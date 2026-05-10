@@ -33,6 +33,7 @@ const EXECUTIVE_ITEMS: NavItem[] = [
   { href: "/admin/operators", icon: "Shield", label: "運用者管理" },
   { href: "/admin/notices", icon: "Megaphone", label: "周知一覧" },
   { href: "/admin/posts", icon: "PenSquare", label: "投稿一覧" },
+  { href: "/inquiries/manage", icon: "MessageSquare", label: "問い合わせ" },
   { href: "/admin/my", icon: "UserCircle", label: "My" },
 ];
 
