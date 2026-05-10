@@ -31,6 +31,11 @@ export type NotificationSettings = {
   clock:            NotifyItemConfig;
   /** お知らせが投稿されたとき → スタッフへ */
   announcement:     NotifyItemConfig;
+  /** スタッフから問い合わせが来たとき → 管理者グループへ */
+  inquiry:          NotifyItemConfig;
+  /** 管理者が問い合わせに返信したとき → スタッフへ */
+  inquiry_reply:    NotifyItemConfig;
+
   // ── 定時通知（スケジュール）────────────────────────────
   /** 出勤時間N分前リマインド → スタッフへ */
   shift_start_remind:  NotifyItemConfig;
@@ -73,6 +78,17 @@ export const DEFAULT_NOTIFY_MESSAGES: Record<keyof NotificationSettings, string>
 {タイトル}
 
 {本文}`,
+
+  inquiry:
+`【問い合わせ】{名前}さんから問い合わせが届きました。
+件名：{件名}
+{内容}`,
+
+  inquiry_reply:
+`{名前}さん、問い合わせへの返信が届きました。
+件名：{件名}
+【返信内容】
+{返信}`,
 
   shift_start_remind:
 `{名前}さん、お疲れ様です。
@@ -158,6 +174,16 @@ export const NOTIFY_VARS: Record<keyof NotificationSettings, { label: string; no
     { label: "{タイトル}" },
     { label: "{本文}" },
   ],
+  inquiry: [
+    { label: "{名前}" },
+    { label: "{件名}" },
+    { label: "{内容}" },
+  ],
+  inquiry_reply: [
+    { label: "{名前}" },
+    { label: "{件名}" },
+    { label: "{返信}" },
+  ],
   shift_start_remind: [
     { label: "{名前}" },
     { label: "{シフト}", note: "シフト名・時刻" },
@@ -203,6 +229,8 @@ export function buildDefaultNotificationSettings(
     tardiness:           get("tardiness",            { enabled: false, recipient: "admin", message: DEFAULT_NOTIFY_MESSAGES.tardiness }),
     clock:               get("clock",                { enabled: false, recipient: "admin", message: DEFAULT_NOTIFY_MESSAGES.clock }),
     announcement:        get("announcement",         { enabled: false, recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.announcement }),
+    inquiry:             get("inquiry",              { enabled: false, recipient: "admin", message: DEFAULT_NOTIFY_MESSAGES.inquiry }),
+    inquiry_reply:       get("inquiry_reply",        { enabled: false, recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.inquiry_reply }),
     shift_start_remind:  get("shift_start_remind",  { enabled: false, recipient: "staff", minutes_before: 60, message: DEFAULT_NOTIFY_MESSAGES.shift_start_remind }),
     shift_end_remind:    get("shift_end_remind",    { enabled: false, recipient: "staff", minutes_after: 15,  message: DEFAULT_NOTIFY_MESSAGES.shift_end_remind }),
     rest_day_remind:     get("rest_day_remind",     { enabled: false, recipient: "staff", time: "20:00",      message: DEFAULT_NOTIFY_MESSAGES.rest_day_remind }),

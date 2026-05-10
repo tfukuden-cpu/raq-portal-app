@@ -1015,6 +1015,8 @@ const EVENT_NOTIFY_ITEMS: { key: NotifyKey; label: string; desc: string }[] = [
   { key: "tardiness",       label: "遅刻申請通知",       desc: "スタッフが遅刻申請を行ったとき（管理者グループへ）" },
   { key: "clock",           label: "打刻通知",           desc: "出勤・退勤の打刻が行われたとき" },
   { key: "announcement",   label: "お知らせ通知",       desc: "管理者がお知らせを投稿したとき（スタッフへ）" },
+  { key: "inquiry",        label: "問い合わせ通知",     desc: "スタッフから問い合わせが届いたとき（管理者グループへ）" },
+  { key: "inquiry_reply",  label: "問い合わせ返信通知", desc: "管理者が問い合わせに返信したとき（スタッフ本人へ）" },
 ];
 
 const RECIPIENT_LABELS: Record<string, string> = {

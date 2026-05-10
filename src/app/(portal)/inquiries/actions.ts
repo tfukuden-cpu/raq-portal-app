@@ -34,10 +34,10 @@ export async function submitInquiryAction(fd: FormData): Promise<InquiryResult> 
 
   revalidatePath("/inquiries");
 
-  void sendEventNotify(projectId, "inquiry" as never, {
-    "名前": name,
-    "件名": title,
-    "内容": body.length > 80 ? body.slice(0, 80) + "…" : body,
+  void sendEventNotify(projectId, "inquiry", {
+    名前: name,
+    件名: title,
+    内容: body.length > 80 ? body.slice(0, 80) + "…" : body,
   });
 
   return { success: true, message: "送信しました" };
@@ -55,8 +55,13 @@ export async function replyInquiryAction(fd: FormData): Promise<InquiryResult> {
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
 
   const { data: inquiry, error: fetchErr } = await supabase
-    .from("inquiries").select("project_id, staff_id, title").eq("id", id).maybeSingle();
+    .from("inquiries")
+    .select("project_id, staff_id, title, staffs(display_name, name)")
+    .eq("id", id).maybeSingle();
   if (fetchErr || !inquiry) return { success: false, message: "問い合わせが見つかりません" };
+  const s = (Array.isArray(inquiry.staffs) ? inquiry.staffs[0] : inquiry.staffs) as
+    { display_name: string | null; name: string | null } | null;
+  const staffName = s?.display_name ?? s?.name ?? inquiry.staff_id;
 
   const { error } = await supabase.from("inquiries").update({
     reply,
@@ -69,10 +74,10 @@ export async function replyInquiryAction(fd: FormData): Promise<InquiryResult> {
   revalidatePath("/inquiries");
   revalidatePath("/inquiries/manage");
 
-  // スタッフ本人にLINE通知
-  void sendEventNotify(inquiry.project_id, "inquiry_reply" as never, {
-    "件名": inquiry.title,
-    "返信": reply.length > 80 ? reply.slice(0, 80) + "…" : reply,
+  void sendEventNotify(inquiry.project_id, "inquiry_reply", {
+    名前: staffName,
+    件名: inquiry.title,
+    返信: reply.length > 80 ? reply.slice(0, 80) + "…" : reply,
   }, inquiry.staff_id);
 
   return { success: true, message: "返信しました" };
