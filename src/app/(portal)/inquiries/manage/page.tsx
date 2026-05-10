@@ -28,12 +28,10 @@ export default async function InquiryManagePage() {
   }
 
   const admin = createAdminClient();
-  let q = admin
-    .from("inquiries")
-    .select("id, title, body, status, reply, replied_by, replied_at, created_at, staff_id, project_id, staffs(display_name, name)")
-    .order("created_at", { ascending: false });
-  if (projectId) q = q.eq("project_id", projectId);
-  const { data: inquiries, error: qErr } = await q;
+  const SEL = "id, title, body, status, reply, replied_by, replied_at, created_at, staff_id, project_id, staffs(display_name, name)";
+  const { data: inquiries, error: qErr } = projectId
+    ? await admin.from("inquiries").select(SEL).eq("project_id", projectId).order("created_at", { ascending: false })
+    : await admin.from("inquiries").select(SEL).order("created_at", { ascending: false });
   if (qErr) console.error("[inquiries/manage] query error:", qErr);
 
   const list = (inquiries ?? []).map(inq => {
