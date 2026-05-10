@@ -41,6 +41,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/public") ||
+    pathname.startsWith("/api/auth/line") ||
     pathname === "/manifest.webmanifest" ||
     pathname.startsWith("/icons/") ||
     pathname.startsWith("/sw.") ||
