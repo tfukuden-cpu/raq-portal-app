@@ -10,35 +10,24 @@ export default function AuthConfirmPage() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // 既にセッションが確立されていれば即リダイレクト
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        window.location.href = "/dashboard";
-        return;
-      }
-    });
+    // URLフラグメントからトークンを手動でパース
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const accessToken  = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
 
-    // セッション確立を待って検知
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
-        window.location.href = "/dashboard";
-      }
-    });
-
-    // フォールバック：3秒後にセッション再確認
-    const timer = setTimeout(async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        window.location.href = "/dashboard";
-      } else {
-        window.location.href = "/login?error=auth_failed";
-      }
-    }, 3000);
-
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timer);
-    };
+    if (accessToken && refreshToken) {
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ error }) => {
+          if (error) {
+            window.location.href = "/login?error=auth_failed";
+          } else {
+            window.location.href = "/dashboard";
+          }
+        });
+    } else {
+      window.location.href = "/login?error=auth_failed";
+    }
   }, []);
 
   return (
