@@ -28,15 +28,13 @@ export default async function InquiryManagePage() {
   }
 
   const admin = createAdminClient();
-  const query = admin
+  let q = admin
     .from("inquiries")
     .select("id, title, body, status, reply, replied_by, replied_at, created_at, staff_id, project_id, staffs(display_name, name)")
     .order("created_at", { ascending: false });
-
-  // 運営者かつ案件未選択 → 全案件の問い合わせを表示
-  const { data: inquiries } = projectId
-    ? await query.eq("project_id", projectId)
-    : await query;
+  if (projectId) q = q.eq("project_id", projectId);
+  const { data: inquiries, error: qErr } = await q;
+  if (qErr) console.error("[inquiries/manage] query error:", qErr);
 
   const list = (inquiries ?? []).map(inq => {
     const s = (Array.isArray(inq.staffs) ? inq.staffs[0] : inq.staffs) as

@@ -34,7 +34,7 @@ export async function submitInquiryAction(fd: FormData): Promise<InquiryResult> 
 
   revalidatePath("/inquiries");
 
-  void sendEventNotify(projectId, "inquiry", {
+  await sendEventNotify(projectId, "inquiry", {
     名前: name,
     件名: title,
     内容: body.length > 80 ? body.slice(0, 80) + "…" : body,
@@ -74,7 +74,7 @@ export async function replyInquiryAction(fd: FormData): Promise<InquiryResult> {
   revalidatePath("/inquiries");
   revalidatePath("/inquiries/manage");
 
-  void sendEventNotify(inquiry.project_id, "inquiry_reply", {
+  await sendEventNotify(inquiry.project_id, "inquiry_reply", {
     名前: staffName,
     件名: inquiry.title,
     返信: reply.length > 80 ? reply.slice(0, 80) + "…" : reply,
