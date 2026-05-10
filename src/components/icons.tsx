@@ -305,6 +305,14 @@ export function IdCardIcon({ className }: IconProps) {
   );
 }
 
+export function MessageSquareIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 export const ICON_MAP = {
   Home: HomeIcon,
   Clock: ClockIcon,
@@ -324,6 +332,7 @@ export const ICON_MAP = {
   Settings: SettingsIcon,
   Shield: ShieldIcon,
   IdCard: IdCardIcon,
+  MessageSquare: MessageSquareIcon,
 } as const;
 
 export type IconKey = keyof typeof ICON_MAP;
