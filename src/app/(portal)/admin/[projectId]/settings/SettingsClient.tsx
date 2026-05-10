@@ -1137,6 +1137,7 @@ function NotifyCard({
   onRecipient: (v: "admin" | "staff") => void;
   onMessage: (v: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const insertVar = (v: string) => {
@@ -1162,11 +1163,23 @@ function NotifyCard({
           <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 leading-tight">{label}</p>
           <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">{desc}</p>
         </div>
-        <Toggle checked={config.enabled} onChange={onToggle} />
+        {config.enabled && (
+          <button
+            type="button"
+            onClick={() => setOpen(v => !v)}
+            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            aria-label={open ? "折り畳む" : "設定を開く"}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        )}
+        <Toggle checked={config.enabled} onChange={() => { onToggle(); if (!config.enabled) setOpen(true); }} />
       </div>
 
-      {/* 詳細設定（ON のときのみ） */}
-      {config.enabled && (
+      {/* 詳細設定（ON かつ open のときのみ） */}
+      {config.enabled && open && (
         <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 py-3 bg-zinc-50 dark:bg-zinc-800/40 space-y-3">
           {/* 通知先セレクト */}
           <div className="flex items-center gap-2">
