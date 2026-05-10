@@ -29,6 +29,7 @@ export async function submitInquiryAction(fd: FormData): Promise<InquiryResult> 
     staff_id:   staffId,
     title,
     body,
+    status:     "open",
   });
   if (error) return { success: false, message: "送信失敗：" + error.message };
 
