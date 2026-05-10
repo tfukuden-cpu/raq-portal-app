@@ -8,6 +8,7 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { logoutAction } from "@/app/login/actions";
 import { unlinkLineAction } from "./actions";
 import { ChevronRightIcon, UserCircleIcon } from "@/components/icons";
+import DisplayNameEditor from "./DisplayNameEditor";
 
 export default async function MyPage({
   searchParams,
@@ -83,6 +84,7 @@ export default async function MyPage({
             <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
               {roleLabel}
             </span>
+            <DisplayNameEditor currentName={displayName} />
           </div>
         </div>
 

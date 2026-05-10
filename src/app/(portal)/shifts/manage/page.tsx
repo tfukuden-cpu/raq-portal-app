@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import ShiftDayList from "./ShiftDayList";
+import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
 import QuickImportButton from "./QuickImportButton";
 import { isGSheetsConfigured } from "@/lib/gsheets";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
@@ -79,6 +80,7 @@ export default async function ManageShiftsPage(props: {
     { data: members },
     { data: shiftPatternRows },
     { data: shiftsRaw },
+    { data: shiftRequestsRaw },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", selectedProjectId).maybeSingle(),
     admin.from("project_members")
@@ -95,6 +97,11 @@ export default async function ManageShiftsPage(props: {
       .lte("shift_date", endDate)
       .order("shift_date")
       .order("staff_id"),
+    admin.from("shift_requests")
+      .select("id, staff_id, request_date, opening_id, reason, status, created_at, shift_openings(shift_name, shift_start, shift_end)")
+      .eq("project_id", selectedProjectId)
+      .order("request_date", { ascending: false })
+      .limit(100),
   ]);
 
   const activeMembers = (members ?? [])
@@ -108,6 +115,22 @@ export default async function ManageShiftsPage(props: {
       };
     })
     .filter((m) => !!m.id) as { id: string; name: string; role: string }[];
+
+  const staffNameMap = new Map(activeMembers.map(m => [m.id, m.name]));
+
+  const shiftRequests = (shiftRequestsRaw ?? []).map(r => {
+    const opening = Array.isArray(r.shift_openings) ? r.shift_openings[0] : r.shift_openings;
+    return {
+      id:          r.id,
+      staff_name:  staffNameMap.get(r.staff_id) ?? r.staff_id,
+      request_date: r.request_date,
+      shift_name:  (opening as { shift_name: string } | null)?.shift_name ?? null,
+      shift_start: (opening as { shift_start: string } | null)?.shift_start ?? null,
+      shift_end:   (opening as { shift_end: string } | null)?.shift_end ?? null,
+      reason:      r.reason ?? null,
+      status:      r.status,
+    };
+  });
 
   const shiftPatterns = (shiftPatternRows ?? []).map((p) => ({
     name:           p.name,
@@ -194,7 +217,8 @@ export default async function ManageShiftsPage(props: {
       </div>
 
       {/* ── スクロール領域（ShiftDayList の sticky がここで効く） ── */}
-      <div className="flex-1 overflow-y-auto px-4 pb-20">
+      <div className="flex-1 overflow-y-auto px-4 pb-20 space-y-4 pt-3">
+        <ShiftRequestsAdmin requests={shiftRequests} />
         <ShiftDayList
           allDates={allDates}
           shifts={shifts ?? []}
