@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
     type:        "magiclink",
     email,
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app"}/dashboard`,
+      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app"}/auth/confirm`,
     },
   });
 
