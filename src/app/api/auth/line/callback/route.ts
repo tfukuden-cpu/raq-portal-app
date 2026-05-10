@@ -100,8 +100,11 @@ export async function GET(req: NextRequest) {
   // magic link 生成（パスワード不要でセッションを確立）
   const email = `${staff.id.toLowerCase()}@raq.internal`;
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-    type:  "magiclink",
+    type:        "magiclink",
     email,
+    options: {
+      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app"}/dashboard`,
+    },
   });
 
   if (linkError || !linkData?.properties?.action_link) {
