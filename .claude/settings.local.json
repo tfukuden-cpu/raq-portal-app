@@ -31,7 +31,14 @@
       "Bash(/admin/\\\\${projectId})",
       "Bash(powershell -Command \"\\(Get-Content 'src/app/\\(portal\\)/admin/[projectId]/settings/actions.ts'\\) -replace 'revalidatePath\\\\\\(`/admin/\\\\$\\\\{projectId\\\\}/settings`\\\\\\)', 'revalidatePath\\(`/admin/\\\\${projectId}`\\)' | Set-Content 'src/app/\\(portal\\)/admin/[projectId]/settings/actions.ts' -Encoding utf8\")",
       "Bash(Get-ChildItem -Path \"C:\\\\dev\\\\raq-portal-app\" -Force)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "PowerShell(npx vercel --version)",
+      "PowerShell(Get-Content \"$env:APPDATA\\\\Vercel\\\\auth.json\" 2>&1)",
+      "Bash(Remove-Item \"src\\\\app\\\\\\(portal\\)\\\\admin\\\\my\\\\AvatarPicker.tsx\")"
     ]
   }
 }
