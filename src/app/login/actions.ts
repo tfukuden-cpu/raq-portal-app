@@ -51,6 +51,17 @@ export async function loginAction(formData: FormData): Promise<LoginResult> {
     };
   }
 
+  // LINE未連携なら連携フローへ
+  const { data: staffDetail } = await supabase
+    .from("staffs")
+    .select("line_user_id")
+    .eq("id", staffId.toUpperCase())
+    .maybeSingle();
+
+  if (!staffDetail?.line_user_id) {
+    redirect("/api/auth/line?mode=link");
+  }
+
   redirect("/dashboard");
 }
 
