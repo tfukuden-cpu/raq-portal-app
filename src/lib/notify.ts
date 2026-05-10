@@ -27,6 +27,17 @@ export function resolveMessage(
 
 // ── LINE ID 取得ヘルパー ─────────────────────────────────────────────────────
 
+/** 案件に紐付いたLINEグループIDを取得 */
+async function getProjectGroupId(projectId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("line_groups")
+    .select("group_id")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  return (data?.group_id as string | null) ?? null;
+}
+
 /** 案件の管理者（project_admin）の LINE ID 一覧を取得 */
 export async function getAdminLineIds(projectId: string): Promise<string[]> {
   const admin = createAdminClient();
@@ -103,20 +114,23 @@ export async function sendEventNotify(
     const template = item.message ?? DEFAULT_NOTIFY_MESSAGES[type] ?? "";
     const message  = resolveMessage(template, vars);
 
+    const groupId = await getProjectGroupId(projectId);
+
     if (item.recipient === "admin") {
       const ids = await getAdminLineIds(projectId);
       if (ids.length > 0) await multicastLine(ids, message);
     } else {
       if (targetStaffId) {
-        // 特定の1人へ
         const lineId = await getStaffLineId(targetStaffId);
         if (lineId) await pushLine(lineId, message);
       } else {
-        // 案件の全スタッフへ
         const ids = await getAllStaffLineIds(projectId);
         if (ids.length > 0) await multicastLine(ids, message);
       }
     }
+
+    // グループにも送信
+    if (groupId) await pushLine(groupId, message);
   } catch (e) {
     console.error(`[notify] sendEventNotify(${type}) failed:`, e);
   }

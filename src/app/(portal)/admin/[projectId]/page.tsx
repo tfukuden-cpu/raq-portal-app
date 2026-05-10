@@ -39,6 +39,7 @@ export default async function ProjectDetailPage(props: {
     { data: settings },
     { data: shiftPatterns },
     { data: holidayRules },
+    { data: lineGroups },
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
@@ -51,6 +52,8 @@ export default async function ProjectDetailPage(props: {
     createAdminClient().from("holiday_rules")
       .select("rule_type, value")
       .eq("project_id", projectId).order("sort_order"),
+    createAdminClient().from("line_groups")
+      .select("id, group_id, group_name, project_id"),
   ]);
 
   if (!project) redirect("/admin");
@@ -114,6 +117,11 @@ export default async function ProjectDetailPage(props: {
           notificationSettings={
             (settings?.notification_settings as Record<string, boolean> | null) ?? {}
           }
+          lineGroups={(lineGroups ?? []).map(g => ({
+            groupId:   g.group_id,
+            groupName: g.group_name ?? null,
+            projectId: (g.project_id as string | null) ?? null,
+          }))}
           archiveAction={archiveAction}
         />
       </div>

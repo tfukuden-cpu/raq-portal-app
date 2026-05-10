@@ -599,6 +599,43 @@ export async function saveLineSettingsAction(fd: FormData): Promise<SettingsResu
   return { success: true, message: "保存しました" };
 }
 
+// ── LINEグループ紐付け ────────────────────────────────────
+
+export async function linkLineGroupAction(fd: FormData): Promise<SettingsResult> {
+  const projectId = String(fd.get("projectId") ?? "").trim();
+  const groupId   = String(fd.get("groupId")   ?? "").trim();
+  if (!projectId || !groupId) return { success: false, message: "パラメータ不足" };
+
+  await assertAdmin();
+
+  const { error } = await adminSupa()
+    .from("line_groups")
+    .update({ project_id: projectId })
+    .eq("group_id", groupId);
+
+  if (error) return { success: false, message: error.message };
+  revalidatePath(`/admin/${projectId}`);
+  return { success: true, message: "グループを紐付けました" };
+}
+
+export async function unlinkLineGroupAction(fd: FormData): Promise<SettingsResult> {
+  const projectId = String(fd.get("projectId") ?? "").trim();
+  const groupId   = String(fd.get("groupId")   ?? "").trim();
+  if (!projectId || !groupId) return { success: false, message: "パラメータ不足" };
+
+  await assertAdmin();
+
+  const { error } = await adminSupa()
+    .from("line_groups")
+    .update({ project_id: null })
+    .eq("group_id", groupId)
+    .eq("project_id", projectId);
+
+  if (error) return { success: false, message: error.message };
+  revalidatePath(`/admin/${projectId}`);
+  return { success: true, message: "グループの紐付けを解除しました" };
+}
+
 // ── 新規案件作成 ─────────────────────────────────────────
 
 export async function createProjectAction(fd: FormData): Promise<SettingsResult & { projectId?: string }> {

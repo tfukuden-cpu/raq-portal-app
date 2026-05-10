@@ -38,7 +38,11 @@
       "Bash(git commit *)",
       "PowerShell(npx vercel --version)",
       "PowerShell(Get-Content \"$env:APPDATA\\\\Vercel\\\\auth.json\" 2>&1)",
-      "Bash(Remove-Item \"src\\\\app\\\\\\(portal\\)\\\\admin\\\\my\\\\AvatarPicker.tsx\")"
+      "Bash(Remove-Item \"src\\\\app\\\\\\(portal\\)\\\\admin\\\\my\\\\AvatarPicker.tsx\")",
+      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__list_projects",
+      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__get_project_url",
+      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__get_publishable_keys",
+      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__execute_sql"
     ]
   }
 }
