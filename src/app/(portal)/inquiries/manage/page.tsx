@@ -28,26 +28,29 @@ export default async function InquiryManagePage() {
   }
 
   const admin = createAdminClient();
-  const SEL = "id, title, body, status, reply, replied_by, replied_at, created_at, staff_id, project_id, staffs(display_name, name)";
+  const SEL = "id, title, body, status, reply, replied_by, replied_at, created_at, staff_id, project_id";
   const { data: inquiries, error: qErr } = projectId
     ? await admin.from("inquiries").select(SEL).eq("project_id", projectId).order("created_at", { ascending: false })
     : await admin.from("inquiries").select(SEL).order("created_at", { ascending: false });
   if (qErr) console.error("[inquiries/manage] query error:", qErr);
 
-  const list = (inquiries ?? []).map(inq => {
-    const s = (Array.isArray(inq.staffs) ? inq.staffs[0] : inq.staffs) as
-      { display_name: string | null; name: string | null } | null;
-    return {
-      id:          inq.id,
-      staffName:   s?.display_name ?? s?.name ?? inq.staff_id,
-      title:       inq.title,
-      body:        inq.body,
-      status:      inq.status,
-      reply:       inq.reply ?? null,
-      replied_at:  inq.replied_at ?? null,
-      created_at:  inq.created_at,
-    };
-  });
+  // staff名を別途取得
+  const staffIds = [...new Set((inquiries ?? []).map(i => i.staff_id))];
+  const { data: staffRows } = staffIds.length > 0
+    ? await admin.from("staffs").select("id, display_name, name").in("id", staffIds)
+    : { data: [] };
+  const staffMap = new Map((staffRows ?? []).map(s => [s.id, s.display_name ?? s.name ?? s.id]));
+
+  const list = (inquiries ?? []).map(inq => ({
+    id:         inq.id,
+    staffName:  staffMap.get(inq.staff_id) ?? inq.staff_id,
+    title:      inq.title,
+    body:       inq.body,
+    status:     inq.status,
+    reply:      inq.reply ?? null,
+    replied_at: inq.replied_at ?? null,
+    created_at: inq.created_at,
+  }));
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-black">
