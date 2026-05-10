@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-10（v9：LINE通知システム実装・アバター設計・デプロイ準備）
+最終更新：2026-05-11（v10：問い合わせシステム・LINE Login修正・LINEグループ連携・各種バグ修正）
 
 ---
 
@@ -41,7 +41,43 @@ Cookie `rqp_project_id`（HTTPOnly・30日）に現在選択中の案件IDを保
 
 ---
 
-## 3. 開発の再開方法
+## 3. 現在の開発フェーズと方向性
+
+### 現状（v10時点）
+GASからの移行を進めており、**コア機能はほぼ揃った状態**。
+実際の案件・スタッフで使い始める前の最終調整フェーズ。
+
+| カテゴリ | 状態 |
+|---|---|
+| 認証（社員ID＋パスワード＋LINE連携） | ✅ 完成 |
+| 打刻・勤怠実績 | ✅ 完成 |
+| シフト表示・希望休申請 | ✅ 完成 |
+| 管理者シフト管理 | ✅ 完成（追加申請審査は未着手） |
+| 周知・投稿 | ✅ 完成 |
+| 問い合わせ（スタッフ↔管理者） | ✅ 完成（v10新設） |
+| LINE通知（イベント系） | ✅ 完成・動作確認済み |
+| LINE通知（定時スケジュール） | 🔄 実装済み・本番テスト未 |
+| LINEグループ連携 | ✅ 完成 |
+| 希望休ルール適用（バリデーション） | ⏳ 未着手 |
+| スタッフ一括CSV登録 | ⏳ 未着手 |
+| アバターシステム | 🔄 設計済み・パーツ未実装 |
+
+### 次に優先すべきこと（新しいセッションはここから）
+
+1. **スケジュール通知の本番テスト** — `CRON_SECRET` を使ってcronエンドポイントを叩き、出勤前リマインドなどが飛ぶか確認
+2. **シフト追加申請の管理者審査画面** — `/shifts/manage` に申請タブを追加（`shift_requests` テーブルのデータを表示・承認/却下）
+3. **勤怠実績のシフト突き合わせ** — `punch_logs × shifts` で遅刻・早退時間を自動計算
+4. **希望休ルールのバリデーション** — 月上限・締切・連続上限チェック
+5. **本番スタッフ登録** — CSVで100名一括登録（`bulkCreateAndAddStaffsAction` 使用）
+
+### 開発スタイルの注意点
+- **バイブコーディング**：ユーザーはJS/SQL未経験。実装はAIが担当し、ユーザーは方向性を決める
+- **Vercel自動デプロイ**：`git push` → GitHub → Vercel で自動反映
+- **テストアカウント**：S001（admin）でP001・P002を確認。O002は運用者（executive）
+
+---
+
+## 4. 開発の再開方法
 
 ```powershell
 cd C:\dev\raq-portal-app
@@ -237,6 +273,8 @@ src/
 | `tardiness` | イベント | 遅刻申請 | 管理者グループ |
 | `clock` | イベント | 出退勤打刻 | 管理者グループ |
 | `announcement` | イベント | お知らせ投稿 | 全スタッフ |
+| `inquiry` | イベント | 問い合わせ受信 ★v10新設 | 管理者グループ |
+| `inquiry_reply` | イベント | 問い合わせ返信 ★v10新設 | スタッフ本人 |
 | `shift_start_remind` | 定時 | 出勤N分前リマインド | スタッフ本人 |
 | `shift_end_remind` | 定時 | 退勤打刻忘れ確認 | スタッフ本人 |
 | `rest_day_remind` | 定時 | 翌日出勤アナウンス | スタッフ本人 |
@@ -366,30 +404,24 @@ type AvatarConfig = {
 
 ---
 
-## 9. ⚠️ 未実行のSQL（要実行）
+## 9. SQL実行状況
 
-Supabase SQL Editor で実行すること。
+### ✅ 実行済み
+- `project_settings.notification_settings` jsonb カラム追加
+- `project_settings.line_group_id` text カラム追加（LINEグループ連携）
+- `inquiries` テーブル作成（RLS設定済み）
+- `staffs.avatar_config` jsonb カラム追加（要確認）
 
-### ① notification_settings カラム追加（v9・必須）
-```sql
-alter table public.project_settings
-  add column if not exists notification_settings jsonb default '{}';
-```
+### ⏳ 未実行（要実行）
 
-### ② avatar_config カラム追加（v9・必須）
-```sql
-alter table public.staffs
-  add column if not exists avatar_config jsonb;
-```
-
-### ③ shift_patterns テーブル更新
+#### ① shift_patterns テーブル更新
 ```sql
 alter table public.shift_patterns
   add column if not exists short_name text not null default '',
   add column if not exists required_count int;
 ```
 
-### ④ holiday_rules テーブル新規作成
+#### ② holiday_rules テーブル新規作成
 ```sql
 create table if not exists public.holiday_rules (
   id         uuid        primary key default gen_random_uuid(),
@@ -437,19 +469,29 @@ CRON_SECRET=...                            # ★v9新設：openssl rand -hex 32 
 
 | # | タスク | 状態 |
 |---|---|---|
-| A-1 | SQL①② を Supabase に実行（notification_settings・avatar_config） | ⏳ |
-| A-2 | `.env.local` に `CRON_SECRET` を追加 | ⏳ |
-| A-3 | SQL③④ を Supabase に実行（shift_patterns・holiday_rules） | ⏳ |
+| A-1 | SQL①② を Supabase に実行（shift_patterns・holiday_rules） | ⏳ |
+| A-2 | `.env.local` に `CRON_SECRET` を追加 | ✅ |
 
 ---
 
-### 🟠 LINE通知（v9で基盤実装済み、残りは細部）
+### 🟠 LINE通知（v10で問い合わせ通知まで実装済み）
 
 | # | タスク | 状態 | 詳細 |
 |---|---|---|---|
-| B-1 | イベント通知の動作確認 | ⏳ | 欠勤・遅刻・打刻・お知らせ投稿でLINEが飛ぶかテスト |
-| B-2 | スケジュール通知の動作確認 | ⏳ | `curl -H "Authorization: Bearer <CRON_SECRET>" localhost:3000/api/cron/notify` |
+| B-1 | イベント通知（欠勤・遅刻・打刻・お知らせ・問い合わせ）| ✅ | 動作確認済み |
+| B-2 | スケジュール通知の動作確認 | ⏳ | `curl -H "Authorization: Bearer <CRON_SECRET>" /api/cron/notify` |
 | B-3 | holiday_reminder の実装 | ⏳ | 締切日（毎月何日）を `project_settings` に追加してから実装 |
+
+---
+
+### 🟠 問い合わせシステム（v10で新規実装）
+
+| # | タスク | 状態 | 詳細 |
+|---|---|---|---|
+| C-1 | スタッフ→管理者 問い合わせフォーム | ✅ | `/inquiries` で送信・履歴確認 |
+| C-2 | 管理者の返信UI | ✅ | `/inquiries/manage` でフィルタ・返信・クローズ |
+| C-3 | LINE通知（問い合わせ受信・返信）| ✅ | 設定ON時に動作確認済み |
+| C-4 | 運営者が全案件の問い合わせ閲覧 | ✅ | 案件未選択でも全件表示 |
 
 ---
 
@@ -457,9 +499,9 @@ CRON_SECRET=...                            # ★v9新設：openssl rand -hex 32 
 
 | # | タスク | 状態 | 詳細 |
 |---|---|---|---|
-| C-1 | SVGパーツの描画（HairBack/HairFront/Eyes/Mouth） | 🔄 | ユーザーが手書き予定。セクション7の仕様書を参照 |
-| C-2 | AvatarSvg を他の画面でも使う | ⏳ | スタッフ一覧・管理画面のアイコン表示に使う |
-| C-3 | スタッフ用マイページ（/my）にも同様のアバター設定を追加 | ⏳ | 現状は管理者/運用者のみ |
+| D-1 | SVGパーツの描画（HairBack/HairFront/Eyes/Mouth） | 🔄 | ユーザーが手書き予定。セクション7の仕様書を参照 |
+| D-2 | AvatarSvg を他の画面でも使う | ⏳ | スタッフ一覧・管理画面のアイコン表示に使う |
+| D-3 | スタッフ用マイページ（/my）にも同様のアバター設定を追加 | ⏳ | 現状は管理者/運用者のみ |
 
 ---
 
@@ -467,11 +509,11 @@ CRON_SECRET=...                            # ★v9新設：openssl rand -hex 32 
 
 | # | タスク | 状態 | 詳細 |
 |---|---|---|---|
-| D-1 | 申請期限日チェック | ⏳ | `deadline_day` ルールを読み、締切後は翌月分に切替 |
-| D-2 | 月上限チェック | ⏳ | `monthly_limit_per_person` ルール |
-| D-3 | 日上限チェック | ⏳ | `daily_limit_count` ルール |
-| D-4 | 連続申請上限チェック | ⏳ | `consecutive_limit` ルール |
-| D-5 | 申請画面でルール内容を表示 | ⏳ | 「月3日まで申請可能です」等のヒント |
+| E-1 | 申請期限日チェック | ⏳ | `deadline_day` ルールを読み、締切後は翌月分に切替 |
+| E-2 | 月上限チェック | ⏳ | `monthly_limit_per_person` ルール |
+| E-3 | 日上限チェック | ⏳ | `daily_limit_count` ルール |
+| E-4 | 連続申請上限チェック | ⏳ | `consecutive_limit` ルール |
+| E-5 | 申請画面でルール内容を表示 | ⏳ | 「月3日まで申請可能です」等のヒント |
 
 ---
 
@@ -479,21 +521,20 @@ CRON_SECRET=...                            # ★v9新設：openssl rand -hex 32 
 
 | # | タスク | 状態 | 詳細 |
 |---|---|---|---|
-| E-1 | シフト追加申請の管理者審査画面 | ⏳ | `/shifts/manage` に申請一覧。承認→shifts 反映 |
-| E-2 | 勤怠実績のシフト突き合わせ | ⏳ | punch_logs × shifts で遅刻/早退時間を計算 |
+| F-1 | シフト追加申請の管理者審査画面 | ⏳ | `/shifts/manage` に申請一覧。承認→shifts 反映 |
+| F-2 | 勤怠実績のシフト突き合わせ | ⏳ | punch_logs × shifts で遅刻/早退時間を計算 |
 
 ---
 
-### 🟢 本番化
+### 🟢 本番化（Vercel・Supabase・LINE は設定済み）
 
 | # | タスク | 状態 | 詳細 |
 |---|---|---|---|
-| F-1 | GitHub リポジトリ作成 & push | ⏳ | git init → commit → push |
-| F-2 | Vercel デプロイ | ⏳ | GitHub連携 → 環境変数設定 → Deploy |
-| F-3 | Supabase URL に本番ドメインを追加 | ⏳ | Auth → URL Configuration |
-| F-4 | LINE Developers に本番 Callback URL を追加 | ⏳ | `https://本番ドメイン/api/auth/line/callback` |
-| F-5 | 案件A 本番投入（GASと2週間並行運用） | ⏳ | |
-| F-6 | 社員100名の一括移行 | ⏳ | `migration/migrate-staffs.mjs` を使う |
+| G-1 | GitHub リポジトリ & Vercel デプロイ | ✅ | 本番URL: https://raq-portal-app.vercel.app |
+| G-2 | Supabase Auth URL設定 | ✅ | 本番ドメインを追加済み |
+| G-3 | LINE Login / Messaging API設定 | ✅ | コールバックURL・Webhook設定済み |
+| G-4 | 案件A 本番投入（GASと並行運用） | ⏳ | |
+| G-5 | 社員100名の一括移行 | ⏳ | `migration/migrate-staffs.mjs` を使う（CSVでやる予定） |
 
 ---
 
@@ -553,4 +594,5 @@ export default async function Page({
 | 2026-05-06 | v6 | スプシ連携大改訂、シフト表テンプレート |
 | 2026-05-06 | v7 | 希望休ルール柔軟化、holiday_rules テーブル |
 | 2026-05-09 | v8 | シフト管理UI全面刷新、adminClient化、ops メニュー追加 |
-| 2026-05-10 | v9 | LINE通知システム実装（notify.ts・cron route・各action更新）、アバターシステム設計（AvatarSvg/AvatarEditor/avatar-types）、運用者マイページ(/admin/my)、vercel.json、CRON_SECRET |
+| 2026-05-10 | v9 | LINE通知システム実装（notify.ts・cron route・各action更新）、アバターシステム設計、運用者マイページ(/admin/my)、vercel.json |
+| 2026-05-11 | v10 | 問い合わせシステム新設（/inquiries・/inquiries/manage）、LINE Login magic link修正（/auth/confirm）、LINEグループ連携（project_settings.line_group_id）、inquiry/inquiry_reply通知種別追加、通知カードアコーディオンUI、notify.ts個別try-catch、ops向け問い合わせ管理修正 |
