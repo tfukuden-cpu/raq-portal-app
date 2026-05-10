@@ -1,0 +1,211 @@
+/**
+ * シフト管理画面（案件管理者・運用者用）
+ * - 管理者: 自案件のシフトを日付タブで確認・編集
+ * - 運用者: 全案件タブ切替 + 日付タブで確認・編集
+ * - シフトパターンの充足数/不足数をリアルタイム表示
+ */
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentProjectId } from "@/lib/project-context";
+import { redirect } from "next/navigation";
+import ShiftDayList from "./ShiftDayList";
+import QuickImportButton from "./QuickImportButton";
+import { isGSheetsConfigured } from "@/lib/gsheets";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
+
+function dateKey(d: Date) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" })
+    .format(d)
+    .slice(0, 10);
+}
+
+export default async function ManageShiftsPage(props: {
+  searchParams: Promise<{ year?: string; month?: string; project?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+
+  const { data: myStaff } = await supabase
+    .from("staffs").select("global_role").eq("id", myStaffId).maybeSingle();
+
+  const isGlobalAdmin =
+    myStaff?.global_role === "admin" || myStaff?.global_role === "executive";
+
+  // ── プロジェクト選択 ──────────────────────────────────────
+  // グローバル管理者は全案件を参照できる（viewMode に依存しない）
+  let selectedProjectId: string | null;
+  let allProjects: { id: string; name: string }[] = [];
+
+  if (isGlobalAdmin) {
+    const admin = createAdminClient();
+    const { data: projects } = await admin
+      .from("projects").select("id, name").eq("is_active", true).order("id");
+    allProjects = projects ?? [];
+    // URL params → cookie の現プロジェクト → 先頭案件 の優先順位
+    const cookieProjectId = await getCurrentProjectId();
+    selectedProjectId =
+      searchParams.project ??
+      (cookieProjectId && allProjects.some(p => p.id === cookieProjectId) ? cookieProjectId : null) ??
+      allProjects[0]?.id ?? null;
+  } else {
+    selectedProjectId = await getCurrentProjectId();
+    if (!selectedProjectId) redirect("/select-project");
+
+    // 案件管理者チェック
+    const { data: pm } = await supabase
+      .from("project_members").select("role")
+      .eq("staff_id", myStaffId).eq("project_id", selectedProjectId).maybeSingle();
+    if (pm?.role !== "project_admin") redirect("/shifts");
+  }
+
+  if (!selectedProjectId) redirect("/select-project");
+
+  // ── データ取得（全て adminClient で RLS をバイパス） ──────────
+  const admin = createAdminClient();
+
+  // 月の設定（データ取得前に確定）
+  const now = new Date();
+  const targetYear  = Number(searchParams.year  ?? now.getFullYear());
+  const targetMonth = Number(searchParams.month ?? now.getMonth() + 1);
+  const startDate = dateKey(new Date(targetYear, targetMonth - 1, 1));
+  const endDate   = dateKey(new Date(targetYear, targetMonth,     0));
+
+  const [
+    { data: project },
+    { data: members },
+    { data: shiftPatternRows },
+    { data: shiftsRaw },
+  ] = await Promise.all([
+    admin.from("projects").select("id, name").eq("id", selectedProjectId).maybeSingle(),
+    admin.from("project_members")
+      .select("staff_id, role, staffs(id, name, display_name)")
+      .eq("project_id", selectedProjectId),
+    admin.from("shift_patterns")
+      .select("name, required_count, start_time, end_time")
+      .eq("project_id", selectedProjectId)
+      .order("sort_order"),
+    admin.from("shifts")
+      .select("id, staff_id, shift_date, shift_name, shift_start, shift_end, note")
+      .eq("project_id", selectedProjectId)
+      .gte("shift_date", startDate)
+      .lte("shift_date", endDate)
+      .order("shift_date")
+      .order("staff_id"),
+  ]);
+
+  const activeMembers = (members ?? [])
+    .map((m) => {
+      const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+        { id: string | null; name: string | null; display_name: string | null } | null;
+      return {
+        id:   s?.id ?? m.staff_id,
+        name: s?.display_name ?? s?.name ?? m.staff_id,
+        role: m.role ?? "staff",
+      };
+    })
+    .filter((m) => !!m.id) as { id: string; name: string; role: string }[];
+
+  const shiftPatterns = (shiftPatternRows ?? []).map((p) => ({
+    name:           p.name,
+    required_count: Math.max(0, p.required_count ?? 0),
+    start_time:     (p.start_time  ?? null) as string | null,
+    end_time:       (p.end_time    ?? null) as string | null,
+  }));
+
+  const shifts = shiftsRaw ?? [];
+
+  const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+  const allDates = Array.from({ length: daysInMonth }, (_, i) =>
+    dateKey(new Date(targetYear, targetMonth - 1, i + 1))
+  );
+  const todayStr   = dateKey(new Date());
+  const defaultDate = allDates.includes(todayStr) ? todayStr : allDates[0] ?? "";
+
+  // ── 月ナビURL ─────────────────────────────────────────────
+  const prevMonth = (() => {
+    const d = new Date(targetYear, targetMonth - 2, 1);
+    return { year: d.getFullYear(), month: d.getMonth() + 1 };
+  })();
+  const nextMonth = (() => {
+    const d = new Date(targetYear, targetMonth, 1);
+    return { year: d.getFullYear(), month: d.getMonth() + 1 };
+  })();
+
+  const monthNavBase = isGlobalAdmin
+    ? `/shifts/manage?project=${selectedProjectId}&year=`
+    : `/shifts/manage?year=`;
+
+  return (
+    <main className="h-dvh flex flex-col bg-white dark:bg-zinc-950 max-w-3xl mx-auto">
+
+      {/* ── 固定ヘッダー（スクロールしない） ── */}
+      <div className="flex-shrink-0 px-4 pt-6 space-y-3">
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              シフト管理
+            </h1>
+            <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5 font-semibold">{project?.name}</p>
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+            {isGSheetsConfigured() && (
+              <QuickImportButton projectId={selectedProjectId} year={targetYear} month={targetMonth} />
+            )}
+            <div className="flex items-center gap-1">
+              <a href={`${monthNavBase}${prevMonth.year}&month=${prevMonth.month}`}
+                className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
+              </a>
+              <span className="text-sm font-semibold tabular-nums w-20 text-center text-zinc-900 dark:text-zinc-100">
+                {targetYear}/{String(targetMonth).padStart(2, "0")}
+              </span>
+              <a href={`${monthNavBase}${nextMonth.year}&month=${nextMonth.month}`}
+                className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* 案件タブ（グローバル管理者） */}
+        {isGlobalAdmin && allProjects.length > 1 && (
+          <div className="flex overflow-x-auto border-b border-zinc-100 dark:border-zinc-800 -mx-4 px-4">
+            {allProjects.map((p) => (
+              <a
+                key={p.id}
+                href={`/shifts/manage?project=${p.id}&year=${targetYear}&month=${targetMonth}`}
+                className={[
+                  "px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px whitespace-nowrap transition-colors flex-shrink-0",
+                  p.id === selectedProjectId
+                    ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
+                    : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
+                ].join(" ")}
+              >
+                {p.name}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── スクロール領域（ShiftDayList の sticky がここで効く） ── */}
+      <div className="flex-1 overflow-y-auto px-4 pb-20">
+        <ShiftDayList
+          allDates={allDates}
+          shifts={shifts ?? []}
+          activeMembers={activeMembers}
+          shiftPatterns={shiftPatterns}
+          defaultDate={defaultDate}
+          projectId={selectedProjectId}
+          targetYear={targetYear}
+          targetMonth={targetMonth}
+        />
+      </div>
+    </main>
+  );
+}

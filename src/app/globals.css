@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/* dark: クラスはメディアクエリではなく .dark クラスで制御 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* スクロールバー非表示（全要素） */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* iPhone ホームインジケーター対応 */
+@utility pb-safe {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+}
+
+@utility nav-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
