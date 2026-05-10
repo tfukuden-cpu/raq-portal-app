@@ -116,21 +116,25 @@ export async function sendEventNotify(
 
     const groupId = await getProjectGroupId(projectId);
 
+    const send = async (fn: () => Promise<void>) => {
+      try { await fn(); } catch (e) { console.error(`[notify] send failed:`, e); }
+    };
+
     if (item.recipient === "admin") {
       const ids = await getAdminLineIds(projectId);
-      if (ids.length > 0) await multicastLine(ids, message);
+      if (ids.length > 0) await send(() => multicastLine(ids, message));
     } else {
       if (targetStaffId) {
         const lineId = await getStaffLineId(targetStaffId);
-        if (lineId) await pushLine(lineId, message);
+        if (lineId) await send(() => pushLine(lineId, message));
       } else {
         const ids = await getAllStaffLineIds(projectId);
-        if (ids.length > 0) await multicastLine(ids, message);
+        if (ids.length > 0) await send(() => multicastLine(ids, message));
       }
     }
 
-    // グループにも送信
-    if (groupId) await pushLine(groupId, message);
+    // グループにも送信（個別送信の失敗に関わらず必ず試みる）
+    if (groupId) await send(() => pushLine(groupId, message));
   } catch (e) {
     console.error(`[notify] sendEventNotify(${type}) failed:`, e);
   }

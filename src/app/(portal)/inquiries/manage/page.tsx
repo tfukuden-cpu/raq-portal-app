@@ -9,26 +9,34 @@ export default async function InquiryManagePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const staffId   = user.email?.split("@")[0]?.toUpperCase() ?? "";
-  const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
-
-  const { data: membership } = await supabase
-    .from("project_members").select("role")
-    .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle();
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const { data: staff } = await supabase
     .from("staffs").select("global_role").eq("id", staffId).maybeSingle();
 
-  const isAdmin = membership?.role === "project_admin"
-    || staff?.global_role === "admin"
-    || staff?.global_role === "executive";
-  if (!isAdmin) redirect("/dashboard");
+  const isExecutive = staff?.global_role === "executive" || staff?.global_role === "admin";
+  const projectId   = await getCurrentProjectId();
 
-  const { data: inquiries } = await createAdminClient()
+  // 案件未選択かつ運営者でもない場合はプロジェクト選択へ
+  if (!projectId && !isExecutive) redirect("/select-project");
+
+  // 案件管理者チェック（案件が選択されている場合のみ）
+  if (projectId && !isExecutive) {
+    const { data: membership } = await supabase
+      .from("project_members").select("role")
+      .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle();
+    if (membership?.role !== "project_admin") redirect("/dashboard");
+  }
+
+  const admin = createAdminClient();
+  const query = admin
     .from("inquiries")
-    .select("id, title, body, status, reply, replied_by, replied_at, created_at, staff_id, staffs(display_name, name)")
-    .eq("project_id", projectId)
+    .select("id, title, body, status, reply, replied_by, replied_at, created_at, staff_id, project_id, staffs(display_name, name)")
     .order("created_at", { ascending: false });
+
+  // 運営者かつ案件未選択 → 全案件の問い合わせを表示
+  const { data: inquiries } = projectId
+    ? await query.eq("project_id", projectId)
+    : await query;
 
   const list = (inquiries ?? []).map(inq => {
     const s = (Array.isArray(inq.staffs) ? inq.staffs[0] : inq.staffs) as
@@ -49,6 +57,9 @@ export default async function InquiryManagePage() {
     <main className="min-h-screen bg-zinc-50 dark:bg-black">
       <div className="max-w-lg mx-auto px-4 pt-6 pb-24">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 mb-6">問い合わせ管理</h1>
+        {!projectId && isExecutive && (
+          <p className="text-xs text-zinc-400 mb-4">全案件の問い合わせを表示しています</p>
+        )}
         <InquiryManageClient inquiries={list} />
       </div>
     </main>
