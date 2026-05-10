@@ -31,11 +31,11 @@ export function resolveMessage(
 async function getProjectGroupId(projectId: string): Promise<string | null> {
   const admin = createAdminClient();
   const { data } = await admin
-    .from("line_groups")
-    .select("group_id")
+    .from("project_settings")
+    .select("line_group_id")
     .eq("project_id", projectId)
     .maybeSingle();
-  return (data?.group_id as string | null) ?? null;
+  return (data?.line_group_id as string | null) ?? null;
 }
 
 /** 案件の管理者（project_admin）の LINE ID 一覧を取得 */

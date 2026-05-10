@@ -39,21 +39,18 @@ export default async function ProjectDetailPage(props: {
     { data: settings },
     { data: shiftPatterns },
     { data: holidayRules },
-    { data: lineGroups },
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
       .select("staff_id, role, staffs(name, display_name, company_name)")
       .eq("project_id", projectId),
-    createAdminClient().from("project_settings").select("sheet_url, notification_settings").eq("project_id", projectId).maybeSingle(),
+    createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
       .select("id, name, short_name, start_time, end_time, required_count, target_role")
       .eq("project_id", projectId).order("sort_order"),
     createAdminClient().from("holiday_rules")
       .select("rule_type, value")
       .eq("project_id", projectId).order("sort_order"),
-    createAdminClient().from("line_groups")
-      .select("id, group_id, group_name, project_id"),
   ]);
 
   if (!project) redirect("/admin");
@@ -117,11 +114,7 @@ export default async function ProjectDetailPage(props: {
           notificationSettings={
             (settings?.notification_settings as Record<string, boolean> | null) ?? {}
           }
-          lineGroups={(lineGroups ?? []).map(g => ({
-            groupId:   g.group_id,
-            groupName: g.group_name ?? null,
-            projectId: (g.project_id as string | null) ?? null,
-          }))}
+          lineGroupId={settings?.line_group_id ?? null}
           archiveAction={archiveAction}
         />
       </div>

@@ -13,8 +13,7 @@ import {
   bulkCreateAndAddStaffsAction,
   generateShiftTableAction,
   saveLineSettingsAction,
-  linkLineGroupAction,
-  unlinkLineGroupAction,
+  saveLineGroupAction,
 } from "./actions";
 import {
   buildDefaultNotificationSettings,
@@ -40,7 +39,6 @@ type ShiftPattern = {
   required_count: string;
   target_role: string; // "all" | "admin" | "staff"
 };
-type LineGroup = { groupId: string; groupName: string | null; projectId: string | null };
 type TabId = "basic" | "members" | "shift" | "holiday" | "notify" | "danger";
 
 // ── 共通フィードバック ──────────────────────────────────
@@ -80,7 +78,7 @@ export function SettingsContainer({
   shiftPatterns,
   holidayRules,
   notificationSettings,
-  lineGroups,
+  lineGroupId,
   archiveAction,
 }: {
   projectId: string;
@@ -91,7 +89,7 @@ export function SettingsContainer({
   shiftPatterns: ShiftPattern[];
   holidayRules: HolidayRuleInput[];
   notificationSettings: Partial<NotificationSettings>;
-  lineGroups: LineGroup[];
+  lineGroupId: string | null;
   archiveAction: (fd: FormData) => Promise<void>;
 }) {
   const [tab, setTab] = useState<TabId>("basic");
@@ -202,11 +200,11 @@ export function SettingsContainer({
           <section className="space-y-3">
             <SectionHeading
               title="LINEグループ連携"
-              sub="ボットをグループに追加すると自動で一覧に表示されます"
+              sub="グループIDを入力するとグループへも通知が届きます"
             />
             <LineGroupSection
               projectId={projectId}
-              lineGroups={lineGroups}
+              currentGroupId={lineGroupId}
             />
           </section>
           <Divider />
@@ -952,33 +950,21 @@ export function ShiftPatternList({
 
 function LineGroupSection({
   projectId,
-  lineGroups,
+  currentGroupId,
 }: {
   projectId: string;
-  lineGroups: LineGroup[];
+  currentGroupId: string | null;
 }) {
+  const [groupId, setGroupId] = useState(currentGroupId ?? "");
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const linked   = lineGroups.filter(g => g.projectId === projectId);
-  const unlinked = lineGroups.filter(g => !g.projectId);
-
-  const link = (groupId: string) => {
+  const save = () => {
     const fd = new FormData();
     fd.set("projectId", projectId);
-    fd.set("groupId", groupId);
+    fd.set("groupId", groupId.trim());
     startTransition(async () => {
-      const r = await linkLineGroupAction(fd);
-      setResult({ ok: r.success, msg: r.message ?? "" });
-    });
-  };
-
-  const unlink = (groupId: string) => {
-    const fd = new FormData();
-    fd.set("projectId", projectId);
-    fd.set("groupId", groupId);
-    startTransition(async () => {
-      const r = await unlinkLineGroupAction(fd);
+      const r = await saveLineGroupAction(fd);
       setResult({ ok: r.success, msg: r.message ?? "" });
     });
   };
@@ -986,63 +972,33 @@ function LineGroupSection({
   return (
     <div className="space-y-3">
       {result && <Flash ok={result.ok} msg={result.msg} />}
-
-      {linked.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-zinc-500">連携中のグループ</p>
-          {linked.map(g => (
-            <div key={g.groupId}
-              className="flex items-center justify-between px-3 py-2 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-900">
-              <div>
-                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                  {g.groupName ?? "グループ"}
-                </p>
-                <p className="text-[10px] text-zinc-400 font-mono">{g.groupId}</p>
-              </div>
-              <button
-                onClick={() => unlink(g.groupId)}
-                disabled={isPending}
-                className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40 transition-colors"
-              >
-                解除
-              </button>
-            </div>
-          ))}
-        </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={groupId}
+          onChange={e => setGroupId(e.target.value)}
+          placeholder="C1234567890abcdef..."
+          className="flex-1 px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 font-mono"
+        />
+        <button
+          onClick={save}
+          disabled={isPending}
+          className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 text-white rounded-xl transition-colors"
+        >
+          保存
+        </button>
+      </div>
+      {groupId && (
+        <button
+          onClick={() => { setGroupId(""); save(); }}
+          disabled={isPending}
+          className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40 transition-colors"
+        >
+          連携を解除する
+        </button>
       )}
-
-      {unlinked.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-zinc-500">未連携のグループ（ボットが参加済み）</p>
-          {unlinked.map(g => (
-            <div key={g.groupId}
-              className="flex items-center justify-between px-3 py-2 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-              <div>
-                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                  {g.groupName ?? "グループ"}
-                </p>
-                <p className="text-[10px] text-zinc-400 font-mono">{g.groupId}</p>
-              </div>
-              <button
-                onClick={() => link(g.groupId)}
-                disabled={isPending}
-                className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-40 transition-colors font-medium"
-              >
-                この案件に紐付け
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {lineGroups.length === 0 && (
-        <p className="text-sm text-zinc-400 py-2">
-          ボットをLINEグループに追加すると自動でここに表示されます
-        </p>
-      )}
-
       <p className="text-[11px] text-zinc-400 bg-zinc-50 dark:bg-zinc-900 rounded-xl px-3 py-2">
-        手順：LINE公式アカウントをグループに招待 → 数秒後にここに表示される
+        グループIDの取得方法：LINE公式アカウントをグループに招待 → LINEアプリのグループ情報からIDをコピー、またはDevelopers ConsoleのWebhookログで確認
       </p>
     </div>
   );
