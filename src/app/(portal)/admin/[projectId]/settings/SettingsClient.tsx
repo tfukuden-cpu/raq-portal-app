@@ -437,7 +437,7 @@ export function MemberList({
   };
 
   const handleCreateNew = () => {
-    const fullName = `${newLast} ${newFirst}`.trim();
+    const fullName = `${newLast}${newFirst}`.trim();
     const fd = new FormData();
     fd.set("projectId", projectId); fd.set("name", fullName);
     fd.set("display_name", fullName); fd.set("role", newRole);
@@ -461,7 +461,7 @@ export function MemberList({
       const last = cols[0] ?? ""; const first = cols[1] ?? "";
       const role = ROLE_MAP[cols[2]?.trim() ?? ""] ?? "staff";
       const company_name = cols[3]?.trim() ?? "";
-      return { id: "", name: `${last} ${first}`.trim(), role, company_name };
+      return { id: "", name: `${last}${first}`.trim(), role, company_name };
     }).filter(r => r.name);
   };
 
