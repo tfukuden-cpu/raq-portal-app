@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
 
+const adminClient = () => createAdminClient();
+
 export type HolidayResult = { success: boolean; message?: string };
 
 /** 希望休を申請（複数日まとめて） */
@@ -26,8 +28,8 @@ export async function submitHolidayAction(
   const projectId = await getCurrentProjectId();
   if (!projectId) return { success: false, message: "案件が選択されていません" };
 
-  // 希望休ルールを取得
-  const { data: ruleRows } = await supabase
+  // 希望休ルールを取得（RLSバイパスで確実に読む）
+  const { data: ruleRows } = await adminClient()
     .from("holiday_rules")
     .select("rule_type, value")
     .eq("project_id", projectId);
