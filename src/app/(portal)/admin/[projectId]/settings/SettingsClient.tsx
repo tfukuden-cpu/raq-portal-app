@@ -29,7 +29,7 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -717,10 +717,19 @@ export function MemberList({
                     <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">{m.name}</span>
                     <span className="text-[10px] text-zinc-400 font-mono flex-shrink-0">{m.staffId}</span>
                   </div>
-                  {m.company_name
-                    ? <p className="text-[11px] text-zinc-400 truncate leading-tight">{m.company_name}</p>
-                    : <p className="text-[11px] text-amber-400 leading-tight">会社名未設定</p>
-                  }
+                  <div className="flex items-center gap-1.5">
+                    {m.company_name
+                      ? <p className="text-[11px] text-zinc-400 truncate leading-tight">{m.company_name}</p>
+                      : <p className="text-[11px] text-amber-400 leading-tight">会社名未設定</p>
+                    }
+                    <span className={`text-[10px] px-1 py-0 rounded font-medium flex-shrink-0 ${
+                      m.lineLinked
+                        ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
+                    }`}>
+                      LINE{m.lineLinked ? "✓" : "未"}
+                    </span>
+                  </div>
                 </div>
                 {/* ロール */}
                 <select
