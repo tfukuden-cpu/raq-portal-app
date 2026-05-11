@@ -56,14 +56,15 @@ export async function replyInquiryAction(fd: FormData): Promise<InquiryResult> {
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
 
-  const { data: inquiry, error: fetchErr } = await createAdminClient()
+  const admin = createAdminClient();
+  const { data: inquiry, error: fetchErr } = await admin
     .from("inquiries")
-    .select("project_id, staff_id, title, staffs(display_name, name)")
+    .select("project_id, staff_id, title")
     .eq("id", id).maybeSingle();
   if (fetchErr || !inquiry) return { success: false, message: "問い合わせが見つかりません" };
-  const s = (Array.isArray(inquiry.staffs) ? inquiry.staffs[0] : inquiry.staffs) as
-    { display_name: string | null; name: string | null } | null;
-  const staffName = s?.display_name ?? s?.name ?? inquiry.staff_id;
+  const { data: staffRow } = await admin
+    .from("staffs").select("display_name, name").eq("id", inquiry.staff_id).maybeSingle();
+  const staffName = staffRow?.display_name ?? staffRow?.name ?? inquiry.staff_id;
 
   const { error } = await supabase.from("inquiries").update({
     reply,
