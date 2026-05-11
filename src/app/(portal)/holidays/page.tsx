@@ -2,6 +2,7 @@
  * 休暇申請画面（スタッフ用）
  */
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import HolidayCalendar from "./HolidayCalendar";
@@ -34,6 +35,7 @@ export default async function HolidaysPage() {
   const futureDate = new Date(today.getFullYear(), today.getMonth() + 3, 0);
   const to = `${futureDate.getFullYear()}-${String(futureDate.getMonth() + 1).padStart(2, "0")}-${String(futureDate.getDate()).padStart(2, "0")}`;
 
+  const admin = createAdminClient();
   const [{ data: requests }, { data: ruleRows }] = await Promise.all([
     supabase
       .from("holiday_requests")
@@ -43,7 +45,7 @@ export default async function HolidaysPage() {
       .gte("request_date", from)
       .lte("request_date", to)
       .order("request_date"),
-    supabase
+    admin
       .from("holiday_rules")
       .select("rule_type, value")
       .eq("project_id", projectId),

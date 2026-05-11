@@ -2,6 +2,7 @@
  * シフト・希望休・追加申請（タブ切り替え）
  */
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import ShiftsTabs from "./ShiftsTabs";
@@ -63,8 +64,8 @@ export default async function ShiftsPage() {
       .lte("opening_date", dateKey(rangeEnd))
       .order("opening_date"),
 
-    // 希望休ルール
-    supabase
+    // 希望休ルール（RLSバイパスで確実に取得）
+    createAdminClient()
       .from("holiday_rules")
       .select("rule_type, value")
       .eq("project_id", projectId),
