@@ -26,7 +26,7 @@ export default async function ShiftsPage() {
   const rangeStart = new Date(today.getFullYear(), today.getMonth() - 3, 1);
   const rangeEnd   = new Date(today.getFullYear(), today.getMonth() + 4, 0);
 
-  const [shiftsRes, holidaysRes, requestsRes, openingsRes] = await Promise.all([
+  const [shiftsRes, holidaysRes, requestsRes, openingsRes, rulesRes] = await Promise.all([
     supabase
       .from("shifts")
       .select("shift_date, shift_name, shift_start, shift_end, note")
@@ -62,7 +62,17 @@ export default async function ShiftsPage() {
       .gte("opening_date", todayStr)
       .lte("opening_date", dateKey(rangeEnd))
       .order("opening_date"),
+
+    // 希望休ルール
+    supabase
+      .from("holiday_rules")
+      .select("rule_type, value")
+      .eq("project_id", projectId),
   ]);
+
+  const ruleMap = new Map((rulesRes.data ?? []).map(r => [r.rule_type, r.value as number]));
+  const holidayDeadlineDay   = ruleMap.get("deadline_day") ?? null;
+  const holidayMaxDaysPerMonth = ruleMap.get("monthly_limit_per_person") ?? null;
 
   const minMonth = `${rangeStart.getFullYear()}-${String(rangeStart.getMonth() + 1).padStart(2, "0")}`;
   const maxMonth = `${rangeEnd.getFullYear()}-${String(rangeEnd.getMonth() + 1).padStart(2, "0")}`;
@@ -88,6 +98,8 @@ export default async function ShiftsPage() {
             holidayRequests={holidaysRes.data ?? []}
             shiftRequests={requestsRes.data ?? []}
             shiftOpenings={openingsRes.data ?? []}
+            holidayDeadlineDay={holidayDeadlineDay}
+            holidayMaxDaysPerMonth={holidayMaxDaysPerMonth}
           />
         </div>
       </div>

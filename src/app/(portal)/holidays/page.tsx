@@ -34,14 +34,24 @@ export default async function HolidaysPage() {
   const futureDate = new Date(today.getFullYear(), today.getMonth() + 3, 0);
   const to = `${futureDate.getFullYear()}-${String(futureDate.getMonth() + 1).padStart(2, "0")}-${String(futureDate.getDate()).padStart(2, "0")}`;
 
-  const { data: requests } = await supabase
-    .from("holiday_requests")
-    .select("id, request_date, status, note")
-    .eq("project_id", projectId)
-    .eq("staff_id", staffId)
-    .gte("request_date", from)
-    .lte("request_date", to)
-    .order("request_date");
+  const [{ data: requests }, { data: ruleRows }] = await Promise.all([
+    supabase
+      .from("holiday_requests")
+      .select("id, request_date, status, note")
+      .eq("project_id", projectId)
+      .eq("staff_id", staffId)
+      .gte("request_date", from)
+      .lte("request_date", to)
+      .order("request_date"),
+    supabase
+      .from("holiday_rules")
+      .select("rule_type, value")
+      .eq("project_id", projectId),
+  ]);
+
+  const ruleMap = new Map((ruleRows ?? []).map(r => [r.rule_type, r.value as number]));
+  const deadlineDay = ruleMap.get("deadline_day") ?? null;
+  const maxDaysPerMonth = ruleMap.get("monthly_limit_per_person") ?? null;
 
   const appliedRequests = (requests ?? []).map((r) => ({
     id: r.id,
@@ -70,6 +80,8 @@ export default async function HolidaysPage() {
           initialYear={today.getFullYear()}
           initialMonth={today.getMonth() + 1}
           appliedRequests={appliedRequests}
+          deadlineDay={deadlineDay}
+          maxDaysPerMonth={maxDaysPerMonth}
         />
       </div>
     </main>

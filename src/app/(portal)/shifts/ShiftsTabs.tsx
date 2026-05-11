@@ -52,6 +52,8 @@ type Props = {
   holidayRequests: HolidayRequest[];
   shiftRequests: ShiftRequest[];
   shiftOpenings: ShiftOpening[];
+  holidayDeadlineDay?: number | null;
+  holidayMaxDaysPerMonth?: number | null;
 };
 
 type TabKey = "shift" | "holiday" | "request";
@@ -65,6 +67,7 @@ const TABS: { key: TabKey; label: string }[] = [
 export default function ShiftsTabs({
   shifts, todayStr, initialYear, initialMonth, minMonth, maxMonth,
   holidayRequests, shiftRequests, shiftOpenings,
+  holidayDeadlineDay = null, holidayMaxDaysPerMonth = null,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("shift");
 
@@ -110,6 +113,8 @@ export default function ShiftsTabs({
               initialYear={initialYear}
               initialMonth={initialMonth}
               appliedRequests={holidayRequests}
+              deadlineDay={holidayDeadlineDay}
+              maxDaysPerMonth={holidayMaxDaysPerMonth}
             />
           </div>
         )}

@@ -22,25 +22,24 @@ function dateKey(y: number, m: number, d: number) {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-/** 申請期日チェック（現在は無効） */
-function isPastDeadline(_year: number, _month: number) {
-  return false;
-}
-
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  pending: { label: "審査中", color: "text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20" },
-  approved: { label: "承認", color: "text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20" },
-  rejected: { label: "却下", color: "text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20" },
+  pending:  { label: "審査中", color: "text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20" },
+  approved: { label: "承認",   color: "text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20" },
+  rejected: { label: "却下",   color: "text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20" },
 };
 
 export default function HolidayCalendar({
   initialYear,
   initialMonth,
   appliedRequests,
+  deadlineDay = null,
+  maxDaysPerMonth = null,
 }: {
   initialYear: number;
   initialMonth: number;
   appliedRequests: AppliedRequest[];
+  deadlineDay?: number | null;
+  maxDaysPerMonth?: number | null;
 }) {
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
@@ -50,13 +49,28 @@ export default function HolidayCalendar({
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
+  const today = new Date();
+  const todayDay = today.getDate();
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth() + 1;
+
   // 申請済み日付マップ
   const appliedMap = new Map(appliedRequests.map((r) => [r.request_date, r]));
+
+  // 月のapproved件数（上限チェック用）
+  const monthStr = `${year}-${String(month).padStart(2, "0")}`;
+  const approvedThisMonth = appliedRequests.filter(
+    r => r.request_date.startsWith(monthStr) && r.status === "approved"
+  ).length;
+  const remaining = maxDaysPerMonth !== null ? maxDaysPerMonth - approvedThisMonth : null;
+
+  // 締切チェック：表示中の月が今月で、今日 > deadline_day なら締切済み
+  const isCurrentMonth = year === todayYear && month === todayMonth;
+  const pastDeadline = deadlineDay !== null && isCurrentMonth && todayDay > deadlineDay;
 
   // 月の日数・開始曜日
   const firstDow = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
-  const pastDeadline = isPastDeadline(year, month);
 
   const goMonth = (delta: number) => {
     setSelected([]);
@@ -71,6 +85,7 @@ export default function HolidayCalendar({
       return;
     }
     if (pastDeadline) return;
+    if (remaining !== null && remaining <= 0 && !selected.includes(ds)) return;
     setSelected((prev) =>
       prev.includes(ds) ? prev.filter((d) => d !== ds) : [...prev, ds]
     );
@@ -78,6 +93,11 @@ export default function HolidayCalendar({
 
   const handleApply = () => {
     if (selected.length === 0) return;
+    // 上限チェック
+    if (remaining !== null && selected.length > remaining) {
+      setError(`この月の残り申請枠は${remaining}日です`);
+      return;
+    }
     setNote("");
     setError(null);
     setModal({ type: "apply", dates: [...selected].sort() });
@@ -120,7 +140,18 @@ export default function HolidayCalendar({
           >
             <ChevronLeftIcon className="w-4 h-4" />
           </button>
-          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50">{year}年 {month}月</p>
+          <div className="text-center">
+            <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50">{year}年 {month}月</p>
+            {maxDaysPerMonth !== null && (
+              <p className={`text-[11px] tabular-nums ${
+                (remaining ?? 0) <= 0
+                  ? "text-red-500 dark:text-red-400 font-bold"
+                  : "text-zinc-400"
+              }`}>
+                申請枠: 残{remaining ?? 0}/{maxDaysPerMonth}日
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => goMonth(1)}
@@ -130,10 +161,20 @@ export default function HolidayCalendar({
           </button>
         </div>
 
-        {/* 期限警告 */}
+        {/* 期限・上限警告 */}
         {pastDeadline && (
           <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-xl px-3 py-2.5">
-            申請締切日（20日）を過ぎているため、今月分の新規申請・取り下げはできません
+            申請締切日（{deadlineDay}日）を過ぎているため、今月分の新規申請・取り下げはできません
+          </div>
+        )}
+        {!pastDeadline && deadlineDay !== null && isCurrentMonth && (
+          <div className="text-xs text-zinc-400 px-1">
+            今月の申請締切: {month}/{deadlineDay}
+          </div>
+        )}
+        {remaining !== null && remaining <= 0 && !pastDeadline && (
+          <div className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2.5">
+            この月の申請上限（{maxDaysPerMonth}日）に達しています
           </div>
         )}
 
@@ -155,6 +196,7 @@ export default function HolidayCalendar({
             const applied = appliedMap.get(ds);
             const isSelected = selected.includes(ds);
             const dow = new Date(year, month - 1, d).getDay();
+            const atLimit = remaining !== null && remaining <= 0 && !isSelected;
 
             let cellClass =
               "rounded-lg py-2 text-sm font-medium transition-colors cursor-pointer select-none ";
@@ -168,7 +210,7 @@ export default function HolidayCalendar({
                   : "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900";
             } else if (isSelected) {
               cellClass += "bg-blue-600 text-white";
-            } else if (pastDeadline) {
+            } else if (pastDeadline || atLimit) {
               cellClass += "text-zinc-300 dark:text-zinc-600 cursor-default";
             } else {
               cellClass +=
@@ -210,6 +252,7 @@ export default function HolidayCalendar({
             希望休を申請する（{selected.length}日選択中）
           </button>
         )}
+        {error && <p className="text-xs text-red-500 text-center">{error}</p>}
       </div>
 
       {/* 申請確認モーダル */}
@@ -257,14 +300,18 @@ export default function HolidayCalendar({
             {(() => {
               const r = modal.request;
               const d = new Date(r.request_date + "T00:00:00+09:00");
+              const reqYear  = d.getFullYear();
+              const reqMonth = d.getMonth() + 1;
+              const reqDay   = d.getDate();
               const st = STATUS_LABEL[r.status] ?? { label: r.status, color: "" };
-              // 承認フロー不要のため approved でも取り下げ可能
-              const canWithdraw = (r.status === "pending" || r.status === "approved") && !isPastDeadline(d.getFullYear(), d.getMonth() + 1);
+              const isReqCurrentMonth = reqYear === todayYear && reqMonth === todayMonth;
+              const reqPastDeadline = deadlineDay !== null && isReqCurrentMonth && todayDay > deadlineDay;
+              const canWithdraw = (r.status === "pending" || r.status === "approved") && !reqPastDeadline;
               return (
                 <>
                   <div className="text-xs font-medium text-zinc-500 mb-1">申請済みの希望休</div>
                   <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 mb-2">
-                    {d.getMonth() + 1}月{d.getDate()}日（{WEEKDAY_JP[d.getDay()]}）
+                    {reqMonth}月{reqDay}日（{WEEKDAY_JP[d.getDay()]}）
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded font-medium ${st.color}`}>{st.label}</span>
                   {r.note && (
