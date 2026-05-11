@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
 import { sendEventNotify } from "@/lib/notify";
@@ -55,7 +56,7 @@ export async function replyInquiryAction(fd: FormData): Promise<InquiryResult> {
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
 
-  const { data: inquiry, error: fetchErr } = await supabase
+  const { data: inquiry, error: fetchErr } = await createAdminClient()
     .from("inquiries")
     .select("project_id, staff_id, title, staffs(display_name, name)")
     .eq("id", id).maybeSingle();
