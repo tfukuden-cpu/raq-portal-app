@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
+import { sendEventNotify } from "@/lib/notify";
 
 export type ActionResult = { success: boolean; message?: string };
 
@@ -47,6 +48,21 @@ export async function applyShiftOpeningAction(
   if (error) return { success: false, message: "申請失敗: " + error.message };
 
   revalidatePath("/shifts");
+
+  const { data: staff } = await supabase
+    .from("staffs").select("display_name, name").eq("id", staffId).maybeSingle();
+  const staffName = staff?.display_name ?? staff?.name ?? staffId;
+
+  // 申請先のシフト名を取得
+  const { data: opening } = await supabase
+    .from("shift_openings").select("shift_name").eq("id", openingId).maybeSingle();
+
+  await sendEventNotify(projectId, "shift_request", {
+    名前:   staffName,
+    日付:   requestDate,
+    シフト: opening?.shift_name ?? "シフト追加",
+  });
+
   return { success: true, message: "申請しました" };
 }
 
