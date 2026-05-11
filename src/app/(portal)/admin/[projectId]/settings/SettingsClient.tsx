@@ -591,7 +591,7 @@ export function MemberList({
       {addMode === "new" && (
         <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20 p-3 space-y-2">
           <p className="text-xs font-semibold text-zinc-500">新規アカウントを作成してこの案件に追加</p>
-          <p className="text-[10px] text-zinc-400">社員IDは自動採番 ／ 初期パスワード: raq-init-2026</p>
+          <p className="text-[10px] text-zinc-400">社員IDは自動採番 ／ 初期パスワード: 1234</p>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] text-zinc-500 font-semibold">苗字 *</label>

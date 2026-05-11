@@ -170,7 +170,7 @@ export async function addMemberAction(fd: FormData): Promise<SettingsResult> {
 // ── 新規スタッフ作成 ＋ 案件紐付け ──────────────────────────
 
 const EMAIL_DOMAIN = "raq.internal";
-const INITIAL_PASSWORD = "raq-init-2026";
+const INITIAL_PASSWORD = "1234";
 
 /** S001, S002, ... の形式で次の空き社員IDを自動採番する */
 async function getNextStaffId(): Promise<string> {
@@ -656,7 +656,7 @@ export async function createProjectAction(fd: FormData): Promise<SettingsResult 
 
       const { data: authData, error: authErr } = await adminSupa().auth.admin.createUser({
         email: managerEmail,
-        password: "raq-init-2026",
+        password: "1234",
         email_confirm: true,
       });
       if (!authErr && authData.user) {

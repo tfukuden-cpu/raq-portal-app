@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
-const INITIAL_PASSWORD = "raq-init-2026";
+const INITIAL_PASSWORD = "1234";
 const EMAIL_DOMAIN = "raq.internal";
 
 export type OperatorResult = { success: boolean; message?: string };

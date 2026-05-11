@@ -101,7 +101,7 @@ export default function NewProjectModal() {
                 <div className="space-y-4">
                   <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-3 text-xs text-blue-700 dark:text-blue-300 space-y-1">
                     <p>・社員IDは自動生成（A + 案件名頭文字 + 3桁）</p>
-                    <p>・初期パスワード: <span className="font-mono font-bold">raq-init-2026</span></p>
+                    <p>・初期パスワード: <span className="font-mono font-bold">1234</span></p>
                     <p>・空欄のまま作成し、後から案件設定で追加もできます</p>
                   </div>
                   <div>

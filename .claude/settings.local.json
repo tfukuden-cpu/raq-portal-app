@@ -42,7 +42,19 @@
       "mcp__2aff666e-f695-49bd-901b-085478bb71fe__list_projects",
       "mcp__2aff666e-f695-49bd-901b-085478bb71fe__get_project_url",
       "mcp__2aff666e-f695-49bd-901b-085478bb71fe__get_publishable_keys",
-      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__execute_sql"
+      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__execute_sql",
+      "PowerShell(git add \"src/app/\\(portal\\)/layout.tsx\")",
+      "PowerShell(git commit -m \"fix: add inquiry management to executive menu\")",
+      "PowerShell(git push origin master)",
+      "Bash(git revert *)",
+      "Bash(git checkout *)",
+      "Bash(git rm *)",
+      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__apply_migration",
+      "mcp__Claude_in_Chrome__read_network_requests",
+      "mcp__Claude_in_Chrome__javascript_tool",
+      "Bash(gh run *)",
+      "mcp__Claude_in_Chrome__tabs_create_mcp",
+      "mcp__Claude_in_Chrome__tabs_close_mcp"
     ]
   }
 }

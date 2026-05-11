@@ -106,7 +106,7 @@ export default function OperatorsClient({
             placeholder="氏名"
             className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <p className="text-xs text-zinc-400">社員IDは自動生成されます。初期パスワード: raq-init-2026</p>
+          <p className="text-xs text-zinc-400">社員IDは自動生成されます。初期パスワード: 1234</p>
           <div className="flex gap-2">
             <button
               onClick={handleCreate}
