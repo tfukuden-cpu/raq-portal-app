@@ -29,7 +29,7 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -385,7 +385,7 @@ const AVATAR_PALETTE = [
 ];
 
 type AddMode = "none" | "new" | "csv";
-type CsvRow = { id: string; name: string; role: string; company_name: string };
+type CsvRow = { id: string; name: string; role: string; company_name: string; section: string };
 type CsvResult = { id: string; name: string; ok: boolean; message: string; noCompany?: boolean };
 
 export function MemberList({
@@ -396,10 +396,11 @@ export function MemberList({
   members: Member[];
 }) {
   const [addMode, setAddMode]       = useState<AddMode>("none");
-  const [newLast, setNewLast]       = useState("");
-  const [newFirst, setNewFirst]     = useState("");
-  const [newCompany, setNewCompany] = useState("");
-  const [newRole, setNewRole]       = useState("staff");
+  const [newLast, setNewLast]         = useState("");
+  const [newFirst, setNewFirst]       = useState("");
+  const [newCompany, setNewCompany]   = useState("");
+  const [newRole, setNewRole]         = useState("staff");
+  const [newSection, setNewSection]   = useState("");
   const [search, setSearch]         = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
   const [csvText, setCsvText]       = useState("");
@@ -431,7 +432,7 @@ export function MemberList({
 
   const reset = (mode: AddMode = "none") => {
     setAddMode(mode);
-    setNewLast(""); setNewFirst(""); setNewCompany(""); setNewRole("staff");
+    setNewLast(""); setNewFirst(""); setNewCompany(""); setNewRole("staff"); setNewSection("");
     setCsvText(""); setCsvPreview([]); setCsvResults(null);
     setResult(null);
   };
@@ -442,6 +443,7 @@ export function MemberList({
     fd.set("projectId", projectId); fd.set("name", fullName);
     fd.set("display_name", fullName); fd.set("role", newRole);
     if (newCompany.trim()) fd.set("company_name", newCompany.trim());
+    if (newSection.trim()) fd.set("section", newSection.trim());
     start(async () => {
       const r = await createAndAddStaffAction(fd);
       setResult({ ok: r.success, msg: r.message ?? (r.success ? "登録しました" : "エラー") });
@@ -455,13 +457,17 @@ export function MemberList({
     "運営者": "ops", "ops": "ops",
   };
   const parseCsv = (text: string) => {
-    const lines = text.split("\n").map(l => l.replace(/\r$/, "")).filter(l => l.trim() && !l.startsWith("苗字"));
-    return lines.map(line => {
+    const lines = text.split("\n").map(l => l.replace(/\r$/, "")).filter(l => l.trim());
+    // ヘッダー行をスキップ（所属会社・苗字・氏名 いずれかで始まる行）
+    const dataLines = lines.filter(l => !l.match(/^(所属会社|苗字|氏名)/));
+    return dataLines.map(line => {
       const cols = line.split(",").map(c => c.replace(/^"|"$/g, "").trim());
-      const last = cols[0] ?? ""; const first = cols[1] ?? "";
-      const role = ROLE_MAP[cols[2]?.trim() ?? ""] ?? "staff";
-      const company_name = cols[3]?.trim() ?? "";
-      return { id: "", name: `${last}${first}`.trim(), role, company_name };
+      // フォーマット: 所属会社,氏名,役割,セクション
+      const company_name = cols[0] ?? "";
+      const name         = cols[1] ?? "";
+      const role         = ROLE_MAP[cols[2]?.trim() ?? ""] ?? "staff";
+      const section      = cols[3]?.trim() ?? "";
+      return { id: "", name, role, company_name, section };
     }).filter(r => r.name);
   };
 
@@ -479,7 +485,7 @@ export function MemberList({
   const handleBulkCsv = () => {
     const fd = new FormData();
     fd.set("projectId", projectId);
-    fd.set("csv", JSON.stringify(csvPreview.map(r => ({ name: r.name, role: r.role, company_name: r.company_name }))));
+    fd.set("csv", JSON.stringify(csvPreview.map(r => ({ name: r.name, role: r.role, company_name: r.company_name, section: r.section }))));
     start(async () => {
       const r = await bulkCreateAndAddStaffsAction(fd);
       setCsvResults(r.results);
@@ -609,13 +615,20 @@ export function MemberList({
             <input type="text" value={newCompany} onChange={e => setNewCompany(e.target.value)} placeholder="株式会社○○"
               className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm mt-0.5" />
           </div>
-          <div>
-            <label className="text-[10px] text-zinc-500 font-semibold">ロール</label>
-            <select value={newRole} onChange={e => setNewRole(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm mt-0.5">
-              <option value="staff">スタッフ</option>
-              <option value="project_admin">管理者</option>
-            </select>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-zinc-500 font-semibold">ロール</label>
+              <select value={newRole} onChange={e => setNewRole(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm mt-0.5">
+                <option value="staff">スタッフ</option>
+                <option value="project_admin">管理者</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] text-zinc-500 font-semibold">セクション（任意）</label>
+              <input type="text" value={newSection} onChange={e => setNewSection(e.target.value)} placeholder="A班"
+                className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm mt-0.5" />
+            </div>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={() => reset()}
@@ -628,7 +641,7 @@ export function MemberList({
 
       {addMode === "csv" && (
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40 p-3 space-y-2">
-          <p className="text-xs font-semibold text-zinc-500">CSVで一括登録（苗字,名前,ロール,所属会社）</p>
+          <p className="text-xs font-semibold text-zinc-500">CSVで一括登録（所属会社,氏名,役割,セクション）</p>
           <div className="flex gap-2 items-center">
             <button type="button" onClick={() => fileRef.current?.click()}
               className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-900">
@@ -717,11 +730,16 @@ export function MemberList({
                     <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">{m.name}</span>
                     <span className="text-[10px] text-zinc-400 font-mono flex-shrink-0">{m.staffId}</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {m.company_name
                       ? <p className="text-[11px] text-zinc-400 truncate leading-tight">{m.company_name}</p>
                       : <p className="text-[11px] text-amber-400 leading-tight">会社名未設定</p>
                     }
+                    {m.section && (
+                      <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex-shrink-0">
+                        {m.section}
+                      </span>
+                    )}
                     <span className={`text-[10px] px-1 py-0 rounded font-medium flex-shrink-0 ${
                       m.lineLinked
                         ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"

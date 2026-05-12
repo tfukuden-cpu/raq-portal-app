@@ -42,7 +42,7 @@ export default async function ProjectDetailPage(props: {
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
-      .select("staff_id, role, staffs(name, display_name, company_name, line_user_id)")
+      .select("staff_id, role, section, staffs(name, display_name, company_name, line_user_id)")
       .eq("project_id", projectId),
     createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
@@ -75,6 +75,7 @@ export default async function ProjectDetailPage(props: {
       company_name: s?.company_name ?? null,
       role:         m.role ?? "staff",
       lineLinked:   !!s?.line_user_id,
+      section:      m.section ?? null,
     };
   });
 

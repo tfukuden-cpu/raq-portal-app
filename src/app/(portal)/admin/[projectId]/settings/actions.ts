@@ -189,6 +189,7 @@ export async function createAndAddStaffAction(fd: FormData): Promise<SettingsRes
   const displayName = String(fd.get("display_name")  ?? "").trim() || name;
   const companyName = String(fd.get("company_name")  ?? "").trim() || null;
   const role        = String(fd.get("role")          ?? "staff");
+  const section     = String(fd.get("section")       ?? "").trim() || null;
 
   if (!name) return { success: false, message: "氏名は必須です" };
 
@@ -227,7 +228,7 @@ export async function createAndAddStaffAction(fd: FormData): Promise<SettingsRes
 
   // 案件メンバーとして紐付け
   const { error: memErr } = await admin.from("project_members").upsert(
-    { project_id: projectId, staff_id: id, role, is_main: true },
+    { project_id: projectId, staff_id: id, role, section, is_main: true },
     { onConflict: "project_id,staff_id" }
   );
   if (memErr) return { success: false, message: memErr.message };
@@ -248,7 +249,7 @@ export async function bulkCreateAndAddStaffsAction(fd: FormData): Promise<{
   const csvJson   = String(fd.get("csv")       ?? "");
   if (!csvJson) return { success: false, message: "データがありません", results: [] };
 
-  type CsvEntry = { name: string; role: string; company_name?: string };
+  type CsvEntry = { name: string; role: string; company_name?: string; section?: string };
   let entries: CsvEntry[];
   try {
     entries = JSON.parse(csvJson) as CsvEntry[];
@@ -281,8 +282,9 @@ export async function bulkCreateAndAddStaffsAction(fd: FormData): Promise<{
         { id, auth_user_id: authData.user.id, name, display_name: name, company_name: companyName, global_role: "staff", must_change_password: true, is_active: true },
         { onConflict: "id" }
       );
+      const section = entry.section?.trim() || null;
       await admin.from("project_members").upsert(
-        { project_id: projectId, staff_id: id, role, is_main: true },
+        { project_id: projectId, staff_id: id, role, section, is_main: true },
         { onConflict: "project_id,staff_id" }
       );
       results.push({ id, name, ok: true, message: `${id} で登録`, noCompany: !companyName });
