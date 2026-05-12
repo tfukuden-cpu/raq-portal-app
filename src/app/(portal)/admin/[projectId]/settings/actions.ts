@@ -261,10 +261,29 @@ export async function bulkCreateAndAddStaffsAction(fd: FormData): Promise<{
   const admin = adminSupa();
   const results: { id: string; name: string; ok: boolean; message: string; noCompany?: boolean }[] = [];
 
+  // 当該案件の既存メンバー名一覧を取得（重複スキップ用）
+  const { data: existingMembers } = await admin
+    .from("project_members")
+    .select("staffs(name, display_name)")
+    .eq("project_id", projectId);
+  const existingNames = new Set(
+    (existingMembers ?? []).flatMap((m) => {
+      const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+        { name: string | null; display_name: string | null } | null;
+      return [s?.name, s?.display_name].filter((n): n is string => !!n);
+    })
+  );
+
   for (const entry of entries) {
     const name = entry.name.trim();
     const role = entry.role || "staff";
     if (!name) { results.push({ id: "", name, ok: false, message: "氏名が空" }); continue; }
+
+    // 当該案件に同名メンバーがいればスキップ
+    if (existingNames.has(name)) {
+      results.push({ id: "", name, ok: false, message: "既存メンバーのためスキップ" });
+      continue;
+    }
 
     try {
       // ID自動採番
