@@ -15,7 +15,7 @@ type Shift = {
   shift_end: string | null;
   note: string | null;
 };
-type Member  = { id: string; name: string; role: string };
+type Member  = { id: string; name: string; role: string; section: string | null };
 type Pattern = { name: string; required_count: number; start_time: string | null; end_time: string | null };
 
 // 姓＋名1文字（例：田中太郎 → 田中太）
@@ -200,6 +200,15 @@ export default function ShiftDayList({
   const [isPending, startTransition]      = useTransition();
   const [error, setError]                 = useState<string | null>(null);
   const [tabKey, setTabKey]               = useState<TabKey>("shukkin");
+  const [sectionFilter, setSectionFilter] = useState<string | null>(null);
+
+  // セクション一覧（nullでない値のみ・ソート）
+  const sections = [...new Set(activeMembers.map(m => m.section).filter((s): s is string => !!s))].sort();
+  const hasSection = sections.length > 0;
+  // フィルター適用済みメンバー
+  const visibleMembers = sectionFilter
+    ? activeMembers.filter(m => m.section === sectionFilter)
+    : activeMembers;
 
   // モーダル
   const [modalMode,    setModalMode]    = useState<ModalMode>("add");
@@ -236,13 +245,13 @@ export default function ShiftDayList({
   const shiftMap = new Map<string, Shift>(shifts.map((s) => [`${s.staff_id}__${s.shift_date}`, s]));
   const getShift = (sid: string, d: string) => shiftMap.get(`${sid}__${d}`);
 
-  // パターン×日付 → メンバーリスト
+  // パターン×日付 → メンバーリスト（セクションフィルター適用）
   const membersForPatternDay = (patternName: string, date: string) =>
-    activeMembers.filter((m) => getShift(m.id, date)?.shift_name === patternName);
+    visibleMembers.filter((m) => getShift(m.id, date)?.shift_name === patternName);
 
-  // 指定日にシフト未割当のメンバー
+  // 指定日にシフト未割当のメンバー（セクションフィルター適用）
   const unassignedMembersForDate = (date: string) =>
-    activeMembers.filter((m) => !getShift(m.id, date));
+    visibleMembers.filter((m) => !getShift(m.id, date));
 
   // ── モーダルを開く ────────────────────────────────────────────
 
@@ -341,19 +350,19 @@ export default function ShiftDayList({
 
   // ── タブ ─────────────────────────────────────────────────────
   const shukkinCount = shiftPatterns.reduce(
-    (s, p) => s + membersForPatternDay(p.name, selectedDate).length, 0
+    (s, p) => s + visibleMembers.filter((m) => getShift(m.id, selectedDate)?.shift_name === p.name).length, 0
   );
   const tabs: { key: TabKey; label: string; badge: number }[] = [
     { key: "shukkin", label: "出勤", badge: shukkinCount },
     { key: "kyukyu",  label: "公休",
-      badge: activeMembers.filter((m) => getShift(m.id, selectedDate)?.shift_name === "公休").length },
+      badge: visibleMembers.filter((m) => getShift(m.id, selectedDate)?.shift_name === "公休").length },
     { key: "kiboshu", label: "希望休",
-      badge: activeMembers.filter((m) => getShift(m.id, selectedDate)?.shift_name === "希望休").length },
+      badge: visibleMembers.filter((m) => getShift(m.id, selectedDate)?.shift_name === "希望休").length },
   ];
 
   // ── スワップ用：同日の他メンバー情報 ─────────────────────────
   const swapCandidates = modalStaffId
-    ? activeMembers
+    ? visibleMembers
         .filter((m) => m.id !== modalStaffId)
         .map((m) => ({ ...m, currentShift: getShift(m.id, modalDate) ?? null }))
     : [];
@@ -363,7 +372,40 @@ export default function ShiftDayList({
       {/* ━━ sticky ヘッダー ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className="sticky top-0 z-10 bg-white dark:bg-zinc-950 -mx-4 px-4 pt-3 pb-0 border-b border-zinc-100 dark:border-zinc-800">
 
-        {/* ① パターンタブ */}
+        {/* ① セクションフィルター（セクションがある案件のみ表示） */}
+        {hasSection && (
+          <div className="flex overflow-x-auto gap-1 mb-2" style={{ scrollbarWidth: "none" }}>
+            <button
+              type="button"
+              onClick={() => setSectionFilter(null)}
+              className={cx(
+                "px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0",
+                sectionFilter === null
+                  ? "bg-blue-600 text-white"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700",
+              )}
+            >
+              すべて
+            </button>
+            {sections.map((sec) => (
+              <button
+                key={sec}
+                type="button"
+                onClick={() => setSectionFilter(sec)}
+                className={cx(
+                  "px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0",
+                  sectionFilter === sec
+                    ? "bg-blue-600 text-white"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700",
+                )}
+              >
+                {sec}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ② パターンタブ */}
         <div className="flex overflow-x-auto gap-1 mb-3" style={{ scrollbarWidth: "none" }}>
           {tabs.map((t) => {
             const isSel = tabKey === t.key;
@@ -392,7 +434,7 @@ export default function ShiftDayList({
           })}
         </div>
 
-        {/* ② 週ナビ */}
+        {/* ③ 週ナビ */}
         <div className="flex items-center justify-between mb-1 px-0.5">
           <button
             type="button"
@@ -425,7 +467,7 @@ export default function ShiftDayList({
           </button>
         </div>
 
-        {/* ③ 日付列 */}
+        {/* ④ 日付列 */}
         <div className="flex">
           {currentWeek.map((d) => {
             const { dateNum, dow, dayOfWeek } = parseDayInfo(d);

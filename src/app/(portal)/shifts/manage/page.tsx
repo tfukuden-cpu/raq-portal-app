@@ -84,7 +84,7 @@ export default async function ManageShiftsPage(props: {
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", selectedProjectId).maybeSingle(),
     admin.from("project_members")
-      .select("staff_id, role, staffs(id, name, display_name)")
+      .select("staff_id, role, section, staffs(id, name, display_name)")
       .eq("project_id", selectedProjectId),
     admin.from("shift_patterns")
       .select("name, required_count, start_time, end_time")
@@ -109,12 +109,13 @@ export default async function ManageShiftsPage(props: {
       const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
         { id: string | null; name: string | null; display_name: string | null } | null;
       return {
-        id:   s?.id ?? m.staff_id,
-        name: s?.display_name ?? s?.name ?? m.staff_id,
-        role: m.role ?? "staff",
+        id:      s?.id ?? m.staff_id,
+        name:    s?.display_name ?? s?.name ?? m.staff_id,
+        role:    m.role ?? "staff",
+        section: m.section ?? null,
       };
     })
-    .filter((m) => !!m.id) as { id: string; name: string; role: string }[];
+    .filter((m) => !!m.id) as { id: string; name: string; role: string; section: string | null }[];
 
   const staffNameMap = new Map(activeMembers.map(m => [m.id, m.name]));
 
