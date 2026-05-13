@@ -47,27 +47,30 @@ function HairBack({ style, color }: { style: number; color: string }) {
   }
 }
 
-// ── Hair (front layer – rendered AFTER the face) ──────────────────────────────
+// ── Hair cap (shared fringe shape) ───────────────────────────────────────────
 
-function HairFront({ style, color }: { style: number; color: string }) {
-  // Shared fringe/cap shape used by most styles
-  const Cap = () => (
+function HairCap({ color }: { color: string }) {
+  return (
     <path
       d="M 23,46 Q 22,20 50,18 Q 78,20 77,46 Q 68,32 50,31 Q 32,32 23,46 Z"
       fill={color}
     />
   );
+}
 
+// ── Hair (front layer – rendered AFTER the face) ──────────────────────────────
+
+function HairFront({ style, color }: { style: number; color: string }) {
   switch (style) {
     case 0: // Short – cap only
-      return <Cap />;
+      return <HairCap color={color} />;
 
     case 1: // Medium – cap + side wings covering ears
       return (
         <>
           <path d="M 18,54 Q 16,30 23,46 Q 20,62 18,54 Z" fill={color} />
           <path d="M 82,54 Q 84,30 77,46 Q 80,62 82,54 Z" fill={color} />
-          <Cap />
+          <HairCap color={color} />
         </>
       );
 
@@ -76,7 +79,7 @@ function HairFront({ style, color }: { style: number; color: string }) {
         <>
           <path d="M 15,54 Q 13,26 23,46 Q 17,72 15,54 Z" fill={color} />
           <path d="M 85,54 Q 87,26 77,46 Q 83,72 85,54 Z" fill={color} />
-          <Cap />
+          <HairCap color={color} />
         </>
       );
 

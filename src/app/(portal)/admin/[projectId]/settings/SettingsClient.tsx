@@ -407,6 +407,7 @@ export function MemberList({
   const [newSection, setNewSection]   = useState("");
   const [search, setSearch]         = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
+  const [sectionFilter, setSectionFilter] = useState("");
   const [csvText, setCsvText]       = useState("");
   const [csvPreview, setCsvPreview] = useState<CsvRow[]>([]);
   const [csvResults, setCsvResults] = useState<CsvResult[] | null>(null);
@@ -453,6 +454,11 @@ export function MemberList({
     members.map(m => m.company_name).filter((c): c is string => Boolean(c))
   )].sort();
 
+  // セクション一覧（ユニーク・ソート済み）
+  const sections = [...new Set(
+    members.map(m => m.section).filter((s): s is string => Boolean(s))
+  )].sort();
+
   // 会社名 → パレットインデックスのマップ
   const companyColorMap = new Map(companies.map((c, i) => [c, i % AVATAR_PALETTE.length]));
   const avatarStyle = (company: string | null) => AVATAR_PALETTE[companyColorMap.get(company ?? "") ?? AVATAR_PALETTE.length - 1];
@@ -465,7 +471,8 @@ export function MemberList({
       || m.staffId.toLowerCase().includes(q)
       || (m.company_name ?? "").toLowerCase().includes(q);
     const matchCompany = !companyFilter || m.company_name === companyFilter;
-    return matchSearch && matchCompany;
+    const matchSection = !sectionFilter || m.section === sectionFilter;
+    return matchSearch && matchCompany && matchSection;
   });
 
   const reset = (mode: AddMode = "none") => {
@@ -624,6 +631,39 @@ export function MemberList({
                 }`}
               >
                 <span className="truncate">{c}</span>
+                <span className={`tabular-nums flex-shrink-0 ${active ? "opacity-70" : "opacity-50"}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* セクションフィルターチップ（1つ以上のとき表示） */}
+      {sections.length > 0 && addMode === "none" && (
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          <span className="flex-shrink-0 px-2 py-1 text-[10px] font-semibold text-zinc-400 self-center">班:</span>
+          <button
+            onClick={() => setSectionFilter("")}
+            className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+              !sectionFilter
+                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+            }`}
+          >
+            全班
+          </button>
+          {sections.map((s) => {
+            const active = sectionFilter === s;
+            const count = members.filter(m => m.section === s).length;
+            return (
+              <button key={s} onClick={() => setSectionFilter(active ? "" : s)}
+                className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                  active
+                    ? "bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                }`}
+              >
+                <span>{s}</span>
                 <span className={`tabular-nums flex-shrink-0 ${active ? "opacity-70" : "opacity-50"}`}>{count}</span>
               </button>
             );
@@ -826,6 +866,9 @@ export function MemberList({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">{m.name}</span>
+                    {m.account_number && (
+                      <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0">{m.account_number}</span>
+                    )}
                     <span className="text-[10px] text-zinc-400 font-mono flex-shrink-0">{m.staffId}</span>
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
