@@ -68,34 +68,20 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 
 **現状：スプシ連携機能は動作していない。**
 
-GCPプロジェクト「Raq app」の組織ポリシー `iam.disableServiceAccountKeyCreation` により、
-サービスアカウントキーの作成が禁止されている。
-そのため `GOOGLE_SERVICE_ACCOUNT_JSON` は使用できない。
+確認済みの事実：
+- GCPプロジェクト「Raq app」のサービスアカウント `raq-portal@raq-app-495214.iam.gserviceaccount.com` にキーは存在しない
+- GCPの組織ポリシー `iam.disableServiceAccountKeyCreation` によりキーの新規作成も不可
+- Vercelに `GOOGLE_SERVICE_ACCOUNT_JSON` は設定されているが、動作しない状態
+- `GOOGLE_REFRESH_TOKEN` / `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` はVercelに存在しない
 
-Vercelに設定されている環境変数（Google関連）：
-- `GOOGLE_SERVICE_ACCOUNT_JSON` ← 設定済みだが壊れている＆そもそもキーが存在しない
-
-コード側は以下の認証方式に対応済み（`src/lib/gsheets.ts`）：
-1. OAuth2（`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `GOOGLE_REFRESH_TOKEN`）← **推奨・未設定**
-2. サービスアカウントJSON（`GOOGLE_SERVICE_ACCOUNT_JSON`）← キー作成が禁止されていて使えない
-3. 個別環境変数（`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`）← コードは対応済み・未設定
-
-**解決策：OAuth2リフレッシュトークンを設定する**
-
-Google Cloud Console → APIs & Services → 認証情報 → OAuthクライアントID を作成し、
-[OAuth 2.0 Playground](https://developers.google.com/oauthplayground/) でリフレッシュトークンを取得。
-スコープ: `https://www.googleapis.com/auth/spreadsheets`
-
-Vercelに以下を設定：
-```
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GOOGLE_REFRESH_TOKEN=...
-```
+コード側（`src/lib/gsheets.ts`）が対応している認証方式：
+1. OAuth2（`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `GOOGLE_REFRESH_TOKEN`）← 未設定
+2. サービスアカウントJSON（`GOOGLE_SERVICE_ACCOUNT_JSON`）← 未動作
+3. 個別環境変数（`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`）← 未設定
 
 ### 次に優先すべきこと（新しいセッションはここから）
 
-1. **Google Sheets認証の修正** — OAuth2リフレッシュトークンを取得してVercelに設定する（上記参照）
+1. **Google Sheets連携の復旧** — 認証が通るように環境変数を正しく設定する
 2. **スケジュール通知の本番テスト** — `CRON_SECRET` を使ってcronエンドポイントを叩き、出勤前リマインドなどが飛ぶか確認
 3. **シフト追加申請の管理者審査画面** — `/shifts/manage` に申請タブを追加
 4. **希望休ルールのバリデーション** — 月上限・締切・連続上限チェック
@@ -488,13 +474,16 @@ LINE_LOGIN_CHANNEL_SECRET=...
 LINE_CHANNEL_ACCESS_TOKEN=...
 CRON_SECRET=...                            # ★v9新設：openssl rand -hex 32 等で生成
 
-# Google Sheets連携（いずれか1セットを設定）
-# 推奨：OAuth2方式（サービスアカウントキー不要）
+# Google Sheets連携（以下いずれかの方式で設定）
+# 方式A: OAuth2
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REFRESH_TOKEN=...
-# または：サービスアカウントJSON方式（GCPの組織ポリシーで禁止の場合は使えない）
-# GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
+# 方式B: サービスアカウントJSON
+GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
+# 方式C: 個別環境変数
+GOOGLE_CLIENT_EMAIL=...
+GOOGLE_PRIVATE_KEY=...
 ```
 
 ---
