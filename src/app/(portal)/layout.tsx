@@ -111,20 +111,10 @@ export default async function PortalLayout({
   // 表示モードに応じてメニューを構築
   let sections: NavSection[];
   if (viewMode === "ops") {
-    // 案件一覧セクション（クリックで案件コンテキスト切り替え）
-    const projectNavItems: NavItem[] = opsProjects.map(p => ({
-      href:  `/admin/ops/switch/${p.id}`,
-      icon:  "Briefcase" as IconKey,
-      label: p.name,
-    }));
     sections = [
       { items: EXECUTIVE_ITEMS },
-      { title: "案件", items: projectNavItems },
+      { title: "案件管理", items: PROJECT_ADMIN_ITEMS },
     ];
-    // 案件が選択済みなら管理者メニューも追加
-    if (projectId) {
-      sections.push({ title: projectName ?? "案件管理", items: PROJECT_ADMIN_ITEMS });
-    }
   } else if (viewMode === "admin") {
     sections = [{ items: STAFF_ITEMS }, { title: "管理", items: PROJECT_ADMIN_ITEMS }];
   } else {
