@@ -650,6 +650,44 @@ export async function updateMemberRoleAction(fd: FormData): Promise<SettingsResu
   return { success: true };
 }
 
+/**
+ * メンバー情報を更新（氏名・会社・セクション・ロール）してスプシに同期
+ */
+export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResult> {
+  const projectId  = String(fd.get("projectId")  ?? "").trim();
+  const staffId    = String(fd.get("staffId")    ?? "").trim().toUpperCase();
+  const name       = String(fd.get("name")       ?? "").trim();
+  const companyName= String(fd.get("company_name")  ?? "").trim() || null;
+  const section    = String(fd.get("section")    ?? "").trim() || null;
+  const role       = String(fd.get("role")       ?? "staff");
+
+  if (!name) return { success: false, message: "氏名を入力してください" };
+
+  await assertAdmin();
+  const admin = adminSupa();
+
+  // staffs テーブル更新（氏名・会社名）
+  const { error: staffErr } = await admin
+    .from("staffs")
+    .update({ name, display_name: name, company_name: companyName })
+    .eq("id", staffId);
+  if (staffErr) return { success: false, message: staffErr.message };
+
+  // project_members テーブル更新（ロール・セクション）
+  const { error: memberErr } = await admin
+    .from("project_members")
+    .update({ role, section })
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId);
+  if (memberErr) return { success: false, message: memberErr.message };
+
+  // スプシのメンバーシートを同期
+  try { await syncProjectMembersToSheet(projectId); } catch { /* ignore */ }
+
+  revalidatePath(`/admin/${projectId}`);
+  return { success: true, message: "更新しました" };
+}
+
 // ── 案件アーカイブ ───────────────────────────────────────
 
 export async function archiveProjectAction(fd: FormData): Promise<void> {

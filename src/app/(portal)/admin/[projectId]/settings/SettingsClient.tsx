@@ -7,6 +7,7 @@ import {
   createSpreadsheetAction,
   removeMemberAction,
   updateMemberRoleAction,
+  updateMemberInfoAction,
   saveShiftPatternsAction,
   saveHolidayRulesAction,
   createAndAddStaffAction,
@@ -413,6 +414,37 @@ export function MemberList({
   const [result, setResult]         = useState<{ ok: boolean; msg: string } | null>(null);
   const [isPending, start]          = useTransition();
 
+  // インライン編集
+  const [editId, setEditId]           = useState<string | null>(null);
+  const [editName, setEditName]       = useState("");
+  const [editCompany, setEditCompany] = useState("");
+  const [editSection, setEditSection] = useState("");
+  const [editRole, setEditRole]       = useState("staff");
+
+  const startEdit = (m: Member) => {
+    setEditId(m.staffId);
+    setEditName(m.name);
+    setEditCompany(m.company_name ?? "");
+    setEditSection(m.section ?? "");
+    setEditRole(m.role);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editId || !editName.trim()) return;
+    const fd = new FormData();
+    fd.set("projectId",    projectId);
+    fd.set("staffId",      editId);
+    fd.set("name",         editName.trim());
+    fd.set("company_name", editCompany.trim());
+    fd.set("section",      editSection.trim());
+    fd.set("role",         editRole);
+    start(async () => {
+      const r = await updateMemberInfoAction(fd);
+      setResult({ ok: r.success, msg: r.message ?? (r.success ? "更新しました" : "エラー") });
+      if (r.success) setEditId(null);
+    });
+  };
+
   // 会社一覧（ユニーク・ソート済み）
   const companies = [...new Set(
     members.map(m => m.company_name).filter((c): c is string => Boolean(c))
@@ -720,9 +752,63 @@ export function MemberList({
         <div className="space-y-0.5">
           {filtered.map((m) => {
             const av = avatarStyle(m.company_name);
+            const isEditing = editId === m.staffId;
+
+            if (isEditing) {
+              return (
+                <div key={m.staffId} className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20 p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="font-mono text-[11px] text-zinc-400">{m.staffId}</span>
+                    <span className="text-[10px] text-zinc-400">を編集中</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">氏名 *</label>
+                      <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">所属会社</label>
+                      <input type="text" value={editCompany} onChange={e => setEditCompany(e.target.value)}
+                        placeholder="任意"
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">セクション</label>
+                      <input type="text" value={editSection} onChange={e => setEditSection(e.target.value)}
+                        placeholder="A班など（任意）"
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">ロール</label>
+                      <select value={editRole} onChange={e => setEditRole(e.target.value)}
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                        <option value="staff">スタッフ</option>
+                        <option value="project_admin">管理者</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setEditId(null)}
+                      className="flex-1 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                      キャンセル
+                    </button>
+                    <button type="button" onClick={handleSaveEdit} disabled={!editName.trim() || isPending}
+                      className="flex-1 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-40">
+                      {isPending ? "保存中…" : "保存"}
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div key={m.staffId}
-                className="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/50 group transition-colors">
+                className="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/50 group transition-colors cursor-pointer"
+                onClick={() => startEdit(m)}
+              >
                 {/* アバター */}
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${av.bg} ${av.text}`}>
                   {m.name[0]}
@@ -750,22 +836,20 @@ export function MemberList({
                     }`}>
                       LINE{m.lineLinked ? "✓" : "未"}
                     </span>
+                    <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex-shrink-0">
+                      {m.role === "project_admin" ? "管理者" : "スタッフ"}
+                    </span>
                   </div>
                 </div>
-                {/* ロール */}
-                <select
-                  value={m.role}
-                  onChange={e => handleRoleChange(m.staffId, e.target.value)}
-                  disabled={isPending}
-                  className="text-[11px] px-1.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 flex-shrink-0"
-                >
-                  <option value="staff">スタッフ</option>
-                  <option value="project_admin">管理者</option>
-                </select>
+                {/* 編集アイコン（ホバー時） */}
+                <svg className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a4 4 0 01-2.828 1.172H7v-2a4 4 0 011.172-2.828z" />
+                </svg>
                 {/* 削除 */}
                 <button
                   type="button"
-                  onClick={() => handleRemove(m.staffId)}
+                  onClick={e => { e.stopPropagation(); handleRemove(m.staffId); }}
                   disabled={isPending}
                   className="w-6 h-6 flex items-center justify-center rounded-lg text-zinc-300 dark:text-zinc-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all disabled:opacity-0 flex-shrink-0"
                 >
