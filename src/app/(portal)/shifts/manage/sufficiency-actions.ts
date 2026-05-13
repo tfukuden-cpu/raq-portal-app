@@ -2,7 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { readSheet, extractSpreadsheetId, generateSufficiencySheet } from "@/lib/gsheets";
+import {
+  readSheet, extractSpreadsheetId, generateSufficiencySheet,
+  generateShiftTableSheet, syncHolidaySheet,
+} from "@/lib/gsheets";
 
 export async function upsertSlotRequirementAction(fd: FormData): Promise<{ success: boolean; message?: string }> {
   const supabase = await createClient();
@@ -148,4 +151,112 @@ export async function importRequiredCountsFromSheetAction(fd: FormData): Promise
   } catch { /* 充足シート更新失敗は無視 */ }
 
   return { success: true, count: upsertData.length, message: `${upsertData.length}件を読み込みました（${matchCount}パターン）` };
+}
+
+/**
+ * シフト表シートを再生成（DBの既存シフトを presetShifts として渡し、入力済み内容を保持）
+ */
+export async function regenerateShiftTableAction(fd: FormData): Promise<{ success: boolean; message?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "未認証" };
+
+  const projectId = String(fd.get("projectId") ?? "").trim();
+  const year      = Number(fd.get("year")  ?? 0);
+  const month     = Number(fd.get("month") ?? 0);
+  if (!projectId || !year || !month) return { success: false, message: "パラメータ不足" };
+
+  const admin = createAdminClient();
+
+  // スプシURL取得
+  const { data: settings } = await admin
+    .from("project_settings").select("sheet_url").eq("project_id", projectId).maybeSingle();
+  if (!settings?.sheet_url) return { success: false, message: "スプレッドシートが設定されていません" };
+
+  const spreadsheetId = extractSpreadsheetId(settings.sheet_url);
+  const monthStr = String(month).padStart(2, "0");
+  const lastDay  = new Date(year, month, 0).getDate();
+  const dateFrom = `${year}-${monthStr}-01`;
+  const dateTo   = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
+
+  // メンバー一覧
+  const { data: memberRows } = await admin
+    .from("project_members")
+    .select("staff_id, role, section, staffs(name, display_name, company_name)")
+    .eq("project_id", projectId)
+    .order("staff_id");
+
+  const memberList = (memberRows ?? []).map(m => {
+    const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+      { name: string | null; display_name: string | null; company_name: string | null } | null;
+    return {
+      id:          m.staff_id,
+      displayName: s?.display_name?.trim() || s?.name?.trim() || m.staff_id,
+      companyName: (s?.company_name?.trim() || null) as string | null,
+      role:        (m.role ?? "staff") as string,
+      section:     (m.section ?? null) as string | null,
+    };
+  });
+  if (memberList.length === 0) return { success: false, message: "メンバーが登録されていません" };
+
+  // シフトパターン
+  const { data: patternRows } = await admin
+    .from("shift_patterns")
+    .select("name, required_count, required_weekday, required_weekend, start_time, end_time, target_role, section, sort_order")
+    .eq("project_id", projectId)
+    .order("sort_order");
+
+  const patternList = (patternRows ?? []).map(p => ({
+    name:             p.name,
+    required_count:   (p as { required_count?: number | null }).required_count ?? null,
+    required_weekday: (p as { required_weekday?: number | null }).required_weekday ?? null,
+    required_weekend: (p as { required_weekend?: number | null }).required_weekend ?? null,
+    start_time:       (p.start_time  ?? null) as string | null,
+    end_time:         (p.end_time    ?? null) as string | null,
+    target_role:      (p as { target_role?: string }).target_role ?? "all",
+    section:          (p as { section?: string | null }).section ?? null,
+  }));
+  if (patternList.length === 0) return { success: false, message: "シフトパターンが登録されていません" };
+
+  // 希望休
+  const { data: holidayData } = await admin
+    .from("holiday_requests")
+    .select("staff_id, request_date")
+    .eq("project_id", projectId)
+    .gte("request_date", dateFrom)
+    .lte("request_date", dateTo);
+
+  const holidays = (holidayData ?? []).map(h => ({ staffId: h.staff_id, requestDate: h.request_date as string }));
+
+  // DBの既存シフトを presetShifts として渡す（入力済み内容を保持）
+  const { data: shiftRows } = await admin
+    .from("shifts")
+    .select("staff_id, shift_date, shift_name")
+    .eq("project_id", projectId)
+    .gte("shift_date", dateFrom)
+    .lte("shift_date", dateTo);
+
+  const presetShifts = new Map<string, Map<string, string>>();
+  for (const s of (shiftRows ?? [])) {
+    if (!s.shift_name) continue;
+    if (!presetShifts.has(s.staff_id)) presetShifts.set(s.staff_id, new Map());
+    presetShifts.get(s.staff_id)!.set(s.shift_date as string, s.shift_name as string);
+  }
+
+  try {
+    const staffNameMap = new Map(memberList.map(m => [m.id, m.displayName]));
+    const holidaysFull = (holidayData ?? []).map(h => ({
+      staffId: h.staff_id, requestDate: h.request_date as string,
+      staffName: staffNameMap.get(h.staff_id) ?? h.staff_id, note: null,
+    }));
+    await syncHolidaySheet(spreadsheetId, holidaysFull);
+    await generateShiftTableSheet(
+      spreadsheetId, memberList, patternList, year, month,
+      holidays, false, presetShifts,
+    );
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : "シート生成エラー" };
+  }
+
+  return { success: true, message: `${year}年${month}月のシフト表を再生成しました` };
 }
