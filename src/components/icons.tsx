@@ -313,6 +313,15 @@ export function MessageSquareIcon({ className }: IconProps) {
   );
 }
 
+export function BriefcaseIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+    </svg>
+  );
+}
+
 export const ICON_MAP = {
   Home: HomeIcon,
   Clock: ClockIcon,
@@ -333,6 +342,7 @@ export const ICON_MAP = {
   Shield: ShieldIcon,
   IdCard: IdCardIcon,
   MessageSquare: MessageSquareIcon,
+  Briefcase: BriefcaseIcon,
 } as const;
 
 export type IconKey = keyof typeof ICON_MAP;

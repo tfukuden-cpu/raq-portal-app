@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { cookies } from "next/headers";
 import AppNav from "@/components/AppNav";
@@ -57,8 +58,17 @@ export default async function PortalLayout({
     .eq("id", staffId)
     .maybeSingle();
 
-  const isExecutive = staff?.global_role === "executive";
+  const isExecutive   = staff?.global_role === "executive";
   const isGlobalAdmin = staff?.global_role === "admin" || staff?.global_role === "executive";
+
+  // 運用者は全案件リストを取得
+  let opsProjects: { id: string; name: string }[] = [];
+  if (isExecutive) {
+    const admin = createAdminClient();
+    const { data: pj } = await admin
+      .from("projects").select("id, name").eq("is_active", true).order("id");
+    opsProjects = pj ?? [];
+  }
 
   const cookieStore = await cookies();
   const initialCollapsed =
@@ -101,7 +111,20 @@ export default async function PortalLayout({
   // 表示モードに応じてメニューを構築
   let sections: NavSection[];
   if (viewMode === "ops") {
-    sections = [{ items: EXECUTIVE_ITEMS }];
+    // 案件一覧セクション（クリックで案件コンテキスト切り替え）
+    const projectNavItems: NavItem[] = opsProjects.map(p => ({
+      href:  `/admin/ops/switch/${p.id}`,
+      icon:  "Briefcase" as IconKey,
+      label: p.name,
+    }));
+    sections = [
+      { items: EXECUTIVE_ITEMS },
+      { title: "案件", items: projectNavItems },
+    ];
+    // 案件が選択済みなら管理者メニューも追加
+    if (projectId) {
+      sections.push({ title: projectName ?? "案件管理", items: PROJECT_ADMIN_ITEMS });
+    }
   } else if (viewMode === "admin") {
     sections = [{ items: STAFF_ITEMS }, { title: "管理", items: PROJECT_ADMIN_ITEMS }];
   } else {
