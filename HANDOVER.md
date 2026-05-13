@@ -408,7 +408,66 @@ type AvatarConfig = {
 
 ---
 
-## 8. UIデザイン方針
+## 8. Google Sheets 連携
+
+### 操作場所
+**`/admin/[projectId]`（案件詳細設定画面）のスプシタブ**から行う。
+`/shifts/manage` のスプシタブは v8 で削除済み。
+
+### シフト作業フロー
+```
+① 案件設定 → スプシを自動作成 or URL手動入力
+   └─ 保存と同時にメンバーシート自動同期
+
+② 案件設定 →「シフト表生成」
+   └─ 年月指定 ＋「仮組あり」オプション（draftAssign=true）
+   └─ holiday_requests テーブルから希望休を自動反映
+   └─ シフトパターン・メンバー一覧付きのテンプレートをスプシに生成
+
+③ スプシで手入力（シフト名をマスに入力）
+   └─ 不足数はスプシの数式が自動計算
+
+④ シフト管理（/shifts/manage）→「スプシから読込」
+   └─ importFromSheetAction → shifts テーブルへ反映
+
+⑤ アプリ→スプシへの書き戻しはしない（スプシが正）
+```
+
+### 自動同期タイミング
+| 操作 | 同期先シート |
+|---|---|
+| メンバー追加/削除/役割変更 | メンバーシート |
+| シフトパターン保存 | シフトパターンシート |
+| 希望休ルール保存 | 希望休ルールシート |
+| シフト表生成 | 希望休シート ＋ シフト表シート |
+
+### スプシ構成（9シート固定）
+| シート名 | 用途 |
+|---|---|
+| 設定 | 通知ON/OFF等の設定値 |
+| メンバー | 社員ID・表示名・本名・役割・会社名 |
+| 希望休 | 希望休申請データ |
+| シフト表 | 月次入力用テンプレート（target_role で admin/staff 分割） |
+| シフト | シフト詳細データ |
+| 打刻ログ | 打刻履歴 |
+| 日別勤怠 | 日別勤怠実績 |
+| 月次集計 | 月次集計 |
+| シフト変更ログ | シフト変更履歴 |
+
+### 認証方式（3段階フォールバック・v11）
+1. `GOOGLE_SERVICE_ACCOUNT_JSON` （JSON丸ごと）
+2. `GOOGLE_CLIENT_EMAIL` ＋ `GOOGLE_PRIVATE_KEY` （個別環境変数）
+3. `GOOGLE_CLIENT_ID` ＋ `GOOGLE_CLIENT_SECRET` ＋ `GOOGLE_REFRESH_TOKEN` （OAuth2）
+
+### 関連ファイル
+- `lib/gsheets.ts` — シート操作全般（`generateShiftTableSheet` / `syncMembersSheet` 等）
+- `admin/[projectId]/settings/actions.ts` — `generateShiftTableAction` / `createSpreadsheetAction` 等
+- `shifts/actions.ts` — `importFromSheetAction`（スプシ→DBへの読込）
+- `shifts/manage/SheetsSync.tsx` — 現在未使用（孤立ファイル）。必要なら管理画面に再統合可
+
+---
+
+## 9. UI デザイン方針
 
 - **角丸**: `rounded-2xl`（カード・大要素）
 - **配色**: `zinc-` グレースケール ＋ `blue-600` アクセント
@@ -421,7 +480,7 @@ type AvatarConfig = {
 
 ---
 
-## 9. SQL実行状況
+## 10. SQL実行状況
 
 ### ✅ 実行済み
 - `project_settings.notification_settings` jsonb カラム追加
@@ -462,7 +521,7 @@ create policy "admin_all_holiday_rules" on public.holiday_rules
 
 ---
 
-## 10. 環境変数（.env.local）
+## 11. 環境変数（.env.local）
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
@@ -488,7 +547,7 @@ GOOGLE_PRIVATE_KEY=...
 
 ---
 
-## 11. 残タスク一覧
+## 12. 残タスク一覧
 
 > 凡例：✅ 完了 / 🔄 進行中 / ⏳ 未着手
 
@@ -565,7 +624,7 @@ GOOGLE_PRIVATE_KEY=...
 
 ---
 
-## 12. テストアカウント
+## 13. テストアカウント
 
 | 項目 | 値 |
 |---|---|
@@ -576,7 +635,7 @@ GOOGLE_PRIVATE_KEY=...
 
 ---
 
-## 13. ホスティングとCron
+## 14. ホスティングとCron
 
 `vercel.json` が設置済み。Vercelにデプロイすると自動で5分ごとに
 `/api/cron/notify` が呼ばれ、スケジュール通知が送信される。
@@ -588,7 +647,7 @@ curl -H "Authorization: Bearer <CRON_SECRETの値>" http://localhost:3000/api/cr
 
 ---
 
-## 14. 既知の問題・注意点
+## 15. 既知の問題・注意点
 
 ### Next.js の searchParams は Promise
 ```tsx
@@ -612,7 +671,7 @@ export default async function Page({
 
 ---
 
-## 15. 改訂履歴
+## 16. 改訂履歴
 
 | 日付 | バージョン | 内容 |
 |---|---|---|
@@ -624,3 +683,4 @@ export default async function Page({
 | 2026-05-10 | v9 | LINE通知システム実装（notify.ts・cron route・各action更新）、アバターシステム設計、運用者マイページ(/admin/my)、vercel.json |
 | 2026-05-11 | v10 | 問い合わせシステム新設（/inquiries・/inquiries/manage）、LINE Login magic link修正（/auth/confirm）、LINEグループ連携（project_settings.line_group_id）、inquiry/inquiry_reply通知種別追加、通知カードアコーディオンUI、notify.ts個別try-catch、ops向け問い合わせ管理修正 |
 | 2026-05-13 | v11 | セクション機能（project_members.section）、CSVフォーマットをIDOM形式に変更（所属会社,氏名,役割,セクション）、CSV重複スキップ、姓名スペース削除、LINE連携状況の表示、初期PW変更（1234）、問い合わせ返信バグ修正、シフト管理セクションフィルタ、シフト生成エラーハンドリング改善、Google Sheets認証を3段階フォールバック＋OAuth2個別環境変数対応 |
+| 2026-05-09 | v12 | シフト管理UI全面刷新（ShiftDayList：日付タブ・充足バッジ・未登録折りたたみ・メンバー外シフト表示・router.refresh）、adminClient化（RLSバイパス）、/api/set-project Route Handler新設、Google Sheets連携セクション追記（セクション8）、運用者メニューへの管理者メニュー追加を残タスクに追記 |

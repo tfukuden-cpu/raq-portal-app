@@ -186,7 +186,12 @@ export async function upsertShiftAction(
     shift_start: shiftStart,
     shift_end: shiftEnd,
     note,
+    created_by: myStaffId,
   };
+
+  // DB書き込みは adminClient（RLSバイパス）で行う
+  // 認証チェックは上の supabase.auth.getUser() で完了済み
+  const adminDb = createAdminClient();
 
   // スタッフ・変更者の表示名を取得（スプシログ用）
   const [staffName, changedByName] = await Promise.all([
@@ -196,12 +201,12 @@ export async function upsertShiftAction(
 
   if (id) {
     // 変更前のデータを取得
-    const { data: before } = await supabase
+    const { data: before } = await adminDb
       .from("shifts").select("shift_name,shift_start,shift_end,note").eq("id", id).maybeSingle();
-    const { error } = await supabase.from("shifts").update(payload).eq("id", id);
+    const { error } = await adminDb.from("shifts").update(payload).eq("id", id);
     if (error) return { success: false, message: "更新失敗：" + error.message };
     // 変更ログ記録（DB）
-    await supabase.from("shift_change_logs").insert({
+    await adminDb.from("shift_change_logs").insert({
       project_id: projectId, shift_id: id,
       staff_id: staffId, shift_date: shiftDate,
       action: "update", before_data: before ?? null, after_data: payload,
@@ -210,12 +215,12 @@ export async function upsertShiftAction(
     // 変更ログ追記（スプレッドシート）
     await appendChangeLogToSheet(projectId, changedByName, "update", staffId, staffName, shiftDate, before ?? null, payload);
   } else {
-    const { data: upserted, error } = await supabase.from("shifts").upsert(payload, {
+    const { data: upserted, error } = await adminDb.from("shifts").upsert(payload, {
       onConflict: "project_id,staff_id,shift_date",
     }).select("id").maybeSingle();
     if (error) return { success: false, message: "登録失敗：" + error.message };
     // 変更ログ記録（DB）
-    await supabase.from("shift_change_logs").insert({
+    await adminDb.from("shift_change_logs").insert({
       project_id: projectId, shift_id: upserted?.id ?? null,
       staff_id: staffId, shift_date: shiftDate,
       action: "create", before_data: null, after_data: payload,
