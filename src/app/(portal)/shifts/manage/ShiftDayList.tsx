@@ -562,16 +562,112 @@ export default function ShiftDayList({
           if (touchStartX.current === null) return;
           const dx = e.changedTouches[0].clientX - touchStartX.current;
           touchStartX.current = null;
-          if (Math.abs(dx) < 48) return; // 短いスワイプは無視
-          if (dx < 0) { // 左スワイプ → 次週
-            const n = weekChunks[weekIdx + 1];
-            if (n) onDateChange(n[0]);
-          } else {      // 右スワイプ → 前週
-            const p = weekChunks[weekIdx - 1];
-            if (p) onDateChange(p[0]);
-          }
+          if (Math.abs(dx) < 48) return;
+          if (dx < 0) { const n = weekChunks[weekIdx + 1]; if (n) onDateChange(n[0]); }
+          else         { const p = weekChunks[weekIdx - 1]; if (p) onDateChange(p[0]); }
         }}
       >
+
+        {/* ── 週別充足テーブル（出勤タブ時のみ） ── */}
+        {tabKey === "shukkin" && shiftPatterns.some(hasAnyRequired) && (
+          <div className="rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60">
+            {/* 日付ヘッダー */}
+            <div className="flex border-b border-zinc-100 dark:border-zinc-800/60">
+              {/* パターン名列 */}
+              <div className="w-14 flex-shrink-0 px-2 py-1.5 flex items-center">
+                <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wide">班/P</span>
+              </div>
+              {currentWeek.map(d => {
+                const { dateNum, dow, dayOfWeek } = parseDayInfo(d);
+                const isSel = d === selectedDate;
+                const isSun = dayOfWeek === 0;
+                const isSat = dayOfWeek === 6;
+                return (
+                  <div key={d} className={cx(
+                    "flex-1 flex flex-col items-center py-1 min-w-0",
+                    isSel ? "bg-blue-500/10 dark:bg-blue-400/10" : "",
+                  )}>
+                    <span className={cx(
+                      "text-[9px] font-semibold leading-none",
+                      isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500",
+                    )}>{dow}</span>
+                    <span className={cx(
+                      "text-[11px] font-bold tabular-nums leading-none mt-0.5",
+                      isSel ? "text-blue-600 dark:text-blue-400"
+                      : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300",
+                    )}>{dateNum}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* パターン行 */}
+            {shiftPatterns.filter(hasAnyRequired).map((pattern, pi) => {
+              const pByDay = currentWeek.map(d =>
+                visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length
+              );
+              const isLast = pi === shiftPatterns.filter(hasAnyRequired).length - 1;
+              return (
+                <div key={pattern.name} className={cx(
+                  "flex",
+                  isLast ? "" : "border-b border-zinc-50 dark:border-zinc-800/40",
+                )}>
+                  {/* パターン名（先頭4文字） */}
+                  <div className="w-14 flex-shrink-0 px-2 py-1 flex items-center">
+                    <span className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 truncate leading-tight">
+                      {pattern.name.length > 4 ? pattern.name.slice(0, 4) : pattern.name}
+                    </span>
+                  </div>
+
+                  {/* 日別セル — タップでその日×パターンに移動 */}
+                  {currentWeek.map((d, i) => {
+                    const req   = getRequiredForDate(pattern, d);
+                    const count = pByDay[i];
+                    const ok    = req === 0 || count >= req;
+                    const isSel = d === selectedDate;
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => {
+                          onDateChange(d);
+                          // このパターンを展開
+                          setCollapsedPatterns(prev => {
+                            const next = new Set(prev);
+                            next.delete(pattern.name);
+                            return next;
+                          });
+                        }}
+                        className={cx(
+                          "flex-1 min-w-0 py-1 flex flex-col items-center justify-center transition-colors",
+                          isSel
+                            ? "bg-blue-500/10 dark:bg-blue-400/10"
+                            : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
+                        )}
+                      >
+                        {req > 0 ? (
+                          <>
+                            <span className={cx(
+                              "tabular-nums text-[11px] font-bold leading-none",
+                              ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400",
+                            )}>
+                              {count}
+                            </span>
+                            <span className="text-[8px] text-zinc-300 dark:text-zinc-600 leading-none tabular-nums">
+                              /{req}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* ── 出勤タブ ── */}
         {tabKey === "shukkin" && shiftPatterns.map((pattern) => {
