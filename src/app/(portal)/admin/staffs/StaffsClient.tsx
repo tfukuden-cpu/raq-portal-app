@@ -44,6 +44,7 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
   const [editId, setEditId]           = useState<string | null>(null);
   const [editName, setEditName]       = useState("");
   const [editCompany, setEditCompany] = useState("");
+  const [editRole, setEditRole]       = useState("staff");
 
   function notify(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
 
@@ -81,7 +82,10 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
     if (!editId || !editName.trim()) return;
     start(async () => {
       const fd = new FormData();
-      fd.set("id", editId); fd.set("name", editName); fd.set("company_name", editCompany);
+      fd.set("id", editId);
+      fd.set("name", editName);
+      fd.set("company_name", editCompany);
+      fd.set("global_role", editRole);
       const r = await updateStaffInfoAction(fd);
       notify(r.message ?? (r.success ? "更新しました" : "エラー"));
       if (r.success) setEditId(null);
@@ -211,6 +215,15 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
                         className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                     </div>
                   </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-400 font-semibold">システム役割</label>
+                    <select value={editRole} onChange={e => setEditRole(e.target.value)}
+                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                      <option value="staff">スタッフ</option>
+                      <option value="admin">管理者（全社）</option>
+                      <option value="executive">運用者</option>
+                    </select>
+                  </div>
                   <div className="flex gap-2">
                     <button onClick={() => setEditId(null)}
                       className="flex-1 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
@@ -218,7 +231,7 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
                     </button>
                     <button onClick={handleSave} disabled={!editName.trim() || isPending}
                       className="flex-1 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-40">
-                      保存
+                      {isPending ? "保存中…" : "保存"}
                     </button>
                   </div>
                 </div>
@@ -278,7 +291,7 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
               {!isEditing && (
                 <div className="flex flex-col gap-1.5 flex-shrink-0">
                   <button
-                    onClick={() => { setEditId(s.id); setEditName(s.name); setEditCompany(s.company_name ?? ""); }}
+                    onClick={() => { setEditId(s.id); setEditName(s.name); setEditCompany(s.company_name ?? ""); setEditRole(s.global_role); }}
                     disabled={isPending}
                     className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 whitespace-nowrap"
                   >
