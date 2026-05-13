@@ -538,9 +538,10 @@ export default function ShiftDayList({
               {/* ── 日付列 ── */}
               <div className="flex pr-4">
                 {allDates.map(d => {
-                  const dt        = new Date(d + "T00:00:00+09:00");
-                  const dateNum   = dt.getDate();
-                  const dayOfWeek = dt.getDay();
+                  // "YYYY-MM-DD" を UTC midnight としてパース → getUTCDay/getUTCDate でサーバー(UTC)・クライアント間の不一致を防ぐ
+                  const dt        = new Date(d);
+                  const dateNum   = dt.getUTCDate();
+                  const dayOfWeek = dt.getUTCDay();
                   const dow       = WEEKDAY_JP[dayOfWeek];
                   const isSel     = d === selectedDate;
                   const isToday   = d === todayStr;
@@ -690,9 +691,9 @@ export default function ShiftDayList({
                 {/* 日付列 */}
                 <div className="flex pr-4">
                   {allDates.map(d => {
-                    const dt        = new Date(d + "T00:00:00+09:00");
-                    const dateNum   = dt.getDate();
-                    const dayOfWeek = dt.getDay();
+                    const dt        = new Date(d);
+                    const dateNum   = dt.getUTCDate();
+                    const dayOfWeek = dt.getUTCDay();
                     const dow       = WEEKDAY_JP[dayOfWeek];
                     const isSel     = d === selectedDate;
                     const isToday   = d === todayStr;
