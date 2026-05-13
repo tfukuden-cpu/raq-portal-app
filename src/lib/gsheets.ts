@@ -83,8 +83,14 @@ async function getAccessToken(): Promise<string> {
     }
   }
 
+  // 試行4: 個別環境変数（GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY）
+  if (!private_key) {
+    client_email = process.env.GOOGLE_CLIENT_EMAIL;
+    private_key  = process.env.GOOGLE_PRIVATE_KEY;
+  }
+
   if (!client_email || !private_key) {
-    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON からclient_emailとprivate_keyを読み取れませんでした。サービスアカウントのJSONファイルをVercelに再設定してください。");
+    throw new Error("Google認証情報を読み取れませんでした。GOOGLE_CLIENT_EMAIL と GOOGLE_PRIVATE_KEY を Vercel に設定してください。");
   }
   const pem = private_key.replace(/\\n/g, "\n");
   const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
@@ -1064,7 +1070,11 @@ export function isGSheetsConfigured(): boolean {
     process.env.GOOGLE_CLIENT_SECRET &&
     process.env.GOOGLE_REFRESH_TOKEN
   );
-  return hasOAuth || !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  const hasSA = !!(
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
+    (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY)
+  );
+  return hasOAuth || hasSA;
 }
 
 // 各シートの初期ヘッダー（シフト表は月ごとに動的生成するためここには含まない）
