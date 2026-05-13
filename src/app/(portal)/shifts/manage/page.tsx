@@ -241,7 +241,6 @@ export default async function ManageShiftsPage(props: {
           shifts={shifts ?? []}
           activeMembers={activeMembers}
           shiftPatterns={shiftPatterns}
-          slotRequirements={slotRequirements}
           shiftRequests={shiftRequests}
           targetYear={targetYear}
           targetMonth={targetMonth}

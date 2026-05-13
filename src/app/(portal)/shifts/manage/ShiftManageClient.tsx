@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import ShiftDayList from "./ShiftDayList";
-import ShiftSufficiencyTable from "./ShiftSufficiencyTable";
 import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
 
 type Shift = {
@@ -27,13 +26,6 @@ type Pattern = {
   end_time: string | null;
 };
 
-type SlotReq = {
-  section: string;
-  pattern_name: string;
-  shift_date: string;
-  required_count: number;
-};
-
 type ShiftRequest = {
   id: string;
   staff_name: string;
@@ -52,7 +44,6 @@ type Props = {
   shifts: Shift[];
   activeMembers: Member[];
   shiftPatterns: Pattern[];
-  slotRequirements: SlotReq[];
   shiftRequests: ShiftRequest[];
   targetYear: number;
   targetMonth: number;
@@ -65,7 +56,6 @@ export default function ShiftManageClient({
   shifts,
   activeMembers,
   shiftPatterns,
-  slotRequirements,
   shiftRequests,
   targetYear,
   targetMonth,
@@ -75,23 +65,6 @@ export default function ShiftManageClient({
   return (
     <>
       <ShiftRequestsAdmin requests={shiftRequests} />
-
-      <ShiftSufficiencyTable
-        projectId={projectId}
-        allDates={allDates}
-        patterns={shiftPatterns}
-        shifts={shifts.map(s => ({
-          staff_id:   s.staff_id,
-          shift_date: s.shift_date,
-          shift_name: s.shift_name ?? "",
-        }))}
-        members={activeMembers.map(m => ({ id: m.id, section: m.section }))}
-        slotRequirements={slotRequirements}
-        holidays={[]}
-        selectedDate={selectedDate}
-        onDateSelect={setSelectedDate}
-      />
-
       <ShiftDayList
         allDates={allDates}
         shifts={shifts}

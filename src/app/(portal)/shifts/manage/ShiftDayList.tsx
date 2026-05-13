@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { upsertShiftAction, deleteShiftAction, swapShiftsAction } from "../actions";
 
@@ -16,7 +16,33 @@ type Shift = {
   note: string | null;
 };
 type Member  = { id: string; name: string; role: string; section: string | null };
-type Pattern = { name: string; required_count: number; section: string | null; start_time: string | null; end_time: string | null };
+type Pattern = {
+  name: string;
+  required_count: number;
+  required_weekday: number | null;
+  required_weekend: number | null;
+  section: string | null;
+  start_time: string | null;
+  end_time: string | null;
+};
+
+function isWeekendDate(dateStr: string): boolean {
+  const dow = new Date(dateStr).getUTCDay();
+  return dow === 0 || dow === 6;
+}
+
+/** 平日/休日を考慮した必要人数を返す */
+function getRequiredForDate(p: Pattern, date: string): number {
+  const weekend = isWeekendDate(date);
+  if (weekend && p.required_weekend != null) return p.required_weekend;
+  if (!weekend && p.required_weekday != null) return p.required_weekday;
+  return p.required_count;
+}
+
+/** パターンが何らかの必要数設定を持つか */
+function hasAnyRequired(p: Pattern): boolean {
+  return p.required_count > 0 || p.required_weekday != null || p.required_weekend != null;
+}
 
 // 姓＋名1文字（例：田中太郎 → 田中太）
 const shortName = (name: string) => {
@@ -203,6 +229,8 @@ export default function ShiftDayList({
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
   // パターンごとの折りたたみ状態
   const [collapsedPatterns, setCollapsedPatterns] = useState<Set<string>>(new Set());
+  // スワイプ検出
+  const touchStartX = useRef<number | null>(null);
   const togglePattern = (name: string) => setCollapsedPatterns(prev => {
     const next = new Set(prev);
     if (next.has(name)) next.delete(name); else next.add(name);
@@ -525,10 +553,9 @@ export default function ShiftDayList({
         </div>
 
         {/* ⑥ 週別×パターン 充足数サマリー */}
-        {tabKey === "shukkin" && (
+        {tabKey === "shukkin" && shiftPatterns.some(hasAnyRequired) && (
           <div className="pb-1.5 border-t border-zinc-100 dark:border-zinc-800">
-            {shiftPatterns.filter(p => p.required_count > 0).map(pattern => {
-              const req = pattern.required_count;
+            {shiftPatterns.filter(hasAnyRequired).map(pattern => {
               const pByDay = currentWeek.map(d =>
                 visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length
               );
@@ -538,22 +565,27 @@ export default function ShiftDayList({
                     {pattern.name}
                   </span>
                   {currentWeek.map((d, i) => {
+                    const req   = getRequiredForDate(pattern, d);
                     const count = pByDay[i];
-                    const ok    = count >= req;
+                    const ok    = req === 0 || count >= req;
                     const isSel = d === selectedDate;
                     return (
                       <div key={d} className={cx(
                         "flex-1 flex justify-center items-center rounded",
-                        isSel ? "bg-zinc-900/8 dark:bg-zinc-100/8" : "",
+                        isSel ? "bg-zinc-100 dark:bg-zinc-800/60" : "",
                       )}>
-                        <span className={cx(
-                          "tabular-nums text-[9px] font-bold leading-none",
-                          ok
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-red-500 dark:text-red-400",
-                        )}>
-                          {count}/{req}
-                        </span>
+                        {req > 0 ? (
+                          <span className={cx(
+                            "tabular-nums text-[9px] font-bold leading-none",
+                            ok
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-red-500 dark:text-red-400",
+                          )}>
+                            {count}/{req}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-zinc-300 dark:text-zinc-700">—</span>
+                        )}
                       </div>
                     );
                   })}
@@ -564,21 +596,39 @@ export default function ShiftDayList({
         )}
       </div>
 
-      {/* ━━ コンテンツ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="pt-2 space-y-3">
+      {/* ━━ コンテンツ（スワイプで週移動） ━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div
+        className="pt-2 space-y-3"
+        onTouchStart={e => { touchStartX.current = e.touches[0].clientX; }}
+        onTouchEnd={e => {
+          if (touchStartX.current === null) return;
+          const dx = e.changedTouches[0].clientX - touchStartX.current;
+          touchStartX.current = null;
+          if (Math.abs(dx) < 48) return; // 短いスワイプは無視
+          if (dx < 0) { // 左スワイプ → 次週
+            const n = weekChunks[weekIdx + 1];
+            if (n) onDateChange(n[0]);
+          } else {      // 右スワイプ → 前週
+            const p = weekChunks[weekIdx - 1];
+            if (p) onDateChange(p[0]);
+          }
+        }}
+      >
 
         {/* ── 出勤タブ ── */}
         {tabKey === "shukkin" && shiftPatterns.map((pattern) => {
           const byDay = currentWeek.map((d) =>
             visibleMembers.filter((m) => getShift(m.id, d)?.shift_name === pattern.name)
           );
-          const req      = pattern.required_count;
-          const maxSlots = Math.max(req, ...byDay.map((ms) => ms.length));
+          // 週内の最大必要数（平日/休日考慮）
+          const maxReq   = Math.max(0, ...currentWeek.map(d => getRequiredForDate(pattern, d)));
+          const maxSlots = Math.max(maxReq, ...byDay.map((ms) => ms.length));
           if (maxSlots === 0) return null;
           const isCollapsed = collapsedPatterns.has(pattern.name);
-          // 選択日のカウント
+          // 選択日のカウントと必要数
           const selDayIdx = currentWeek.indexOf(selectedDate);
-          const selCount = selDayIdx >= 0 ? (byDay[selDayIdx]?.length ?? 0) : 0;
+          const selCount  = selDayIdx >= 0 ? (byDay[selDayIdx]?.length ?? 0) : 0;
+          const selReq    = getRequiredForDate(pattern, selectedDate);
           return (
             <div key={pattern.name}>
               <button
@@ -592,14 +642,14 @@ export default function ShiftDayList({
                     {pattern.start_time?.slice(0, 5)}〜{pattern.end_time?.slice(0, 5)}
                   </span>
                 )}
-                {req > 0 && (
+                {selReq > 0 && (
                   <span className={cx(
                     "tabular-nums text-[10px] font-bold px-1.5 py-0.5 rounded-full",
-                    selCount >= req
+                    selCount >= selReq
                       ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
                       : "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400",
                   )}>
-                    {selCount}/{req}
+                    {selCount}/{selReq}
                   </span>
                 )}
                 <svg
@@ -615,7 +665,8 @@ export default function ShiftDayList({
                     {currentWeek.map((d, di) => {
                       const member    = byDay[di][slotIdx];
                       const isSel     = d === selectedDate;
-                      const isAddable = slotIdx < req;
+                      const dayReq    = getRequiredForDate(pattern, d);
+                      const isAddable = slotIdx < dayReq;
                       // 空き枠：未割当スタッフがいる場合のみ追加可能
                       const canAdd    = isAddable && !member && unassignedMembersForDate(d).length > 0;
                       return (
@@ -651,20 +702,25 @@ export default function ShiftDayList({
                     })}
                   </div>
                 ))}
-                {req > 0 && (
+                {maxReq > 0 && (
                   <div className="flex divide-x divide-zinc-100 dark:divide-zinc-800 bg-zinc-50 dark:bg-zinc-900/60">
                     {currentWeek.map((d, di) => {
-                      const count = byDay[di].length;
-                      const isSel = d === selectedDate;
-                      const ok    = count >= req;
+                      const count  = byDay[di].length;
+                      const dayReq = getRequiredForDate(pattern, d);
+                      const isSel  = d === selectedDate;
+                      const ok     = dayReq === 0 || count >= dayReq;
                       return (
                         <div key={d} className={cx("flex-1 py-1.5 flex items-center justify-center", isSel ? "bg-blue-50 dark:bg-blue-950/30" : "")}>
-                          <span className={cx(
-                            "tabular-nums text-[10px] font-bold px-1.5 py-0.5 rounded-full",
-                            ok
-                              ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
-                              : "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400",
-                          )}>{count}/{req}</span>
+                          {dayReq > 0 ? (
+                            <span className={cx(
+                              "tabular-nums text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                              ok
+                                ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
+                                : "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400",
+                            )}>{count}/{dayReq}</span>
+                          ) : (
+                            <span className="text-[9px] text-zinc-300 dark:text-zinc-700">—</span>
+                          )}
                         </div>
                       );
                     })}
