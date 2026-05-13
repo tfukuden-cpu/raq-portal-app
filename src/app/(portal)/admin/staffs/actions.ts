@@ -46,10 +46,11 @@ export async function toggleStaffActiveAction(
 export async function updateStaffInfoAction(
   fd: FormData
 ): Promise<{ success: boolean; message?: string }> {
-  const id          = String(fd.get("id")           ?? "").trim().toUpperCase();
-  const name        = String(fd.get("name")         ?? "").trim();
-  const companyName = String(fd.get("company_name") ?? "").trim() || null;
-  const globalRole  = String(fd.get("global_role")  ?? "staff");
+  const id            = String(fd.get("id")             ?? "").trim().toUpperCase();
+  const name          = String(fd.get("name")           ?? "").trim();
+  const companyName   = String(fd.get("company_name")   ?? "").trim() || null;
+  const globalRole    = String(fd.get("global_role")    ?? "staff");
+  const accountNumber = String(fd.get("account_number") ?? "").trim() || null;
 
   await assertExecutive();
 
@@ -57,7 +58,7 @@ export async function updateStaffInfoAction(
 
   const { error } = await admin
     .from("staffs")
-    .update({ name, display_name: name, company_name: companyName, global_role: globalRole })
+    .update({ name, display_name: name, company_name: companyName, global_role: globalRole, account_number: accountNumber })
     .eq("id", id);
 
   if (error) return { success: false, message: error.message };
@@ -81,19 +82,20 @@ export async function updateStaffInfoAction(
         // そのプロジェクトの全メンバーを取得
         const { data: members } = await admin
           .from("project_members")
-          .select("staff_id, role, section, staffs(name, display_name, company_name)")
+          .select("staff_id, role, section, staffs(name, display_name, company_name, account_number)")
           .eq("project_id", projectId)
           .order("staff_id");
 
         const memberList = (members ?? []).map(m => {
           const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
-            { name: string | null; display_name: string | null; company_name: string | null } | null;
+            { name: string | null; display_name: string | null; company_name: string | null; account_number: string | null } | null;
           return {
-            id:          m.staff_id,
-            displayName: s?.display_name?.trim() || s?.name?.trim() || m.staff_id,
-            companyName: (s?.company_name?.trim() || null) as string | null,
-            role:        m.role ?? "staff",
-            section:     (m.section ?? null) as string | null,
+            id:            m.staff_id,
+            displayName:   s?.display_name?.trim() || s?.name?.trim() || m.staff_id,
+            companyName:   (s?.company_name?.trim() || null) as string | null,
+            role:          m.role ?? "staff",
+            section:       (m.section ?? null) as string | null,
+            accountNumber: (s?.account_number ?? null) as string | null,
           };
         });
 

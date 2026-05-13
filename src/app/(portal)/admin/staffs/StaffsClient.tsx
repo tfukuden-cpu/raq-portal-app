@@ -11,6 +11,7 @@ type StaffProject = { id: string; name: string; role: string };
 type StaffEntry = {
   id: string; name: string; company_name: string | null;
   global_role: string; is_active: boolean; must_change_password: boolean;
+  account_number: string | null;
   projects: StaffProject[];
 };
 
@@ -41,10 +42,11 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
   const [filterRole, setFilterRole]       = useState("");
   const [showInactive, setShowInactive]   = useState(false);
 
-  const [editId, setEditId]           = useState<string | null>(null);
-  const [editName, setEditName]       = useState("");
-  const [editCompany, setEditCompany] = useState("");
-  const [editRole, setEditRole]       = useState("staff");
+  const [editId, setEditId]                   = useState<string | null>(null);
+  const [editName, setEditName]               = useState("");
+  const [editCompany, setEditCompany]         = useState("");
+  const [editRole, setEditRole]               = useState("staff");
+  const [editAccountNumber, setEditAccountNumber] = useState("");
 
   function notify(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
 
@@ -86,6 +88,7 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
       fd.set("name", editName);
       fd.set("company_name", editCompany);
       fd.set("global_role", editRole);
+      fd.set("account_number", editAccountNumber);
       const r = await updateStaffInfoAction(fd);
       notify(r.message ?? (r.success ? "更新しました" : "エラー"));
       if (r.success) setEditId(null);
@@ -215,14 +218,22 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
                         className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                     </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-400 font-semibold">システム役割</label>
-                    <select value={editRole} onChange={e => setEditRole(e.target.value)}
-                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                      <option value="staff">スタッフ</option>
-                      <option value="admin">管理者（全社）</option>
-                      <option value="executive">運用者</option>
-                    </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-semibold">システム役割</label>
+                      <select value={editRole} onChange={e => setEditRole(e.target.value)}
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                        <option value="staff">スタッフ</option>
+                        <option value="admin">管理者（全社）</option>
+                        <option value="executive">運用者</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-semibold">アカウント番号</label>
+                      <input type="text" value={editAccountNumber} onChange={e => setEditAccountNumber(e.target.value)}
+                        placeholder="任意"
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => setEditId(null)}
@@ -291,7 +302,7 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
               {!isEditing && (
                 <div className="flex flex-col gap-1.5 flex-shrink-0">
                   <button
-                    onClick={() => { setEditId(s.id); setEditName(s.name); setEditCompany(s.company_name ?? ""); setEditRole(s.global_role); }}
+                    onClick={() => { setEditId(s.id); setEditName(s.name); setEditCompany(s.company_name ?? ""); setEditRole(s.global_role); setEditAccountNumber(s.account_number ?? ""); }}
                     disabled={isPending}
                     className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 whitespace-nowrap"
                   >

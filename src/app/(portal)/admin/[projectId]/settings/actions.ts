@@ -57,19 +57,20 @@ async function syncProjectMembersToSheet(projectId: string): Promise<void> {
   // 最新のメンバー一覧を取得
   const { data: members } = await supa
     .from("project_members")
-    .select("staff_id, role, section, staffs(name, display_name, company_name)")
+    .select("staff_id, role, section, staffs(name, display_name, company_name, account_number)")
     .eq("project_id", projectId)
     .order("staff_id");
 
   const memberList = (members ?? []).map((m) => {
     const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
-      { name: string | null; display_name: string | null; company_name: string | null } | null;
+      { name: string | null; display_name: string | null; company_name: string | null; account_number: string | null } | null;
     return {
-      id:          m.staff_id,
-      displayName: s?.display_name ?? s?.name ?? m.staff_id,
-      companyName: s?.company_name ?? null,
-      role:        m.role ?? "staff",
-      section:     (m.section ?? null) as string | null,
+      id:            m.staff_id,
+      displayName:   s?.display_name ?? s?.name ?? m.staff_id,
+      companyName:   s?.company_name ?? null,
+      role:          m.role ?? "staff",
+      section:       (m.section ?? null) as string | null,
+      accountNumber: (s?.account_number ?? null) as string | null,
     };
   });
 
@@ -654,22 +655,23 @@ export async function updateMemberRoleAction(fd: FormData): Promise<SettingsResu
  * メンバー情報を更新（氏名・会社・セクション・ロール）してスプシに同期
  */
 export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResult> {
-  const projectId  = String(fd.get("projectId")  ?? "").trim();
-  const staffId    = String(fd.get("staffId")    ?? "").trim().toUpperCase();
-  const name       = String(fd.get("name")       ?? "").trim();
-  const companyName= String(fd.get("company_name")  ?? "").trim() || null;
-  const section    = String(fd.get("section")    ?? "").trim() || null;
-  const role       = String(fd.get("role")       ?? "staff");
+  const projectId    = String(fd.get("projectId")    ?? "").trim();
+  const staffId      = String(fd.get("staffId")      ?? "").trim().toUpperCase();
+  const name         = String(fd.get("name")         ?? "").trim();
+  const companyName  = String(fd.get("company_name") ?? "").trim() || null;
+  const section      = String(fd.get("section")      ?? "").trim() || null;
+  const role         = String(fd.get("role")         ?? "staff");
+  const accountNumber= String(fd.get("account_number") ?? "").trim() || null;
 
   if (!name) return { success: false, message: "氏名を入力してください" };
 
   await assertAdmin();
   const admin = adminSupa();
 
-  // staffs テーブル更新（氏名・会社名）
+  // staffs テーブル更新（氏名・会社名・アカウント番号）
   const { error: staffErr } = await admin
     .from("staffs")
-    .update({ name, display_name: name, company_name: companyName })
+    .update({ name, display_name: name, company_name: companyName, account_number: accountNumber })
     .eq("id", staffId);
   if (staffErr) return { success: false, message: staffErr.message };
 

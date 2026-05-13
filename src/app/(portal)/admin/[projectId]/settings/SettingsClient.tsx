@@ -30,7 +30,7 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; account_number: string | null };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -415,11 +415,12 @@ export function MemberList({
   const [isPending, start]          = useTransition();
 
   // インライン編集
-  const [editId, setEditId]           = useState<string | null>(null);
-  const [editName, setEditName]       = useState("");
-  const [editCompany, setEditCompany] = useState("");
-  const [editSection, setEditSection] = useState("");
-  const [editRole, setEditRole]       = useState("staff");
+  const [editId, setEditId]                   = useState<string | null>(null);
+  const [editName, setEditName]               = useState("");
+  const [editCompany, setEditCompany]         = useState("");
+  const [editSection, setEditSection]         = useState("");
+  const [editRole, setEditRole]               = useState("staff");
+  const [editAccountNumber, setEditAccountNumber] = useState("");
 
   const startEdit = (m: Member) => {
     setEditId(m.staffId);
@@ -427,17 +428,19 @@ export function MemberList({
     setEditCompany(m.company_name ?? "");
     setEditSection(m.section ?? "");
     setEditRole(m.role);
+    setEditAccountNumber(m.account_number ?? "");
   };
 
   const handleSaveEdit = () => {
     if (!editId || !editName.trim()) return;
     const fd = new FormData();
-    fd.set("projectId",    projectId);
-    fd.set("staffId",      editId);
-    fd.set("name",         editName.trim());
-    fd.set("company_name", editCompany.trim());
-    fd.set("section",      editSection.trim());
-    fd.set("role",         editRole);
+    fd.set("projectId",      projectId);
+    fd.set("staffId",        editId);
+    fd.set("name",           editName.trim());
+    fd.set("company_name",   editCompany.trim());
+    fd.set("section",        editSection.trim());
+    fd.set("role",           editRole);
+    fd.set("account_number", editAccountNumber.trim());
     start(async () => {
       const r = await updateMemberInfoAction(fd);
       setResult({ ok: r.success, msg: r.message ?? (r.success ? "更新しました" : "エラー") });
@@ -789,6 +792,12 @@ export function MemberList({
                         <option value="project_admin">管理者</option>
                       </select>
                     </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 font-semibold">アカウント番号</label>
+                    <input type="text" value={editAccountNumber} onChange={e => setEditAccountNumber(e.target.value)}
+                      placeholder="任意"
+                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                   </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setEditId(null)}
