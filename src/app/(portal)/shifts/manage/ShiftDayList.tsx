@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { upsertShiftAction, deleteShiftAction, swapShiftsAction } from "../actions";
 
@@ -231,6 +231,19 @@ export default function ShiftDayList({
   const [collapsedPatterns, setCollapsedPatterns] = useState<Set<string>>(new Set());
   // スワイプ検出
   const touchStartX = useRef<number | null>(null);
+  // 月次ストリップの横スクロールコンテナ
+  const stripRef = useRef<HTMLDivElement>(null);
+
+  // 選択日が変わったらストリップを中央にスクロール
+  useEffect(() => {
+    if (!stripRef.current) return;
+    const LEFT_COL = 64;  // w-16
+    const COL_W    = 44;  // w-11
+    const idx = allDates.indexOf(selectedDate);
+    if (idx < 0) return;
+    const target = LEFT_COL + idx * COL_W - (stripRef.current.clientWidth - LEFT_COL) / 2 + COL_W / 2;
+    stripRef.current.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+  }, [selectedDate, allDates]);
   const togglePattern = (name: string) => setCollapsedPatterns(prev => {
     const next = new Set(prev);
     if (next.has(name)) next.delete(name); else next.add(name);
@@ -465,93 +478,6 @@ export default function ShiftDayList({
           )}
         </div>
 
-        {/* ③ 日付ピッカー（矢印統合 + ヘルスドット） */}
-        <div className="flex items-stretch pb-2">
-          {/* 前週 */}
-          <button
-            type="button"
-            onClick={() => { const p = weekChunks[weekIdx - 1]; if (p) onDateChange(p[0]); }}
-            disabled={weekIdx === 0}
-            className="flex-shrink-0 w-6 flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 disabled:opacity-0 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-
-          {currentWeek.map((d) => {
-            const { dateNum, dow, dayOfWeek } = parseDayInfo(d);
-            const isSel   = d === selectedDate;
-            const isToday = d === todayStr;
-            const isSun   = dayOfWeek === 0;
-            const isSat   = dayOfWeek === 6;
-
-            // ヘルス計算（必要数があるパターンの中で不足しているものの割合）
-            const reqPatterns = shiftPatterns.filter(p => getRequiredForDate(p, d) > 0);
-            const shortCount  = reqPatterns.filter(p => {
-              const req = getRequiredForDate(p, d);
-              return visibleMembers.filter(m => getShift(m.id, d)?.shift_name === p.name).length < req;
-            }).length;
-            const healthDot =
-              reqPatterns.length === 0   ? null
-              : shortCount === 0         ? "bg-emerald-400"
-              : shortCount < reqPatterns.length ? "bg-amber-400"
-              :                            "bg-red-400";
-
-            return (
-              <button
-                key={d}
-                onClick={() => onDateChange(d)}
-                className={cx(
-                  "flex-1 flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all",
-                  isSel
-                    ? "bg-zinc-900 dark:bg-zinc-100"
-                    : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
-                )}
-              >
-                <span className={cx(
-                  "text-[10px] font-medium leading-none",
-                  isSel  ? "text-zinc-400 dark:text-zinc-500"
-                  : isSun ? "text-red-400"
-                  : isSat ? "text-blue-400"
-                          : "text-zinc-400 dark:text-zinc-500",
-                )}>
-                  {dow}
-                </span>
-                <span className={cx(
-                  "text-base font-bold tabular-nums leading-none",
-                  isSel  ? "text-white dark:text-zinc-900"
-                  : isSun ? "text-red-500"
-                  : isSat ? "text-blue-500"
-                          : "text-zinc-800 dark:text-zinc-200",
-                )}>
-                  {dateNum}
-                </span>
-                {/* ヘルスドット + 当日ドット */}
-                <div className="flex items-center justify-center gap-0.5 h-2">
-                  {isToday && (
-                    <span className={cx("w-1 h-1 rounded-full", isSel ? "bg-blue-400" : "bg-blue-500")} />
-                  )}
-                  {healthDot && (
-                    <span className={cx("w-1.5 h-1.5 rounded-full", isSel ? "bg-white/50 dark:bg-black/30" : healthDot)} />
-                  )}
-                </div>
-              </button>
-            );
-          })}
-
-          {/* 次週 */}
-          <button
-            type="button"
-            onClick={() => { const n = weekChunks[weekIdx + 1]; if (n) onDateChange(n[0]); }}
-            disabled={weekIdx === weekChunks.length - 1}
-            className="flex-shrink-0 w-6 flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 disabled:opacity-0 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
       </div>
 
       {/* ━━ コンテンツ（スワイプで週移動） ━━━━━━━━━━━━━━━━━━━━━━━━ */}
@@ -568,104 +494,141 @@ export default function ShiftDayList({
         }}
       >
 
-        {/* ── 週別充足テーブル（出勤タブ時のみ） ── */}
-        {tabKey === "shukkin" && shiftPatterns.some(hasAnyRequired) && (
-          <div className="rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60">
-            {/* 日付ヘッダー */}
-            <div className="flex border-b border-zinc-100 dark:border-zinc-800/60">
-              {/* パターン名列 */}
-              <div className="w-14 flex-shrink-0 px-2 py-1.5 flex items-center">
-                <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wide">班/P</span>
-              </div>
-              {currentWeek.map(d => {
-                const { dateNum, dow, dayOfWeek } = parseDayInfo(d);
-                const isSel = d === selectedDate;
-                const isSun = dayOfWeek === 0;
-                const isSat = dayOfWeek === 6;
-                return (
-                  <div key={d} className={cx(
-                    "flex-1 flex flex-col items-center py-1 min-w-0",
-                    isSel ? "bg-blue-500/10 dark:bg-blue-400/10" : "",
-                  )}>
-                    <span className={cx(
-                      "text-[9px] font-semibold leading-none",
-                      isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500",
-                    )}>{dow}</span>
-                    <span className={cx(
-                      "text-[11px] font-bold tabular-nums leading-none mt-0.5",
-                      isSel ? "text-blue-600 dark:text-blue-400"
-                      : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300",
-                    )}>{dateNum}</span>
-                  </div>
-                );
-              })}
-            </div>
+        {/* ── 月次カレンダー＆充足ストリップ ── */}
+        {tabKey === "shukkin" && (
+          <div
+            ref={stripRef}
+            className="overflow-x-auto -mx-4 rounded-none border-y border-zinc-100 dark:border-zinc-800"
+            style={{ scrollbarWidth: "none" }}
+          >
+            <div className="flex min-w-max bg-white dark:bg-zinc-900">
 
-            {/* パターン行 */}
-            {shiftPatterns.filter(hasAnyRequired).map((pattern, pi) => {
-              const pByDay = currentWeek.map(d =>
-                visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length
-              );
-              const isLast = pi === shiftPatterns.filter(hasAnyRequired).length - 1;
-              return (
-                <div key={pattern.name} className={cx(
-                  "flex",
-                  isLast ? "" : "border-b border-zinc-50 dark:border-zinc-800/40",
-                )}>
-                  {/* パターン名（先頭4文字） */}
-                  <div className="w-14 flex-shrink-0 px-2 py-1 flex items-center">
-                    <span className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 truncate leading-tight">
-                      {pattern.name.length > 4 ? pattern.name.slice(0, 4) : pattern.name}
+              {/* 左固定列（パターン名） */}
+              <div className="sticky left-0 z-20 w-16 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-100 dark:border-zinc-800">
+                {/* 日付ヘッダー行 */}
+                <div className="h-12 px-2 flex items-end pb-2 border-b border-zinc-100 dark:border-zinc-800">
+                  <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
+                </div>
+                {/* パターン行 */}
+                {shiftPatterns.filter(hasAnyRequired).map((pattern, pi, arr) => (
+                  <div
+                    key={pattern.name}
+                    className={cx(
+                      "h-9 px-2 flex items-center",
+                      pi < arr.length - 1 ? "border-b border-zinc-50 dark:border-zinc-800/60" : "",
+                    )}
+                  >
+                    <span
+                      className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 truncate leading-tight w-full"
+                      title={pattern.name}
+                    >
+                      {pattern.name.slice(0, 5)}
                     </span>
                   </div>
+                ))}
+              </div>
 
-                  {/* 日別セル — タップでその日×パターンに移動 */}
-                  {currentWeek.map((d, i) => {
-                    const req   = getRequiredForDate(pattern, d);
-                    const count = pByDay[i];
-                    const ok    = req === 0 || count >= req;
-                    const isSel = d === selectedDate;
-                    return (
+              {/* 日付列 */}
+              <div className="flex pr-4">
+                {allDates.map(d => {
+                  const dt = new Date(d + "T00:00:00+09:00");
+                  const dateNum   = dt.getDate();
+                  const dayOfWeek = dt.getDay();
+                  const dow       = WEEKDAY_JP[dayOfWeek];
+                  const isSel     = d === selectedDate;
+                  const isToday   = d === todayStr;
+                  const isSun     = dayOfWeek === 0;
+                  const isSat     = dayOfWeek === 6;
+                  const reqPatterns = shiftPatterns.filter(hasAnyRequired);
+
+                  return (
+                    <div
+                      key={d}
+                      className={cx(
+                        "w-11 flex-shrink-0 flex flex-col",
+                        isSel
+                          ? "bg-blue-50 dark:bg-blue-950/20"
+                          : (isSun || isSat)
+                            ? "bg-red-50/30 dark:bg-red-950/10"
+                            : "",
+                      )}
+                    >
+                      {/* 日付ボタン */}
                       <button
-                        key={d}
                         type="button"
-                        onClick={() => {
-                          onDateChange(d);
-                          // このパターンを展開
-                          setCollapsedPatterns(prev => {
-                            const next = new Set(prev);
-                            next.delete(pattern.name);
-                            return next;
-                          });
-                        }}
+                        onClick={() => onDateChange(d)}
                         className={cx(
-                          "flex-1 min-w-0 py-1 flex flex-col items-center justify-center transition-colors",
+                          "h-12 flex flex-col items-center justify-center gap-0.5 w-full border-b border-zinc-100 dark:border-zinc-800 transition-colors relative",
                           isSel
-                            ? "bg-blue-500/10 dark:bg-blue-400/10"
-                            : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
+                            ? "bg-zinc-900 dark:bg-zinc-100"
+                            : "hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
                         )}
                       >
-                        {req > 0 ? (
-                          <>
-                            <span className={cx(
-                              "tabular-nums text-[11px] font-bold leading-none",
-                              ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400",
-                            )}>
-                              {count}
-                            </span>
-                            <span className="text-[8px] text-zinc-300 dark:text-zinc-600 leading-none tabular-nums">
-                              /{req}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                        {isToday && !isSel && (
+                          <span className="absolute top-1.5 right-1.5 w-1 h-1 rounded-full bg-blue-500" />
                         )}
+                        <span className={cx(
+                          "text-[9px] font-medium leading-none",
+                          isSel  ? "text-zinc-500 dark:text-zinc-500"
+                          : isSun ? "text-red-400"
+                          : isSat ? "text-blue-400"
+                                  : "text-zinc-400 dark:text-zinc-500",
+                        )}>{dow}</span>
+                        <span className={cx(
+                          "text-sm font-bold tabular-nums leading-none",
+                          isSel    ? "text-white dark:text-zinc-900"
+                          : isToday ? "text-blue-600 dark:text-blue-400"
+                          : isSun   ? "text-red-500"
+                          : isSat   ? "text-blue-500"
+                                    : "text-zinc-700 dark:text-zinc-300",
+                        )}>{dateNum}</span>
                       </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
+
+                      {/* パターン充足セル */}
+                      {reqPatterns.map((pattern, pi) => {
+                        const req    = getRequiredForDate(pattern, d);
+                        const actual = visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length;
+                        const ok     = req === 0 || actual >= req;
+                        return (
+                          <button
+                            key={pattern.name}
+                            type="button"
+                            onClick={() => {
+                              onDateChange(d);
+                              setCollapsedPatterns(prev => {
+                                const next = new Set(prev);
+                                next.delete(pattern.name);
+                                return next;
+                              });
+                            }}
+                            className={cx(
+                              "h-9 flex flex-col items-center justify-center w-full transition-colors",
+                              pi < reqPatterns.length - 1 ? "border-b border-zinc-50 dark:border-zinc-800/60" : "",
+                              isSel
+                                ? "hover:bg-blue-100/60 dark:hover:bg-blue-900/30"
+                                : "hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
+                            )}
+                          >
+                            {req > 0 ? (
+                              <>
+                                <span className={cx(
+                                  "tabular-nums text-[11px] font-bold leading-none",
+                                  ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400",
+                                )}>{actual}</span>
+                                <span className="text-[8px] text-zinc-300 dark:text-zinc-600 leading-none tabular-nums">/{req}</span>
+                              </>
+                            ) : (
+                              <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+
+            </div>
           </div>
         )}
 
