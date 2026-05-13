@@ -478,6 +478,8 @@ export default function ShiftDayList({
 
         {/* ⑤ 日付列 */}
         <div className="flex">
+          {/* パターン名ラベル列のスペーサー（充足サマリーと列幅を合わせる） */}
+          <div className="w-12 flex-shrink-0" />
           {currentWeek.map((d) => {
             const { dateNum, dow, dayOfWeek } = parseDayInfo(d);
             const isSel   = d === selectedDate;
@@ -521,6 +523,45 @@ export default function ShiftDayList({
             );
           })}
         </div>
+
+        {/* ⑥ 週別×パターン 充足数サマリー */}
+        {tabKey === "shukkin" && (
+          <div className="pb-1.5 border-t border-zinc-100 dark:border-zinc-800">
+            {shiftPatterns.filter(p => p.required_count > 0).map(pattern => {
+              const req = pattern.required_count;
+              const pByDay = currentWeek.map(d =>
+                visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length
+              );
+              return (
+                <div key={pattern.name} className="flex items-center h-5">
+                  <span className="w-12 flex-shrink-0 text-[9px] font-semibold text-zinc-400 dark:text-zinc-500 truncate pr-1 leading-none">
+                    {pattern.name}
+                  </span>
+                  {currentWeek.map((d, i) => {
+                    const count = pByDay[i];
+                    const ok    = count >= req;
+                    const isSel = d === selectedDate;
+                    return (
+                      <div key={d} className={cx(
+                        "flex-1 flex justify-center items-center rounded",
+                        isSel ? "bg-zinc-900/8 dark:bg-zinc-100/8" : "",
+                      )}>
+                        <span className={cx(
+                          "tabular-nums text-[9px] font-bold leading-none",
+                          ok
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-red-500 dark:text-red-400",
+                        )}>
+                          {count}/{req}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ━━ コンテンツ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
@@ -529,7 +570,7 @@ export default function ShiftDayList({
         {/* ── 出勤タブ ── */}
         {tabKey === "shukkin" && shiftPatterns.map((pattern) => {
           const byDay = currentWeek.map((d) =>
-            activeMembers.filter((m) => getShift(m.id, d)?.shift_name === pattern.name)
+            visibleMembers.filter((m) => getShift(m.id, d)?.shift_name === pattern.name)
           );
           const req      = pattern.required_count;
           const maxSlots = Math.max(req, ...byDay.map((ms) => ms.length));
@@ -638,7 +679,7 @@ export default function ShiftDayList({
         {(tabKey === "kyukyu" || tabKey === "kiboshu") && (() => {
           const targetName = tabKey === "kyukyu" ? "公休" : "希望休";
           const byDay = currentWeek.map((d) =>
-            activeMembers.filter((m) => getShift(m.id, d)?.shift_name === targetName)
+            visibleMembers.filter((m) => getShift(m.id, d)?.shift_name === targetName)
           );
           // 空き枠（未割当スタッフがいる日は＋ボタン表示）
           const maxSlots = Math.max(...byDay.map((ms) => ms.length), 1);
