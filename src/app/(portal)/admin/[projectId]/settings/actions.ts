@@ -401,12 +401,16 @@ export async function generateShiftTableAction(fd: FormData): Promise<SettingsRe
 
   // 希望休シート同期 ＆ シフト表生成
   const spreadsheetId = extractSpreadsheetId(settings.sheet_url);
-  await syncHolidaySheet(spreadsheetId, holidays);
-  await generateShiftTableSheet(
-    spreadsheetId, memberList, patternList, year, month,
-    holidays.map(h => ({ staffId: h.staffId, requestDate: h.requestDate })),
-    draftAssign,
-  );
+  try {
+    await syncHolidaySheet(spreadsheetId, holidays);
+    await generateShiftTableSheet(
+      spreadsheetId, memberList, patternList, year, month,
+      holidays.map(h => ({ staffId: h.staffId, requestDate: h.requestDate })),
+      draftAssign,
+    );
+  } catch (e) {
+    return { success: false, message: (e instanceof Error ? e.message : "シート生成中にエラーが発生しました") };
+  }
 
   return {
     success: true,
