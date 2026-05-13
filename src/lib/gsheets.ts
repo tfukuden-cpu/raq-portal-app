@@ -51,6 +51,8 @@ async function getAccessToken(): Promise<string> {
     client_email: string;
     private_key: string;
   };
+  if (!private_key) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON に private_key が含まれていません。サービスアカウントのJSONを確認してください。");
+  if (!client_email) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON に client_email が含まれていません。サービスアカウントのJSONを確認してください。");
   const pem = private_key.replace(/\\n/g, "\n");
   const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
   const claims = Buffer.from(JSON.stringify({
@@ -444,7 +446,7 @@ export async function generateShiftTableSheet(
       const s = fmtTime(p.start_time);
       const e = fmtTime(p.end_time);
       const timeRange = (s && e) ? `${s}〜${e}` : "";
-      const pNameEsc = p.name.replace(/"/g, '""');
+      const pNameEsc = (p.name ?? "").replace(/"/g, '""');
 
       for (let j = 0; j < slotCounts[pi]; j++) {
         rows.push([
