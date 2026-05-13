@@ -36,6 +36,8 @@ type Props = {
   members: Member[];
   slotRequirements: SlotReq[];
   holidays: string[];   // 祝日の date 文字列一覧
+  selectedDate?: string;
+  onDateSelect?: (date: string) => void;
 };
 
 function isWeekend(dateStr: string, holidays: string[]): boolean {
@@ -61,6 +63,8 @@ export default function ShiftSufficiencyTable({
   members,
   slotRequirements,
   holidays,
+  selectedDate,
+  onDateSelect,
 }: Props) {
   // セクションがあるパターンのみ対象
   const targetPatterns = patterns.filter(p => p.section);
@@ -167,12 +171,18 @@ export default function ShiftSufficiencyTable({
               </th>
               {allDates.map(d => {
                 const weekend = isWeekend(d, holidays);
+                const isSel = d === selectedDate;
                 return (
                   <th key={d}
+                    onClick={() => onDateSelect?.(d)}
                     className={[
                       "px-1.5 py-1 text-center font-semibold border-b border-zinc-200 dark:border-zinc-700 min-w-[36px]",
-                      weekend ? "text-red-500 dark:text-red-400 bg-red-50/50 dark:bg-red-950/20"
-                               : "text-zinc-500 dark:text-zinc-400",
+                      onDateSelect ? "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700/60" : "",
+                      isSel
+                        ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                        : weekend
+                          ? "text-red-500 dark:text-red-400 bg-red-50/50 dark:bg-red-950/20"
+                          : "text-zinc-500 dark:text-zinc-400",
                     ].join(" ")}>
                     <div className="tabular-nums">{dayLabel(d)}</div>
                     <div className="text-[9px] font-normal">{dayOfWeekLabel(d)}</div>
@@ -206,13 +216,14 @@ export default function ShiftSufficiencyTable({
                     const diff     = required === 0 ? 0 : actual - required;
                     const hasOverride = reqMap.has(`${section}::${pattern.name}::${date}`);
                     const weekend = isWeekend(date, holidays);
+                    const isSel = date === selectedDate;
 
                     return (
                       <td key={date}
                         onClick={() => openEdit(section, pattern.name, date, required)}
                         className={[
                           "text-center tabular-nums py-1 px-0.5 cursor-pointer transition-colors select-none",
-                          weekend ? "bg-red-50/30 dark:bg-red-950/10" : "",
+                          isSel ? "bg-blue-50/60 dark:bg-blue-950/20" : weekend ? "bg-red-50/30 dark:bg-red-950/10" : "",
                           "hover:bg-zinc-100 dark:hover:bg-zinc-800",
                         ].join(" ")}>
                         {required === 0 ? (

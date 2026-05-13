@@ -8,9 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
-import ShiftDayList from "./ShiftDayList";
-import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
-import ShiftSufficiencyTable from "./ShiftSufficiencyTable";
+import ShiftManageClient from "./ShiftManageClient";
 import SheetMenuButton from "./SheetMenuButton";
 import { isGSheetsConfigured } from "@/lib/gsheets";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
@@ -234,25 +232,17 @@ export default async function ManageShiftsPage(props: {
         )}
       </div>
 
-      {/* ── スクロール領域（ShiftDayList の sticky がここで効く） ── */}
+      {/* ── スクロール領域 ── */}
       <div className="flex-1 overflow-y-auto px-4 pb-20 space-y-4 pt-3">
-        <ShiftRequestsAdmin requests={shiftRequests} />
-        <ShiftSufficiencyTable
+        <ShiftManageClient
           projectId={selectedProjectId}
           allDates={allDates}
-          patterns={shiftPatterns}
-          shifts={(shifts ?? []).map(s => ({ staff_id: s.staff_id, shift_date: s.shift_date, shift_name: s.shift_name }))}
-          members={activeMembers.map(m => ({ id: m.id, section: m.section }))}
-          slotRequirements={slotRequirements}
-          holidays={[]}
-        />
-        <ShiftDayList
-          allDates={allDates}
+          defaultDate={defaultDate}
           shifts={shifts ?? []}
           activeMembers={activeMembers}
           shiftPatterns={shiftPatterns}
-          defaultDate={defaultDate}
-          projectId={selectedProjectId}
+          slotRequirements={slotRequirements}
+          shiftRequests={shiftRequests}
           targetYear={targetYear}
           targetMonth={targetMonth}
         />

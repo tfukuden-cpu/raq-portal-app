@@ -184,23 +184,30 @@ function ShiftAlerts({ alerts }: { alerts: string[] }) {
 }
 
 export default function ShiftDayList({
-  allDates, shifts, activeMembers, shiftPatterns, defaultDate, projectId,
+  allDates, shifts, activeMembers, shiftPatterns, selectedDate, onDateChange, projectId,
 }: {
   allDates: string[];
   shifts: Shift[];
   activeMembers: Member[];
   shiftPatterns: Pattern[];
-  defaultDate: string;
+  selectedDate: string;
+  onDateChange: (date: string) => void;
   projectId: string;
   targetYear: number;
   targetMonth: number;
 }) {
   const router = useRouter();
-  const [selectedDate, setSelectedDate]   = useState(defaultDate);
   const [isPending, startTransition]      = useTransition();
   const [error, setError]                 = useState<string | null>(null);
   const [tabKey, setTabKey]               = useState<TabKey>("shukkin");
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
+  // パターンごとの折りたたみ状態
+  const [collapsedPatterns, setCollapsedPatterns] = useState<Set<string>>(new Set());
+  const togglePattern = (name: string) => setCollapsedPatterns(prev => {
+    const next = new Set(prev);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    return next;
+  });
 
   // セクション一覧（nullでない値のみ・ソート）
   const sections = [...new Set(activeMembers.map(m => m.section).filter((s): s is string => !!s))].sort();
@@ -210,24 +217,15 @@ export default function ShiftDayList({
     ? activeMembers.filter(m => m.section === sectionFilter)
     : activeMembers;
 
-  // シフトルックアップ（早めに定義して sufficiency summary でも使えるように）
+  // シフトルックアップ
   const shiftMap = new Map<string, Shift>(shifts.map((s) => [`${s.staff_id}__${s.shift_date}`, s]));
   const getShift = (sid: string, d: string) => shiftMap.get(`${sid}__${d}`);
-
-  // 選択日の充足サマリー（要求数 > 0 のパターンのみ）
-  const selectedDateSummary = shiftPatterns
-    .filter(p => p.required_count > 0)
-    .map(p => ({
-      name:     p.name,
-      count:    visibleMembers.filter(m => getShift(m.id, selectedDate)?.shift_name === p.name).length,
-      required: p.required_count,
-    }));
 
   // モーダル
   const [modalMode,    setModalMode]    = useState<ModalMode>("add");
   const [modalOpen,    setModalOpen]    = useState(false);
   const [editShift,    setEditShift]    = useState<Shift | null>(null);
-  const [modalDate,    setModalDate]    = useState(defaultDate);
+  const [modalDate,    setModalDate]    = useState(selectedDate);
   const [modalStaffId, setModalStaffId] = useState("");
   const [name,  setName]  = useState("");
   const [start, setStart] = useState("");
@@ -254,7 +252,7 @@ export default function ShiftDayList({
     };
   };
 
-  // シフトルックアップ（上部で定義済み）
+  // ── シフトルックアップ（上部で定義済み） ─────────────────────────
 
   // パターン×日付 → メンバーリスト（セクションフィルター適用）
   const membersForPatternDay = (patternName: string, date: string) =>
@@ -416,26 +414,7 @@ export default function ShiftDayList({
           </div>
         )}
 
-        {/* ② 選択日の充足サマリー */}
-        {selectedDateSummary.length > 0 && (
-          <div className="flex overflow-x-auto gap-1 mb-2" style={{ scrollbarWidth: "none" }}>
-            {selectedDateSummary.map(s => {
-              const ok = s.count >= s.required;
-              return (
-                <span key={s.name} className={cx(
-                  "flex-shrink-0 tabular-nums text-[10px] font-bold px-2 py-0.5 rounded-full",
-                  ok
-                    ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
-                    : "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400",
-                )}>
-                  {s.name}&nbsp;{s.count}/{s.required}
-                </span>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ③ パターンタブ */}
+        {/* ② パターンタブ */}
         <div className="flex overflow-x-auto gap-1 mb-3" style={{ scrollbarWidth: "none" }}>
           {tabs.map((t) => {
             const isSel = tabKey === t.key;
@@ -468,7 +447,7 @@ export default function ShiftDayList({
         <div className="flex items-center justify-between mb-1 px-0.5">
           <button
             type="button"
-            onClick={() => { const p = weekChunks[weekIdx - 1]; if (p) setSelectedDate(p[0]); }}
+            onClick={() => { const p = weekChunks[weekIdx - 1]; if (p) onDateChange(p[0]); }}
             disabled={weekIdx === 0}
             className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-20 transition-colors"
           >
@@ -487,7 +466,7 @@ export default function ShiftDayList({
           </span>
           <button
             type="button"
-            onClick={() => { const n = weekChunks[weekIdx + 1]; if (n) setSelectedDate(n[0]); }}
+            onClick={() => { const n = weekChunks[weekIdx + 1]; if (n) onDateChange(n[0]); }}
             disabled={weekIdx === weekChunks.length - 1}
             className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-20 transition-colors"
           >
@@ -508,7 +487,7 @@ export default function ShiftDayList({
             return (
               <button
                 key={d}
-                onClick={() => setSelectedDate(d)}
+                onClick={() => onDateChange(d)}
                 className={cx(
                   "flex-1 flex flex-col items-center gap-0.5 py-2 transition-all",
                   isSel
@@ -555,17 +534,41 @@ export default function ShiftDayList({
           const req      = pattern.required_count;
           const maxSlots = Math.max(req, ...byDay.map((ms) => ms.length));
           if (maxSlots === 0) return null;
+          const isCollapsed = collapsedPatterns.has(pattern.name);
+          // 選択日のカウント
+          const selDayIdx = currentWeek.indexOf(selectedDate);
+          const selCount = selDayIdx >= 0 ? (byDay[selDayIdx]?.length ?? 0) : 0;
           return (
             <div key={pattern.name}>
-              <div className="flex items-baseline gap-2 px-0.5 mb-1">
+              <button
+                type="button"
+                onClick={() => togglePattern(pattern.name)}
+                className="flex items-center gap-2 w-full px-0.5 mb-1 group"
+              >
                 <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{pattern.name}</span>
                 {(pattern.start_time || pattern.end_time) && (
                   <span className="text-[10px] text-zinc-400 font-mono">
                     {pattern.start_time?.slice(0, 5)}〜{pattern.end_time?.slice(0, 5)}
                   </span>
                 )}
-              </div>
-              <div className="overflow-hidden border border-zinc-100 dark:border-zinc-800 rounded-b-2xl">
+                {req > 0 && (
+                  <span className={cx(
+                    "tabular-nums text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                    selCount >= req
+                      ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
+                      : "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400",
+                  )}>
+                    {selCount}/{req}
+                  </span>
+                )}
+                <svg
+                  className={cx("w-3.5 h-3.5 text-zinc-400 ml-auto transition-transform", isCollapsed ? "-rotate-90" : "")}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {!isCollapsed && <div className="overflow-hidden border border-zinc-100 dark:border-zinc-800 rounded-b-2xl">
                 {Array.from({ length: maxSlots }, (_, slotIdx) => (
                   <div key={slotIdx} className="flex divide-x divide-zinc-100 dark:divide-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0">
                     {currentWeek.map((d, di) => {
@@ -626,7 +629,7 @@ export default function ShiftDayList({
                     })}
                   </div>
                 )}
-              </div>
+              </div>}
             </div>
           );
         })}
