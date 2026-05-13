@@ -47,26 +47,45 @@ async function getAccessToken(): Promise<string> {
   const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (!json) throw new Error("Google認証が設定されていません（GOOGLE_REFRESH_TOKEN または GOOGLE_SERVICE_ACCOUNT_JSON が必要です）");
 
-  // Vercelへの貼り付け時にprivate_key内の改行が壊れることがある → 自動修正を試みる
-  let parsed: { client_email?: string; private_key?: string };
+  // Vercelへの貼り付けでJSONが壊れることがあるため、3段階でフォールバック解析する
+  let client_email: string | undefined;
+  let private_key: string | undefined;
+
+  // 試行1: 標準のJSON.parse
   try {
-    parsed = JSON.parse(json) as { client_email?: string; private_key?: string };
-  } catch {
+    const p = JSON.parse(json) as Record<string, string>;
+    client_email = p.client_email;
+    private_key  = p.private_key;
+  } catch { /* → 試行2へ */ }
+
+  // 試行2: PEM内の実際の改行を \n エスケープに変換して再パース
+  if (!private_key) {
     try {
-      // PEMブロック内の実際の改行文字を \n エスケープシーケンスに変換して再パース
       const fixed = json.replace(
         /(-----BEGIN [A-Z ]+-----)([\s\S]*?)(-----END [A-Z ]+-----\r?\n?)/g,
         (_, b, m, e) => b + m.replace(/\r?\n/g, "\\n") + e.replace(/\r?\n/g, "\\n"),
       );
-      parsed = JSON.parse(fixed) as { client_email?: string; private_key?: string };
-    } catch {
-      throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON のJSONが不正です。サービスアカウントのJSONファイルをそのままVercelに貼り付けてください。");
+      const p = JSON.parse(fixed) as Record<string, string>;
+      client_email = p.client_email;
+      private_key  = p.private_key;
+    } catch { /* → 試行3へ */ }
+  }
+
+  // 試行3: JSONパースを諦めて正規表現で直接抽出
+  if (!private_key) {
+    const emailMatch = json.match(/"client_email"\s*:\s*"([^"]+)"/);
+    const pemMatch   = json.match(/(-----BEGIN [A-Z ]+ KEY-----)([\s\S]+?)(-----END [A-Z ]+ KEY-----)/);
+    if (emailMatch && pemMatch) {
+      // base64部分の空白・改行をすべて除去して標準PEMに再組み立て
+      const b64 = pemMatch[2].replace(/[\s\r\n]/g, "");
+      client_email = emailMatch[1];
+      private_key  = `-----BEGIN PRIVATE KEY-----\\n${b64}\\n-----END PRIVATE KEY-----\\n`;
     }
   }
 
-  const { client_email, private_key } = parsed;
-  if (!private_key) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON に private_key が含まれていません。");
-  if (!client_email) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON に client_email が含まれていません。");
+  if (!client_email || !private_key) {
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON からclient_emailとprivate_keyを読み取れませんでした。サービスアカウントのJSONファイルをVercelに再設定してください。");
+  }
   const pem = private_key.replace(/\\n/g, "\n");
   const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
   const claims = Buffer.from(JSON.stringify({
