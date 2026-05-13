@@ -402,30 +402,35 @@ export async function generateShiftTableSheet(
   const PS = staffPatterns.length;
   const hasConfirmSplit = PA > 0 && PS > 0; // 確認ビューを2セクションに分割するか
 
+  // 充足サマリー（確認ビューの上に表示）：セクション付きパターンのみ
+  const summaryPatterns = shiftPatterns.filter(p => p.section);
+  // summaryRowOffset = ヘッダー行(1) + データ行数 + 区切り行(1)
+  const summaryRowOffset = summaryPatterns.length > 0 ? 2 + summaryPatterns.length : 0;
+
   const adminSlotCounts = adminPatterns.map(p => Math.max(1, p.required_count ?? 1));
   const staffSlotCounts = staffPatterns.map(p => Math.max(1, p.required_count ?? 1));
 
-  // 管理者確認ブロック開始行（0-indexed、行0=確認ヘッダー）
+  // 管理者確認ブロック開始行（0-indexed、summaryRowOffset 分シフト）
   const adminConfirmBlockStarts: number[] = [];
-  let aOff = 1;
+  let aOff = summaryRowOffset + 1;
   for (let i = 0; i < PA; i++) {
     adminConfirmBlockStarts.push(aOff);
     aOff += adminSlotCounts[i] + 3;
   }
-  const totalAdminConfirmRows = aOff - 1;
+  const totalAdminConfirmRows = aOff - (summaryRowOffset + 1);
 
   // 確認ビュー内の管理者↔スタッフ区切り行（両方あるとき）
-  const rConfirmMidSep = hasConfirmSplit ? (1 + totalAdminConfirmRows) : -1;
+  const rConfirmMidSep = hasConfirmSplit ? (summaryRowOffset + 1 + totalAdminConfirmRows) : -1;
   const confirmMidCount = hasConfirmSplit ? 1 : 0;
 
   // スタッフ確認ブロック開始行（0-indexed）
   const staffConfirmBlockStarts: number[] = [];
-  let sOff = 1 + totalAdminConfirmRows + confirmMidCount;
+  let sOff = summaryRowOffset + 1 + totalAdminConfirmRows + confirmMidCount;
   for (let i = 0; i < PS; i++) {
     staffConfirmBlockStarts.push(sOff);
     sOff += staffSlotCounts[i] + 3;
   }
-  const totalStaffConfirmRows = sOff - (1 + totalAdminConfirmRows + confirmMidCount);
+  const totalStaffConfirmRows = sOff - (summaryRowOffset + 1 + totalAdminConfirmRows + confirmMidCount);
 
   const totalConfirmRows = totalAdminConfirmRows + confirmMidCount + totalStaffConfirmRows;
 
@@ -436,8 +441,14 @@ export async function generateShiftTableSheet(
 
   // ── 行レイアウト（0-indexed）────────────────────────────
   //
-  // 【上段：確認ビュー】
-  // Row 0          : 確認ビューヘッダー
+  // 【充足サマリー（セクション付きパターンがある場合のみ）】
+  // Row 0               : 充足サマリーヘッダー（セクション│パターン│日付…）
+  // Row 1..SP           : 充足サマリーデータ行（section×pattern、COUNTIF自動反映）
+  // Row SP+1            : 区切り
+  //   ↑ これら = summaryRowOffset 行
+  //
+  // 【確認ビュー（自動反映）】
+  // Row summaryRowOffset : 確認ビューヘッダー（= rCH）
   // 管理者パターンブロック（adminConfirmBlockStarts[i] から）
   //   ※ hasConfirmSplit のとき、管理者ブロック後に区切り行（rConfirmMidSep）→ スタッフブロック
   // スタッフパターンブロック（staffConfirmBlockStarts[i] から）
@@ -451,8 +462,8 @@ export async function generateShiftTableSheet(
   // rI0 〜 rI1     : スタッフ行（A=氏名、B-=シフトパターンドロップダウン）
 
   // 0-indexed キー行
-  const rCH  = 0;
-  const rSep = 1 + totalConfirmRows;
+  const rCH  = summaryRowOffset;
+  const rSep = summaryRowOffset + 1 + totalConfirmRows;
   const rIH  = rSep + 1;                              // 入力ヘッダー
   const rI0  = rIH + 1;                               // 管理者行 開始
   const rAdminEnd = rIH + M_admin;                    // 管理者行 終了（管理者0名なら rIH）
@@ -465,6 +476,34 @@ export async function generateShiftTableSheet(
   const iEnd1        = rI1 + 1;         // 全行 終了
   const iAdminStart1 = rI0 + 1;         // 管理者入力行 開始
   const iAdminEnd1   = M_admin > 0 ? rAdminEnd + 1 : rI0 + 1; // 管理者入力行 終了
+
+  // ── 充足サマリー行を生成（確認ビューの上に表示、COUNTIF で自動反映） ──
+  const dayLabelHeaders = Array.from({ length: daysInMonth }, (_, i) => {
+    const d = new Date(year, month - 1, i + 1);
+    return `${month}/${i + 1}(${["日","月","火","水","木","金","土"][d.getDay()]})`;
+  });
+  const summaryHeaderRow: string[][] = summaryPatterns.length > 0
+    ? [["充足サマリー", "", "", ...dateCells]]
+    : [];
+  const summaryDataRows: string[][] = summaryPatterns.map(p => {
+    const pNameEsc = (p.name ?? "").replace(/"/g, '""');
+    return [
+      p.section ?? "",
+      p.name,
+      "",
+      ...Array.from({ length: daysInMonth }, (_, di) => {
+        const d      = new Date(year, month - 1, di + 1);
+        const isWkend = d.getDay() === 0 || d.getDay() === 6;
+        const req    = isWkend
+          ? ((p as { required_weekend?: number | null }).required_weekend ?? p.required_count ?? 0)
+          : ((p as { required_weekday?: number | null }).required_weekday ?? p.required_count ?? 0);
+        if (!req) return "";
+        const dayCol = columnLetter(di + 4);
+        return `=COUNTIF(${dayCol}$${iStart1}:${dayCol}$${iEnd1},"${pNameEsc}")-${req}`;
+      }),
+    ];
+  });
+  const summarySepRow: string[][] = summaryPatterns.length > 0 ? [["", "", "", ...Array(daysInMonth).fill("")]] : [];
 
   // 時刻を "HH:MM" 形式に整形（DB値は "HH:MM:SS" または "HH:MM"）
   const fmtTime = (t?: string | null) => (t ? t.slice(0, 5) : "");
@@ -615,6 +654,9 @@ export async function generateShiftTableSheet(
     : [];
 
   await writeSheet(spreadsheetId, sheetName, [
+    ...summaryHeaderRow,
+    ...summaryDataRows,
+    ...summarySepRow,
     ["確認ビュー（自動反映）", "", "", ...dateCells],
     ...adminConfirmRows,
     ...confirmMidSepRow,
@@ -691,6 +733,56 @@ export async function generateShiftTableSheet(
         fields: "userEnteredFormat",
       },
     },
+
+    // ── 充足サマリー（確認ビューの上） ──────────────────────
+    ...(summaryPatterns.length > 0 ? [
+      // サマリーヘッダー行（濃い紺）
+      rpt(0, 0, 0, 2, {
+        backgroundColor: { red:0.122, green:0.196, blue:0.412 },
+        textFormat: { bold: true, foregroundColor: W, fontSize: 9 },
+        horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE",
+      }),
+      rpt(0, 0, 3, totalCols - 1, {
+        backgroundColor: { red:0.122, green:0.196, blue:0.412 },
+        textFormat: { bold: true, foregroundColor: W, fontSize: 9 },
+        horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE", numberFormat: DATE_FMT,
+      }),
+      // サマリーデータ行（セクション列・パターン列・日付値列）
+      rpt(1, summaryPatterns.length, 0, 0, {
+        backgroundColor: { red:0.878, green:0.894, blue:0.961 },
+        textFormat: { bold: true, fontSize: 9 },
+        horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE",
+      }),
+      rpt(1, summaryPatterns.length, 1, 2, {
+        backgroundColor: { red:0.937, green:0.945, blue:0.980 },
+        textFormat: { fontSize: 9 },
+        horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE",
+      }),
+      rpt(1, summaryPatterns.length, 3, totalCols - 1, {
+        backgroundColor: { red:0.969, green:0.973, blue:0.996 },
+        textFormat: { bold: true, fontSize: 10 },
+        horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE",
+      }),
+      // 区切り行
+      rpt(summaryPatterns.length + 1, summaryPatterns.length + 1, 0, totalCols - 1, { backgroundColor: GS }),
+      // 行高さ
+      { updateDimensionProperties: { range: { sheetId, dimension: "ROWS", startIndex: 0, endIndex: 1 }, properties: { pixelSize: 24 }, fields: "pixelSize" } },
+      { updateDimensionProperties: { range: { sheetId, dimension: "ROWS", startIndex: 1, endIndex: summaryPatterns.length + 1 }, properties: { pixelSize: 26 }, fields: "pixelSize" } },
+      { updateDimensionProperties: { range: { sheetId, dimension: "ROWS", startIndex: summaryPatterns.length + 1, endIndex: summaryPatterns.length + 2 }, properties: { pixelSize: 8 }, fields: "pixelSize" } },
+      // 条件付き書式（数値：マイナス=赤、ゼロ=緑、プラス=黄）
+      { addConditionalFormatRule: { rule: {
+        ranges: [{ sheetId, startRowIndex: 1, endRowIndex: summaryPatterns.length + 1, startColumnIndex: 3, endColumnIndex: totalCols }],
+        booleanRule: { condition: { type: "NUMBER_LESS", values: [{ userEnteredValue: "0" }] }, format: { textFormat: { foregroundColor: { red:0.72, green:0.07, blue:0.07 }, bold: true }, backgroundColor: { red:1.0, green:0.80, blue:0.80 } } },
+      }, index: 0 } },
+      { addConditionalFormatRule: { rule: {
+        ranges: [{ sheetId, startRowIndex: 1, endRowIndex: summaryPatterns.length + 1, startColumnIndex: 3, endColumnIndex: totalCols }],
+        booleanRule: { condition: { type: "NUMBER_EQ",   values: [{ userEnteredValue: "0" }] }, format: { textFormat: { foregroundColor: { red:0.06, green:0.38, blue:0.06 }, bold: true }, backgroundColor: { red:0.71, green:0.96, blue:0.71 } } },
+      }, index: 1 } },
+      { addConditionalFormatRule: { rule: {
+        ranges: [{ sheetId, startRowIndex: 1, endRowIndex: summaryPatterns.length + 1, startColumnIndex: 3, endColumnIndex: totalCols }],
+        booleanRule: { condition: { type: "NUMBER_GREATER", values: [{ userEnteredValue: "0" }] }, format: { textFormat: { foregroundColor: { red:0.60, green:0.40, blue:0.00 }, bold: true }, backgroundColor: { red:1.0, green:0.95, blue:0.60 } } },
+      }, index: 2 } },
+    ] : []),
 
     // ── 確認ビュー ヘッダー ──────────────────────────────
     rpt(rCH, rCH, 0, 2, {  // A・B・C列
@@ -899,12 +991,15 @@ export async function generateShiftTableSheet(
       },
     })),
 
-    // ── A・B列と確認ヘッダー行を固定 ─────────────────────
+    // ── A〜C列と充足サマリー行を固定（サマリーなければ確認ヘッダー行のみ固定）
     {
       updateSheetProperties: {
         properties: {
           sheetId,
-          gridProperties: { frozenColumnCount: 3, frozenRowCount: 1 },
+          gridProperties: {
+            frozenColumnCount: 3,
+            frozenRowCount: summaryRowOffset > 0 ? summaryRowOffset : 1,
+          },
         },
         fields: "gridProperties.frozenColumnCount,gridProperties.frozenRowCount",
       },
