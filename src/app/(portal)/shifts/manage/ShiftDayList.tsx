@@ -409,124 +409,108 @@ export default function ShiftDayList({
       {/* ━━ sticky ヘッダー ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className="sticky top-0 z-10 bg-white dark:bg-zinc-950 -mx-4 px-4 pt-3 pb-0 border-b border-zinc-100 dark:border-zinc-800">
 
-        {/* ① セクションフィルター（セクションがある案件のみ表示） */}
-        {hasSection && (
-          <div className="flex overflow-x-auto gap-1 mb-2" style={{ scrollbarWidth: "none" }}>
-            <button
-              type="button"
-              onClick={() => setSectionFilter(null)}
-              className={cx(
-                "px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0",
-                sectionFilter === null
-                  ? "bg-blue-600 text-white"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700",
-              )}
-            >
-              すべて
-            </button>
-            {sections.map((sec) => (
-              <button
-                key={sec}
-                type="button"
-                onClick={() => setSectionFilter(sec)}
-                className={cx(
-                  "px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0",
-                  sectionFilter === sec
-                    ? "bg-blue-600 text-white"
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700",
-                )}
-              >
-                {sec}
-              </button>
-            ))}
+        {/* ① セクション + タブ（同一行） */}
+        <div className="flex items-center justify-between mb-3 gap-2">
+          {/* タブ */}
+          <div className="flex gap-0.5">
+            {tabs.map((t) => {
+              const isSel = tabKey === t.key;
+              return (
+                <button
+                  key={t.key} type="button"
+                  onClick={() => setTabKey(t.key)}
+                  className={cx(
+                    "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
+                    isSel
+                      ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                      : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300",
+                  )}
+                >
+                  {t.label}
+                  <span className={cx(
+                    "tabular-nums text-[10px] font-bold",
+                    isSel ? "text-white/60 dark:text-zinc-900/60" : "text-zinc-400 dark:text-zinc-500",
+                  )}>
+                    {t.badge}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        )}
 
-        {/* ② パターンタブ */}
-        <div className="flex overflow-x-auto gap-1 mb-3" style={{ scrollbarWidth: "none" }}>
-          {tabs.map((t) => {
-            const isSel = tabKey === t.key;
-            return (
-              <button
-                key={t.key} type="button"
-                onClick={() => setTabKey(t.key)}
+          {/* セクションフィルター（セクションがある案件のみ） */}
+          {hasSection && (
+            <div className="flex overflow-x-auto gap-1 flex-shrink" style={{ scrollbarWidth: "none" }}>
+              <button type="button" onClick={() => setSectionFilter(null)}
                 className={cx(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0",
-                  isSel
-                    ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm"
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700",
-                )}
-              >
-                {t.label}
-                <span className={cx(
-                  "tabular-nums text-[10px] min-w-[1.5rem] text-center px-1.5 py-0.5 rounded-full font-bold",
-                  isSel
-                    ? "bg-white/15 text-white dark:text-zinc-900 dark:bg-black/15"
-                    : "bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400",
+                  "px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all flex-shrink-0",
+                  sectionFilter === null
+                    ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                    : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
                 )}>
-                  {t.badge}
-                </span>
+                全班
               </button>
-            );
-          })}
+              {sections.map((sec) => (
+                <button key={sec} type="button" onClick={() => setSectionFilter(sec)}
+                  className={cx(
+                    "px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all flex-shrink-0",
+                    sectionFilter === sec
+                      ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                      : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
+                  )}>
+                  {sec}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* ④ 週ナビ */}
-        <div className="flex items-center justify-between mb-1 px-0.5">
+        {/* ③ 日付ピッカー（矢印統合 + ヘルスドット） */}
+        <div className="flex items-stretch pb-2">
+          {/* 前週 */}
           <button
             type="button"
             onClick={() => { const p = weekChunks[weekIdx - 1]; if (p) onDateChange(p[0]); }}
             disabled={weekIdx === 0}
-            className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-20 transition-colors"
+            className="flex-shrink-0 w-6 flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 disabled:opacity-0 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <span className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 tabular-nums">
-            {(() => {
-              const first = currentWeek[0] ?? "";
-              const last  = currentWeek[currentWeek.length - 1] ?? "";
-              const f = parseDayInfo(first);
-              const l = parseDayInfo(last);
-              return `${first.slice(5).replace("-", "/")}(${f.dow}) — ${last.slice(5).replace("-", "/")}(${l.dow})`;
-            })()}
-          </span>
-          <button
-            type="button"
-            onClick={() => { const n = weekChunks[weekIdx + 1]; if (n) onDateChange(n[0]); }}
-            disabled={weekIdx === weekChunks.length - 1}
-            className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-20 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
 
-        {/* ⑤ 日付列 */}
-        <div className="flex">
-          {/* パターン名ラベル列のスペーサー（充足サマリーと列幅を合わせる） */}
-          <div className="w-12 flex-shrink-0" />
           {currentWeek.map((d) => {
             const { dateNum, dow, dayOfWeek } = parseDayInfo(d);
             const isSel   = d === selectedDate;
             const isToday = d === todayStr;
             const isSun   = dayOfWeek === 0;
             const isSat   = dayOfWeek === 6;
+
+            // ヘルス計算（必要数があるパターンの中で不足しているものの割合）
+            const reqPatterns = shiftPatterns.filter(p => getRequiredForDate(p, d) > 0);
+            const shortCount  = reqPatterns.filter(p => {
+              const req = getRequiredForDate(p, d);
+              return visibleMembers.filter(m => getShift(m.id, d)?.shift_name === p.name).length < req;
+            }).length;
+            const healthDot =
+              reqPatterns.length === 0   ? null
+              : shortCount === 0         ? "bg-emerald-400"
+              : shortCount < reqPatterns.length ? "bg-amber-400"
+              :                            "bg-red-400";
+
             return (
               <button
                 key={d}
                 onClick={() => onDateChange(d)}
                 className={cx(
-                  "flex-1 flex flex-col items-center gap-0.5 py-2 transition-all",
+                  "flex-1 flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all",
                   isSel
-                    ? "bg-zinc-900 dark:bg-zinc-100 rounded-t-xl"
-                    : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60 rounded-t-xl",
+                    ? "bg-zinc-900 dark:bg-zinc-100"
+                    : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
                 )}
               >
                 <span className={cx(
-                  "text-[10px] font-semibold leading-none",
+                  "text-[10px] font-medium leading-none",
                   isSel  ? "text-zinc-400 dark:text-zinc-500"
                   : isSun ? "text-red-400"
                   : isSat ? "text-blue-400"
@@ -535,7 +519,7 @@ export default function ShiftDayList({
                   {dow}
                 </span>
                 <span className={cx(
-                  "text-sm font-bold tabular-nums leading-none",
+                  "text-base font-bold tabular-nums leading-none",
                   isSel  ? "text-white dark:text-zinc-900"
                   : isSun ? "text-red-500"
                   : isSat ? "text-blue-500"
@@ -543,62 +527,36 @@ export default function ShiftDayList({
                 )}>
                   {dateNum}
                 </span>
-                <span className={cx(
-                  "w-1 h-1 rounded-full",
-                  isToday ? (isSel ? "bg-blue-400" : "bg-blue-500") : "bg-transparent",
-                )} />
+                {/* ヘルスドット + 当日ドット */}
+                <div className="flex items-center justify-center gap-0.5 h-2">
+                  {isToday && (
+                    <span className={cx("w-1 h-1 rounded-full", isSel ? "bg-blue-400" : "bg-blue-500")} />
+                  )}
+                  {healthDot && (
+                    <span className={cx("w-1.5 h-1.5 rounded-full", isSel ? "bg-white/50 dark:bg-black/30" : healthDot)} />
+                  )}
+                </div>
               </button>
             );
           })}
-        </div>
 
-        {/* ⑥ 週別×パターン 充足数サマリー */}
-        {tabKey === "shukkin" && shiftPatterns.some(hasAnyRequired) && (
-          <div className="pb-1.5 border-t border-zinc-100 dark:border-zinc-800">
-            {shiftPatterns.filter(hasAnyRequired).map(pattern => {
-              const pByDay = currentWeek.map(d =>
-                visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length
-              );
-              return (
-                <div key={pattern.name} className="flex items-center h-5">
-                  <span className="w-12 flex-shrink-0 text-[9px] font-semibold text-zinc-400 dark:text-zinc-500 truncate pr-1 leading-none">
-                    {pattern.name}
-                  </span>
-                  {currentWeek.map((d, i) => {
-                    const req   = getRequiredForDate(pattern, d);
-                    const count = pByDay[i];
-                    const ok    = req === 0 || count >= req;
-                    const isSel = d === selectedDate;
-                    return (
-                      <div key={d} className={cx(
-                        "flex-1 flex justify-center items-center rounded",
-                        isSel ? "bg-zinc-100 dark:bg-zinc-800/60" : "",
-                      )}>
-                        {req > 0 ? (
-                          <span className={cx(
-                            "tabular-nums text-[9px] font-bold leading-none",
-                            ok
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : "text-red-500 dark:text-red-400",
-                          )}>
-                            {count}/{req}
-                          </span>
-                        ) : (
-                          <span className="text-[9px] text-zinc-300 dark:text-zinc-700">—</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        )}
+          {/* 次週 */}
+          <button
+            type="button"
+            onClick={() => { const n = weekChunks[weekIdx + 1]; if (n) onDateChange(n[0]); }}
+            disabled={weekIdx === weekChunks.length - 1}
+            className="flex-shrink-0 w-6 flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 disabled:opacity-0 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* ━━ コンテンツ（スワイプで週移動） ━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div
-        className="pt-2 space-y-3"
+        className="pt-3 space-y-2"
         onTouchStart={e => { touchStartX.current = e.touches[0].clientX; }}
         onTouchEnd={e => {
           if (touchStartX.current === null) return;
@@ -630,103 +588,93 @@ export default function ShiftDayList({
           const selCount  = selDayIdx >= 0 ? (byDay[selDayIdx]?.length ?? 0) : 0;
           const selReq    = getRequiredForDate(pattern, selectedDate);
           return (
-            <div key={pattern.name}>
+            <div key={pattern.name} className="rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60">
+              {/* パターンヘッダー */}
               <button
                 type="button"
                 onClick={() => togglePattern(pattern.name)}
-                className="flex items-center gap-2 w-full px-0.5 mb-1 group"
+                className="flex items-center gap-2 w-full px-3.5 py-2.5"
               >
-                <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{pattern.name}</span>
-                {(pattern.start_time || pattern.end_time) && (
-                  <span className="text-[10px] text-zinc-400 font-mono">
-                    {pattern.start_time?.slice(0, 5)}〜{pattern.end_time?.slice(0, 5)}
-                  </span>
-                )}
+                <div className="flex items-baseline gap-1.5 min-w-0">
+                  <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 truncate">{pattern.name}</span>
+                  {(pattern.start_time || pattern.end_time) && (
+                    <span className="text-[10px] text-zinc-400 font-mono flex-shrink-0">
+                      {pattern.start_time?.slice(0, 5)}–{pattern.end_time?.slice(0, 5)}
+                    </span>
+                  )}
+                </div>
                 {selReq > 0 && (
                   <span className={cx(
-                    "tabular-nums text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                    "ml-auto flex-shrink-0 tabular-nums text-xs font-bold px-2 py-0.5 rounded-full",
                     selCount >= selReq
-                      ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
-                      : "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400",
+                      ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30"
+                      : "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30",
                   )}>
                     {selCount}/{selReq}
                   </span>
                 )}
                 <svg
-                  className={cx("w-3.5 h-3.5 text-zinc-400 ml-auto transition-transform", isCollapsed ? "-rotate-90" : "")}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                  className={cx("w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 transition-transform flex-shrink-0", selReq > 0 ? "" : "ml-auto", isCollapsed ? "-rotate-90" : "")}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              {!isCollapsed && <div className="overflow-hidden border border-zinc-100 dark:border-zinc-800 rounded-b-2xl">
-                {Array.from({ length: maxSlots }, (_, slotIdx) => (
-                  <div key={slotIdx} className="flex divide-x divide-zinc-100 dark:divide-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0">
-                    {currentWeek.map((d, di) => {
-                      const member    = byDay[di][slotIdx];
-                      const isSel     = d === selectedDate;
-                      const dayReq    = getRequiredForDate(pattern, d);
-                      const isAddable = slotIdx < dayReq;
-                      // 空き枠：未割当スタッフがいる場合のみ追加可能
-                      const canAdd    = isAddable && !member && unassignedMembersForDate(d).length > 0;
-                      return (
-                        <button
-                          key={d} type="button"
-                          disabled={isPending || (!member && !canAdd)}
-                          onClick={() => member ? openOccupied(member, d) : openEmpty(d, pattern.name)}
-                          className={cx(
-                            "flex-1 min-w-0 py-3 flex items-center justify-center transition-colors",
-                            isSel
-                              ? "bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                              : (member || canAdd)
-                                ? "bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-                                : "bg-white dark:bg-zinc-900 pointer-events-none",
-                          )}
-                        >
-                          {member ? (
-                            <span className={cx(
-                              "text-[11px] font-semibold leading-none px-1 truncate",
-                              isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-800 dark:text-zinc-200",
-                            )}>{shortName(member.name)}</span>
-                          ) : canAdd ? (
-                            <span className={cx(
-                              "text-sm leading-none font-light",
-                              isSel ? "text-blue-300 dark:text-blue-700" : "text-zinc-200 dark:text-zinc-700",
-                            )}>＋</span>
-                          ) : isAddable ? (
-                            // 必要枠だが未割当スタッフなし（全員割当済み）
-                            <span className="text-[9px] text-zinc-200 dark:text-zinc-700">─</span>
-                          ) : null}
-                        </button>
-                      );
-                    })}
+
+              {/* グリッド（ボーダーなし・選択列をカラムハイライト） */}
+              {!isCollapsed && (
+                <div className="border-t border-zinc-100 dark:border-zinc-800/60">
+                  {/* 列ハイライト用ガイドライン */}
+                  <div className="flex h-px">
+                    {currentWeek.map(d => (
+                      <div key={d} className={cx("flex-1", d === selectedDate ? "bg-blue-500/40" : "")} />
+                    ))}
                   </div>
-                ))}
-                {maxReq > 0 && (
-                  <div className="flex divide-x divide-zinc-100 dark:divide-zinc-800 bg-zinc-50 dark:bg-zinc-900/60">
-                    {currentWeek.map((d, di) => {
-                      const count  = byDay[di].length;
-                      const dayReq = getRequiredForDate(pattern, d);
-                      const isSel  = d === selectedDate;
-                      const ok     = dayReq === 0 || count >= dayReq;
-                      return (
-                        <div key={d} className={cx("flex-1 py-1.5 flex items-center justify-center", isSel ? "bg-blue-50 dark:bg-blue-950/30" : "")}>
-                          {dayReq > 0 ? (
-                            <span className={cx(
-                              "tabular-nums text-[10px] font-bold px-1.5 py-0.5 rounded-full",
-                              ok
-                                ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
-                                : "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400",
-                            )}>{count}/{dayReq}</span>
-                          ) : (
-                            <span className="text-[9px] text-zinc-300 dark:text-zinc-700">—</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>}
+
+                  {Array.from({ length: maxSlots }, (_, slotIdx) => (
+                    <div key={slotIdx} className="flex">
+                      {currentWeek.map((d, di) => {
+                        const member    = byDay[di][slotIdx];
+                        const isSel     = d === selectedDate;
+                        const dayReq    = getRequiredForDate(pattern, d);
+                        const isAddable = slotIdx < dayReq;
+                        const canAdd    = isAddable && !member && unassignedMembersForDate(d).length > 0;
+                        return (
+                          <button
+                            key={d} type="button"
+                            disabled={isPending || (!member && !canAdd)}
+                            onClick={() => member ? openOccupied(member, d) : openEmpty(d, pattern.name)}
+                            className={cx(
+                              "flex-1 min-w-0 py-3 flex items-center justify-center transition-colors",
+                              isSel
+                                ? member
+                                  ? "bg-blue-500/10 dark:bg-blue-400/10 hover:bg-blue-500/15 dark:hover:bg-blue-400/15"
+                                  : "bg-blue-500/5 dark:bg-blue-400/5 hover:bg-blue-500/10 dark:hover:bg-blue-400/10"
+                                : member || canAdd
+                                  ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                                  : "pointer-events-none",
+                            )}
+                          >
+                            {member ? (
+                              <span className={cx(
+                                "text-xs font-semibold leading-none px-0.5 truncate",
+                                isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
+                              )}>{shortName(member.name)}</span>
+                            ) : canAdd ? (
+                              <span className={cx(
+                                "text-lg leading-none font-thin",
+                                isSel ? "text-blue-300/70 dark:text-blue-600/70" : "text-zinc-200 dark:text-zinc-700",
+                              )}>+</span>
+                            ) : isAddable ? (
+                              <span className="w-3 h-px bg-zinc-100 dark:bg-zinc-800 rounded-full" />
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -740,13 +688,17 @@ export default function ShiftDayList({
           // 空き枠（未割当スタッフがいる日は＋ボタン表示）
           const maxSlots = Math.max(...byDay.map((ms) => ms.length), 1);
           return (
-            <div className="overflow-hidden border border-zinc-100 dark:border-zinc-800 rounded-b-2xl">
+            <div className="rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60">
+              <div className="flex h-px">
+                {currentWeek.map(d => (
+                  <div key={d} className={cx("flex-1", d === selectedDate ? "bg-blue-500/40" : "")} />
+                ))}
+              </div>
               {Array.from({ length: maxSlots }, (_, slotIdx) => (
-                <div key={slotIdx} className="flex divide-x divide-zinc-100 dark:divide-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0">
+                <div key={slotIdx} className="flex">
                   {currentWeek.map((d, di) => {
                     const member  = byDay[di][slotIdx];
                     const isSel   = d === selectedDate;
-                    // 最初の空きスロットのみ＋表示
                     const canAdd  = !member && slotIdx === byDay[di].length && unassignedMembersForDate(d).length > 0;
                     return (
                       <button
@@ -760,21 +712,23 @@ export default function ShiftDayList({
                         className={cx(
                           "flex-1 min-w-0 py-3 flex items-center justify-center transition-colors",
                           isSel
-                            ? "bg-blue-50 dark:bg-blue-950/30" + ((member || canAdd) ? " hover:bg-blue-100 dark:hover:bg-blue-900/40" : "")
+                            ? member
+                              ? "bg-blue-500/10 dark:bg-blue-400/10 hover:bg-blue-500/15"
+                              : "bg-blue-500/5 dark:bg-blue-400/5 hover:bg-blue-500/10"
                             : (member || canAdd)
-                              ? "bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-                              : "bg-white dark:bg-zinc-900 pointer-events-none",
+                              ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                              : "pointer-events-none",
                         )}
                       >
                         {member ? (
                           <span className={cx(
-                            "text-[11px] font-semibold leading-none px-1 truncate",
-                            isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-800 dark:text-zinc-200",
+                            "text-xs font-semibold leading-none px-0.5 truncate",
+                            isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
                           )}>{shortName(member.name)}</span>
                         ) : canAdd ? (
                           <span className={cx(
-                            "text-sm leading-none font-light",
-                            isSel ? "text-blue-300 dark:text-blue-700" : "text-zinc-200 dark:text-zinc-700",
+                            "text-lg leading-none font-thin",
+                            isSel ? "text-blue-300/70 dark:text-blue-600/70" : "text-zinc-200 dark:text-zinc-700",
                           )}>＋</span>
                         ) : null}
                       </button>
