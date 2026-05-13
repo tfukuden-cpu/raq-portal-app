@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-11（v10：問い合わせシステム・LINE Login修正・LINEグループ連携・各種バグ修正）
+最終更新：2026-05-13（v11：セクション機能・CSV重複スキップ・各種バグ修正・Google Sheets認証問題）
 
 ---
 
@@ -43,32 +43,62 @@ Cookie `rqp_project_id`（HTTPOnly・30日）に現在選択中の案件IDを保
 
 ## 3. 現在の開発フェーズと方向性
 
-### 現状（v10時点）
+### 現状（v11時点）
 GASからの移行を進めており、**コア機能はほぼ揃った状態**。
-実際の案件・スタッフで使い始める前の最終調整フェーズ。
+実際の案件・スタッフで使い始めている段階。
 
 | カテゴリ | 状態 |
 |---|---|
 | 認証（社員ID＋パスワード＋LINE連携） | ✅ 完成 |
 | 打刻・勤怠実績 | ✅ 完成 |
 | シフト表示・希望休申請 | ✅ 完成 |
-| 管理者シフト管理 | ✅ 完成（追加申請審査は未着手） |
+| 管理者シフト管理（セクションフィルタ含む） | ✅ 完成 |
 | 周知・投稿 | ✅ 完成 |
-| 問い合わせ（スタッフ↔管理者） | ✅ 完成（v10新設） |
+| 問い合わせ（スタッフ↔管理者） | ✅ 完成 |
 | LINE通知（イベント系） | ✅ 完成・動作確認済み |
 | LINE通知（定時スケジュール） | 🔄 実装済み・本番テスト未 |
 | LINEグループ連携 | ✅ 完成 |
+| セクション管理（IDOM案件対応） | ✅ 完成（v11新設） |
+| CSV一括登録（IDOM形式・重複スキップ） | ✅ 完成（v11更新） |
+| **Google Sheets連携** | ❌ **現在未動作（認証問題）** |
 | 希望休ルール適用（バリデーション） | ⏳ 未着手 |
-| スタッフ一括CSV登録 | ⏳ 未着手 |
 | アバターシステム | 🔄 設計済み・パーツ未実装 |
+
+### ⚠️ Google Sheets連携について（重要）
+
+**現状：スプシ連携機能は動作していない。**
+
+GCPプロジェクト「Raq app」の組織ポリシー `iam.disableServiceAccountKeyCreation` により、
+サービスアカウントキーの作成が禁止されている。
+そのため `GOOGLE_SERVICE_ACCOUNT_JSON` は使用できない。
+
+Vercelに設定されている環境変数（Google関連）：
+- `GOOGLE_SERVICE_ACCOUNT_JSON` ← 設定済みだが壊れている＆そもそもキーが存在しない
+
+コード側は以下の認証方式に対応済み（`src/lib/gsheets.ts`）：
+1. OAuth2（`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `GOOGLE_REFRESH_TOKEN`）← **推奨・未設定**
+2. サービスアカウントJSON（`GOOGLE_SERVICE_ACCOUNT_JSON`）← キー作成が禁止されていて使えない
+3. 個別環境変数（`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`）← コードは対応済み・未設定
+
+**解決策：OAuth2リフレッシュトークンを設定する**
+
+Google Cloud Console → APIs & Services → 認証情報 → OAuthクライアントID を作成し、
+[OAuth 2.0 Playground](https://developers.google.com/oauthplayground/) でリフレッシュトークンを取得。
+スコープ: `https://www.googleapis.com/auth/spreadsheets`
+
+Vercelに以下を設定：
+```
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...
+```
 
 ### 次に優先すべきこと（新しいセッションはここから）
 
-1. **スケジュール通知の本番テスト** — `CRON_SECRET` を使ってcronエンドポイントを叩き、出勤前リマインドなどが飛ぶか確認
-2. **シフト追加申請の管理者審査画面** — `/shifts/manage` に申請タブを追加（`shift_requests` テーブルのデータを表示・承認/却下）
-3. **勤怠実績のシフト突き合わせ** — `punch_logs × shifts` で遅刻・早退時間を自動計算
+1. **Google Sheets認証の修正** — OAuth2リフレッシュトークンを取得してVercelに設定する（上記参照）
+2. **スケジュール通知の本番テスト** — `CRON_SECRET` を使ってcronエンドポイントを叩き、出勤前リマインドなどが飛ぶか確認
+3. **シフト追加申請の管理者審査画面** — `/shifts/manage` に申請タブを追加
 4. **希望休ルールのバリデーション** — 月上限・締切・連続上限チェック
-5. **本番スタッフ登録** — CSVで100名一括登録（`bulkCreateAndAddStaffsAction` 使用）
 
 ### 開発スタイルの注意点
 - **バイブコーディング**：ユーザーはJS/SQL未経験。実装はAIが担当し、ユーザーは方向性を決める
@@ -114,6 +144,7 @@ staffs（社員マスタ）
 
 project_members（兼務対応）
   staff_id, project_id, role (staff/project_admin),
+  section text,            ← ★v11新設（IDOM案件のセクション管理）
   start_date, end_date, is_main
 ```
 
@@ -455,8 +486,15 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 LINE_LOGIN_CHANNEL_ID=...
 LINE_LOGIN_CHANNEL_SECRET=...
 LINE_CHANNEL_ACCESS_TOKEN=...
-GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
 CRON_SECRET=...                            # ★v9新設：openssl rand -hex 32 等で生成
+
+# Google Sheets連携（いずれか1セットを設定）
+# 推奨：OAuth2方式（サービスアカウントキー不要）
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...
+# または：サービスアカウントJSON方式（GCPの組織ポリシーで禁止の場合は使えない）
+# GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
 ```
 
 ---
@@ -596,3 +634,4 @@ export default async function Page({
 | 2026-05-09 | v8 | シフト管理UI全面刷新、adminClient化、ops メニュー追加 |
 | 2026-05-10 | v9 | LINE通知システム実装（notify.ts・cron route・各action更新）、アバターシステム設計、運用者マイページ(/admin/my)、vercel.json |
 | 2026-05-11 | v10 | 問い合わせシステム新設（/inquiries・/inquiries/manage）、LINE Login magic link修正（/auth/confirm）、LINEグループ連携（project_settings.line_group_id）、inquiry/inquiry_reply通知種別追加、通知カードアコーディオンUI、notify.ts個別try-catch、ops向け問い合わせ管理修正 |
+| 2026-05-13 | v11 | セクション機能（project_members.section）、CSVフォーマットをIDOM形式に変更（所属会社,氏名,役割,セクション）、CSV重複スキップ、姓名スペース削除、LINE連携状況の表示、初期PW変更（1234）、問い合わせ返信バグ修正、シフト管理セクションフィルタ、シフト生成エラーハンドリング改善、Google Sheets認証を3段階フォールバック＋OAuth2個別環境変数対応 |
