@@ -16,7 +16,7 @@ type Shift = {
   note: string | null;
 };
 type Member  = { id: string; name: string; role: string; section: string | null };
-type Pattern = { name: string; required_count: number; start_time: string | null; end_time: string | null };
+type Pattern = { name: string; required_count: number; section: string | null; start_time: string | null; end_time: string | null };
 
 // 姓＋名1文字（例：田中太郎 → 田中太）
 const shortName = (name: string) => {
@@ -789,7 +789,11 @@ export default function ShiftDayList({
           {/* ── add: 空き枠への追加（パターン固定・未割当スタッフのみ） ── */}
           {modalMode === "add" && (() => {
             const { dow } = parseDayInfo(modalDate);
-            const candidates = unassignedMembersForDate(modalDate);
+            // パターンのセクションに合うメンバーだけ候補に（セクション未設定パターンは全員）
+            const lockedPatternSection = shiftPatterns.find(p => p.name === lockedPattern)?.section ?? null;
+            const candidates = unassignedMembersForDate(modalDate).filter(m =>
+              !lockedPatternSection || m.section === lockedPatternSection
+            );
             const addAlerts = getShiftAlerts(modalStaffId, modalDate, name, allDates, shiftMap, shiftPatterns);
             return (
               <>
@@ -870,8 +874,13 @@ export default function ShiftDayList({
             const { dow } = parseDayInfo(modalDate);
             const member = activeMembers.find((m) => m.id === modalStaffId);
             const changeAlerts = getShiftAlerts(modalStaffId, modalDate, name, allDates, shiftMap, shiftPatterns);
+            // メンバーのセクションに合うパターンだけ表示（セクション未設定パターンは常に表示）
+            const memberSection = member?.section ?? null;
+            const filteredPatterns = memberSection
+              ? shiftPatterns.filter(p => !p.section || p.section === memberSection)
+              : shiftPatterns;
             const presets = [
-              ...shiftPatterns.map((p) => ({ name: p.name, start: p.start_time?.slice(0, 5) ?? "", end: p.end_time?.slice(0, 5) ?? "" })),
+              ...filteredPatterns.map((p) => ({ name: p.name, start: p.start_time?.slice(0, 5) ?? "", end: p.end_time?.slice(0, 5) ?? "" })),
               { name: "公休",   start: "", end: "" },
               { name: "希望休", start: "", end: "" },
             ];

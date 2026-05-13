@@ -374,8 +374,8 @@ function columnLetter(col: number): string {
  */
 export async function generateShiftTableSheet(
   spreadsheetId: string,
-  members: { id: string; displayName: string; companyName?: string | null; role?: string }[],
-  shiftPatterns: { name: string; required_count?: number | null; start_time?: string | null; end_time?: string | null; target_role?: string }[],
+  members: { id: string; displayName: string; companyName?: string | null; role?: string; section?: string | null }[],
+  shiftPatterns: { name: string; required_count?: number | null; start_time?: string | null; end_time?: string | null; target_role?: string; section?: string | null }[],
   year: number,
   month: number,  // 1-12
   approvedHolidays: { staffId: string; requestDate: string }[] = [],
@@ -549,10 +549,14 @@ export async function generateShiftTableSheet(
       for (const p of shiftPatterns) {
         const count      = Math.max(0, p.required_count ?? 0);
         const targetRole = p.target_role ?? "all";
+        const patternSection = p.section ?? null;
         const eligible = rotated.filter(mi => {
-          const r = orderedMembers[mi].role ?? "staff";
-          if (targetRole === "admin")  return r === "project_admin";
-          if (targetRole === "staff")  return r !== "project_admin";
+          const member = orderedMembers[mi];
+          const r = member.role ?? "staff";
+          if (targetRole === "admin"  && r !== "project_admin") return false;
+          if (targetRole === "staff"  && r === "project_admin") return false;
+          // セクションが設定されている場合は同セクションのみ
+          if (patternSection && member.section !== patternSection) return false;
           return true;
         });
         let filled = 0;

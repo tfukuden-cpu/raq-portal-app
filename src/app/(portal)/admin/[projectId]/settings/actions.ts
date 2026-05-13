@@ -344,7 +344,7 @@ export async function generateShiftTableAction(fd: FormData): Promise<SettingsRe
   // メンバー一覧を取得（会社名も含む）
   const { data: members } = await supa
     .from("project_members")
-    .select("staff_id, role, staffs(name, display_name, company_name)")
+    .select("staff_id, role, section, staffs(name, display_name, company_name)")
     .eq("project_id", projectId)
     .order("staff_id");
 
@@ -356,6 +356,7 @@ export async function generateShiftTableAction(fd: FormData): Promise<SettingsRe
       displayName: s?.display_name?.trim() || s?.name?.trim() || m.staff_id,
       companyName: s?.company_name?.trim() || null,
       role:        (m.role ?? "staff") as string,
+      section:     (m.section ?? null) as string | null,
     };
   });
 
@@ -364,7 +365,7 @@ export async function generateShiftTableAction(fd: FormData): Promise<SettingsRe
   // シフトパターン一覧を取得（時間帯も含む）
   const { data: patterns } = await supa
     .from("shift_patterns")
-    .select("name, required_count, start_time, end_time, target_role")
+    .select("name, required_count, start_time, end_time, target_role, section")
     .eq("project_id", projectId)
     .order("sort_order");
 
@@ -374,6 +375,7 @@ export async function generateShiftTableAction(fd: FormData): Promise<SettingsRe
     start_time:     (p.start_time   ?? null) as string | null,
     end_time:       (p.end_time     ?? null) as string | null,
     target_role:    (p as { target_role?: string }).target_role ?? "all",
+    section:        (p as { section?: string | null }).section ?? null,
   }));
   if (patternList.length === 0) return { success: false, message: "シフトパターンが登録されていません" };
 
