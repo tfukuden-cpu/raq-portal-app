@@ -46,7 +46,7 @@ export default async function ProjectDetailPage(props: {
       .eq("project_id", projectId),
     createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
-      .select("id, name, short_name, start_time, end_time, required_count, target_role")
+      .select("id, name, short_name, start_time, end_time, required_count, required_weekday, required_weekend, section, target_role")
       .eq("project_id", projectId).order("sort_order"),
     createAdminClient().from("holiday_rules")
       .select("rule_type, value")
@@ -56,14 +56,19 @@ export default async function ProjectDetailPage(props: {
   if (!project) redirect("/admin");
 
   const patternList = (shiftPatterns ?? []).map((p) => ({
-    id:             p.id,
-    name:           p.name,
-    short_name:     (p as { short_name?: string }).short_name ?? "",
-    start_time:     (p.start_time ?? "") as string,
-    end_time:       (p.end_time   ?? "") as string,
-    required_count: (p as { required_count?: number | null }).required_count != null
+    id:                p.id,
+    name:              p.name,
+    short_name:        (p as { short_name?: string }).short_name ?? "",
+    start_time:        (p.start_time ?? "") as string,
+    end_time:          (p.end_time   ?? "") as string,
+    required_count:    (p as { required_count?: number | null }).required_count != null
       ? String((p as { required_count?: number | null }).required_count) : "",
-    target_role:    (p as { target_role?: string }).target_role ?? "all",
+    required_weekday:  (p as { required_weekday?: number | null }).required_weekday != null
+      ? String((p as { required_weekday?: number | null }).required_weekday) : "",
+    required_weekend:  (p as { required_weekend?: number | null }).required_weekend != null
+      ? String((p as { required_weekend?: number | null }).required_weekend) : "",
+    section:           (p as { section?: string | null }).section ?? "",
+    target_role:       (p as { target_role?: string }).target_role ?? "all",
   }));
 
   const memberList = (members ?? []).map((m) => {

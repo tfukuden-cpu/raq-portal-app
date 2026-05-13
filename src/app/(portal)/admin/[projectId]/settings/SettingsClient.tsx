@@ -37,6 +37,9 @@ type ShiftPattern = {
   start_time: string;
   end_time: string;
   required_count: string;
+  required_weekday: string;
+  required_weekend: string;
+  section: string;
   target_role: string; // "all" | "admin" | "staff"
 };
 type TabId = "basic" | "members" | "shift" | "holiday" | "notify" | "danger";
@@ -887,7 +890,7 @@ export function ShiftPatternList({
   const update = (i: number, field: keyof ShiftPattern, value: string) =>
     setPatterns(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
   const add = () =>
-    setPatterns(prev => [...prev, { name: "", short_name: "", start_time: "", end_time: "", required_count: "", target_role: "all" }]);
+    setPatterns(prev => [...prev, { name: "", short_name: "", start_time: "", end_time: "", required_count: "", required_weekday: "", required_weekend: "", section: "", target_role: "all" }]);
   const remove = (i: number) =>
     setPatterns(prev => prev.filter((_, idx) => idx !== i));
 
@@ -898,13 +901,16 @@ export function ShiftPatternList({
     fd.set("projectId", projectId);
     fd.set("patterns", JSON.stringify(
       valid.map((p, i) => ({
-        name:           p.name.trim(),
-        short_name:     p.short_name.trim() || p.name.trim().slice(0, 2),
-        start_time:     p.start_time || null,
-        end_time:       p.end_time   || null,
-        required_count: p.required_count ? Number(p.required_count) : null,
-        target_role:    p.target_role || "all",
-        sort_order:     i,
+        name:             p.name.trim(),
+        short_name:       p.short_name.trim() || p.name.trim().slice(0, 2),
+        start_time:       p.start_time || null,
+        end_time:         p.end_time   || null,
+        required_count:   p.required_weekday ? Number(p.required_weekday) : (p.required_count ? Number(p.required_count) : null),
+        required_weekday: p.required_weekday  ? Number(p.required_weekday)  : null,
+        required_weekend: p.required_weekend  ? Number(p.required_weekend)  : null,
+        section:          p.section.trim() || null,
+        target_role:      p.target_role || "all",
+        sort_order:       i,
       }))
     ));
     startTransition(async () => {
@@ -936,18 +942,29 @@ export function ShiftPatternList({
             <span className="text-zinc-400 text-sm flex-shrink-0">〜</span>
             <input type="time" value={p.end_time} onChange={e => update(i, "end_time", e.target.value)}
               className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100" />
-            <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-              <span className="text-[9px] text-zinc-400 font-semibold leading-none">必要人数</span>
-              <div className="flex items-center gap-1">
-                <input type="number" value={p.required_count} onChange={e => update(i, "required_count", e.target.value)}
-                  placeholder="0" min={0}
-                  className="w-12 px-1.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 text-center" />
-                <span className="text-[10px] text-zinc-400">人</span>
-              </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-zinc-400 font-semibold flex-shrink-0 w-12">セクション</span>
+            <input type="text" value={p.section} onChange={e => update(i, "section", e.target.value)}
+              placeholder="査定・販売 など"
+              className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-zinc-400 font-semibold flex-shrink-0 w-12">必要人数</span>
+            <div className="flex items-center gap-1 flex-1">
+              <span className="text-[10px] text-zinc-400 flex-shrink-0">平日</span>
+              <input type="number" value={p.required_weekday} onChange={e => update(i, "required_weekday", e.target.value)}
+                placeholder="0" min={0}
+                className="w-14 px-1.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 text-center" />
+              <span className="text-[10px] text-zinc-400 flex-shrink-0 ml-2">土日祝</span>
+              <input type="number" value={p.required_weekend} onChange={e => update(i, "required_weekend", e.target.value)}
+                placeholder="0" min={0}
+                className="w-14 px-1.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 text-center" />
+              <span className="text-[10px] text-zinc-400">人</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-zinc-400 font-semibold flex-shrink-0">対象</span>
+            <span className="text-[10px] text-zinc-400 font-semibold flex-shrink-0 w-12">対象</span>
             <select value={p.target_role} onChange={e => update(i, "target_role", e.target.value)}
               className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-xs text-zinc-700 dark:text-zinc-300">
               <option value="all">全員</option>

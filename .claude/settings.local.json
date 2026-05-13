@@ -54,7 +54,15 @@
       "mcp__Claude_in_Chrome__javascript_tool",
       "Bash(gh run *)",
       "mcp__Claude_in_Chrome__tabs_create_mcp",
-      "mcp__Claude_in_Chrome__tabs_close_mcp"
+      "mcp__Claude_in_Chrome__tabs_close_mcp",
+      "Bash(grep -n \"last.*first\\\\|first.*last\\\\|苗字\\\\|名前\\\\|\\\\`\\\\${\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/[projectId]/settings/actions.ts\")",
+      "Bash(grep -n \"lastName\\\\|firstName\\\\|last_name\\\\|first_name\\\\|姓\\\\|名前\\\\|displayName\\\\|name.*trim\\\\| \\\\`\\\\${\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/[projectId]/settings/actions.ts\")",
+      "Bash(grep -n \"last.*first\\\\|newLast\\\\|newFirst\\\\|\\\\`\\\\${.*}\\\\s*\\\\${\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/staffs/actions.ts\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/operators/actions.ts\")",
+      "Bash(grep -n \"last\\\\|first\\\\|苗字\\\\|名前\\\\|fullName\\\\|name.*join\\\\|\\\\`\\\\${\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/staffs/StaffsClient.tsx\")",
+      "Bash(grep -n \"last\\\\|first\\\\|苗字\\\\|名前\\\\|fullName\\\\|\\\\`\\\\${\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/staffs/actions.ts\")",
+      "Bash(grep -n \"last\\\\|first\\\\|苗字\\\\|名前\\\\|fullName\\\\|\\\\`\\\\${\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/operators/OperatorsClient.tsx\")",
+      "Bash(grep -n \"last\\\\|first\\\\|苗字\\\\|名前\\\\|fullName\\\\|\\\\`\\\\${.*}\\\\`\\\\|trim\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/staffs/StaffsClient.tsx\")",
+      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__list_tables"
     ]
   }
 }

@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 import ShiftDayList from "./ShiftDayList";
 import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
 import QuickImportButton from "./QuickImportButton";
+import ShiftSufficiencyTable from "./ShiftSufficiencyTable";
 import { isGSheetsConfigured } from "@/lib/gsheets";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
@@ -81,13 +82,14 @@ export default async function ManageShiftsPage(props: {
     { data: shiftPatternRows },
     { data: shiftsRaw },
     { data: shiftRequestsRaw },
+    { data: slotRequirementsRaw },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", selectedProjectId).maybeSingle(),
     admin.from("project_members")
       .select("staff_id, role, section, staffs(id, name, display_name)")
       .eq("project_id", selectedProjectId),
     admin.from("shift_patterns")
-      .select("name, required_count, start_time, end_time")
+      .select("name, required_count, required_weekday, required_weekend, section, start_time, end_time")
       .eq("project_id", selectedProjectId)
       .order("sort_order"),
     admin.from("shifts")
@@ -102,6 +104,11 @@ export default async function ManageShiftsPage(props: {
       .eq("project_id", selectedProjectId)
       .order("request_date", { ascending: false })
       .limit(100),
+    admin.from("shift_slot_requirements")
+      .select("section, pattern_name, shift_date, required_count")
+      .eq("project_id", selectedProjectId)
+      .gte("shift_date", startDate)
+      .lte("shift_date", endDate),
   ]);
 
   const activeMembers = (members ?? [])
@@ -134,10 +141,20 @@ export default async function ManageShiftsPage(props: {
   });
 
   const shiftPatterns = (shiftPatternRows ?? []).map((p) => ({
-    name:           p.name,
-    required_count: Math.max(0, p.required_count ?? 0),
-    start_time:     (p.start_time  ?? null) as string | null,
-    end_time:       (p.end_time    ?? null) as string | null,
+    name:             p.name,
+    required_count:   Math.max(0, p.required_count ?? 0),
+    required_weekday: (p as { required_weekday?: number | null }).required_weekday ?? null,
+    required_weekend: (p as { required_weekend?: number | null }).required_weekend ?? null,
+    section:          (p as { section?: string | null }).section ?? null,
+    start_time:       (p.start_time  ?? null) as string | null,
+    end_time:         (p.end_time    ?? null) as string | null,
+  }));
+
+  const slotRequirements = (slotRequirementsRaw ?? []).map(r => ({
+    section:        r.section as string,
+    pattern_name:   r.pattern_name as string,
+    shift_date:     r.shift_date as string,
+    required_count: r.required_count as number,
   }));
 
   const shifts = shiftsRaw ?? [];
@@ -220,6 +237,15 @@ export default async function ManageShiftsPage(props: {
       {/* ── スクロール領域（ShiftDayList の sticky がここで効く） ── */}
       <div className="flex-1 overflow-y-auto px-4 pb-20 space-y-4 pt-3">
         <ShiftRequestsAdmin requests={shiftRequests} />
+        <ShiftSufficiencyTable
+          projectId={selectedProjectId}
+          allDates={allDates}
+          patterns={shiftPatterns}
+          shifts={(shifts ?? []).map(s => ({ staff_id: s.staff_id, shift_date: s.shift_date, shift_name: s.shift_name }))}
+          members={activeMembers.map(m => ({ id: m.id, section: m.section }))}
+          slotRequirements={slotRequirements}
+          holidays={[]}
+        />
         <ShiftDayList
           allDates={allDates}
           shifts={shifts ?? []}

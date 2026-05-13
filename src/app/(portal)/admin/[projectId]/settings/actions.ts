@@ -497,6 +497,9 @@ export async function saveShiftPatternsAction(fd: FormData): Promise<SettingsRes
     start_time: string | null;
     end_time: string | null;
     required_count: number | null;
+    required_weekday: number | null;
+    required_weekend: number | null;
+    section: string | null;
     target_role: string;
     sort_order: number;
   };
