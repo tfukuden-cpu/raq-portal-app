@@ -29,6 +29,15 @@ async function getContext() {
   return { supabase, staffId, projectId };
 }
 
+// projectId なしでユーザー情報だけ取得（FormData に projectId がある場合用）
+async function getUserContext() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("ログインしてください");
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+  return { supabase, staffId };
+}
+
 function monthRange(year: number, month: number) {
   const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
   const endDate   = new Date(year, month, 0).toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -864,7 +873,7 @@ export async function quickImportShiftTableAction(fd: FormData): Promise<SyncRes
   const projectId = String(fd.get("projectId") ?? "").trim();
 
   try {
-    const { supabase, staffId } = await getContext();
+    const { supabase, staffId } = await getUserContext();
     const admin = createAdminClient();
 
     // FormData の projectId を優先、なければ Cookie の案件ID
