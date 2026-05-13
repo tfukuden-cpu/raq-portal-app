@@ -199,6 +199,28 @@ export async function writeSheet(
 }
 
 /**
+ * シートの値を読み取る（string[][] を返す。空セルは ""）
+ */
+export async function readSheet(
+  spreadsheetId: string,
+  sheetName: string,
+  range = "A1:AZ500"
+): Promise<string[][]> {
+  const token = await getAccessToken();
+  const encodedRange = encodeURIComponent(`${sheetName}!${range}`);
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) {
+    const err = (await res.json()) as { error?: { message?: string } };
+    throw new Error(err.error?.message ?? `シートの読み取りに失敗しました (${res.status})`);
+  }
+  const data = (await res.json()) as { values?: (string | number)[][] };
+  return (data.values ?? []).map(row => row.map(cell => String(cell)));
+}
+
+/**
  * シートの末尾に1行追記する（既存データを消さない）
  * ヘッダー行が存在しない場合は先にヘッダーを書き込む
  */

@@ -12,6 +12,7 @@ import ShiftDayList from "./ShiftDayList";
 import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
 import QuickImportButton from "./QuickImportButton";
 import ShiftSufficiencyTable from "./ShiftSufficiencyTable";
+import ImportRequiredCountsButton from "./ImportRequiredCountsButton";
 import { isGSheetsConfigured } from "@/lib/gsheets";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
@@ -195,7 +196,10 @@ export default async function ManageShiftsPage(props: {
 
           <div className="flex flex-col items-end gap-2">
             {isGSheetsConfigured() && (
-              <QuickImportButton projectId={selectedProjectId} year={targetYear} month={targetMonth} />
+              <div className="flex flex-col items-end gap-1.5">
+                <QuickImportButton projectId={selectedProjectId} year={targetYear} month={targetMonth} />
+                <ImportRequiredCountsButton projectId={selectedProjectId} year={targetYear} month={targetMonth} />
+              </div>
             )}
             <div className="flex items-center gap-1">
               <a href={`${monthNavBase}${prevMonth.year}&month=${prevMonth.month}`}
