@@ -800,7 +800,8 @@ export async function importShiftTableAction(fd: FormData): Promise<SyncResult> 
   try {
     const { supabase, staffId, projectId } = await getContext();
     const sheetTabName = `${year}年${month}月シフト表`;
-    const rows = await readSheet(sheetId(url), sheetTabName);
+    // A:AM = 39列（3ヘッダー列 + 31日 + 余裕）→ 31日まで対応
+    const rows = await readSheet(sheetId(url), sheetTabName, "A:AM");
 
     if (rows.length < 2) return { success: false, message: "データがありません" };
 
