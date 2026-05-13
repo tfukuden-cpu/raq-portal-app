@@ -68,6 +68,9 @@ export default function ShiftSufficiencyTable({
   // セクション一覧（重複排除・順序維持）
   const sections = Array.from(new Set(targetPatterns.map(p => p.section!)));
 
+  // 折りたたみ state（デフォルト折りたたみ）
+  const [collapsed, setCollapsed] = useState(true);
+
   // 編集ポップオーバー state
   const [editing, setEditing] = useState<{
     section: string; pattern: string; date: string; current: number;
@@ -132,12 +135,26 @@ export default function ShiftSufficiencyTable({
 
   return (
     <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800">
-        <h2 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">充足表</h2>
-        <p className="text-[10px] text-zinc-400 mt-0.5">必要数セルをタップして日別上書き可</p>
-      </div>
+      <button
+        type="button"
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-left"
+      >
+        <div>
+          <h2 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">充足表</h2>
+          {!collapsed && (
+            <p className="text-[10px] text-zinc-400 mt-0.5">必要数セルをタップして日別上書き可</p>
+          )}
+        </div>
+        <svg
+          className={`w-4 h-4 text-zinc-400 transition-transform ${collapsed ? "" : "rotate-180"}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
 
-      <div className="overflow-x-auto">
+      {!collapsed && <div className="overflow-x-auto">
         <table className="text-xs border-collapse min-w-max">
           <thead>
             <tr>
@@ -226,7 +243,7 @@ export default function ShiftSufficiencyTable({
             })}
           </tbody>
         </table>
-      </div>
+      </div>}
 
       {/* 編集ポップオーバー */}
       {editing && (

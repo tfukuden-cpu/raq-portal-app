@@ -210,6 +210,19 @@ export default function ShiftDayList({
     ? activeMembers.filter(m => m.section === sectionFilter)
     : activeMembers;
 
+  // シフトルックアップ（早めに定義して sufficiency summary でも使えるように）
+  const shiftMap = new Map<string, Shift>(shifts.map((s) => [`${s.staff_id}__${s.shift_date}`, s]));
+  const getShift = (sid: string, d: string) => shiftMap.get(`${sid}__${d}`);
+
+  // 選択日の充足サマリー（要求数 > 0 のパターンのみ）
+  const selectedDateSummary = shiftPatterns
+    .filter(p => p.required_count > 0)
+    .map(p => ({
+      name:     p.name,
+      count:    visibleMembers.filter(m => getShift(m.id, selectedDate)?.shift_name === p.name).length,
+      required: p.required_count,
+    }));
+
   // モーダル
   const [modalMode,    setModalMode]    = useState<ModalMode>("add");
   const [modalOpen,    setModalOpen]    = useState(false);
@@ -241,9 +254,7 @@ export default function ShiftDayList({
     };
   };
 
-  // シフトルックアップ
-  const shiftMap = new Map<string, Shift>(shifts.map((s) => [`${s.staff_id}__${s.shift_date}`, s]));
-  const getShift = (sid: string, d: string) => shiftMap.get(`${sid}__${d}`);
+  // シフトルックアップ（上部で定義済み）
 
   // パターン×日付 → メンバーリスト（セクションフィルター適用）
   const membersForPatternDay = (patternName: string, date: string) =>
@@ -405,7 +416,26 @@ export default function ShiftDayList({
           </div>
         )}
 
-        {/* ② パターンタブ */}
+        {/* ② 選択日の充足サマリー */}
+        {selectedDateSummary.length > 0 && (
+          <div className="flex overflow-x-auto gap-1 mb-2" style={{ scrollbarWidth: "none" }}>
+            {selectedDateSummary.map(s => {
+              const ok = s.count >= s.required;
+              return (
+                <span key={s.name} className={cx(
+                  "flex-shrink-0 tabular-nums text-[10px] font-bold px-2 py-0.5 rounded-full",
+                  ok
+                    ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
+                    : "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400",
+                )}>
+                  {s.name}&nbsp;{s.count}/{s.required}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ③ パターンタブ */}
         <div className="flex overflow-x-auto gap-1 mb-3" style={{ scrollbarWidth: "none" }}>
           {tabs.map((t) => {
             const isSel = tabKey === t.key;
@@ -434,7 +464,7 @@ export default function ShiftDayList({
           })}
         </div>
 
-        {/* ③ 週ナビ */}
+        {/* ④ 週ナビ */}
         <div className="flex items-center justify-between mb-1 px-0.5">
           <button
             type="button"
@@ -467,7 +497,7 @@ export default function ShiftDayList({
           </button>
         </div>
 
-        {/* ④ 日付列 */}
+        {/* ⑤ 日付列 */}
         <div className="flex">
           {currentWeek.map((d) => {
             const { dateNum, dow, dayOfWeek } = parseDayInfo(d);
