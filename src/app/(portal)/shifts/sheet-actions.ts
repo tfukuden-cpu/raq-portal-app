@@ -891,7 +891,8 @@ export async function quickImportShiftTableAction(fd: FormData): Promise<SyncRes
     if (!url) return { success: false, message: "スプレッドシートURLが設定されていません（案件設定で登録してください）" };
 
     const sheetTabName = `${year}年${month}月シフト表`;
-    const rows = await readSheet(sheetId(url), sheetTabName);
+    // A:AM = 39列（3ヘッダー列 + 31日 + 余裕）→ 31日まで対応
+    const rows = await readSheet(sheetId(url), sheetTabName, "A:AM");
     if (rows.length < 2) return { success: false, message: `「${sheetTabName}」シートにデータがありません` };
 
     // 年月は引数から直接使用（シート名で確定済み）
