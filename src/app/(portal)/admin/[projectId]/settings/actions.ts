@@ -57,7 +57,7 @@ async function syncProjectMembersToSheet(projectId: string): Promise<void> {
   // 最新のメンバー一覧を取得
   const { data: members } = await supa
     .from("project_members")
-    .select("staff_id, role, staffs(name, display_name, company_name)")
+    .select("staff_id, role, section, staffs(name, display_name, company_name)")
     .eq("project_id", projectId)
     .order("staff_id");
 
@@ -69,11 +69,76 @@ async function syncProjectMembersToSheet(projectId: string): Promise<void> {
       displayName: s?.display_name ?? s?.name ?? m.staff_id,
       companyName: s?.company_name ?? null,
       role:        m.role ?? "staff",
+      section:     (m.section ?? null) as string | null,
     };
   });
 
   const spreadsheetId = extractSpreadsheetId(settings.sheet_url);
+
+  // メンバーシートを同期
   await syncMembersSheet(spreadsheetId, memberList);
+
+  // 当月・翌月のシフト表タブのメンバー行も更新（DBシフトを読み込んで再生成）
+  const { data: patterns } = await supa
+    .from("shift_patterns")
+    .select("name, required_count, start_time, end_time, target_role, section")
+    .eq("project_id", projectId)
+    .order("sort_order");
+  const patternList = (patterns ?? []).map((p) => ({
+    name:          p.name,
+    required_count: p.required_count ?? null,
+    start_time:    (p.start_time  ?? null) as string | null,
+    end_time:      (p.end_time    ?? null) as string | null,
+    target_role:   (p as { target_role?: string }).target_role ?? "all",
+    section:       (p as { section?: string | null }).section ?? null,
+  }));
+  if (patternList.length === 0) return;
+
+  const { data: holidayData } = await supa
+    .from("holiday_requests")
+    .select("staff_id, request_date")
+    .eq("project_id", projectId)
+    .eq("status", "approved");
+
+  const now = new Date();
+  // 当月・翌月を対象
+  const months = [
+    { year: now.getFullYear(), month: now.getMonth() + 1 },
+    { year: now.getFullYear(), month: now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2 },
+  ];
+  if (now.getMonth() + 2 > 12) months[1].year = now.getFullYear() + 1;
+
+  for (const { year, month } of months) {
+    const monthStr  = String(month).padStart(2, "0");
+    const dateFrom  = `${year}-${monthStr}-01`;
+    const dateTo    = `${year}-${monthStr}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+
+    // 当該月のDBシフトをpresetShiftsとして渡す
+    const { data: shifts } = await supa
+      .from("shifts")
+      .select("staff_id, shift_date, shift_name")
+      .eq("project_id", projectId)
+      .gte("shift_date", dateFrom)
+      .lte("shift_date", dateTo);
+
+    const presetShifts = new Map<string, Map<string, string>>();
+    for (const s of (shifts ?? [])) {
+      if (!s.shift_name) continue;
+      if (!presetShifts.has(s.staff_id)) presetShifts.set(s.staff_id, new Map());
+      presetShifts.get(s.staff_id)!.set(s.shift_date, s.shift_name);
+    }
+
+    const holidays = (holidayData ?? [])
+      .filter(h => h.request_date >= dateFrom && h.request_date <= dateTo)
+      .map(h => ({ staffId: h.staff_id, requestDate: h.request_date as string }));
+
+    try {
+      await generateShiftTableSheet(
+        spreadsheetId, memberList, patternList, year, month,
+        holidays, false, presetShifts,
+      );
+    } catch { /* 月別シートがなければスキップ */ }
+  }
 }
 
 // ── 案件名変更 ──────────────────────────────────────────

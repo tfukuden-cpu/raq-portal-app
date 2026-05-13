@@ -402,6 +402,8 @@ export async function generateShiftTableSheet(
   month: number,  // 1-12
   approvedHolidays: { staffId: string; requestDate: string }[] = [],
   draftAssign = false,  // true = 仮組（空き枠に自動でパターンを割り当て）
+  // presetShifts: staffId → date(YYYY-MM-DD) → shift_name（DBから読み込んだ既存シフト）
+  presetShifts: Map<string, Map<string, string>> = new Map(),
 ): Promise<void> {
   const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -607,6 +609,9 @@ export async function generateShiftTableSheet(
             return "公休";
           }
           if (draftAssign) return dayAssignments[di]?.get(mi) ?? "";
+          // DBシフトが渡されていればそれを優先
+          const preset = presetShifts.get(m.id)?.get(dateStr);
+          if (preset) return preset;
           return "";
         }),
       ];
