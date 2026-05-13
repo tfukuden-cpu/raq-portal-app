@@ -1016,6 +1016,147 @@ export async function generateShiftTableSheet(
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ requests }),
   });
+
+  // 充足サマリーシートを生成（セクション付きパターンがある場合のみ）
+  const sectionPatterns = shiftPatterns.filter(p => p.section);
+  if (sectionPatterns.length > 0) {
+    // presetShifts or draftAssign からシフトデータを組み立て
+    const summaryShifts: { staffId: string; shiftDate: string; shiftName: string }[] = [];
+    for (let di = 0; di < daysInMonth; di++) {
+      const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(di + 1).padStart(2, "0")}`;
+      for (const m of orderedMembers) {
+        let shiftName: string | null = null;
+        if (draftAssign) {
+          const mi = orderedMembers.indexOf(m);
+          shiftName = dayAssignments[di]?.get(mi) ?? null;
+        } else {
+          shiftName = presetShifts.get(m.id)?.get(dateStr) ?? null;
+        }
+        if (shiftName && shiftName !== "公休" && shiftName !== "希望休") {
+          summaryShifts.push({ staffId: m.id, shiftDate: dateStr, shiftName });
+        }
+      }
+    }
+    try {
+      await generateSufficiencySheet(
+        spreadsheetId, members, shiftPatterns, summaryShifts, year, month,
+      );
+    } catch { /* 充足シート生成失敗は無視 */ }
+  }
+}
+
+/**
+ * 充足サマリーシート（「充足」タブ）を生成する
+ * セクション×パターン×日付の過不足を一覧表示
+ */
+export async function generateSufficiencySheet(
+  spreadsheetId: string,
+  members: { id: string; section?: string | null }[],
+  patterns: { name: string; section?: string | null; required_weekday?: number | null; required_weekend?: number | null; required_count?: number | null }[],
+  shifts: { staffId: string; shiftDate: string; shiftName: string }[],
+  year: number,
+  month: number,
+): Promise<void> {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const monthStr    = String(month).padStart(2, "0");
+
+  const targetPatterns = patterns.filter(p => p.section);
+  if (targetPatterns.length === 0) return;
+
+  // メンバーセクションmap
+  const memberSection = new Map(members.map(m => [m.id, m.section ?? null]));
+
+  // シフトmap: date → staffId → shiftName
+  const shiftMap = new Map<string, Map<string, string>>();
+  for (const s of shifts) {
+    if (!shiftMap.has(s.shiftDate)) shiftMap.set(s.shiftDate, new Map());
+    shiftMap.get(s.shiftDate)!.set(s.staffId, s.shiftName);
+  }
+
+  // ヘッダー行
+  const dayHeaders = Array.from({ length: daysInMonth }, (_, i) => {
+    const d   = new Date(year, month - 1, i + 1);
+    const dow = ["日","月","火","水","木","金","土"][d.getDay()];
+    return `${i + 1}(${dow})`;
+  });
+  const header = ["セクション", "パターン", ...dayHeaders];
+
+  // データ行
+  const sections = Array.from(new Set(targetPatterns.map(p => p.section!)));
+  const dataRows: string[][] = [];
+
+  for (const section of sections) {
+    const sectionPats = targetPatterns.filter(p => p.section === section);
+    for (const pattern of sectionPats) {
+      const row: string[] = [section, pattern.name];
+      for (let di = 0; di < daysInMonth; di++) {
+        const date  = `${year}-${monthStr}-${String(di + 1).padStart(2, "0")}`;
+        const d     = new Date(date);
+        const isWkend = d.getDay() === 0 || d.getDay() === 6;
+        const required = isWkend
+          ? (pattern.required_weekend ?? pattern.required_count ?? 0)
+          : (pattern.required_weekday ?? pattern.required_count ?? 0);
+        if (!required) { row.push(""); continue; }
+
+        // 実際の配置数（同セクションのメンバーのみ）
+        let actual = 0;
+        const dayShifts = shiftMap.get(date);
+        if (dayShifts) {
+          for (const [sid, sname] of dayShifts) {
+            if (sname === pattern.name && memberSection.get(sid) === section) actual++;
+          }
+        }
+        const diff = actual - required;
+        row.push(diff > 0 ? `+${diff}` : String(diff));
+      }
+      dataRows.push(row);
+    }
+  }
+
+  await writeSheet(spreadsheetId, "充足", [header, ...dataRows]);
+
+  // 書式設定（ヘッダー色・過不足の色分け）
+  const { sheetId } = await getSheetInfo(spreadsheetId, "充足");
+  const tok = await getAccessToken();
+  const totalRows = 1 + dataRows.length;
+  const totalCols = 2 + daysInMonth;
+
+  const colorRequests = [];
+
+  // ヘッダー行を濃いグレーに
+  colorRequests.push({
+    repeatCell: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: totalCols },
+      cell: { userEnteredFormat: { backgroundColor: { red:0.2, green:0.2, blue:0.2 }, textFormat: { foregroundColor: { red:1, green:1, blue:1 }, bold: true } } },
+      fields: "userEnteredFormat(backgroundColor,textFormat)",
+    },
+  });
+
+  // データセルに条件付き書式（マイナス=赤、プラス=緑、ゼロ=グレー）
+  const dataRange = { sheetId, startRowIndex: 1, endRowIndex: totalRows, startColumnIndex: 2, endColumnIndex: totalCols };
+  colorRequests.push(
+    { addConditionalFormatRule: { rule: {
+      ranges: [dataRange],
+      booleanRule: { condition: { type: "TEXT_CONTAINS", values: [{ userEnteredValue: "-" }] }, format: { textFormat: { foregroundColor: { red:0.85, green:0.1, blue:0.1 } }, backgroundColor: { red:1, green:0.93, blue:0.93 } } },
+    }, index: 0 } },
+    { addConditionalFormatRule: { rule: {
+      ranges: [dataRange],
+      booleanRule: { condition: { type: "TEXT_CONTAINS", values: [{ userEnteredValue: "+" }] }, format: { textFormat: { foregroundColor: { red:0.1, green:0.6, blue:0.2 } }, backgroundColor: { red:0.9, green:0.97, blue:0.91 } } },
+    }, index: 1 } },
+  );
+
+  // 列幅：A・B列を広く、日付列は狭く
+  colorRequests.push(
+    { updateDimensionProperties: { range: { sheetId, dimension: "COLUMNS", startIndex: 0, endIndex: 1 }, properties: { pixelSize: 90 }, fields: "pixelSize" } },
+    { updateDimensionProperties: { range: { sheetId, dimension: "COLUMNS", startIndex: 1, endIndex: 2 }, properties: { pixelSize: 100 }, fields: "pixelSize" } },
+    { updateDimensionProperties: { range: { sheetId, dimension: "COLUMNS", startIndex: 2, endIndex: totalCols }, properties: { pixelSize: 38 }, fields: "pixelSize" } },
+  );
+
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ requests: colorRequests }),
+  });
 }
 
 /**

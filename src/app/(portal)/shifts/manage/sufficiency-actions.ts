@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { readSheet, extractSpreadsheetId } from "@/lib/gsheets";
+import { readSheet, extractSpreadsheetId, generateSufficiencySheet } from "@/lib/gsheets";
 
 export async function upsertSlotRequirementAction(fd: FormData): Promise<{ success: boolean; message?: string }> {
   const supabase = await createClient();
@@ -123,5 +123,29 @@ export async function importRequiredCountsFromSheetAction(fd: FormData): Promise
     .upsert(upsertData, { onConflict: "project_id,section,pattern_name,shift_date" });
 
   if (error) return { success: false, message: error.message };
+
+  // 充足シートも更新
+  try {
+    const { data: memberRows } = await admin
+      .from("project_members").select("staff_id, section").eq("project_id", projectId);
+    const { data: shiftRows } = await admin
+      .from("shifts").select("staff_id, shift_date, shift_name")
+      .eq("project_id", projectId)
+      .gte("shift_date", `${year}-${String(month).padStart(2,"0")}-01`)
+      .lte("shift_date", `${year}-${String(month).padStart(2,"0")}-${String(new Date(year,month,0).getDate()).padStart(2,"0")}`);
+    const memberList = (memberRows ?? []).map(m => ({ id: m.staff_id, section: m.section as string | null }));
+    const shiftList  = (shiftRows  ?? []).map(s => ({ staffId: s.staff_id, shiftDate: s.shift_date as string, shiftName: s.shift_name as string }));
+    const patternList = orderedPatterns.map(p => ({
+      name: p.name,
+      section: p.section,
+      required_weekday: (p as { required_weekday?: number|null }).required_weekday ?? null,
+      required_weekend: (p as { required_weekend?: number|null }).required_weekend ?? null,
+      required_count: (p as { required_count?: number|null }).required_count ?? null,
+    }));
+    await generateSufficiencySheet(
+      extractSpreadsheetId(settings.sheet_url), memberList, patternList, shiftList, year, month,
+    );
+  } catch { /* 充足シート更新失敗は無視 */ }
+
   return { success: true, count: upsertData.length, message: `${upsertData.length}件を読み込みました（${matchCount}パターン）` };
 }
