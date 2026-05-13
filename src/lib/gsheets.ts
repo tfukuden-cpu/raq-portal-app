@@ -259,18 +259,20 @@ export async function syncMembersSheet(
     id: string;
     displayName: string;
     companyName: string | null;
+    section?: string | null;
     role: string;
     weeklyDays?: number | null;
     shiftPreference?: string | null;
     lineId?: string | null;
   }[]
 ): Promise<void> {
-  const header = SHEET_HEADERS["メンバー"]; // ["社員ID", "所属会社", "氏名", "役割", "基本勤務日数", "メモ"]
+  const header = SHEET_HEADERS["メンバー"]; // 社員ID, 所属会社, 氏名, 役割, セクション, 週稼働日数, シフト希望, LINEID
   const rows = members.map((m) => [
     m.id,
     m.companyName ?? "",
     m.displayName,
     m.role,
+    m.section ?? "",
     String(m.weeklyDays ?? 5),
     m.shiftPreference ?? "",
     m.lineId ?? "",
@@ -1325,7 +1327,7 @@ export function isGSheetsConfigured(): boolean {
 // 各シートの初期ヘッダー（シフト表は月ごとに動的生成するためここには含まない）
 const SHEET_HEADERS: Record<string, string[]> = {
   設定:           ["設定項目", "値"],
-  メンバー:       ["社員ID", "所属会社", "氏名", "役割", "週稼働日数", "シフト希望", "LINEID"],
+  メンバー:       ["社員ID", "所属会社", "氏名", "役割", "セクション", "週稼働日数", "シフト希望", "LINEID"],
   希望休:         ["社員ID", "氏名", "希望日", "備考"],
   希望休ルール:   ["ルール", "値", "単位"],
   シフトパターン: ["パターン名", "略称", "開始時刻", "終了時刻", "必要人数", "対象"],

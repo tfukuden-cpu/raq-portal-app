@@ -81,7 +81,7 @@ export async function updateStaffInfoAction(
         // そのプロジェクトの全メンバーを取得
         const { data: members } = await admin
           .from("project_members")
-          .select("staff_id, role, staffs(name, display_name, company_name)")
+          .select("staff_id, role, section, staffs(name, display_name, company_name)")
           .eq("project_id", projectId)
           .order("staff_id");
 
@@ -93,6 +93,7 @@ export async function updateStaffInfoAction(
             displayName: s?.display_name?.trim() || s?.name?.trim() || m.staff_id,
             companyName: (s?.company_name?.trim() || null) as string | null,
             role:        m.role ?? "staff",
+            section:     (m.section ?? null) as string | null,
           };
         });
 
