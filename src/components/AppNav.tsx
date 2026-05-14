@@ -37,7 +37,8 @@ export default function AppNav({
   };
 
   const isCol = collapsed;
-  const mobileItems = sections[0]?.items.slice(0, 5) ?? [];
+  // 全セクションを結合してモバイルに表示（横スクロールで全件対応）
+  const mobileItems = sections.flatMap(s => s.items);
   const initial = staffName.charAt(0).toUpperCase();
 
   return (
@@ -148,7 +149,10 @@ export default function AppNav({
 
       {/* ── モバイル bottom nav ── */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 px-3 nav-safe bg-transparent">
-        <nav className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 shadow-2xl shadow-black/10 flex overflow-hidden">
+        <nav
+          className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 shadow-2xl shadow-black/10 flex overflow-x-auto"
+          style={{ scrollbarWidth: "none" }}
+        >
           {mobileItems.map((item) => {
             const active = isActive(item.href);
             const Icon = ICON_MAP[item.icon];
@@ -156,7 +160,7 @@ export default function AppNav({
               <a
                 key={item.href}
                 href={item.href}
-                className={`relative flex-1 flex flex-col items-center pt-2.5 pb-2.5 gap-[3px] transition-colors ${
+                className={`relative flex-shrink-0 flex flex-col items-center pt-2.5 pb-2.5 px-3 gap-[3px] transition-colors min-w-[64px] ${
                   active
                     ? "text-blue-600 dark:text-blue-400"
                     : "text-zinc-400 dark:text-zinc-600"
