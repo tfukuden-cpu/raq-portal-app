@@ -12,13 +12,14 @@ async function fetchRequestInfo(requestId: string) {
   const admin = createAdminClient();
   const { data } = await admin
     .from("shift_requests")
-    .select("project_id, staff_id, request_date, shift_openings(shift_name), staffs(display_name, name)")
+    .select("project_id, staff_id, request_date, shift_openings(shift_name, shift_start, shift_end), staffs(display_name, name)")
     .eq("id", requestId)
     .maybeSingle();
   if (!data) return null;
 
   const opening = Array.isArray(data.shift_openings) ? data.shift_openings[0] : data.shift_openings;
   const staff   = Array.isArray(data.staffs)         ? data.staffs[0]         : data.staffs;
+  const openingObj = opening as { shift_name: string; shift_start: string | null; shift_end: string | null } | null;
 
   return {
     projectId:  data.project_id as string,
@@ -27,7 +28,9 @@ async function fetchRequestInfo(requestId: string) {
               ?? (staff as { display_name: string | null; name: string | null } | null)?.name
               ?? (data.staff_id as string),
     date:       data.request_date as string,
-    shiftName:  (opening as { shift_name: string } | null)?.shift_name ?? "シフト追加",
+    shiftName:  openingObj?.shift_name ?? "シフト追加",
+    shiftStart: openingObj?.shift_start ?? null,
+    shiftEnd:   openingObj?.shift_end ?? null,
   };
 }
 
@@ -48,6 +51,18 @@ export async function approveShiftRequestAction(requestId: string): Promise<Acti
     .eq("status", "pending");
 
   if (error) return { success: false, message: error.message };
+
+  // 承認と同時にシフトを自動登録
+  if (info) {
+    await admin.from("shifts").upsert({
+      project_id: info.projectId,
+      staff_id:   info.staffId,
+      shift_date: info.date,
+      shift_name: info.shiftName,
+      shift_start: info.shiftStart,
+      shift_end:   info.shiftEnd,
+    }, { onConflict: "project_id,staff_id,shift_date" });
+  }
 
   revalidatePath("/shifts/manage");
   revalidatePath("/shifts");

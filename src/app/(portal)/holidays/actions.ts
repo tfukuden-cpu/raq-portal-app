@@ -34,8 +34,10 @@ export async function submitHolidayAction(
     .select("rule_type, value")
     .eq("project_id", projectId);
   const ruleMap = new Map((ruleRows ?? []).map(r => [r.rule_type, r.value as number]));
-  const deadlineDay = ruleMap.get("deadline_day") ?? null;
-  const maxDaysPerMonth = ruleMap.get("monthly_limit_per_person") ?? null;
+  const deadlineDay      = ruleMap.get("deadline_day") ?? null;
+  const maxDaysPerMonth  = ruleMap.get("monthly_limit_per_person") ?? null;
+  const dailyLimitCount  = ruleMap.get("daily_limit_count") ?? null;
+  const consecutiveLimit = ruleMap.get("consecutive_limit") ?? null;
 
   // 日付ごとに月でグループ化してバリデーション
   const today = new Date();
@@ -81,6 +83,68 @@ export async function submitHolidayAction(
           message: `${Number(m)}月の残り申請枠は${remaining}日です（上限${maxDaysPerMonth}日）`,
         };
       }
+    }
+  }
+
+  // E-3: 1日あたりの希望休上限チェック（プロジェクト全体）
+  if (dailyLimitCount !== null) {
+    for (const d of dates) {
+      const { count } = await adminClient()
+        .from("holiday_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", projectId)
+        .eq("request_date", d)
+        .eq("status", "approved");
+      if ((count ?? 0) >= dailyLimitCount) {
+        const [, m, day] = d.split("-").map(Number);
+        return {
+          success: false,
+          message: `${m}/${day}はすでに${dailyLimitCount}名が希望休を取得しているため申請できません`,
+        };
+      }
+    }
+  }
+
+  // E-4: 連続希望休の上限チェック
+  if (consecutiveLimit !== null) {
+    const sortedNew = [...dates].sort();
+    const minDate = sortedNew[0];
+    const maxDate = sortedNew[sortedNew.length - 1];
+    // 前後バッファ込みで既存の承認済み希望休を取得
+    const bufferDays = consecutiveLimit;
+    const bufMin = new Date(minDate); bufMin.setDate(bufMin.getDate() - bufferDays);
+    const bufMax = new Date(maxDate); bufMax.setDate(bufMax.getDate() + bufferDays);
+    const fromBuf = bufMin.toISOString().slice(0, 10);
+    const toBuf   = bufMax.toISOString().slice(0, 10);
+
+    const { data: existingRows } = await adminClient()
+      .from("holiday_requests")
+      .select("request_date")
+      .eq("project_id", projectId)
+      .eq("staff_id", staffId)
+      .eq("status", "approved")
+      .gte("request_date", fromBuf)
+      .lte("request_date", toBuf);
+
+    const allDates = Array.from(new Set([
+      ...(existingRows ?? []).map(r => r.request_date as string),
+      ...dates,
+    ])).sort();
+
+    let maxConsec = 1; let cur = 1;
+    for (let i = 1; i < allDates.length; i++) {
+      const prev = new Date(allDates[i - 1]); prev.setDate(prev.getDate() + 1);
+      if (prev.toISOString().slice(0, 10) === allDates[i]) {
+        cur++; maxConsec = Math.max(maxConsec, cur);
+      } else {
+        cur = 1;
+      }
+    }
+    if (maxConsec > consecutiveLimit) {
+      return {
+        success: false,
+        message: `希望休は${consecutiveLimit}日以上連続して申請できません（最大${consecutiveLimit}日まで）`,
+      };
     }
   }
 

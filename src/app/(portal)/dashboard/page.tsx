@@ -93,6 +93,8 @@ export default async function DashboardPage() {
   const today = tokyoToday();
   const todayStart = `${today}T00:00:00+09:00`;
   const todayEnd = `${today}T23:59:59+09:00`;
+  const weekLater = new Date(); weekLater.setDate(weekLater.getDate() + 7);
+  const weekLaterStr = weekLater.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
   // 並列クエリ
   const [
@@ -101,8 +103,10 @@ export default async function DashboardPage() {
     { data: todayDeparture },
     { data: todayAbsence },
     { data: todayLate },
-    { data: notices },
+    { data: allNotices },
+    { data: readNotices },
     { data: adminMembers },
+    { data: upcomingShiftRows },
   ] = await Promise.all([
     supabase
       .from("punch_logs")
@@ -148,11 +152,28 @@ export default async function DashboardPage() {
       .select("id")
       .eq("project_id", currentProjectId!),
     supabase
+      .from("notice_reads")
+      .select("notice_id")
+      .eq("staff_id", staffId),
+    supabase
       .from("project_members")
       .select("staff_id, staffs(name, display_name)")
       .eq("project_id", currentProjectId!)
       .eq("role", "project_admin"),
+    supabase
+      .from("shifts")
+      .select("shift_date, shift_name, shift_start, shift_end")
+      .eq("staff_id", staffId)
+      .eq("project_id", currentProjectId!)
+      .gt("shift_date", today)
+      .lte("shift_date", weekLaterStr)
+      .not("shift_name", "in", '("公休","休","公休日")')
+      .order("shift_date")
+      .limit(5),
   ]);
+
+  const readIds = new Set((readNotices ?? []).map(r => r.notice_id as string));
+  const unreadCount = (allNotices ?? []).filter(n => !readIds.has(n.id as string)).length;
 
   const clockInEntry = todayPunches?.find((p) => p.punch_type === "clock_in");
   const clockOutEntry = [...(todayPunches ?? [])]
@@ -198,8 +219,14 @@ export default async function DashboardPage() {
       absenceStatus={todayAbsence?.status ?? null}
       hasLateReport={!!todayLate}
       lateStatus={todayLate?.status ?? null}
-      noticeCount={notices?.length ?? 0}
+      noticeCount={unreadCount}
       approvers={approvers}
+      upcomingShifts={(upcomingShiftRows ?? []).map(s => ({
+        date: s.shift_date as string,
+        name: s.shift_name as string | null,
+        start: s.shift_start as string | null,
+        end: s.shift_end as string | null,
+      }))}
     />
   );
 }

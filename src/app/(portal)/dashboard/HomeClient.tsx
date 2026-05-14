@@ -32,6 +32,7 @@ export interface HomeClientProps {
   lateStatus: string | null;
   noticeCount: number;
   approvers: { id: string; name: string }[];
+  upcomingShifts?: { date: string; name: string | null; start: string | null; end: string | null }[];
 }
 
 function nowJST(): string {
@@ -104,11 +105,17 @@ function YesNoButtons({
   );
 }
 
+const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
+function fmtUpcomingDate(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  return `${d.getMonth() + 1}/${d.getDate()}（${WEEKDAY_JP[d.getDay()]}）`;
+}
+
 export default function HomeClient({
   displayName, projectName, hasMultipleProjects, todayLabel,
   shift, departureTime, clockInTime, clockOutTime,
   hasAbsenceReport, absenceStatus, hasLateReport, lateStatus, noticeCount,
-  approvers,
+  approvers, upcomingShifts,
 }: HomeClientProps) {
   const [modal, setModal] = useState<ModalType>("none");
   const [isPending, startTransition] = useTransition();
@@ -316,6 +323,28 @@ export default function HomeClient({
               </div>
             ))}
           </div>
+
+          {/* 次回出勤 */}
+          {upcomingShifts && upcomingShifts.length > 0 && (
+            <div className="mb-10">
+              <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-3">次回出勤</p>
+              <div className="flex flex-col gap-2">
+                {upcomingShifts.map((s) => (
+                  <div key={s.date} className="flex items-center justify-between">
+                    <span className="text-sm text-zinc-500">{fmtUpcomingDate(s.date)}</span>
+                    <div className="flex items-center gap-2">
+                      {s.name && <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{s.name}</span>}
+                      {s.start && (
+                        <span className="text-xs font-mono tabular-nums text-zinc-400">
+                          {s.start.slice(0, 5)}–{s.end?.slice(0, 5) ?? "--:--"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 欠勤・遅刻：テキストリンクのみ */}
           {canReport && (

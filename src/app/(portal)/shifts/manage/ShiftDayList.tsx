@@ -711,7 +711,7 @@ export default function ShiftDayList({
                             {!isCollapsed && Array.from({ length: maxSlots }).map((_, slotIdx) => {
                               const member    = staffOnDay[slotIdx];
                               const isAddable = slotIdx < req;
-                              const canAdd    = isAddable && !member && unassignedMembersForDate(d).length > 0;
+                              const canAdd    = isAddable && !member;
                               return (
                                 <button
                                   key={slotIdx}
