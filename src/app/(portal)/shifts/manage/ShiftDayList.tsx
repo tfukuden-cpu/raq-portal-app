@@ -595,8 +595,9 @@ export default function ShiftDayList({
 
               {/* ── 左固定列（パターン名） ── */}
               <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-                {/* 日付ヘッダー行 */}
-                <div className="h-12 px-2 flex items-end pb-2 border-b border-zinc-200 dark:border-zinc-700">
+                {/* 日付ヘッダー行（縦スクロール固定） */}
+                <div className="sticky z-30 h-12 px-2 flex items-end pb-2 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                  style={{ top: "var(--page-header-h, 0px)" }}>
                   <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
                 </div>
 
@@ -659,13 +660,18 @@ export default function ShiftDayList({
                           : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
                       )}
                     >
-                      {/* 日付ボタン */}
+                      {/* 日付ボタン（縦スクロール固定） */}
                       <button
                         type="button"
                         onClick={() => onDateChange(d)}
+                        style={{ top: "var(--page-header-h, 0px)" }}
                         className={cx(
-                          "h-12 w-full flex flex-col items-center justify-center gap-0.5 border-b border-zinc-200 dark:border-zinc-700 relative transition-colors",
-                          isSel ? "bg-zinc-900 dark:bg-zinc-100" : "hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
+                          "sticky z-20 h-12 w-full flex flex-col items-center justify-center gap-0.5 border-b border-zinc-200 dark:border-zinc-700 relative transition-colors",
+                          isSel
+                            ? "bg-zinc-900 dark:bg-zinc-100"
+                            : isSun ? "bg-red-50 dark:bg-red-950/20 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                            : isSat ? "bg-blue-50/40 dark:bg-blue-950/10 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                            : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
                         )}
                       >
                         {isToday && !isSel && (
@@ -780,7 +786,8 @@ export default function ShiftDayList({
 
                 {/* 左固定列 */}
                 <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-                  <div className="h-12 px-2 flex items-end pb-2 border-b border-zinc-200 dark:border-zinc-700">
+                  <div className="sticky z-30 h-12 px-2 flex items-end pb-2 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                    style={{ top: "var(--page-header-h, 0px)" }}>
                     <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
                   </div>
                   <div className="h-9 px-2 flex items-center bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-700/60">
@@ -814,13 +821,18 @@ export default function ShiftDayList({
                             : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
                         )}
                       >
-                        {/* 日付ボタン */}
+                        {/* 日付ボタン（縦スクロール固定） */}
                         <button
                           type="button"
                           onClick={() => onDateChange(d)}
+                          style={{ top: "var(--page-header-h, 0px)" }}
                           className={cx(
-                            "h-12 w-full flex flex-col items-center justify-center gap-0.5 border-b border-zinc-200 dark:border-zinc-700 relative transition-colors",
-                            isSel ? "bg-zinc-900 dark:bg-zinc-100" : "hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
+                            "sticky z-20 h-12 w-full flex flex-col items-center justify-center gap-0.5 border-b border-zinc-200 dark:border-zinc-700 relative transition-colors",
+                            isSel
+                              ? "bg-zinc-900 dark:bg-zinc-100"
+                              : isSun ? "bg-red-50 dark:bg-red-950/20 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                              : isSat ? "bg-blue-50/40 dark:bg-blue-950/10 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                              : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
                           )}
                         >
                           {isToday && !isSel && (

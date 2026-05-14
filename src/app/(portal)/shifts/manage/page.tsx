@@ -10,6 +10,7 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import ShiftManageClient from "./ShiftManageClient";
 import SheetMenuButton from "./SheetMenuButton";
+import HeaderHeightSetter from "./HeaderHeightSetter";
 import { isGSheetsConfigured } from "@/lib/gsheets";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
@@ -202,7 +203,7 @@ export default async function ManageShiftsPage(props: {
     <main className="bg-white dark:bg-zinc-950 max-w-3xl mx-auto pb-24">
 
       {/* ── sticky ページヘッダー ── */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
+      <HeaderHeightSetter className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
         <div className="flex items-end justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -250,7 +251,7 @@ export default async function ManageShiftsPage(props: {
             ))}
           </div>
         )}
-      </div>
+      </HeaderHeightSetter>
 
       {/* ── コンテンツ ── */}
       <div className="pt-3">
