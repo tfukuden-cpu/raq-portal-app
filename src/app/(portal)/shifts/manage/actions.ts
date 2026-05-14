@@ -104,38 +104,32 @@ export type LineRequestResult = {
   noLine?: string[];
 };
 
-/** 指定日に公休のスタッフ全員にLINEで出勤追加依頼を送る */
+/**
+ * 指定日・セクションで公休のスタッフへLINEで出勤追加依頼を送る
+ * targetStaffIds: UIで絞り込んだ対象スタッフIDリスト（空なら全公休対象）
+ */
 export async function requestExtraShiftByLineAction(
   projectId: string,
   shiftDate: string,
+  targetStaffIds: string[],
+  shiftName: string,
   customMessage?: string,
 ): Promise<LineRequestResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: "ログインしてください" };
 
-  const admin = createAdminClient();
-
-  // 対象日に「公休」のスタッフIDを取得
-  const { data: offShifts, error: shiftErr } = await admin
-    .from("shifts")
-    .select("staff_id")
-    .eq("project_id", projectId)
-    .eq("shift_date", shiftDate)
-    .eq("shift_name", "公休");
-
-  if (shiftErr) return { success: false, message: shiftErr.message };
-  if (!offShifts || offShifts.length === 0) {
-    return { success: false, message: "当日公休のスタッフがいません" };
+  if (targetStaffIds.length === 0) {
+    return { success: false, message: "送信対象のスタッフがいません" };
   }
 
-  const staffIds = offShifts.map(s => s.staff_id as string);
+  const admin = createAdminClient();
 
   // staffs テーブルから line_user_id と名前を取得
   const { data: staffRows, error: staffErr } = await admin
     .from("staffs")
     .select("id, display_name, name, line_user_id")
-    .in("id", staffIds);
+    .in("id", targetStaffIds);
 
   if (staffErr) return { success: false, message: staffErr.message };
 
@@ -155,13 +149,12 @@ export async function requestExtraShiftByLineAction(
     return { success: false, message: "LINE連携済みのスタッフがいません", noLine: noLineNames };
   }
 
-  // 日付を日本語表記に変換（例: 2026-05-20 → 5/20（水））
   const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
   const dt = new Date(shiftDate);
   const dateLabel = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}（${WEEKDAY_JP[dt.getUTCDay()]}）`;
 
   const text = customMessage?.trim()
-    || `【出勤のご協力をお願いします】\n${dateLabel}にシフトの空きが出ています。\nご都合がよければ管理者にご連絡ください。`;
+    || `【出勤のご協力をお願いします】\n${dateLabel}の${shiftName}に空きが出ています。\nご都合がよければ管理者にご連絡ください。`;
 
   await multicastLine(withLine, text);
 
