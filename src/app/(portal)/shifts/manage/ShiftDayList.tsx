@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { upsertShiftAction, deleteShiftAction, swapShiftsAction } from "../actions";
+import { requestExtraShiftByLineAction, type LineRequestResult } from "./actions";
 
 const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -77,8 +78,8 @@ function ModalWrap({ onClose, children }: { onClose: () => void; children: React
 }
 
 type TabKey = "shukkin" | "kyukyu" | "kiboshu";
-// add: 空き枠クリック | action: 既存シフト選択 | change: 内容変更 | swap: スタッフ入れ替え
-type ModalMode = "add" | "action" | "change" | "swap";
+// add: 空き枠クリック | action: 既存シフト選択 | change: 内容変更 | swap: スタッフ入れ替え | line: LINE出勤依頼
+type ModalMode = "add" | "action" | "change" | "swap" | "line";
 
 // "HH:MM" or "HH:MM:SS" → 分に変換
 const timeToMin = (t: string) => {
@@ -289,6 +290,10 @@ export default function ShiftDayList({
   const [start, setStart] = useState("");
   const [end,   setEnd]   = useState("");
   const [note,  setNote]  = useState("");
+
+  // LINE依頼モーダル用
+  const [lineMessage,    setLineMessage]    = useState("");
+  const [lineResult,     setLineResult]     = useState<LineRequestResult | null>(null);
   // add モード用：固定パターン名（変更不可）
   const [lockedPattern, setLockedPattern] = useState<string | null>(null);
 
@@ -467,6 +472,23 @@ export default function ShiftDayList({
               );
             })}
           </div>
+
+          {/* LINE出勤依頼ボタン */}
+          <button
+            type="button"
+            onClick={() => {
+              setLineMessage("");
+              setLineResult(null);
+              setModalMode("line");
+              setModalOpen(true);
+            }}
+            className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#06C755]/10 text-[#06C755] hover:bg-[#06C755]/20 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current flex-shrink-0">
+              <path d="M19.365 9.89c.50 0 .906.407.906.907s-.406.907-.906.907H17.27v1.204h2.094c.5 0 .906.406.906.906s-.406.907-.906.907h-3c-.5 0-.907-.407-.907-.907V9.89c0-.5.407-.907.907-.907h3zm-5.423 0c.5 0 .906.407.906.907v3.924c0 .5-.406.907-.906.907s-.906-.407-.906-.907V10.797c0-.5.406-.907.906-.907zm-2.854 0c.346 0 .657.197.81.504l1.672 3.34c.222.444.041.985-.402 1.207-.443.222-.985.041-1.207-.402l-.22-.44h-1.306l-.22.44c-.222.443-.764.624-1.207.402-.443-.222-.624-.763-.402-1.207l1.672-3.34c.153-.307.464-.504.81-.504zm0 2.27l-.356.71h.713l-.356-.71zM5.84 9.89c.5 0 .906.407.906.907v2.354l1.814-2.682c.183-.27.487-.42.807-.38.32.04.6.26.706.57.044.132.063.267.055.4v3.757c0 .5-.406.907-.906.907s-.907-.407-.907-.907v-2.354l-1.814 2.682c-.21.31-.579.456-.935.376-.357-.08-.627-.376-.669-.74-.01-.083-.01-.167 0-.25V10.797c0-.5.406-.907.906-.907zM12 2C6.477 2 2 6.036 2 11c0 2.67 1.28 5.063 3.306 6.73.145.122.203.316.151.496l-.47 1.717c-.073.266.107.538.378.538.07 0 .14-.018.202-.054L8.05 19.05c.131-.076.284-.09.427-.039C9.357 19.332 10.666 19.5 12 19.5c5.523 0 10-4.036 10-9s-4.477-9-10-9z"/>
+            </svg>
+            出勤依頼
+          </button>
 
           {/* セクションフィルター（セクションがある案件のみ） */}
           {hasSection && (
@@ -1143,6 +1165,121 @@ export default function ShiftDayList({
                     </button>
                   </div>
                 </div>
+              </>
+            );
+          })()}
+
+          {/* ── line: LINE出勤依頼 ── */}
+          {modalMode === "line" && (() => {
+            const WEEKDAY_JP2 = ["日", "月", "火", "水", "木", "金", "土"];
+            const dt = new Date(selectedDate);
+            const dateLabel = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}（${WEEKDAY_JP2[dt.getUTCDay()]}）`;
+            const offMembers = activeMembers.filter(m =>
+              getShift(m.id, selectedDate)?.shift_name === "公休"
+            );
+            const defaultMessage = `【出勤のご協力をお願いします】\n${dateLabel}にシフトの空きが出ています。\nご都合がよければ管理者にご連絡ください。`;
+
+            const handleLineSend = () => {
+              setLineResult(null);
+              startTransition(async () => {
+                const r = await requestExtraShiftByLineAction(projectId, selectedDate, lineMessage || undefined);
+                setLineResult(r);
+              });
+            };
+
+            return (
+              <>
+                <div className="mb-5">
+                  <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" className="w-5 h-5 fill-[#06C755] flex-shrink-0">
+                      <path d="M19.365 9.89c.50 0 .906.407.906.907s-.406.907-.906.907H17.27v1.204h2.094c.5 0 .906.406.906.906s-.406.907-.906.907h-3c-.5 0-.907-.407-.907-.907V9.89c0-.5.407-.907.907-.907h3zm-5.423 0c.5 0 .906.407.906.907v3.924c0 .5-.406.907-.906.907s-.906-.407-.906-.907V10.797c0-.5.406-.907.906-.907zm-2.854 0c.346 0 .657.197.81.504l1.672 3.34c.222.444.041.985-.402 1.207-.443.222-.985.041-1.207-.402l-.22-.44h-1.306l-.22.44c-.222.443-.764.624-1.207.402-.443-.222-.624-.763-.402-1.207l1.672-3.34c.153-.307.464-.504.81-.504zm0 2.27l-.356.71h.713l-.356-.71zM5.84 9.89c.5 0 .906.407.906.907v2.354l1.814-2.682c.183-.27.487-.42.807-.38.32.04.6.26.706.57.044.132.063.267.055.4v3.757c0 .5-.406.907-.906.907s-.907-.407-.907-.907v-2.354l-1.814 2.682c-.21.31-.579.456-.935.376-.357-.08-.627-.376-.669-.74-.01-.083-.01-.167 0-.25V10.797c0-.5.406-.907.906-.907zM12 2C6.477 2 2 6.036 2 11c0 2.67 1.28 5.063 3.306 6.73.145.122.203.316.151.496l-.47 1.717c-.073.266.107.538.378.538.07 0 .14-.018.202-.054L8.05 19.05c.131-.076.284-.09.427-.039C9.357 19.332 10.666 19.5 12 19.5c5.523 0 10-4.036 10-9s-4.477-9-10-9z"/>
+                    </svg>
+                    LINE出勤依頼
+                  </h2>
+                  <p className="text-sm text-zinc-500 mt-1">{dateLabel}　公休スタッフへ一斉送信</p>
+                </div>
+
+                {/* 結果表示（送信後） */}
+                {lineResult && (
+                  <div className={cx(
+                    "p-4 rounded-2xl mb-4 text-sm font-semibold",
+                    lineResult.success
+                      ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                      : "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300",
+                  )}>
+                    {lineResult.success
+                      ? `✓ ${lineResult.sent}名にLINEを送信しました`
+                      : lineResult.message}
+                    {(lineResult.noLine ?? []).length > 0 && (
+                      <p className="mt-1.5 text-xs font-normal text-zinc-500">
+                        LINE未連携のため未送信：{lineResult.noLine!.join("、")}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {!lineResult && (
+                  <div className="space-y-4">
+                    {/* 送信対象一覧 */}
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-400 mb-2">
+                        送信対象（公休 {offMembers.length}名）
+                      </p>
+                      {offMembers.length === 0 ? (
+                        <p className="text-sm text-zinc-400 py-2">当日公休のスタッフがいません</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {offMembers.map(m => (
+                            <span key={m.id} className="text-xs px-2.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-medium">
+                              {m.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* メッセージ編集（任意） */}
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-400 mb-1.5">
+                        メッセージ <span className="font-normal text-zinc-400">（空欄でデフォルト文を使用）</span>
+                      </label>
+                      <textarea
+                        rows={5}
+                        value={lineMessage}
+                        onChange={e => setLineMessage(e.target.value)}
+                        placeholder={defaultMessage}
+                        className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm text-zinc-900 dark:text-zinc-100 resize-none"
+                      />
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button" onClick={closeModal}
+                        className="flex-1 py-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleLineSend}
+                        disabled={isPending || offMembers.length === 0}
+                        className="flex-1 py-3.5 rounded-2xl text-white text-sm font-bold disabled:opacity-40 transition-colors"
+                        style={{ backgroundColor: "#06C755" }}
+                      >
+                        {isPending ? "送信中…" : `${offMembers.length}名に送信`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {lineResult && (
+                  <button
+                    type="button" onClick={closeModal}
+                    className="w-full mt-2 py-3.5 rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-bold hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
+                  >
+                    閉じる
+                  </button>
+                )}
               </>
             );
           })()}
