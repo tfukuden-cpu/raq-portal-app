@@ -81,6 +81,58 @@ type TabKey = "shukkin" | "kyukyu" | "kiboshu";
 // add: 空き枠クリック | action: 既存シフト選択 | change: 内容変更 | swap: スタッフ入れ替え | line: LINE出勤依頼
 type ModalMode = "add" | "action" | "change" | "swap" | "line";
 
+type EligibilityResult = {
+  weekRestsIfWork: number;
+  consecutiveDays: number;
+  canWork: boolean;
+  weekWarning: boolean;
+  consecutiveWarning: boolean;
+};
+
+/** 公休スタッフがその日出勤した場合の週休・連勤を判定 */
+function analyzeWorkEligibility(
+  memberId: string,
+  date: string,
+  allDates: string[],
+  shiftMap: Map<string, Shift>,
+): EligibilityResult {
+  const isRest = (s: string | null | undefined) => !s || s === "公休" || s === "希望休";
+  const getS   = (d: string) => shiftMap.get(`${memberId}__${d}`)?.shift_name ?? null;
+  const dateIdx = allDates.indexOf(date);
+
+  // 週（月〜日）の休日数：この日を出勤扱いで計算
+  const dt      = new Date(date + "T00:00:00+09:00");
+  const dow     = dt.getDay();
+  const toMon   = dow === 0 ? -6 : 1 - dow;
+  const monday  = new Date(dt.getTime() + toMon * 86400000);
+  const sunday  = new Date(monday.getTime() + 6 * 86400000);
+  const weekDates = allDates.filter(d => {
+    const dd = new Date(d + "T00:00:00+09:00");
+    return dd >= monday && dd <= sunday;
+  });
+  const weekRestsIfWork = weekDates.filter(d => d !== date && isRest(getS(d))).length;
+
+  // 連続勤務日数：この日を出勤扱いで前後を数える
+  let before = 0, after = 0;
+  for (let i = dateIdx - 1; i >= 0; i--) {
+    if (isRest(getS(allDates[i]))) break;
+    before++;
+  }
+  for (let i = dateIdx + 1; i < allDates.length; i++) {
+    if (isRest(getS(allDates[i]))) break;
+    after++;
+  }
+  const consecutiveDays = before + 1 + after;
+
+  return {
+    weekRestsIfWork,
+    consecutiveDays,
+    canWork:             weekRestsIfWork >= 2 && consecutiveDays < 5,
+    weekWarning:         weekRestsIfWork < 2,
+    consecutiveWarning:  consecutiveDays >= 5,
+  };
+}
+
 // "HH:MM" or "HH:MM:SS" → 分に変換
 const timeToMin = (t: string) => {
   const [h, m] = t.split(":").map(Number);
@@ -294,6 +346,13 @@ export default function ShiftDayList({
   // LINE依頼モーダル用
   const [lineMessage,    setLineMessage]    = useState("");
   const [lineResult,     setLineResult]     = useState<LineRequestResult | null>(null);
+  const [selectedOffIds, setSelectedOffIds] = useState<Set<string>>(new Set());
+
+  const toggleOffId = (id: string) => setSelectedOffIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   // add モード用：固定パターン名（変更不可）
   const [lockedPattern, setLockedPattern] = useState<string | null>(null);
 
@@ -340,6 +399,20 @@ export default function ShiftDayList({
     setEnd(p?.end_time?.slice(0, 5) ?? "");
     setNote("");
     setError(null);
+    setLineMessage("");
+    setLineResult(null);
+    // 公休スタッフの適格チェック：週休2日を保てて5連勤未満の人を自動選択
+    const lockedSec = p?.section ?? null;
+    const safeIds = new Set(
+      activeMembers
+        .filter(m =>
+          getShift(m.id, date)?.shift_name === "公休" &&
+          (!lockedSec || m.section === lockedSec) &&
+          analyzeWorkEligibility(m.id, date, allDates, shiftMap).canWork
+        )
+        .map(m => m.id)
+    );
+    setSelectedOffIds(safeIds);
     setModalOpen(true);
   };
 
@@ -967,7 +1040,7 @@ export default function ShiftDayList({
                 const r = await requestExtraShiftByLineAction(
                   projectId,
                   modalDate,
-                  offMembers.map(m => m.id),
+                  [...selectedOffIds],
                   lockedPattern ?? "シフト",
                   lineMessage || undefined,
                 );
@@ -1055,17 +1128,68 @@ export default function ShiftDayList({
                       </div>
 
                       <div className="rounded-2xl border border-zinc-100 dark:border-zinc-800 p-3.5 space-y-3">
-                        <div>
-                          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                            公休スタッフへ出勤依頼をLINEで送る
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                            公休スタッフへLINEで出勤依頼
                           </p>
-                          <div className="flex flex-wrap gap-1">
-                            {offMembers.map(m => (
-                              <span key={m.id} className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-medium">
-                                {m.name}
-                              </span>
-                            ))}
+                          <div className="flex gap-1.5">
+                            <button type="button" onClick={() => setSelectedOffIds(new Set(offMembers.map(m => m.id)))}
+                              className="text-[10px] text-blue-500 hover:text-blue-700 font-semibold">全選択</button>
+                            <span className="text-zinc-200 dark:text-zinc-700">|</span>
+                            <button type="button" onClick={() => setSelectedOffIds(new Set())}
+                              className="text-[10px] text-zinc-400 hover:text-zinc-600 font-semibold">解除</button>
                           </div>
+                        </div>
+
+                        {/* スタッフ一覧（チェックボックス＋適格バッジ） */}
+                        <div className="space-y-1.5">
+                          {offMembers.map(m => {
+                            const elig = analyzeWorkEligibility(m.id, modalDate, allDates, shiftMap);
+                            const checked = selectedOffIds.has(m.id);
+                            return (
+                              <label
+                                key={m.id}
+                                className={cx(
+                                  "flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-colors",
+                                  checked
+                                    ? "bg-blue-50 dark:bg-blue-950/20"
+                                    : "bg-zinc-50 dark:bg-zinc-800/40 hover:bg-zinc-100 dark:hover:bg-zinc-800/70",
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleOffId(m.id)}
+                                  className="w-4 h-4 rounded accent-blue-600 flex-shrink-0"
+                                />
+                                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 flex-1 min-w-0 truncate">
+                                  {m.name}
+                                </span>
+                                <div className="flex gap-1 flex-shrink-0">
+                                  {/* 週休バッジ */}
+                                  {elig.weekRestsIfWork >= 2 ? (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                                      週休{elig.weekRestsIfWork}日
+                                    </span>
+                                  ) : elig.weekRestsIfWork === 1 ? (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 whitespace-nowrap">
+                                      週休1日
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 whitespace-nowrap">
+                                      週休0日
+                                    </span>
+                                  )}
+                                  {/* 連勤バッジ */}
+                                  {elig.consecutiveDays >= 5 && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 whitespace-nowrap">
+                                      {elig.consecutiveDays}連勤
+                                    </span>
+                                  )}
+                                </div>
+                              </label>
+                            );
+                          })}
                         </div>
 
                         {/* 送信結果 */}
@@ -1099,7 +1223,7 @@ export default function ShiftDayList({
                             <button
                               type="button"
                               onClick={handleLineSend}
-                              disabled={isPending}
+                              disabled={isPending || selectedOffIds.size === 0}
                               className="w-full py-3 rounded-2xl text-white text-sm font-bold disabled:opacity-40 transition-opacity hover:opacity-90"
                               style={{ backgroundColor: "#06C755" }}
                             >
@@ -1107,7 +1231,7 @@ export default function ShiftDayList({
                                 <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white flex-shrink-0">
                                   <path d="M19.365 9.89c.50 0 .906.407.906.907s-.406.907-.906.907H17.27v1.204h2.094c.5 0 .906.406.906.906s-.406.907-.906.907h-3c-.5 0-.907-.407-.907-.907V9.89c0-.5.407-.907.907-.907h3zm-5.423 0c.5 0 .906.407.906.907v3.924c0 .5-.406.907-.906.907s-.906-.407-.906-.907V10.797c0-.5.406-.907.906-.907zm-2.854 0c.346 0 .657.197.81.504l1.672 3.34c.222.444.041.985-.402 1.207-.443.222-.985.041-1.207-.402l-.22-.44h-1.306l-.22.44c-.222.443-.764.624-1.207.402-.443-.222-.624-.763-.402-1.207l1.672-3.34c.153-.307.464-.504.81-.504zm0 2.27l-.356.71h.713l-.356-.71zM5.84 9.89c.5 0 .906.407.906.907v2.354l1.814-2.682c.183-.27.487-.42.807-.38.32.04.6.26.706.57.044.132.063.267.055.4v3.757c0 .5-.406.907-.906.907s-.907-.407-.907-.907v-2.354l-1.814 2.682c-.21.31-.579.456-.935.376-.357-.08-.627-.376-.669-.74-.01-.083-.01-.167 0-.25V10.797c0-.5.406-.907.906-.907zM12 2C6.477 2 2 6.036 2 11c0 2.67 1.28 5.063 3.306 6.73.145.122.203.316.151.496l-.47 1.717c-.073.266.107.538.378.538.07 0 .14-.018.202-.054L8.05 19.05c.131-.076.284-.09.427-.039C9.357 19.332 10.666 19.5 12 19.5c5.523 0 10-4.036 10-9s-4.477-9-10-9z"/>
                                 </svg>
-                                {isPending ? "送信中…" : `${offMembers.length}名にLINEで出勤依頼`}
+                                {isPending ? "送信中…" : `選択した${selectedOffIds.size}名にLINEで依頼`}
                               </span>
                             </button>
                           </>
