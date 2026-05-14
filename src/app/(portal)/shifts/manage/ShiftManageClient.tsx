@@ -37,6 +37,8 @@ type ShiftRequest = {
   status: string;
 };
 
+type SlotReq = { section: string; pattern_name: string; shift_date: string; required_count: number };
+
 type Props = {
   projectId: string;
   allDates: string[];
@@ -45,6 +47,7 @@ type Props = {
   activeMembers: Member[];
   shiftPatterns: Pattern[];
   shiftRequests: ShiftRequest[];
+  slotRequirements: SlotReq[];
   targetYear: number;
   targetMonth: number;
 };
@@ -57,6 +60,7 @@ export default function ShiftManageClient({
   activeMembers,
   shiftPatterns,
   shiftRequests,
+  slotRequirements,
   targetYear,
   targetMonth,
 }: Props) {
@@ -70,6 +74,7 @@ export default function ShiftManageClient({
         shifts={shifts}
         activeMembers={activeMembers}
         shiftPatterns={shiftPatterns}
+        slotRequirements={slotRequirements}
         selectedDate={selectedDate}
         onDateChange={setSelectedDate}
         projectId={projectId}

@@ -96,7 +96,8 @@ export default async function ManageShiftsPage(props: {
       .gte("shift_date", startDate)
       .lte("shift_date", endDate)
       .order("shift_date")
-      .order("staff_id"),
+      .order("staff_id")
+      .limit(10000),
     admin.from("shift_requests")
       .select("id, staff_id, request_date, opening_id, reason, status, created_at, shift_openings(shift_name, shift_start, shift_end)")
       .eq("project_id", selectedProjectId)
@@ -242,6 +243,7 @@ export default async function ManageShiftsPage(props: {
           activeMembers={activeMembers}
           shiftPatterns={shiftPatterns}
           shiftRequests={shiftRequests}
+          slotRequirements={slotRequirements}
           targetYear={targetYear}
           targetMonth={targetMonth}
         />

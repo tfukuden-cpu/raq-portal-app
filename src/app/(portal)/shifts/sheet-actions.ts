@@ -70,6 +70,60 @@ function sheetId(url: string) {
   return extractSpreadsheetId(url);
 }
 
+/**
+ * 「必要人数」行をスキャンして shift_patterns.required_count を更新するヘルパー。
+ * テンプレート形式: 任意のセルに "短縮名:件数" のペアが含まれていれば解析する。
+ * （例: "日:15 夜:5" → 日勤=15、夜勤=5）
+ */
+async function syncRequiredCountsFromSheetRows(
+  rows: string[][],
+  headerRowIdx: number,
+  projectId: string,
+): Promise<void> {
+  // headerRowIdx より前の行から「必要人数」を含む行を探す
+  const reqCountRow = rows.slice(0, headerRowIdx).find(r =>
+    r.some(c => (c ?? "").includes("必要人数"))
+  );
+  if (!reqCountRow) return;
+
+  const admin = createAdminClient();
+
+  // shift_patterns の short_name → name マッピングを取得
+  const { data: sPatterns } = await admin
+    .from("shift_patterns")
+    .select("name, short_name")
+    .eq("project_id", projectId);
+  if (!sPatterns || sPatterns.length === 0) return;
+
+  const shortToName = new Map(sPatterns.map(p => [p.short_name, p.name]));
+
+  // 全セルをスキャンして "SHORT:COUNT" ペアを収集（同パターンは最大値を使用）
+  const countMap = new Map<string, number>();
+  reqCountRow.forEach(cell => {
+    const pairs = (cell ?? "").match(/([^\s:]+):(\d+)/g) ?? [];
+    pairs.forEach(pair => {
+      const colonIdx = pair.lastIndexOf(":");
+      const shortName = pair.slice(0, colonIdx);
+      const count = parseInt(pair.slice(colonIdx + 1), 10);
+      const name = shortToName.get(shortName);
+      if (name && !isNaN(count) && count > 0) {
+        countMap.set(name, Math.max(countMap.get(name) ?? 0, count));
+      }
+    });
+  });
+
+  if (countMap.size === 0) return;
+
+  // shift_patterns.required_count を更新
+  for (const [name, count] of countMap.entries()) {
+    await admin
+      .from("shift_patterns")
+      .update({ required_count: count })
+      .eq("project_id", projectId)
+      .eq("name", name);
+  }
+}
+
 // ── 1. シフト読み込み（スプシ→アプリ）──────────────────
 
 export async function importShiftFromSheetAction(fd: FormData): Promise<SyncResult> {
@@ -858,6 +912,9 @@ export async function importShiftTableAction(fd: FormData): Promise<SyncResult> 
       count += c ?? 0;
     }
 
+    // 「必要人数」行が含まれていれば shift_patterns.required_count を同期する
+    await syncRequiredCountsFromSheetRows(rows, headerRowIdx, projectId).catch(() => {/* best-effort */});
+
     revalidatePath("/shifts");
     revalidatePath("/shifts/manage");
     return { success: true, count };
@@ -941,6 +998,9 @@ export async function quickImportShiftTableAction(fd: FormData): Promise<SyncRes
       if (error) return { success: false, message: error.message };
       count += c ?? 0;
     }
+
+    // 「必要人数」行が含まれていれば shift_patterns.required_count を同期する
+    await syncRequiredCountsFromSheetRows(rows, headerRowIdx, resolvedProjectId).catch(() => {/* best-effort */});
 
     revalidatePath("/shifts");
     revalidatePath("/shifts/manage");

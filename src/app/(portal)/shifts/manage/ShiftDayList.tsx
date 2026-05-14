@@ -209,13 +209,16 @@ function ShiftAlerts({ alerts }: { alerts: string[] }) {
   );
 }
 
+type SlotReq = { section: string; pattern_name: string; shift_date: string; required_count: number };
+
 export default function ShiftDayList({
-  allDates, shifts, activeMembers, shiftPatterns, selectedDate, onDateChange, projectId,
+  allDates, shifts, activeMembers, shiftPatterns, slotRequirements, selectedDate, onDateChange, projectId,
 }: {
   allDates: string[];
   shifts: Shift[];
   activeMembers: Member[];
   shiftPatterns: Pattern[];
+  slotRequirements?: SlotReq[];
   selectedDate: string;
   onDateChange: (date: string) => void;
   projectId: string;
@@ -262,6 +265,20 @@ export default function ShiftDayList({
   const shiftMap = new Map<string, Shift>(shifts.map((s) => [`${s.staff_id}__${s.shift_date}`, s]));
   const getShift = (sid: string, d: string) => shiftMap.get(`${sid}__${d}`);
 
+  // 日別スロット必要数（shift_slot_requirements から） section + pattern + date をキーにする
+  const slotReqMap = new Map<string, number>();
+  (slotRequirements ?? []).forEach(r => {
+    slotReqMap.set(`${r.section}__${r.pattern_name}__${r.shift_date}`, r.required_count);
+  });
+  // shift_slot_requirements を優先し、なければ shift_patterns のデフォルト値を使う
+  const getReqForDate = (p: Pattern, date: string): number => {
+    if (p.section) {
+      const override = slotReqMap.get(`${p.section}__${p.name}__${date}`);
+      if (override !== undefined) return override;
+    }
+    return getRequiredForDate(p, date);
+  };
+
   // モーダル
   const [modalMode,    setModalMode]    = useState<ModalMode>("add");
   const [modalOpen,    setModalOpen]    = useState(false);
@@ -288,7 +305,7 @@ export default function ShiftDayList({
   const patternMaxSlots = new Map<string, number>();
   for (const pattern of shiftPatterns) {
     const maxReq = allDates.length > 0
-      ? Math.max(0, ...allDates.map(d => getRequiredForDate(pattern, d)))
+      ? Math.max(0, ...allDates.map(d => getReqForDate(pattern, d)))
       : 0;
     const maxActual = allDates.length > 0
       ? Math.max(0, ...allDates.map(d =>
@@ -590,7 +607,7 @@ export default function ShiftDayList({
                         const maxSlots   = patternMaxSlots.get(pattern.name) ?? 0;
                         const isCollapsed = collapsedPatterns.has(pattern.name);
                         const staffOnDay = visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name);
-                        const req        = getRequiredForDate(pattern, d);
+                        const req        = getReqForDate(pattern, d);
                         const actual     = staffOnDay.length;
                         const ok         = req === 0 || actual >= req;
                         const isLastGrp  = gi === arr.length - 1;
