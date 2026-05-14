@@ -15,15 +15,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Raq ポータル",
-    template: "%s | Raq ポータル",
+    default: "RaqWorks",
+    template: "%s | RaqWorks",
   },
-  description: "Raq 合同会社 社内ポータル",
-  applicationName: "Raq ポータル",
+  description: "RaqWorks 社内ポータル",
+  applicationName: "RaqWorks",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Raq",
+    title: "RaqWorks",
   },
   formatDetection: {
     telephone: false,
