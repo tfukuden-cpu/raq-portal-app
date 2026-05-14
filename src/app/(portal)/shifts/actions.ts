@@ -425,7 +425,7 @@ export async function swapShiftsAction(
     ]);
   }
 
-  // スプレッドシート変更ログ追記（ベストエフォート）
+  // スプレッドシート変更ログ追記＋LINE通知（ベストエフォート）
   const [nameA, nameB, changedByName] = await Promise.all([
     getStaffDisplayName(shiftA.staff_id),
     getStaffDisplayName(staffIdB),
@@ -436,6 +436,42 @@ export async function swapShiftsAction(
     shiftA.staff_id, `${nameA}⇄${nameB}`,
     shiftA.shift_date, shiftA, null,
   );
+
+  // LINE通知：スワップ・譲渡で変更になった両スタッフへ
+  const dateLabel = (shiftA.shift_date as string).slice(5).replace("-", "/");
+  if (shiftB) {
+    // スワップ：A は B のシフト、B は A のシフトに変わる
+    if (shiftA.staff_id !== myStaffId) {
+      sendEventNotify(projectId, "shift_changed", {
+        名前: nameA, 日付: dateLabel,
+        変更前: shiftA.shift_name ?? "（なし）",
+        変更後: (shiftB.shift_name as string | null) ?? "（なし）",
+      }, shiftA.staff_id).catch(() => {});
+    }
+    if (staffIdB !== myStaffId) {
+      sendEventNotify(projectId, "shift_changed", {
+        名前: nameB, 日付: dateLabel,
+        変更前: (shiftB.shift_name as string | null) ?? "（なし）",
+        変更後: shiftA.shift_name ?? "（なし）",
+      }, staffIdB).catch(() => {});
+    }
+  } else {
+    // 譲渡：A のシフトが B に移る。A は削除扱い
+    if (shiftA.staff_id !== myStaffId) {
+      sendEventNotify(projectId, "shift_changed", {
+        名前: nameA, 日付: dateLabel,
+        変更前: shiftA.shift_name ?? "（なし）",
+        変更後: "（削除）",
+      }, shiftA.staff_id).catch(() => {});
+    }
+    if (staffIdB !== myStaffId) {
+      sendEventNotify(projectId, "shift_changed", {
+        名前: nameB, 日付: dateLabel,
+        変更前: "（なし）",
+        変更後: shiftA.shift_name ?? "（なし）",
+      }, staffIdB).catch(() => {});
+    }
+  }
 
   revalidatePath("/shifts");
   revalidatePath("/shifts/manage");
