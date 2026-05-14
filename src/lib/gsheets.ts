@@ -139,7 +139,10 @@ export async function readSheet(
   range = "A:Z"
 ): Promise<string[][]> {
   const token = await getAccessToken();
-  const encodedRange = encodeURIComponent(`${sheetName}!${range}`);
+  // range が空文字 = シート全体を取得（列数制限なし）
+  const encodedRange = range
+    ? encodeURIComponent(`${sheetName}!${range}`)
+    : encodeURIComponent(sheetName);
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}`;
 
   const res = await fetch(url, {
