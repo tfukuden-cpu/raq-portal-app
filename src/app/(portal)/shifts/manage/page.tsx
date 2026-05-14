@@ -74,13 +74,27 @@ export default async function ManageShiftsPage(props: {
   const startDate = dateKey(new Date(targetYear, targetMonth - 1, 1));
   const endDate   = dateKey(new Date(targetYear, targetMonth,     0));
 
+  // PostgREST のデフォルト上限（1000行）を回避するため、シフトは 1000行ずつ並列取得する
+  const shiftSelect = () =>
+    admin.from("shifts")
+      .select("id, staff_id, shift_date, shift_name, shift_start, shift_end, note")
+      .eq("project_id", selectedProjectId)
+      .gte("shift_date", startDate)
+      .lte("shift_date", endDate)
+      .order("shift_date")
+      .order("staff_id");
+
   const [
     { data: project },
     { data: members },
     { data: shiftPatternRows },
-    { data: shiftsRaw },
     { data: shiftRequestsRaw },
     { data: slotRequirementsRaw },
+    shiftBatch0,
+    shiftBatch1,
+    shiftBatch2,
+    shiftBatch3,
+    shiftBatch4,
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", selectedProjectId).maybeSingle(),
     admin.from("project_members")
@@ -90,14 +104,6 @@ export default async function ManageShiftsPage(props: {
       .select("name, required_count, required_weekday, required_weekend, section, start_time, end_time")
       .eq("project_id", selectedProjectId)
       .order("sort_order"),
-    admin.from("shifts")
-      .select("id, staff_id, shift_date, shift_name, shift_start, shift_end, note")
-      .eq("project_id", selectedProjectId)
-      .gte("shift_date", startDate)
-      .lte("shift_date", endDate)
-      .order("shift_date")
-      .order("staff_id")
-      .limit(10000),
     admin.from("shift_requests")
       .select("id, staff_id, request_date, opening_id, reason, status, created_at, shift_openings(shift_name, shift_start, shift_end)")
       .eq("project_id", selectedProjectId)
@@ -108,7 +114,20 @@ export default async function ManageShiftsPage(props: {
       .eq("project_id", selectedProjectId)
       .gte("shift_date", startDate)
       .lte("shift_date", endDate),
+    shiftSelect().range(0,    999),
+    shiftSelect().range(1000, 1999),
+    shiftSelect().range(2000, 2999),
+    shiftSelect().range(3000, 3999),
+    shiftSelect().range(4000, 4999),
   ]);
+
+  const shiftsRaw = [
+    ...(shiftBatch0.data ?? []),
+    ...(shiftBatch1.data ?? []),
+    ...(shiftBatch2.data ?? []),
+    ...(shiftBatch3.data ?? []),
+    ...(shiftBatch4.data ?? []),
+  ];
 
   const activeMembers = (members ?? [])
     .map((m) => {
