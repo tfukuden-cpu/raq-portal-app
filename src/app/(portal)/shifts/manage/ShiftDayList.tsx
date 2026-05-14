@@ -289,18 +289,15 @@ export default function ShiftDayList({
   const touchStartX = useRef<number | null>(null);
   // 月次ストリップの横スクロールコンテナ
   const stripRef = useRef<HTMLDivElement>(null);
-  // タブ/フィルター行の高さを CSS 変数に反映
-  const tabsRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!tabsRef.current) return;
-    const el = tabsRef.current;
-    const set = () =>
-      document.documentElement.style.setProperty("--shift-tabs-h", `${el.offsetHeight}px`);
-    set();
-    const obs = new ResizeObserver(set);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
+  // 日付ヘッダーストリップの内部 div（translateX でスクロール同期）
+  const headerInnerRef = useRef<HTMLDivElement>(null);
+
+  // データテーブルのスクロールに合わせて日付ヘッダーを同期
+  const syncHeader = (scrollLeft: number) => {
+    if (headerInnerRef.current) {
+      headerInnerRef.current.style.transform = `translateX(-${scrollLeft}px)`;
+    }
+  };
 
   // 選択日が変わったらストリップを中央にスクロール
   useEffect(() => {
@@ -310,7 +307,9 @@ export default function ShiftDayList({
     const idx = allDates.indexOf(selectedDate);
     if (idx < 0) return;
     const target = LEFT_COL + idx * COL_W - (stripRef.current.clientWidth - LEFT_COL) / 2 + COL_W / 2;
-    stripRef.current.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+    const scrollLeft = Math.max(0, target);
+    stripRef.current.scrollTo({ left: scrollLeft, behavior: "smooth" });
+    syncHeader(scrollLeft);
   }, [selectedDate, allDates]);
   const togglePattern = (name: string) => setCollapsedPatterns(prev => {
     const next = new Set(prev);
@@ -522,12 +521,8 @@ export default function ShiftDayList({
 
   return (
     <>
-      {/* ━━ sticky ヘッダー ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div
-        ref={tabsRef}
-        className="sticky z-20 bg-white dark:bg-zinc-950 px-4 pt-2 pb-0 border-b border-zinc-100 dark:border-zinc-800"
-        style={{ top: "calc(var(--page-header-h, 0px) + var(--shift-tabs-h, 0px))" }}
-      >
+      {/* ━━ タブ / フィルター ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div className="bg-white dark:bg-zinc-950 px-4 pt-2 pb-0 border-b border-zinc-100 dark:border-zinc-800">
 
         {/* ① セクション + タブ（同一行） */}
         <div className="flex items-center justify-between mb-3 gap-2">
@@ -602,248 +597,36 @@ export default function ShiftDayList({
 
         {/* ── 出勤タブ: 月次一覧テーブル ── */}
         {tabKey === "shukkin" && (
-          <div
-            ref={stripRef}
-            className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
-            style={{ scrollbarWidth: "none" }}
-          >
-            <div className="flex min-w-max bg-white dark:bg-zinc-900">
-
-              {/* ── 左固定列（パターン名） ── */}
-              <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-                {/* 日付ヘッダー行（縦スクロール固定） */}
-                <div className="sticky z-30 h-12 px-2 flex items-end pb-2 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
-                  style={{ top: "calc(var(--page-header-h, 0px) + var(--shift-tabs-h, 0px))" }}>
-                  <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
-                </div>
-
-                {/* パターングループ */}
-                {visibleShiftPatterns.map((pattern, gi, arr) => {
-                  const maxSlots  = patternMaxSlots.get(pattern.name) ?? 0;
-                  const isCollapsed = collapsedPatterns.has(pattern.name);
-                  const isLast    = gi === arr.length - 1;
-                  return (
-                    <div key={pattern.name} className={cx("flex flex-col", isLast ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
-                      {/* パターン名 + 折りたたみボタン（充足数行と同高 h-9） */}
-                      <button
-                        type="button"
-                        onClick={() => togglePattern(pattern.name)}
-                        className="h-9 flex items-center gap-1 px-2 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-700/60 hover:bg-zinc-100 dark:hover:bg-zinc-700/60 transition-colors"
-                      >
-                        <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate flex-1 text-left leading-tight" title={pattern.name}>
-                          {pattern.name}
-                        </span>
-                        <svg
-                          className={cx("w-2.5 h-2.5 text-zinc-400 flex-shrink-0 transition-transform", isCollapsed ? "-rotate-90" : "")}
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-
-                      {/* スタッフ行プレースホルダー */}
-                      {!isCollapsed && Array.from({ length: maxSlots }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={cx("h-8", i < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "")}
-                        />
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* ── 日付列 ── */}
-              <div className="flex pr-4">
-                {allDates.map(d => {
-                  // "YYYY-MM-DD" を UTC midnight としてパース → getUTCDay/getUTCDate でサーバー(UTC)・クライアント間の不一致を防ぐ
-                  const dt        = new Date(d);
-                  const dateNum   = dt.getUTCDate();
-                  const dayOfWeek = dt.getUTCDay();
-                  const dow       = WEEKDAY_JP[dayOfWeek];
-                  const isSel     = d === selectedDate;
-                  const isToday   = d === todayStr;
-                  const isSun     = dayOfWeek === 0;
-                  const isSat     = dayOfWeek === 6;
-
-                  return (
-                    <div
-                      key={d}
-                      className={cx(
-                        "w-11 flex-shrink-0 flex flex-col",
-                        isSel
-                          ? "bg-blue-50/80 dark:bg-blue-950/20"
-                          : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
-                      )}
-                    >
-                      {/* 日付ボタン（縦スクロール固定） */}
-                      <button
-                        type="button"
-                        onClick={() => onDateChange(d)}
-                        style={{ top: "calc(var(--page-header-h, 0px) + var(--shift-tabs-h, 0px))" }}
-                        className={cx(
-                          "sticky z-20 h-12 w-full flex flex-col items-center justify-center gap-0.5 border-b border-zinc-200 dark:border-zinc-700 relative transition-colors",
-                          isSel
-                            ? "bg-zinc-900 dark:bg-zinc-100"
-                            : isSun ? "bg-red-50 dark:bg-red-950/20 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
-                            : isSat ? "bg-blue-50/40 dark:bg-blue-950/10 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
-                            : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
-                        )}
-                      >
-                        {isToday && !isSel && (
-                          <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-500" />
-                        )}
-                        <span className={cx(
-                          "text-[9px] font-medium leading-none",
-                          isSel  ? "text-zinc-500 dark:text-zinc-500"
-                          : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500",
-                        )}>{dow}</span>
-                        <span className={cx(
-                          "text-sm font-bold tabular-nums leading-none",
-                          isSel    ? "text-white dark:text-zinc-900"
-                          : isToday ? "text-blue-600 dark:text-blue-400"
-                          : isSun   ? "text-red-500"
-                          : isSat   ? "text-blue-500"
-                                    : "text-zinc-700 dark:text-zinc-300",
-                        )}>{dateNum}</span>
-                      </button>
-
-                      {/* パターングループ */}
-                      {visibleShiftPatterns.map((pattern, gi, arr) => {
-                        const maxSlots   = patternMaxSlots.get(pattern.name) ?? 0;
-                        const isCollapsed = collapsedPatterns.has(pattern.name);
-                        const staffOnDay = visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name);
-                        const req        = getReqForDate(pattern, d);
-                        const actual     = staffOnDay.length;
-                        const ok         = req === 0 || actual >= req;
-                        const isLastGrp  = gi === arr.length - 1;
-
-                        return (
-                          <div key={pattern.name} className={cx("flex flex-col", isLastGrp ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
-                            {/* 充足数行 (h-9) */}
-                            <div className="h-9 flex items-center justify-center border-b border-zinc-100 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-800/30">
-                              {req > 0 ? (
-                                <div className="flex flex-col items-center gap-px">
-                                  <span className={cx(
-                                    "tabular-nums text-[11px] font-bold leading-none",
-                                    ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400",
-                                  )}>{actual}</span>
-                                  <span className="text-[8px] text-zinc-300 dark:text-zinc-600 leading-none tabular-nums">/{req}</span>
-                                </div>
-                              ) : (
-                                <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
-                              )}
-                            </div>
-
-                            {/* スタッフ行 (h-8 each) */}
-                            {!isCollapsed && Array.from({ length: maxSlots }).map((_, slotIdx) => {
-                              const member      = staffOnDay[slotIdx];
-                              const isAddable   = slotIdx < req;
-                              // 必要数超えの余剰配置：実績の直後スロットもクリック可
-                              const isExtraSlot = !member && slotIdx === staffOnDay.length;
-                              const canAdd      = (isAddable || isExtraSlot) && !member;
-                              return (
-                                <button
-                                  key={slotIdx}
-                                  type="button"
-                                  disabled={isPending || (!member && !canAdd)}
-                                  onClick={() => member ? openOccupied(member, d) : canAdd ? openEmpty(d, pattern.name) : undefined}
-                                  className={cx(
-                                    "h-8 flex items-center justify-center w-full transition-colors",
-                                    slotIdx < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
-                                    member || canAdd
-                                      ? isSel
-                                        ? "hover:bg-blue-100/60 dark:hover:bg-blue-900/30 cursor-pointer"
-                                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800/60 cursor-pointer"
-                                      : "pointer-events-none",
-                                  )}
-                                >
-                                  {member ? (
-                                    <span className={cx(
-                                      "text-[10px] font-semibold leading-none truncate px-0.5",
-                                      isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
-                                    )}>{shortName(member.name)}</span>
-                                  ) : canAdd ? (
-                                    <span className={cx(
-                                      "text-base font-thin leading-none",
-                                      isSel ? "text-blue-300/70 dark:text-blue-600/70" : "text-zinc-200 dark:text-zinc-700",
-                                    )}>+</span>
-                                  ) : isAddable ? (
-                                    <span className="w-4 h-px bg-zinc-100 dark:bg-zinc-800 rounded-full" />
-                                  ) : null}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* ── 公休 / 希望休タブ: 月次テーブル ── */}
-        {(tabKey === "kyukyu" || tabKey === "kiboshu") && (() => {
-          const targetName = tabKey === "kyukyu" ? "公休" : "希望休";
-          const maxActual  = allDates.length > 0
-            ? Math.max(1, ...allDates.map(d => visibleMembers.filter(m => getShift(m.id, d)?.shift_name === targetName).length))
-            : 1;
-          return (
+          <>
+            {/* ── 日付ヘッダーストリップ（sticky・overflow-x コンテナ外） ── */}
             <div
-              ref={stripRef}
-              className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
-              style={{ scrollbarWidth: "none" }}
+              className="sticky z-20 flex bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-700"
+              style={{ top: "var(--page-header-h, 0px)" }}
             >
-              <div className="flex min-w-max bg-white dark:bg-zinc-900">
-
-                {/* 左固定列 */}
-                <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-                  <div className="sticky z-30 h-12 px-2 flex items-end pb-2 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
-                    style={{ top: "calc(var(--page-header-h, 0px) + var(--shift-tabs-h, 0px))" }}>
-                    <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
-                  </div>
-                  <div className="h-9 px-2 flex items-center bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-700/60">
-                    <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300">{targetName}</span>
-                  </div>
-                  {Array.from({ length: maxActual }).map((_, i) => (
-                    <div key={i} className={cx("h-8", i < maxActual - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "")} />
-                  ))}
-                </div>
-
-                {/* 日付列 */}
-                <div className="flex pr-4">
-                  {allDates.map(d => {
-                    const dt        = new Date(d);
-                    const dateNum   = dt.getUTCDate();
-                    const dayOfWeek = dt.getUTCDay();
-                    const dow       = WEEKDAY_JP[dayOfWeek];
-                    const isSel     = d === selectedDate;
-                    const isToday   = d === todayStr;
-                    const isSun     = dayOfWeek === 0;
-                    const isSat     = dayOfWeek === 6;
-                    const staffOnDay = visibleMembers.filter(m => getShift(m.id, d)?.shift_name === targetName);
-
-                    return (
-                      <div
-                        key={d}
-                        className={cx(
-                          "w-11 flex-shrink-0 flex flex-col",
-                          isSel
-                            ? "bg-blue-50/80 dark:bg-blue-950/20"
-                            : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
-                        )}
-                      >
-                        {/* 日付ボタン（縦スクロール固定） */}
+              {/* 左コーナー */}
+              <div className="sticky left-0 z-30 w-20 flex-shrink-0 h-12 px-2 flex items-end pb-2 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
+                <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
+              </div>
+              {/* 日付ボタン群（overflow:hidden → translateX で同期） */}
+              <div className="overflow-hidden flex-1">
+                <div ref={headerInnerRef} className="flex">
+                  <div className="flex pr-4">
+                    {allDates.map(d => {
+                      const dt        = new Date(d);
+                      const dateNum   = dt.getUTCDate();
+                      const dayOfWeek = dt.getUTCDay();
+                      const dow       = WEEKDAY_JP[dayOfWeek];
+                      const isSel     = d === selectedDate;
+                      const isToday   = d === todayStr;
+                      const isSun     = dayOfWeek === 0;
+                      const isSat     = dayOfWeek === 6;
+                      return (
                         <button
+                          key={d}
                           type="button"
                           onClick={() => onDateChange(d)}
-                          style={{ top: "calc(var(--page-header-h, 0px) + var(--shift-tabs-h, 0px))" }}
                           className={cx(
-                            "sticky z-20 h-12 w-full flex flex-col items-center justify-center gap-0.5 border-b border-zinc-200 dark:border-zinc-700 relative transition-colors",
+                            "w-11 flex-shrink-0 h-12 flex flex-col items-center justify-center gap-0.5 relative transition-colors",
                             isSel
                               ? "bg-zinc-900 dark:bg-zinc-100"
                               : isSun ? "bg-red-50 dark:bg-red-950/20 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
@@ -863,10 +646,254 @@ export default function ShiftDayList({
                             "text-sm font-bold tabular-nums leading-none",
                             isSel    ? "text-white dark:text-zinc-900"
                             : isToday ? "text-blue-600 dark:text-blue-400"
-                            : isSun   ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300",
+                            : isSun   ? "text-red-500"
+                            : isSat   ? "text-blue-500"
+                                      : "text-zinc-700 dark:text-zinc-300",
                           )}>{dateNum}</span>
                         </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
 
+            {/* ── データテーブル（日付ボタンなし） ── */}
+            <div
+              ref={stripRef}
+              className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
+              style={{ scrollbarWidth: "none" }}
+              onScroll={(e) => syncHeader(e.currentTarget.scrollLeft)}
+            >
+              <div className="flex min-w-max bg-white dark:bg-zinc-900">
+
+                {/* ── 左固定列（パターン名） ── */}
+                <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
+                  {visibleShiftPatterns.map((pattern, gi, arr) => {
+                    const maxSlots  = patternMaxSlots.get(pattern.name) ?? 0;
+                    const isCollapsed = collapsedPatterns.has(pattern.name);
+                    const isLast    = gi === arr.length - 1;
+                    return (
+                      <div key={pattern.name} className={cx("flex flex-col", isLast ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
+                        <button
+                          type="button"
+                          onClick={() => togglePattern(pattern.name)}
+                          className="h-9 flex items-center gap-1 px-2 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-700/60 hover:bg-zinc-100 dark:hover:bg-zinc-700/60 transition-colors"
+                        >
+                          <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate flex-1 text-left leading-tight" title={pattern.name}>
+                            {pattern.name}
+                          </span>
+                          <svg
+                            className={cx("w-2.5 h-2.5 text-zinc-400 flex-shrink-0 transition-transform", isCollapsed ? "-rotate-90" : "")}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {!isCollapsed && Array.from({ length: maxSlots }).map((_, i) => (
+                          <div key={i} className={cx("h-8", i < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "")} />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ── 日付列（日付ボタンなし） ── */}
+                <div className="flex pr-4">
+                  {allDates.map(d => {
+                    const isSel     = d === selectedDate;
+                    const dayOfWeek = new Date(d).getUTCDay();
+                    const isSun     = dayOfWeek === 0;
+                    const isSat     = dayOfWeek === 6;
+
+                    return (
+                      <div
+                        key={d}
+                        className={cx(
+                          "w-11 flex-shrink-0 flex flex-col",
+                          isSel
+                            ? "bg-blue-50/80 dark:bg-blue-950/20"
+                            : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
+                        )}
+                      >
+                        {visibleShiftPatterns.map((pattern, gi, arr) => {
+                          const maxSlots    = patternMaxSlots.get(pattern.name) ?? 0;
+                          const isCollapsed = collapsedPatterns.has(pattern.name);
+                          const staffOnDay  = visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name);
+                          const req         = getReqForDate(pattern, d);
+                          const actual      = staffOnDay.length;
+                          const ok          = req === 0 || actual >= req;
+                          const isLastGrp   = gi === arr.length - 1;
+
+                          return (
+                            <div key={pattern.name} className={cx("flex flex-col", isLastGrp ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
+                              {/* 充足数行 (h-9) */}
+                              <div className="h-9 flex items-center justify-center border-b border-zinc-100 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-800/30">
+                                {req > 0 ? (
+                                  <div className="flex flex-col items-center gap-px">
+                                    <span className={cx(
+                                      "tabular-nums text-[11px] font-bold leading-none",
+                                      ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400",
+                                    )}>{actual}</span>
+                                    <span className="text-[8px] text-zinc-300 dark:text-zinc-600 leading-none tabular-nums">/{req}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                                )}
+                              </div>
+                              {/* スタッフ行 (h-8 each) */}
+                              {!isCollapsed && Array.from({ length: maxSlots }).map((_, slotIdx) => {
+                                const member      = staffOnDay[slotIdx];
+                                const isAddable   = slotIdx < req;
+                                const isExtraSlot = !member && slotIdx === staffOnDay.length;
+                                const canAdd      = (isAddable || isExtraSlot) && !member;
+                                return (
+                                  <button
+                                    key={slotIdx}
+                                    type="button"
+                                    disabled={isPending || (!member && !canAdd)}
+                                    onClick={() => member ? openOccupied(member, d) : canAdd ? openEmpty(d, pattern.name) : undefined}
+                                    className={cx(
+                                      "h-8 flex items-center justify-center w-full transition-colors",
+                                      slotIdx < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
+                                      member || canAdd
+                                        ? isSel
+                                          ? "hover:bg-blue-100/60 dark:hover:bg-blue-900/30 cursor-pointer"
+                                          : "hover:bg-zinc-100 dark:hover:bg-zinc-800/60 cursor-pointer"
+                                        : "pointer-events-none",
+                                    )}
+                                  >
+                                    {member ? (
+                                      <span className={cx(
+                                        "text-[10px] font-semibold leading-none truncate px-0.5",
+                                        isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
+                                      )}>{shortName(member.name)}</span>
+                                    ) : canAdd ? (
+                                      <span className={cx(
+                                        "text-base font-thin leading-none",
+                                        isSel ? "text-blue-300/70 dark:text-blue-600/70" : "text-zinc-200 dark:text-zinc-700",
+                                      )}>+</span>
+                                    ) : isAddable ? (
+                                      <span className="w-4 h-px bg-zinc-100 dark:bg-zinc-800 rounded-full" />
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── 公休 / 希望休タブ: 月次テーブル ── */}
+        {(tabKey === "kyukyu" || tabKey === "kiboshu") && (() => {
+          const targetName = tabKey === "kyukyu" ? "公休" : "希望休";
+          const maxActual  = allDates.length > 0
+            ? Math.max(1, ...allDates.map(d => visibleMembers.filter(m => getShift(m.id, d)?.shift_name === targetName).length))
+            : 1;
+          return (
+            <>
+              {/* ── 日付ヘッダーストリップ（sticky） ── */}
+              <div
+                className="sticky z-20 flex bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-700"
+                style={{ top: "var(--page-header-h, 0px)" }}
+              >
+                <div className="sticky left-0 z-30 w-20 flex-shrink-0 h-12 px-2 flex items-end pb-2 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
+                  <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
+                </div>
+                <div className="overflow-hidden flex-1">
+                  <div ref={headerInnerRef} className="flex">
+                    <div className="flex pr-4">
+                      {allDates.map(d => {
+                        const dt        = new Date(d);
+                        const dateNum   = dt.getUTCDate();
+                        const dayOfWeek = dt.getUTCDay();
+                        const dow       = WEEKDAY_JP[dayOfWeek];
+                        const isSel     = d === selectedDate;
+                        const isToday   = d === todayStr;
+                        const isSun     = dayOfWeek === 0;
+                        const isSat     = dayOfWeek === 6;
+                        return (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => onDateChange(d)}
+                            className={cx(
+                              "w-11 flex-shrink-0 h-12 flex flex-col items-center justify-center gap-0.5 relative transition-colors",
+                              isSel
+                                ? "bg-zinc-900 dark:bg-zinc-100"
+                                : isSun ? "bg-red-50 dark:bg-red-950/20 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                                : isSat ? "bg-blue-50/40 dark:bg-blue-950/10 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                                : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
+                            )}
+                          >
+                            {isToday && !isSel && (
+                              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-500" />
+                            )}
+                            <span className={cx(
+                              "text-[9px] font-medium leading-none",
+                              isSel  ? "text-zinc-500 dark:text-zinc-500"
+                              : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500",
+                            )}>{dow}</span>
+                            <span className={cx(
+                              "text-sm font-bold tabular-nums leading-none",
+                              isSel    ? "text-white dark:text-zinc-900"
+                              : isToday ? "text-blue-600 dark:text-blue-400"
+                              : isSun   ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300",
+                            )}>{dateNum}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── データテーブル ── */}
+              <div
+                ref={stripRef}
+                className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
+                style={{ scrollbarWidth: "none" }}
+                onScroll={(e) => syncHeader(e.currentTarget.scrollLeft)}
+              >
+              <div className="flex min-w-max bg-white dark:bg-zinc-900">
+
+                {/* 左固定列（日付ヘッダーなし） */}
+                <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
+                  <div className="h-9 px-2 flex items-center bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-700/60">
+                    <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300">{targetName}</span>
+                  </div>
+                  {Array.from({ length: maxActual }).map((_, i) => (
+                    <div key={i} className={cx("h-8", i < maxActual - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "")} />
+                  ))}
+                </div>
+
+                {/* 日付列（日付ボタンなし） */}
+                <div className="flex pr-4">
+                  {allDates.map(d => {
+                    const isSel      = d === selectedDate;
+                    const dayOfWeek  = new Date(d).getUTCDay();
+                    const isSun      = dayOfWeek === 0;
+                    const isSat      = dayOfWeek === 6;
+                    const staffOnDay = visibleMembers.filter(m => getShift(m.id, d)?.shift_name === targetName);
+
+                    return (
+                      <div
+                        key={d}
+                        className={cx(
+                          "w-11 flex-shrink-0 flex flex-col",
+                          isSel
+                            ? "bg-blue-50/80 dark:bg-blue-950/20"
+                            : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
+                        )}
+                      >
                         {/* 件数行 */}
                         <div className="h-9 flex items-center justify-center border-b border-zinc-100 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-800/30">
                           <span className={cx(
@@ -921,7 +948,8 @@ export default function ShiftDayList({
                 </div>
 
               </div>
-            </div>
+              </div>
+            </>
           );
         })()}
       </div>
