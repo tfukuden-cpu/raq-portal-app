@@ -253,7 +253,7 @@ export default async function ManageShiftsPage(props: {
       </div>
 
       {/* ── スクロール領域 ── */}
-      <div className="flex-1 overflow-y-auto px-4 pb-20 space-y-4 pt-3">
+      <div className="flex-1 overflow-y-auto pb-20 pt-3">
         <ShiftManageClient
           projectId={selectedProjectId}
           allDates={allDates}

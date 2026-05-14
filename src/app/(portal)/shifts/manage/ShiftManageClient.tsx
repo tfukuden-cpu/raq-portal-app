@@ -68,7 +68,9 @@ export default function ShiftManageClient({
 
   return (
     <>
-      <ShiftRequestsAdmin requests={shiftRequests} />
+      <div className="px-4">
+        <ShiftRequestsAdmin requests={shiftRequests} />
+      </div>
       <ShiftDayList
         allDates={allDates}
         shifts={shifts}

@@ -495,15 +495,10 @@ export default function ShiftDayList({
   };
 
   // ── タブ ─────────────────────────────────────────────────────
-  const shukkinCount = shiftPatterns.reduce(
-    (s, p) => s + visibleMembers.filter((m) => getShift(m.id, selectedDate)?.shift_name === p.name).length, 0
-  );
-  const tabs: { key: TabKey; label: string; badge: number }[] = [
-    { key: "shukkin", label: "出勤", badge: shukkinCount },
-    { key: "kyukyu",  label: "公休",
-      badge: visibleMembers.filter((m) => getShift(m.id, selectedDate)?.shift_name === "公休").length },
-    { key: "kiboshu", label: "希望休",
-      badge: visibleMembers.filter((m) => getShift(m.id, selectedDate)?.shift_name === "希望休").length },
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: "shukkin", label: "出勤" },
+    { key: "kyukyu",  label: "公休" },
+    { key: "kiboshu", label: "希望休" },
   ];
 
   // ── スワップ用：同日の他メンバー情報 ─────────────────────────
@@ -516,7 +511,7 @@ export default function ShiftDayList({
   return (
     <>
       {/* ━━ sticky ヘッダー ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-zinc-950 -mx-4 px-4 pt-3 pb-0 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="sticky top-0 z-10 bg-white dark:bg-zinc-950 px-4 pt-3 pb-0 border-b border-zinc-100 dark:border-zinc-800">
 
         {/* ① セクション + タブ（同一行） */}
         <div className="flex items-center justify-between mb-3 gap-2">
@@ -529,19 +524,13 @@ export default function ShiftDayList({
                   key={t.key} type="button"
                   onClick={() => setTabKey(t.key)}
                   className={cx(
-                    "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
+                    "px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
                     isSel
                       ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
                       : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300",
                   )}
                 >
                   {t.label}
-                  <span className={cx(
-                    "tabular-nums text-[10px] font-bold",
-                    isSel ? "text-white/60 dark:text-zinc-900/60" : "text-zinc-400 dark:text-zinc-500",
-                  )}>
-                    {t.badge}
-                  </span>
                 </button>
               );
             })}
@@ -599,10 +588,10 @@ export default function ShiftDayList({
         {tabKey === "shukkin" && (
           <div
             ref={stripRef}
-            className="overflow-x-auto -mx-4 border-b border-zinc-100 dark:border-zinc-800"
+            className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
             style={{ scrollbarWidth: "none" }}
           >
-            <div className="flex min-w-max bg-white dark:bg-zinc-900">
+            <div className="flex min-w-max bg-white dark:bg-zinc-900 px-4">
 
               {/* ── 左固定列（パターン名） ── */}
               <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
@@ -784,10 +773,10 @@ export default function ShiftDayList({
           return (
             <div
               ref={stripRef}
-              className="overflow-x-auto -mx-4 border-b border-zinc-100 dark:border-zinc-800"
+              className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
               style={{ scrollbarWidth: "none" }}
             >
-              <div className="flex min-w-max bg-white dark:bg-zinc-900">
+              <div className="flex min-w-max bg-white dark:bg-zinc-900 px-4">
 
                 {/* 左固定列 */}
                 <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
