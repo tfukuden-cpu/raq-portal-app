@@ -8,7 +8,7 @@ import { logoutAction } from "@/app/login/actions";
 import type { IconKey } from "@/components/icons";
 
 export type NavItem = { href: string; icon: IconKey; label: string };
-export type NavSection = { title?: string; items: NavItem[] };
+export type NavSection = { title?: string; mobileLabel?: string; icon?: IconKey; items: NavItem[] };
 
 const STAFF_ITEMS: NavItem[] = [
   { href: "/dashboard", icon: "Home", label: "ホーム" },
@@ -112,11 +112,14 @@ export default async function PortalLayout({
   let sections: NavSection[];
   if (viewMode === "ops") {
     sections = [
-      { items: EXECUTIVE_ITEMS },
-      { title: "案件管理", items: PROJECT_ADMIN_ITEMS },
+      { mobileLabel: "運用者", icon: "Shield",           items: EXECUTIVE_ITEMS },
+      { title: "案件管理",     icon: "CalendarSettings", items: PROJECT_ADMIN_ITEMS },
     ];
   } else if (viewMode === "admin") {
-    sections = [{ items: STAFF_ITEMS }, { title: "管理", items: PROJECT_ADMIN_ITEMS }];
+    sections = [
+      { mobileLabel: "メイン", icon: "Home",     items: STAFF_ITEMS },
+      { title: "管理",         icon: "Settings", items: PROJECT_ADMIN_ITEMS },
+    ];
   } else {
     sections = [{ items: STAFF_ITEMS }];
   }
