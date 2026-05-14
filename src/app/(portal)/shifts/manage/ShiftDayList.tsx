@@ -289,6 +289,18 @@ export default function ShiftDayList({
   const touchStartX = useRef<number | null>(null);
   // 月次ストリップの横スクロールコンテナ
   const stripRef = useRef<HTMLDivElement>(null);
+  // タブ/フィルター行の高さを CSS 変数に反映
+  const tabsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!tabsRef.current) return;
+    const el = tabsRef.current;
+    const set = () =>
+      document.documentElement.style.setProperty("--shift-tabs-h", `${el.offsetHeight}px`);
+    set();
+    const obs = new ResizeObserver(set);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   // 選択日が変わったらストリップを中央にスクロール
   useEffect(() => {
@@ -511,7 +523,11 @@ export default function ShiftDayList({
   return (
     <>
       {/* ━━ sticky ヘッダー ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="bg-white dark:bg-zinc-950 px-4 pt-2 pb-0 border-b border-zinc-100 dark:border-zinc-800">
+      <div
+        ref={tabsRef}
+        className="sticky z-20 bg-white dark:bg-zinc-950 px-4 pt-2 pb-0 border-b border-zinc-100 dark:border-zinc-800"
+        style={{ top: "calc(var(--page-header-h, 0px) + var(--shift-tabs-h, 0px))" }}
+      >
 
         {/* ① セクション + タブ（同一行） */}
         <div className="flex items-center justify-between mb-3 gap-2">
@@ -597,7 +613,7 @@ export default function ShiftDayList({
               <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
                 {/* 日付ヘッダー行（縦スクロール固定） */}
                 <div className="sticky z-30 h-12 px-2 flex items-end pb-2 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
-                  style={{ top: "var(--page-header-h, 0px)" }}>
+                  style={{ top: "calc(var(--page-header-h, 0px) + var(--shift-tabs-h, 0px))" }}>
                   <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
                 </div>
 
@@ -664,7 +680,7 @@ export default function ShiftDayList({
                       <button
                         type="button"
                         onClick={() => onDateChange(d)}
-                        style={{ top: "var(--page-header-h, 0px)" }}
+                        style={{ top: "calc(var(--page-header-h, 0px) + var(--shift-tabs-h, 0px))" }}
                         className={cx(
                           "sticky z-20 h-12 w-full flex flex-col items-center justify-center gap-0.5 border-b border-zinc-200 dark:border-zinc-700 relative transition-colors",
                           isSel
@@ -787,7 +803,7 @@ export default function ShiftDayList({
                 {/* 左固定列 */}
                 <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
                   <div className="sticky z-30 h-12 px-2 flex items-end pb-2 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
-                    style={{ top: "var(--page-header-h, 0px)" }}>
+                    style={{ top: "calc(var(--page-header-h, 0px) + var(--shift-tabs-h, 0px))" }}>
                     <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
                   </div>
                   <div className="h-9 px-2 flex items-center bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-700/60">
@@ -825,7 +841,7 @@ export default function ShiftDayList({
                         <button
                           type="button"
                           onClick={() => onDateChange(d)}
-                          style={{ top: "var(--page-header-h, 0px)" }}
+                          style={{ top: "calc(var(--page-header-h, 0px) + var(--shift-tabs-h, 0px))" }}
                           className={cx(
                             "sticky z-20 h-12 w-full flex flex-col items-center justify-center gap-0.5 border-b border-zinc-200 dark:border-zinc-700 relative transition-colors",
                             isSel
