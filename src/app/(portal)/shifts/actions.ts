@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
 import { readSheet, writeSheet, patchSheetCell, appendSheetRow, extractSpreadsheetId, isGSheetsConfigured } from "@/lib/gsheets";
+import { sendEventNotify } from "@/lib/notify";
 
 export type ShiftResult = {
   success: boolean;
@@ -214,7 +215,19 @@ export async function upsertShiftAction(
     });
     // 変更ログ追記（スプレッドシート）
     await appendChangeLogToSheet(projectId, changedByName, "update", staffId, staffName, shiftDate, before ?? null, payload);
+    // LINE通知（管理者が他スタッフのシフトを変更した場合のみ）
+    if (staffId !== myStaffId) {
+      sendEventNotify(projectId, "shift_changed", {
+        名前:   staffName,
+        日付:   shiftDate.slice(5).replace("-", "/"),
+        変更前: before?.shift_name ?? "（なし）",
+        変更後: shiftName ?? "（なし）",
+      }, staffId).catch(() => {});
+    }
   } else {
+    // upsert前に既存シフトを確認（変更前情報として使う）
+    const { data: existing } = await adminDb
+      .from("shifts").select("shift_name").eq("project_id", projectId).eq("staff_id", staffId).eq("shift_date", shiftDate).maybeSingle();
     const { data: upserted, error } = await adminDb.from("shifts").upsert(payload, {
       onConflict: "project_id,staff_id,shift_date",
     }).select("id").maybeSingle();
@@ -228,6 +241,15 @@ export async function upsertShiftAction(
     });
     // 変更ログ追記（スプレッドシート）
     await appendChangeLogToSheet(projectId, changedByName, "create", staffId, staffName, shiftDate, null, payload);
+    // LINE通知（管理者が他スタッフのシフトを変更した場合のみ）
+    if (staffId !== myStaffId) {
+      sendEventNotify(projectId, "shift_changed", {
+        名前:   staffName,
+        日付:   shiftDate.slice(5).replace("-", "/"),
+        変更前: existing?.shift_name ?? "（なし）",
+        変更後: shiftName ?? "（なし）",
+      }, staffId).catch(() => {});
+    }
   }
 
   // スプレッドシートの該当セルを更新（ベストエフォート）
@@ -277,7 +299,7 @@ export async function deleteShiftAction(
   const { error } = await admin.from("shifts").delete().eq("id", id);
   if (error) return { success: false, message: "削除失敗：" + error.message };
 
-  // ── スプレッドシートへ反映（ベストエフォート） ──
+  // ── スプレッドシートへ反映＋LINE通知（ベストエフォート） ──
   if (before && effectiveProjectId) {
     const [staffName, changedByName] = await Promise.all([
       getStaffDisplayName(before.staff_id),
@@ -287,6 +309,15 @@ export async function deleteShiftAction(
       syncShiftCellToSheet(effectiveProjectId, before.staff_id, before.shift_date, ""),
       appendChangeLogToSheet(effectiveProjectId, changedByName, "delete", before.staff_id, staffName, before.shift_date, before, null),
     ]);
+    // LINE通知（管理者が他スタッフのシフトを削除した場合のみ）
+    if (before.staff_id !== myStaffId) {
+      sendEventNotify(effectiveProjectId, "shift_changed", {
+        名前:   staffName,
+        日付:   (before.shift_date as string).slice(5).replace("-", "/"),
+        変更前: (before.shift_name as string | null) ?? "（なし）",
+        変更後: "（削除）",
+      }, before.staff_id).catch(() => {});
+    }
   }
 
   revalidatePath("/shifts");
