@@ -365,7 +365,7 @@ export default function ShiftDayList({
     };
   };
 
-  // 各パターンの最大スロット数（月全体: max(必要数, 実績)）
+  // 各パターンの最大スロット数（月全体: max(必要数, 実績) + 1 余剰枠）
   const patternMaxSlots = new Map<string, number>();
   for (const pattern of shiftPatterns) {
     const maxReq = allDates.length > 0
@@ -376,7 +376,8 @@ export default function ShiftDayList({
           visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length
         ))
       : 0;
-    patternMaxSlots.set(pattern.name, Math.max(maxReq, maxActual));
+    // +1 で充足後も余剰配置できる空きスロットを常に1つ確保
+    patternMaxSlots.set(pattern.name, Math.max(maxReq, maxActual) + 1);
   }
   const visibleShiftPatterns = shiftPatterns.filter(p => (patternMaxSlots.get(p.name) ?? 0) > 0);
 
@@ -520,7 +521,7 @@ export default function ShiftDayList({
         {/* ① セクション + タブ（同一行） */}
         <div className="flex items-center justify-between mb-3 gap-2">
           {/* タブ */}
-          <div className="flex gap-0.5">
+          <div className="flex items-center gap-0.5">
             {tabs.map((t) => {
               const isSel = tabKey === t.key;
               return (
@@ -544,6 +545,22 @@ export default function ShiftDayList({
                 </button>
               );
             })}
+            {/* 全折りたたみ / 展開（出勤タブのみ） */}
+            {tabKey === "shukkin" && visibleShiftPatterns.length > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (collapsedPatterns.size < visibleShiftPatterns.length) {
+                    setCollapsedPatterns(new Set(visibleShiftPatterns.map(p => p.name)));
+                  } else {
+                    setCollapsedPatterns(new Set());
+                  }
+                }}
+                className="ml-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 whitespace-nowrap transition-colors"
+              >
+                {collapsedPatterns.size < visibleShiftPatterns.length ? "全畳" : "全開"}
+              </button>
+            )}
           </div>
 
           {/* セクションフィルター（セクションがある案件のみ） */}
@@ -709,9 +726,11 @@ export default function ShiftDayList({
 
                             {/* スタッフ行 (h-8 each) */}
                             {!isCollapsed && Array.from({ length: maxSlots }).map((_, slotIdx) => {
-                              const member    = staffOnDay[slotIdx];
-                              const isAddable = slotIdx < req;
-                              const canAdd    = isAddable && !member;
+                              const member      = staffOnDay[slotIdx];
+                              const isAddable   = slotIdx < req;
+                              // 必要数超えの余剰配置：実績の直後スロットもクリック可
+                              const isExtraSlot = !member && slotIdx === staffOnDay.length;
+                              const canAdd      = (isAddable || isExtraSlot) && !member;
                               return (
                                 <button
                                   key={slotIdx}
