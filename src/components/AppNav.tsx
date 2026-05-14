@@ -70,7 +70,7 @@ export default function AppNav({
           </button>
           {!isCol && (
             <span className="text-[13px] font-semibold text-zinc-200 tracking-tight select-none">
-              Raq Portal
+              RaqWorks
             </span>
           )}
         </div>
