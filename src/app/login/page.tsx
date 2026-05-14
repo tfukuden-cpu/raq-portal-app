@@ -37,19 +37,18 @@ export default function LoginPage() {
         >
           <div>
             <label
-              htmlFor="staffId"
+              htmlFor="name"
               className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5"
             >
-              社員ID
+              氏名
             </label>
             <input
-              id="staffId"
-              name="staffId"
+              id="name"
+              name="name"
               type="text"
               required
-              autoComplete="username"
-              autoCapitalize="characters"
-              placeholder="例：S001"
+              autoComplete="name"
+              placeholder="例：田中太郎"
               className="w-full px-3 py-2.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
