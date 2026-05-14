@@ -199,10 +199,10 @@ export default async function ManageShiftsPage(props: {
     : `/shifts/manage?year=`;
 
   return (
-    <main className="h-dvh flex flex-col bg-white dark:bg-zinc-950 max-w-3xl mx-auto">
+    <main className="bg-white dark:bg-zinc-950 max-w-3xl mx-auto pb-24">
 
-      {/* ── 固定ヘッダー（スクロールしない） ── */}
-      <div className="flex-shrink-0 px-4 pt-6 space-y-3">
+      {/* ── sticky ページヘッダー ── */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
         <div className="flex items-end justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -233,13 +233,13 @@ export default async function ManageShiftsPage(props: {
 
         {/* 案件タブ（グローバル管理者） */}
         {isGlobalAdmin && allProjects.length > 1 && (
-          <div className="flex overflow-x-auto border-b border-zinc-100 dark:border-zinc-800 -mx-4 px-4">
+          <div className="flex overflow-x-auto -mx-4 px-4" style={{ scrollbarWidth: "none" }}>
             {allProjects.map((p) => (
               <a
                 key={p.id}
                 href={`/shifts/manage?project=${p.id}&year=${targetYear}&month=${targetMonth}`}
                 className={[
-                  "px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px whitespace-nowrap transition-colors flex-shrink-0",
+                  "px-4 py-2 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex-shrink-0",
                   p.id === selectedProjectId
                     ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
                     : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
@@ -252,8 +252,8 @@ export default async function ManageShiftsPage(props: {
         )}
       </div>
 
-      {/* ── スクロール領域 ── */}
-      <div className="flex-1 overflow-y-auto pb-20 pt-3">
+      {/* ── コンテンツ ── */}
+      <div className="pt-3">
         <ShiftManageClient
           projectId={selectedProjectId}
           allDates={allDates}

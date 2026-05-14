@@ -511,7 +511,7 @@ export default function ShiftDayList({
   return (
     <>
       {/* ━━ sticky ヘッダー ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-zinc-950 px-4 pt-3 pb-0 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="bg-white dark:bg-zinc-950 px-4 pt-2 pb-0 border-b border-zinc-100 dark:border-zinc-800">
 
         {/* ① セクション + タブ（同一行） */}
         <div className="flex items-center justify-between mb-3 gap-2">
@@ -591,7 +591,7 @@ export default function ShiftDayList({
             className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
             style={{ scrollbarWidth: "none" }}
           >
-            <div className="flex min-w-max bg-white dark:bg-zinc-900 px-4">
+            <div className="flex min-w-max bg-white dark:bg-zinc-900">
 
               {/* ── 左固定列（パターン名） ── */}
               <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
@@ -776,7 +776,7 @@ export default function ShiftDayList({
               className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
               style={{ scrollbarWidth: "none" }}
             >
-              <div className="flex min-w-max bg-white dark:bg-zinc-900 px-4">
+              <div className="flex min-w-max bg-white dark:bg-zinc-900">
 
                 {/* 左固定列 */}
                 <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
