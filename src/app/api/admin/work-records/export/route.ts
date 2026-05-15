@@ -78,6 +78,8 @@ type PersonData = {
   lateCount: number;
   earlyLeaveCount: number;
   absentCount: number;
+  totalShiftDays: number;
+  complianceRate: number | null;
   records: DailyRecord[];
 };
 
@@ -196,17 +198,18 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
     { width: 8  },  // 遅刻数
     { width: 8  },  // 早退数
     { width: 8  },  // 欠勤数
+    { width: 10 },  // 順守率
   ];
 
   // タイトル
   const titleRow = ws.addRow([`稼働実績サマリー　${startDate} 〜 ${endDate}`]);
-  ws.mergeCells("A1:J1");
+  ws.mergeCells("A1:K1");
   titleRow.font = { bold: true, size: 13 };
   titleRow.getCell(1).fill = TOTAL_FILL;
   applyBorder(titleRow);
 
   // ヘッダー
-  const hdr = ws.addRow(["会社 / 氏名","アカウント番号","セクション","稼働日数","稼働時間","　内通常時間","　内残業時間","遅刻数","早退数","欠勤数"]);
+  const hdr = ws.addRow(["会社 / 氏名","アカウント番号","セクション","稼働日数","稼働時間","　内通常時間","　内残業時間","遅刻数","早退数","欠勤数","順守率"]);
   hdr.font = { bold: true };
   hdr.fill = HEADER_FILL;
   hdr.alignment = { horizontal: "center" };
@@ -222,6 +225,10 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
     const totEarly     = persons.reduce((s, p) => s + p.earlyLeaveCount, 0);
     const totAbsent    = persons.reduce((s, p) => s + p.absentCount, 0);
 
+    const totShiftDays = persons.reduce((s, p) => s + p.totalShiftDays, 0);
+    const totProblem   = persons.reduce((s, p) => s + p.lateCount + p.earlyLeaveCount + p.absentCount, 0);
+    const totRate      = totShiftDays > 0 ? Math.round((totShiftDays - totProblem) / totShiftDays * 100) : null;
+
     const compRow = ws.addRow([
       `【${company}】合計 (${persons.length}名)`,
       "", "",
@@ -232,6 +239,7 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
       `${totLate}回`,
       `${totEarly}回`,
       `${totAbsent}日`,
+      totRate != null ? `${totRate}%` : "",
     ]);
     compRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
     compRow.fill = COMPANY_FILL;
@@ -250,6 +258,7 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
         `${p.lateCount}回`,
         `${p.earlyLeaveCount}回`,
         `${p.absentCount}日`,
+        p.complianceRate != null ? `${p.complianceRate}%` : "",
       ]);
       pRow.fill = PERSON_FILL;
       applyBorder(pRow);
@@ -371,6 +380,7 @@ export async function GET(req: NextRequest) {
         accountNumber: m.accountNumber, company: m.company, section: m.section,
         workDays: 0, workMinutes: 0, normalMinutes: 0, overtimeMinutes: 0,
         lateCount: 0, earlyLeaveCount: 0, absentCount: 0,
+        totalShiftDays: 0, complianceRate: null,
         records: [],
       });
     }
@@ -419,6 +429,7 @@ export async function GET(req: NextRequest) {
     };
 
     person.records.push(rec);
+    person.totalShiftDays++;
     if (!isAbsent && punch?.clockIn) person.workDays++;
     if (workMinutes     != null) {
       const ot     = overtimeMinutes ?? 0;
@@ -429,6 +440,14 @@ export async function GET(req: NextRequest) {
     if (isLate)       person.lateCount++;
     if (isEarlyLeave) person.earlyLeaveCount++;
     if (isAbsent)     person.absentCount++;
+  }
+
+  // 順守率計算
+  for (const p of personMap.values()) {
+    const problemDays = p.lateCount + p.earlyLeaveCount + p.absentCount;
+    p.complianceRate = p.totalShiftDays > 0
+      ? Math.round((p.totalShiftDays - problemDays) / p.totalShiftDays * 100)
+      : null;
   }
 
   // Excel生成
