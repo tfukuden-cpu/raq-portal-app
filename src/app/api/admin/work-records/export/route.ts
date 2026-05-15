@@ -73,6 +73,7 @@ type PersonData = {
   // 集計
   workDays: number;
   workMinutes: number;
+  normalMinutes: number;
   overtimeMinutes: number;
   lateCount: number;
   earlyLeaveCount: number;
@@ -111,7 +112,8 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
     { width: 8  },  // 出勤打刻
     { width: 8  },  // 退勤打刻
     { width: 10 },  // 稼働時間
-    { width: 10 },  // 残業時間
+    { width: 10 },  // 　内通常時間
+    { width: 10 },  // 　内残業時間
     { width: 6  },  // 遅刻
     { width: 6  },  // 早退
     { width: 6  },  // 欠勤
@@ -124,15 +126,16 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
     person.company ?? "", person.section ?? "",
   ]);
   infoRow.font = { bold: true, size: 12 };
-  ws.mergeCells(`A1:L1`);
+  ws.mergeCells(`A1:M1`);
   infoRow.getCell(1).fill = TOTAL_FILL;
   applyBorder(infoRow);
 
   // Row2: 個人合計
-  const summaryLabels = ["稼働日数","稼働時間","残業時間","遅刻数","早退数","欠勤数"];
+  const summaryLabels = ["稼働日数","稼働時間","　内通常時間","　内残業時間","遅刻数","早退数","欠勤数"];
   const summaryVals   = [
     `${person.workDays}日`,
     fmtMin(person.workMinutes),
+    fmtMin(person.normalMinutes),
     fmtMin(person.overtimeMinutes),
     `${person.lateCount}回`,
     `${person.earlyLeaveCount}回`,
@@ -144,7 +147,7 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
   applyBorder(summaryRow);
 
   // Row3: ヘッダー
-  const hdr = ws.addRow(["日付","シフト名","出勤予定","退勤予定","出勤打刻","退勤打刻","稼働時間","残業時間","遅刻","早退","欠勤","備考"]);
+  const hdr = ws.addRow(["日付","シフト名","出勤予定","退勤予定","出勤打刻","退勤打刻","稼働時間","　内通常時間","　内残業時間","遅刻","早退","欠勤","備考"]);
   hdr.font = { bold: true };
   hdr.fill = HEADER_FILL;
   hdr.alignment = { horizontal: "center" };
@@ -153,6 +156,9 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
   // 日別データ
   for (const r of person.records) {
     const note = [r.absenceReason, r.lateReason].filter(Boolean).join(" / ");
+    const normalMin = r.workMinutes != null && r.overtimeMinutes != null
+      ? r.workMinutes - r.overtimeMinutes
+      : r.workMinutes;
     const dataRow = ws.addRow([
       r.date,
       r.shiftName,
@@ -161,6 +167,7 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
       r.clockIn  ? toJSTTime(r.clockIn)  : "",
       r.clockOut ? toJSTTime(r.clockOut) : "",
       r.workMinutes     != null ? fmtMin(r.workMinutes)     : "",
+      normalMin         != null ? fmtMin(normalMin)          : "",
       r.overtimeMinutes != null ? fmtMin(r.overtimeMinutes) : "",
       r.isLate      ? "●" : "",
       r.isEarlyLeave? "●" : "",
@@ -169,9 +176,9 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
     ]);
     if (r.isAbsent)    dataRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F0" } };
     else if (r.isLate) dataRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF9F0" } };
-    dataRow.getCell(9).alignment  = { horizontal: "center" };
     dataRow.getCell(10).alignment = { horizontal: "center" };
     dataRow.getCell(11).alignment = { horizontal: "center" };
+    dataRow.getCell(12).alignment = { horizontal: "center" };
     applyBorder(dataRow);
   }
 }
@@ -186,7 +193,8 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
     { width: 12 },  // セクション
     { width: 10 },  // 稼働日数
     { width: 10 },  // 稼働時間
-    { width: 10 },  // 残業時間
+    { width: 10 },  // 　内通常時間
+    { width: 10 },  // 　内残業時間
     { width: 8  },  // 遅刻数
     { width: 8  },  // 早退数
     { width: 8  },  // 欠勤数
@@ -194,13 +202,13 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
 
   // タイトル
   const titleRow = ws.addRow([`稼働実績サマリー　${startDate} 〜 ${endDate}`]);
-  ws.mergeCells("A1:I1");
+  ws.mergeCells("A1:J1");
   titleRow.font = { bold: true, size: 13 };
   titleRow.getCell(1).fill = TOTAL_FILL;
   applyBorder(titleRow);
 
   // ヘッダー
-  const hdr = ws.addRow(["会社 / 氏名","アカウント番号","セクション","稼働日数","稼働時間","残業時間","遅刻数","早退数","欠勤数"]);
+  const hdr = ws.addRow(["会社 / 氏名","アカウント番号","セクション","稼働日数","稼働時間","　内通常時間","　内残業時間","遅刻数","早退数","欠勤数"]);
   hdr.font = { bold: true };
   hdr.fill = HEADER_FILL;
   hdr.alignment = { horizontal: "center" };
@@ -210,6 +218,7 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
     // 会社合計行
     const totWorkDays  = persons.reduce((s, p) => s + p.workDays, 0);
     const totWorkMin   = persons.reduce((s, p) => s + p.workMinutes, 0);
+    const totNormalMin = persons.reduce((s, p) => s + p.normalMinutes, 0);
     const totOtMin     = persons.reduce((s, p) => s + p.overtimeMinutes, 0);
     const totLate      = persons.reduce((s, p) => s + p.lateCount, 0);
     const totEarly     = persons.reduce((s, p) => s + p.earlyLeaveCount, 0);
@@ -220,6 +229,7 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
       "", "",
       `${totWorkDays}日`,
       fmtMin(totWorkMin),
+      fmtMin(totNormalMin),
       fmtMin(totOtMin),
       `${totLate}回`,
       `${totEarly}回`,
@@ -237,6 +247,7 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
         p.section       ?? "",
         `${p.workDays}日`,
         fmtMin(p.workMinutes),
+        fmtMin(p.normalMinutes),
         fmtMin(p.overtimeMinutes),
         `${p.lateCount}回`,
         `${p.earlyLeaveCount}回`,
@@ -349,7 +360,7 @@ export async function GET(req: NextRequest) {
       personMap.set(shift.staff_id, {
         staffId: shift.staff_id, name: m.name,
         accountNumber: m.accountNumber, company: m.company, section: m.section,
-        workDays: 0, workMinutes: 0, overtimeMinutes: 0,
+        workDays: 0, workMinutes: 0, normalMinutes: 0, overtimeMinutes: 0,
         lateCount: 0, earlyLeaveCount: 0, absentCount: 0,
         records: [],
       });
@@ -395,11 +406,15 @@ export async function GET(req: NextRequest) {
 
     person.records.push(rec);
     if (!isAbsent && punch?.clockIn) person.workDays++;
-    if (workMinutes     != null)     person.workMinutes     += workMinutes;
-    if (overtimeMinutes != null)     person.overtimeMinutes += overtimeMinutes;
-    if (isLate)      person.lateCount++;
+    if (workMinutes     != null) {
+      const ot     = overtimeMinutes ?? 0;
+      person.workMinutes     += workMinutes;
+      person.normalMinutes   += Math.max(0, workMinutes - ot);
+      person.overtimeMinutes += ot;
+    }
+    if (isLate)       person.lateCount++;
     if (isEarlyLeave) person.earlyLeaveCount++;
-    if (isAbsent)    person.absentCount++;
+    if (isAbsent)     person.absentCount++;
   }
 
   // Excel生成
