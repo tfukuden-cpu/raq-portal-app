@@ -121,37 +121,35 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
   ];
 
   // Row1: 個人情報
-  const infoRow = ws.addRow([
-    `${person.accountNumber ?? ""} ${person.name}`,
-    person.company ?? "", person.section ?? "",
-  ]);
+  const label = [person.accountNumber, person.name, person.company, person.section].filter(Boolean).join("　");
+  const infoRow = ws.addRow([label]);
   infoRow.font = { bold: true, size: 12 };
   ws.mergeCells(`A1:M1`);
   infoRow.getCell(1).fill = TOTAL_FILL;
   applyBorder(infoRow);
 
-  // Row2: 個人合計
-  const summaryLabels = ["稼働日数","稼働時間","　内通常時間","　内残業時間","遅刻数","早退数","欠勤数"];
-  const summaryVals   = [
-    `${person.workDays}日`,
+  // Row2: ヘッダー
+  const hdr = ws.addRow(["日付","シフト名","出勤予定","退勤予定","出勤打刻","退勤打刻","稼働時間","　内通常時間","　内残業時間","遅刻","早退","欠勤","備考"]);
+  hdr.font = { bold: true };
+  hdr.fill = HEADER_FILL;
+  hdr.alignment = { horizontal: "center" };
+  applyBorder(hdr);
+
+  // Row3: 合計行（ヘッダーと列を揃える）
+  const totalRow = ws.addRow([
+    `合計 (稼働${person.workDays}日)`,
+    "", "", "", "", "",
     fmtMin(person.workMinutes),
     fmtMin(person.normalMinutes),
     fmtMin(person.overtimeMinutes),
     `${person.lateCount}回`,
     `${person.earlyLeaveCount}回`,
     `${person.absentCount}日`,
-  ];
-  const summaryRow = ws.addRow([...summaryLabels, ...summaryVals]);
-  summaryRow.font = { bold: true };
-  summaryRow.fill = TOTAL_FILL;
-  applyBorder(summaryRow);
-
-  // Row3: ヘッダー
-  const hdr = ws.addRow(["日付","シフト名","出勤予定","退勤予定","出勤打刻","退勤打刻","稼働時間","　内通常時間","　内残業時間","遅刻","早退","欠勤","備考"]);
-  hdr.font = { bold: true };
-  hdr.fill = HEADER_FILL;
-  hdr.alignment = { horizontal: "center" };
-  applyBorder(hdr);
+    "",
+  ]);
+  totalRow.font = { bold: true };
+  totalRow.fill = TOTAL_FILL;
+  applyBorder(totalRow);
 
   // 日別データ
   for (const r of person.records) {
@@ -319,6 +317,7 @@ export async function GET(req: NextRequest) {
     { data: punches },
     { data: absences },
     { data: lates },
+    { data: shiftPatterns },
   ] = await Promise.all([
     shiftsQ,
     admin.from("punch_logs")
@@ -334,7 +333,17 @@ export async function GET(req: NextRequest) {
       .select("staff_id, late_date, reason")
       .eq("project_id", projectId)
       .gte("late_date", startDate).lte("late_date", endDate),
+    admin.from("shift_patterns")
+      .select("name, start_time, end_time")
+      .eq("project_id", projectId),
   ]);
+
+  // シフトパターンから時刻を補完するマップ (shift_name → {start, end})
+  const patternTimeMap = new Map<string, { start: string; end: string }>(
+    (shiftPatterns ?? [])
+      .filter(p => p.start_time && p.end_time)
+      .map(p => [p.name as string, { start: p.start_time as string, end: p.end_time as string }])
+  );
 
   // 打刻マップ
   const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null }>();
@@ -371,6 +380,11 @@ export async function GET(req: NextRequest) {
     const isAbsent = absenceMap.has(key);
     const isLate   = lateMap.has(key);
 
+    // shift_start/shift_end が未設定の場合はshift_patternsから補完
+    const pattern = patternTimeMap.get(shift.shift_name ?? "");
+    const resolvedStart = shift.shift_start ?? pattern?.start ?? null;
+    const resolvedEnd   = shift.shift_end   ?? pattern?.end   ?? null;
+
     // 稼働時間・残業時間・早退
     let workMinutes:     number | null = null;
     let overtimeMinutes: number | null = null;
@@ -381,8 +395,8 @@ export async function GET(req: NextRequest) {
       const outMs = new Date(punch.clockOut).getTime();
       workMinutes = Math.max(0, Math.round((outMs - inMs) / 60000) - 60);
 
-      if (shift.shift_end) {
-        const endDt = shiftTimeToDate(shift.shift_date, shift.shift_end);
+      if (resolvedEnd) {
+        const endDt = shiftTimeToDate(shift.shift_date, resolvedEnd);
         if (endDt) {
           const endMs = endDt.getTime();
           overtimeMinutes = Math.max(0, Math.round((outMs - endMs) / 60000));
@@ -394,8 +408,8 @@ export async function GET(req: NextRequest) {
     const rec: DailyRecord = {
       date:       shift.shift_date,
       shiftName:  shift.shift_name  ?? "",
-      shiftStart: shift.shift_start ?? null,
-      shiftEnd:   shift.shift_end   ?? null,
+      shiftStart: resolvedStart,
+      shiftEnd:   resolvedEnd,
       clockIn:    punch?.clockIn    ?? null,
       clockOut:   punch?.clockOut   ?? null,
       workMinutes, overtimeMinutes,
