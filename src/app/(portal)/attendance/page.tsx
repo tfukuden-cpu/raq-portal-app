@@ -140,6 +140,14 @@ export default async function AttendancePage() {
     (lateRows ?? []).map(l => [l.staff_id, { reason: l.reason as string | null, expectedArrival: l.expected_arrival as string | null }])
   );
 
+  // セクション判定: シフト名の先頭がセクション名と一致すればそちらを優先、なければ memberSection を使う
+  const resolveSection = (shiftName: string, memberSection: string | null): string => {
+    for (const sec of SECTION_ORDER) {
+      if (shiftName.startsWith(sec)) return sec;
+    }
+    return SECTION_ORDER.includes(memberSection ?? "") ? (memberSection as string) : "その他";
+  };
+
   // 今日シフトのあるメンバーを組み立て
   type MemberData = {
     staffId: string;
@@ -173,11 +181,12 @@ export default async function AttendancePage() {
     else if (departure)       status = "departed";
     else                      status = "not_departed";
 
+    const shiftName = shift.shift_name ?? "";
     allMembers.push({
       staffId:   shift.staff_id,
       name:      member.name,
-      section:   member.section,
-      shift:     { shift_name: shift.shift_name ?? "", shift_start: shift.shift_start, shift_end: shift.shift_end },
+      section:   resolveSection(shiftName, member.section),
+      shift:     { shift_name: shiftName, shift_start: shift.shift_start, shift_end: shift.shift_end },
       clockIn:   punch?.clockIn  ?? null,
       clockOut:  punch?.clockOut ?? null,
       departure,
@@ -186,10 +195,6 @@ export default async function AttendancePage() {
       status,
     });
   }
-
-  // セクション → "その他" にまとめる
-  const normalizeSection = (s: string | null): string =>
-    SECTION_ORDER.includes(s ?? "") ? (s as string) : "その他";
 
   // セクション内をシフト名でグループ化（shift_start順に並べる）
   function groupByShift(members: MemberData[]) {
@@ -220,7 +225,7 @@ export default async function AttendancePage() {
 
   const sections = [...SECTION_ORDER, "その他"];
   const grouped = sections.map(sec => {
-    const members = allMembers.filter(m => normalizeSection(m.section) === sec);
+    const members = allMembers.filter(m => m.section === sec);
     return { section: sec, shiftGroups: groupByShift(members) };
   }).filter(g => g.shiftGroups.length > 0);
 
