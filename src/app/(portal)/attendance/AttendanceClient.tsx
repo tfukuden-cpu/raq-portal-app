@@ -66,7 +66,7 @@ function fmtTime(ts: string): string {
   });
 }
 
-const REMINDER_MSG = "出発報告がまだのようです。出発時にアプリから報告をお願いします。";
+const REMINDER_MSG = "出発報告がまだのようです。遅刻なく到着できますでしょうか？遅刻がある場合は報告をお願いいたします。すでに出発している場合はアプリから報告をお願いします。";
 const REQUEST_MSG  = "本日はお休みのところ恐れ入ります。急なご連絡で申し訳ございませんが、本日の出勤は可能でしょうか？ご確認いただけますと幸いです。";
 
 // ── Props ─────────────────────────────────────────────────
@@ -91,9 +91,19 @@ export default function AttendanceClient({
   total, departed, clockedIn, absent,
   grouped, offMembers,
 }: Props) {
-  // 複数選択
+  // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
+
+  function toggleReminder(staffId: string, mode: SelectionMode) {
+    if (selectedMode !== null && selectedMode !== mode) return;
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(staffId)) next.delete(staffId); else next.add(staffId);
+      if (next.size === 0) setSelectedMode(null); else setSelectedMode(mode);
+      return next;
+    });
+  }
 
   // モーダル
   const [modalState, setModalState]   = useState<ModalState>(null);
@@ -211,20 +221,11 @@ export default function AttendanceClient({
                           {gMembers.map(m => {
                             const canRemind = m.status === "not_departed" || m.status === "late";
                             const isSelected = selectedIds.has(m.staffId);
-                            const isLocked   = selectedMode === "request";
                             return (
                               <div
                                 key={m.staffId}
                                 className={`flex items-center gap-2 px-3 py-2 transition-colors ${isSelected ? "bg-blue-50 dark:bg-blue-950/20" : ""}`}
                               >
-                                {/* チェックボックス */}
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  disabled={isLocked || !canRemind}
-                                  onChange={() => canRemind && toggleSelect(m.staffId, "reminder")}
-                                  className="w-4 h-4 flex-shrink-0 rounded border-zinc-300 accent-blue-600 cursor-pointer disabled:opacity-20"
-                                />
                                 {/* アカウント番号 */}
                                 <span className="w-10 text-xs font-mono text-zinc-400 tabular-nums flex-shrink-0 truncate">
                                   {m.accountNumber ?? ""}
@@ -239,19 +240,23 @@ export default function AttendanceClient({
                                     {STATUS_LABEL[m.status]}
                                   </span>
                                   <span className="text-xs font-mono tabular-nums text-zinc-400 whitespace-nowrap">
-                                    {m.clockIn   && `出${fmtTime(m.clockIn)}`}
-                                    {m.clockOut  && ` 退${fmtTime(m.clockOut)}`}
+                                    {m.clockIn  && `出${fmtTime(m.clockIn)}`}
+                                    {m.clockOut && ` 退${fmtTime(m.clockOut)}`}
                                     {m.departureTime && !m.clockIn && `出発${fmtTime(m.departureTime)}`}
                                     {m.status === "late" && m.expectedArrival && `→${m.expectedArrival.slice(0,5)}`}
                                   </span>
                                 </div>
-                                {/* 個別催促ボタン */}
+                                {/* 催促トグルボタン */}
                                 {canRemind ? (
                                   <button
-                                    onClick={() => openConfirm([m.staffId], "reminder")}
-                                    className="flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800 transition-colors whitespace-nowrap"
+                                    onClick={() => toggleReminder(m.staffId, "reminder")}
+                                    className={`flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-lg border transition-colors whitespace-nowrap ${
+                                      isSelected
+                                        ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
+                                        : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800"
+                                    }`}
                                   >
-                                    催促する
+                                    {isSelected ? "✓ 選択中" : "催促する"}
                                   </button>
                                 ) : (
                                   <div className="w-14 flex-shrink-0" />
@@ -288,13 +293,6 @@ export default function AttendanceClient({
                     key={m.staffId}
                     className={`flex items-center gap-2 px-3 py-2 transition-colors ${isSelected ? "bg-amber-50 dark:bg-amber-950/20" : ""}`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      disabled={isLocked}
-                      onChange={() => toggleSelect(m.staffId, "request")}
-                      className="w-4 h-4 flex-shrink-0 rounded border-zinc-300 accent-amber-500 cursor-pointer disabled:opacity-20"
-                    />
                     <span className="w-10 text-xs font-mono text-zinc-400 tabular-nums flex-shrink-0 truncate">
                       {m.accountNumber ?? ""}
                     </span>
@@ -303,10 +301,15 @@ export default function AttendanceClient({
                     </span>
                     <span className="text-xs text-zinc-400 flex-shrink-0">{m.shiftName}</span>
                     <button
-                      onClick={() => openConfirm([m.staffId], "request")}
-                      className="flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800 transition-colors whitespace-nowrap"
+                      onClick={() => !isLocked && toggleReminder(m.staffId, "request")}
+                      disabled={isLocked}
+                      className={`flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-lg border transition-colors whitespace-nowrap disabled:opacity-30 ${
+                        isSelected
+                          ? "bg-amber-500 text-white border-amber-500 hover:bg-amber-600"
+                          : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800"
+                      }`}
                     >
-                      依頼する
+                      {isSelected ? "✓ 選択中" : "依頼する"}
                     </button>
                   </div>
                 );
@@ -330,7 +333,7 @@ export default function AttendanceClient({
               onClick={() => openConfirm(Array.from(selectedIds), selectedMode!)}
               className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-sm font-bold px-4 py-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              {selectedMode === "reminder" ? "まとめて催促する" : "まとめて依頼する"} →
+              {selectedMode === "reminder" ? `${selectedIds.size}名にまとめて催促する` : `${selectedIds.size}名にまとめて依頼する`} →
             </button>
           </div>
         </div>
