@@ -25,6 +25,9 @@ function fmtTime(ts: string): string {
 
 const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク"];
 
+// これらのシフト名は「出勤なし」扱い → 当日状況に表示しない
+const OFF_SHIFT_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤"];
+
 type StatusKey = "working" | "clocked_out" | "departed" | "absent" | "late" | "not_departed";
 
 const STATUS_LABEL: Record<StatusKey, string> = {
@@ -155,6 +158,8 @@ export default async function AttendancePage() {
   for (const shift of todayShifts ?? []) {
     const member = memberMap.get(shift.staff_id);
     if (!member) continue;
+    // 休日系シフトは表示しない
+    if (OFF_SHIFT_NAMES.includes(shift.shift_name ?? "")) continue;
     const punch     = punchMap.get(shift.staff_id) ?? null;
     const departure = departureMap.get(shift.staff_id) ?? null;
     const absence   = absenceMap.get(shift.staff_id) ?? null;
@@ -186,13 +191,38 @@ export default async function AttendancePage() {
   const normalizeSection = (s: string | null): string =>
     SECTION_ORDER.includes(s ?? "") ? (s as string) : "その他";
 
+  // セクション内をシフト名でグループ化（shift_start順に並べる）
+  function groupByShift(members: MemberData[]) {
+    const shiftOrder: string[] = [];
+    const shiftMap = new Map<string, MemberData[]>();
+    for (const m of members) {
+      const key = m.shift.shift_name || "その他";
+      if (!shiftMap.has(key)) { shiftMap.set(key, []); shiftOrder.push(key); }
+      shiftMap.get(key)!.push(m);
+    }
+    // 各シフトグループを shift_start → status の順にソート
+    for (const [, list] of shiftMap) {
+      list.sort((a, b) => {
+        const ta = a.shift.shift_start ?? "99:99";
+        const tb = b.shift.shift_start ?? "99:99";
+        if (ta !== tb) return ta.localeCompare(tb);
+        return statusSortOrder.indexOf(a.status) - statusSortOrder.indexOf(b.status);
+      });
+    }
+    // シフトグループ自体も shift_start の昇順で並べる
+    shiftOrder.sort((a, b) => {
+      const ta = shiftMap.get(a)![0].shift.shift_start ?? "99:99";
+      const tb = shiftMap.get(b)![0].shift.shift_start ?? "99:99";
+      return ta.localeCompare(tb);
+    });
+    return shiftOrder.map(name => ({ shiftName: name, members: shiftMap.get(name)! }));
+  }
+
   const sections = [...SECTION_ORDER, "その他"];
-  const grouped = sections.map(sec => ({
-    section: sec,
-    members: allMembers
-      .filter(m => normalizeSection(m.section) === sec)
-      .sort((a, b) => statusSortOrder.indexOf(a.status) - statusSortOrder.indexOf(b.status)),
-  })).filter(g => g.members.length > 0);
+  const grouped = sections.map(sec => {
+    const members = allMembers.filter(m => normalizeSection(m.section) === sec);
+    return { section: sec, shiftGroups: groupByShift(members) };
+  }).filter(g => g.shiftGroups.length > 0);
 
   // 全体サマリー
   const total     = allMembers.length;
@@ -245,78 +275,81 @@ export default async function AttendancePage() {
           <p className="text-sm text-zinc-400 text-center py-10">本日の出勤予定者はいません</p>
         ) : (
           <div className="space-y-2">
-            {grouped.map(({ section, members: sMembers }) => {
-              const sDeparted  = sMembers.filter(m => m.departure || m.clockIn).length;
-              const sClockedIn = sMembers.filter(m => m.clockIn).length;
-              const sAbsent    = sMembers.filter(m => m.absence).length;
-              const sTotal     = sMembers.length;
+            {grouped.map(({ section, shiftGroups }) => {
+              const sAllMembers = shiftGroups.flatMap(g => g.members);
+              const sDeparted  = sAllMembers.filter(m => m.departure || m.clockIn).length;
+              const sClockedIn = sAllMembers.filter(m => m.clockIn).length;
+              const sAbsent    = sAllMembers.filter(m => m.absence).length;
+              const sTotal     = sAllMembers.length;
 
               return (
                 <details key={section} className="group bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
                   <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none list-none hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
                     <div className="flex items-center gap-2">
-                      {/* 開閉矢印 */}
                       <svg className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-90 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
                       <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{section}</span>
                       <span className="text-xs text-zinc-400">{sTotal}名</span>
                     </div>
-                    {/* セクションサマリー */}
                     <div className="flex items-center gap-3 text-xs tabular-nums">
-                      <span className="text-blue-600 dark:text-blue-400 font-semibold">
-                        出発 {sDeparted}/{sTotal}
-                      </span>
-                      <span className="text-green-600 dark:text-green-400 font-semibold">
-                        出勤 {sClockedIn}/{sTotal}
-                      </span>
-                      {sAbsent > 0 && (
-                        <span className="text-red-500 font-semibold">欠勤 {sAbsent}</span>
-                      )}
+                      <span className="text-blue-600 dark:text-blue-400 font-semibold">出発 {sDeparted}/{sTotal}</span>
+                      <span className="text-green-600 dark:text-green-400 font-semibold">出勤 {sClockedIn}/{sTotal}</span>
+                      {sAbsent > 0 && <span className="text-red-500 font-semibold">欠勤 {sAbsent}</span>}
                     </div>
                   </summary>
 
-                  {/* メンバー一覧 */}
-                  <div className="border-t border-zinc-100 dark:border-zinc-800 divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {sMembers.map(m => (
-                      <div key={m.staffId} className="px-4 py-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{m.name}</span>
-                              <span className="text-xs text-zinc-400 font-mono">{m.staffId}</span>
-                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${STATUS_COLOR[m.status]}`}>
-                                {STATUS_LABEL[m.status]}
-                              </span>
-                            </div>
-                            <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">
-                              {m.shift.shift_name}
-                              {m.shift.shift_start && m.shift.shift_end && ` ${m.shift.shift_start}〜${m.shift.shift_end}`}
-                            </p>
-                          </div>
-                          {/* 打刻時刻 */}
-                          <div className="flex-shrink-0 text-right text-xs font-mono tabular-nums space-y-0.5">
-                            {m.clockIn  && <div className="text-green-600 dark:text-green-400">出 {fmtTime(m.clockIn)}</div>}
-                            {m.clockOut && <div className="text-zinc-400">退 {fmtTime(m.clockOut)}</div>}
-                          </div>
+                  {/* シフト名ごとのグループ */}
+                  <div className="border-t border-zinc-100 dark:border-zinc-800">
+                    {shiftGroups.map(({ shiftName, members: gMembers }) => (
+                      <div key={shiftName}>
+                        {/* シフト名ヘッダー */}
+                        <div className="px-4 py-1.5 bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-between">
+                          <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                            {shiftName}
+                            {gMembers[0].shift.shift_start && gMembers[0].shift.shift_end &&
+                              ` ${gMembers[0].shift.shift_start}〜${gMembers[0].shift.shift_end}`}
+                          </span>
+                          <span className="text-xs text-zinc-400">{gMembers.length}名</span>
                         </div>
-                        {/* 追加情報 */}
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                          {m.departure && !m.clockIn && (
-                            <span className="text-blue-600 dark:text-blue-400">
-                              出発 {fmtTime(m.departure.reportedAt)}
-                              {m.departure.etaMinutes !== null && ` · 約${m.departure.etaMinutes}分後到着`}
-                            </span>
-                          )}
-                          {m.absence && (
-                            <span className="text-red-500">欠勤理由: {m.absence.reason ?? "未記入"}</span>
-                          )}
-                          {m.late && !m.clockIn && (
-                            <span className="text-amber-600 dark:text-amber-400">
-                              遅刻連絡: {m.late.reason ?? "未記入"}
-                              {m.late.expectedArrival && ` · 到着予定 ${m.late.expectedArrival.slice(0, 5)}`}
-                            </span>
-                          )}
+                        {/* メンバー一覧 */}
+                        <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                          {gMembers.map(m => (
+                            <div key={m.staffId} className="px-4 py-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{m.name}</span>
+                                    <span className="text-xs text-zinc-400 font-mono">{m.staffId}</span>
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${STATUS_COLOR[m.status]}`}>
+                                      {STATUS_LABEL[m.status]}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0 text-right text-xs font-mono tabular-nums space-y-0.5">
+                                  {m.clockIn  && <div className="text-green-600 dark:text-green-400">出 {fmtTime(m.clockIn)}</div>}
+                                  {m.clockOut && <div className="text-zinc-400">退 {fmtTime(m.clockOut)}</div>}
+                                </div>
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                                {m.departure && !m.clockIn && (
+                                  <span className="text-blue-600 dark:text-blue-400">
+                                    出発 {fmtTime(m.departure.reportedAt)}
+                                    {m.departure.etaMinutes !== null && ` · 約${m.departure.etaMinutes}分後`}
+                                  </span>
+                                )}
+                                {m.absence && (
+                                  <span className="text-red-500">欠勤: {m.absence.reason ?? "未記入"}</span>
+                                )}
+                                {m.late && !m.clockIn && (
+                                  <span className="text-amber-600 dark:text-amber-400">
+                                    遅刻: {m.late.reason ?? "未記入"}
+                                    {m.late.expectedArrival && ` · 到着予定 ${m.late.expectedArrival.slice(0, 5)}`}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ))}
