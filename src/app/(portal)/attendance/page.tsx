@@ -1,8 +1,8 @@
 /**
  * 当日状況（案件管理者用）
  * - 本日シフトがあるメンバーのみ表示
- * - セクション別グループ表示
- * - 欠勤/遅刻連絡・出発状況・打刻状況を一覧表示
+ * - セクション別アコーディオン（初期折りたたみ）
+ * - ヘッダーに出発済/出勤済/欠勤サマリー表示
  */
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -22,6 +22,8 @@ function fmtTime(ts: string): string {
     hour12: false,
   });
 }
+
+const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク"];
 
 type StatusKey = "working" | "clocked_out" | "departed" | "absent" | "late" | "not_departed";
 
@@ -43,6 +45,8 @@ const STATUS_COLOR: Record<StatusKey, string> = {
   not_departed: "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
 };
 
+const statusSortOrder: StatusKey[] = ["absent", "late", "working", "departed", "clocked_out", "not_departed"];
+
 export default async function AttendancePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -52,7 +56,6 @@ export default async function AttendancePage() {
   const projectId = await getCurrentProjectId();
   if (!projectId) redirect("/select-project");
 
-  // 権限確認
   const [{ data: myMembership }, { data: myStaff }] = await Promise.all([
     supabase.from("project_members").select("role")
       .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle(),
@@ -71,7 +74,6 @@ export default async function AttendancePage() {
   const todayStart = `${today}T00:00:00+09:00`;
   const todayEnd   = `${today}T23:59:59+09:00`;
 
-  // ── 並列データ取得 ──────────────────────────────────────
   const [
     { data: project },
     { data: memberRows },
@@ -82,62 +84,41 @@ export default async function AttendancePage() {
     { data: lateRows },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
-
     admin.from("project_members")
       .select("staff_id, section, role, staffs(id, name, display_name)")
       .eq("project_id", projectId),
-
     admin.from("shifts")
       .select("staff_id, shift_name, shift_start, shift_end")
       .eq("project_id", projectId)
       .eq("shift_date", today),
-
     admin.from("punch_logs")
       .select("staff_id, punch_type, recorded_at")
       .eq("project_id", projectId)
       .gte("recorded_at", todayStart)
       .lte("recorded_at", todayEnd)
       .order("recorded_at"),
-
     admin.from("departure_reports")
       .select("staff_id, reported_at, eta_minutes")
       .eq("project_id", projectId)
       .gte("reported_at", todayStart)
       .lte("reported_at", todayEnd),
-
     admin.from("absence_reports")
       .select("staff_id, reason")
       .eq("project_id", projectId)
       .eq("absence_date", today),
-
     admin.from("late_reports")
       .select("staff_id, reason, expected_arrival")
       .eq("project_id", projectId)
       .eq("late_date", today),
   ]);
 
-  // ── スタッフ情報マップ ─────────────────────────────────
-  const memberMap = new Map<string, { name: string; section: string | null; role: string }>();
+  // マップ構築
+  const memberMap = new Map<string, { name: string; section: string | null }>();
   for (const m of memberRows ?? []) {
-    const s = Array.isArray(m.staffs) ? m.staffs[0] : m.staffs as { display_name?: string | null; name?: string | null } | null;
-    memberMap.set(m.staff_id, {
-      name:    s?.display_name ?? s?.name ?? m.staff_id,
-      section: m.section ?? null,
-      role:    m.role ?? "staff",
-    });
+    const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as { display_name?: string | null; name?: string | null } | null;
+    memberMap.set(m.staff_id, { name: s?.display_name ?? s?.name ?? m.staff_id, section: m.section ?? null });
   }
 
-  // ── 今日シフトのある staff_id セット ─────────────────
-  const shiftMap = new Map<string, { shift_name: string; shift_start: string | null; shift_end: string | null }>();
-  for (const s of todayShifts ?? []) {
-    shiftMap.set(s.staff_id, {
-      shift_name:  s.shift_name ?? "",
-      shift_start: s.shift_start,
-      shift_end:   s.shift_end,
-    });
-  }
-
-  // ── 打刻マップ ───────────────────────────────────────
   const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null }>();
   for (const p of punchLogs ?? []) {
     if (!punchMap.has(p.staff_id)) punchMap.set(p.staff_id, { clockIn: null, clockOut: null });
@@ -146,24 +127,22 @@ export default async function AttendancePage() {
     if (p.punch_type === "clock_out")                 e.clockOut = p.recorded_at;
   }
 
-  // ── 各レポートマップ ──────────────────────────────────
-  const departureMap = new Map<string, { reportedAt: string; etaMinutes: number | null }>();
-  for (const d of departureRows ?? []) {
-    departureMap.set(d.staff_id, { reportedAt: d.reported_at, etaMinutes: d.eta_minutes });
-  }
+  const departureMap = new Map(
+    (departureRows ?? []).map(d => [d.staff_id, { reportedAt: d.reported_at, etaMinutes: d.eta_minutes as number | null }])
+  );
+  const absenceMap = new Map(
+    (absenceRows ?? []).map(a => [a.staff_id, { reason: a.reason as string | null }])
+  );
+  const lateMap = new Map(
+    (lateRows ?? []).map(l => [l.staff_id, { reason: l.reason as string | null, expectedArrival: l.expected_arrival as string | null }])
+  );
 
-  const absenceMap = new Map<string, { reason: string | null }>();
-  for (const a of absenceRows ?? []) absenceMap.set(a.staff_id, { reason: a.reason });
-
-  const lateMap = new Map<string, { reason: string | null; expectedArrival: string | null }>();
-  for (const l of lateRows ?? []) lateMap.set(l.staff_id, { reason: l.reason, expectedArrival: l.expected_arrival });
-
-  // ── 今日出勤予定のメンバーのみ対象 ────────────────────
+  // 今日シフトのあるメンバーを組み立て
   type MemberData = {
     staffId: string;
     name: string;
     section: string | null;
-    shift: { shift_name: string; shift_start: string | null; shift_end: string | null } | null;
+    shift: { shift_name: string; shift_start: string | null; shift_end: string | null };
     clockIn: string | null;
     clockOut: string | null;
     departure: { reportedAt: string; etaMinutes: number | null } | null;
@@ -172,29 +151,28 @@ export default async function AttendancePage() {
     status: StatusKey;
   };
 
-  const members: MemberData[] = [];
-  for (const [sid, shift] of shiftMap) {
-    const member = memberMap.get(sid);
+  const allMembers: MemberData[] = [];
+  for (const shift of todayShifts ?? []) {
+    const member = memberMap.get(shift.staff_id);
     if (!member) continue;
-
-    const punch     = punchMap.get(sid) ?? null;
-    const departure = departureMap.get(sid) ?? null;
-    const absence   = absenceMap.get(sid) ?? null;
-    const late      = lateMap.get(sid) ?? null;
+    const punch     = punchMap.get(shift.staff_id) ?? null;
+    const departure = departureMap.get(shift.staff_id) ?? null;
+    const absence   = absenceMap.get(shift.staff_id) ?? null;
+    const late      = lateMap.get(shift.staff_id) ?? null;
 
     let status: StatusKey;
-    if (absence)                       status = "absent";
-    else if (punch?.clockOut)          status = "clocked_out";
-    else if (punch?.clockIn)           status = "working";
-    else if (late)                     status = "late";
-    else if (departure)                status = "departed";
-    else                               status = "not_departed";
+    if (absence)             status = "absent";
+    else if (punch?.clockOut) status = "clocked_out";
+    else if (punch?.clockIn)  status = "working";
+    else if (late)            status = "late";
+    else if (departure)       status = "departed";
+    else                      status = "not_departed";
 
-    members.push({
-      staffId: sid,
-      name:    member.name,
-      section: member.section,
-      shift,
+    allMembers.push({
+      staffId:   shift.staff_id,
+      name:      member.name,
+      section:   member.section,
+      shift:     { shift_name: shift.shift_name ?? "", shift_start: shift.shift_start, shift_end: shift.shift_end },
       clockIn:   punch?.clockIn  ?? null,
       clockOut:  punch?.clockOut ?? null,
       departure,
@@ -204,28 +182,25 @@ export default async function AttendancePage() {
     });
   }
 
-  // ── セクション別グループ化 ────────────────────────────
-  const sectionOrder = [...new Set(members.map(m => m.section))].sort((a, b) => {
-    if (a === null) return 1;
-    if (b === null) return -1;
-    return a.localeCompare(b, "ja");
-  });
+  // セクション → "その他" にまとめる
+  const normalizeSection = (s: string | null): string =>
+    SECTION_ORDER.includes(s ?? "") ? (s as string) : "その他";
 
-  const statusOrder: StatusKey[] = ["absent", "late", "working", "departed", "clocked_out", "not_departed"];
-  const grouped = sectionOrder.map(sec => ({
+  const sections = [...SECTION_ORDER, "その他"];
+  const grouped = sections.map(sec => ({
     section: sec,
-    members: members
-      .filter(m => m.section === sec)
-      .sort((a, b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status)),
-  }));
+    members: allMembers
+      .filter(m => normalizeSection(m.section) === sec)
+      .sort((a, b) => statusSortOrder.indexOf(a.status) - statusSortOrder.indexOf(b.status)),
+  })).filter(g => g.members.length > 0);
 
-  // ── サマリー ─────────────────────────────────────────
-  const counts: Record<StatusKey, number> = {
-    working: 0, clocked_out: 0, departed: 0, absent: 0, late: 0, not_departed: 0,
-  };
-  for (const m of members) counts[m.status]++;
+  // 全体サマリー
+  const total     = allMembers.length;
+  const departed  = allMembers.filter(m => m.departure || m.clockIn).length;
+  const clockedIn = allMembers.filter(m => m.clockIn).length;
+  const absent    = allMembers.filter(m => m.absence).length;
 
-  // ── 日付ラベル ────────────────────────────────────────
+  // 日付ラベル
   const [, monthStr, dayStr] = today.split("-");
   const noonJST = new Date(`${today}T12:00:00+09:00`);
   const weekday = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", weekday: "narrow" }).format(noonJST);
@@ -249,94 +224,108 @@ export default async function AttendancePage() {
           </div>
         </div>
 
-        {/* サマリーバッジ */}
-        <div className="flex flex-wrap gap-2 mb-5">
-          {(["working","clocked_out","departed","absent","late","not_departed"] as StatusKey[]).map(s => (
-            counts[s] > 0 && (
-              <span key={s} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_COLOR[s]}`}>
-                {STATUS_LABEL[s]} {counts[s]}
-              </span>
-            )
-          ))}
-          {members.length === 0 && (
-            <span className="text-sm text-zinc-400">本日の出勤予定者はいません</span>
-          )}
+        {/* 全体サマリー */}
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-center">
+            <div className="text-xl font-bold text-blue-500 tabular-nums">{departed}<span className="text-sm text-zinc-400 font-normal">/{total}</span></div>
+            <div className="text-xs text-zinc-500 mt-0.5">出発済</div>
+          </div>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-center">
+            <div className="text-xl font-bold text-green-500 tabular-nums">{clockedIn}<span className="text-sm text-zinc-400 font-normal">/{total}</span></div>
+            <div className="text-xs text-zinc-500 mt-0.5">出勤済</div>
+          </div>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-center">
+            <div className="text-xl font-bold text-red-500 tabular-nums">{absent}</div>
+            <div className="text-xs text-zinc-500 mt-0.5">欠勤</div>
+          </div>
         </div>
 
-        {/* セクション別リスト */}
-        <div className="space-y-4">
-          {grouped.map(({ section, members: sMembers }) => (
-            sMembers.length > 0 && (
-              <div key={section ?? "__none__"} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-                {/* セクションヘッダー */}
-                <div className="px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-800/50">
-                  <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">
-                    {section ?? "未割当"}
-                  </span>
-                  <span className="text-xs text-zinc-400">{sMembers.length}名</span>
-                </div>
+        {/* セクション別アコーディオン */}
+        {grouped.length === 0 ? (
+          <p className="text-sm text-zinc-400 text-center py-10">本日の出勤予定者はいません</p>
+        ) : (
+          <div className="space-y-2">
+            {grouped.map(({ section, members: sMembers }) => {
+              const sDeparted  = sMembers.filter(m => m.departure || m.clockIn).length;
+              const sClockedIn = sMembers.filter(m => m.clockIn).length;
+              const sAbsent    = sMembers.filter(m => m.absence).length;
+              const sTotal     = sMembers.length;
 
-                {/* メンバー一覧 */}
-                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {sMembers.map(m => (
-                    <div key={m.staffId} className="px-4 py-3">
-                      <div className="flex items-start justify-between gap-2">
-                        {/* 左：名前・シフト */}
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{m.name}</span>
-                            <span className="text-xs text-zinc-400 font-mono">{m.staffId}</span>
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${STATUS_COLOR[m.status]}`}>
-                              {STATUS_LABEL[m.status]}
-                            </span>
-                          </div>
-                          {m.shift && (
+              return (
+                <details key={section} className="group bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+                  <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none list-none hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                    <div className="flex items-center gap-2">
+                      {/* 開閉矢印 */}
+                      <svg className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-90 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                      <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{section}</span>
+                      <span className="text-xs text-zinc-400">{sTotal}名</span>
+                    </div>
+                    {/* セクションサマリー */}
+                    <div className="flex items-center gap-3 text-xs tabular-nums">
+                      <span className="text-blue-600 dark:text-blue-400 font-semibold">
+                        出発 {sDeparted}/{sTotal}
+                      </span>
+                      <span className="text-green-600 dark:text-green-400 font-semibold">
+                        出勤 {sClockedIn}/{sTotal}
+                      </span>
+                      {sAbsent > 0 && (
+                        <span className="text-red-500 font-semibold">欠勤 {sAbsent}</span>
+                      )}
+                    </div>
+                  </summary>
+
+                  {/* メンバー一覧 */}
+                  <div className="border-t border-zinc-100 dark:border-zinc-800 divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {sMembers.map(m => (
+                      <div key={m.staffId} className="px-4 py-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{m.name}</span>
+                              <span className="text-xs text-zinc-400 font-mono">{m.staffId}</span>
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${STATUS_COLOR[m.status]}`}>
+                                {STATUS_LABEL[m.status]}
+                              </span>
+                            </div>
                             <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">
                               {m.shift.shift_name}
                               {m.shift.shift_start && m.shift.shift_end && ` ${m.shift.shift_start}〜${m.shift.shift_end}`}
                             </p>
-                          )}
+                          </div>
+                          {/* 打刻時刻 */}
+                          <div className="flex-shrink-0 text-right text-xs font-mono tabular-nums space-y-0.5">
+                            {m.clockIn  && <div className="text-green-600 dark:text-green-400">出 {fmtTime(m.clockIn)}</div>}
+                            {m.clockOut && <div className="text-zinc-400">退 {fmtTime(m.clockOut)}</div>}
+                          </div>
                         </div>
-
-                        {/* 右：打刻時刻 */}
-                        <div className="flex-shrink-0 text-right text-xs font-mono tabular-nums space-y-0.5">
-                          {m.clockIn && (
-                            <div className="text-green-600 dark:text-green-400">出 {fmtTime(m.clockIn)}</div>
+                        {/* 追加情報 */}
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                          {m.departure && !m.clockIn && (
+                            <span className="text-blue-600 dark:text-blue-400">
+                              出発 {fmtTime(m.departure.reportedAt)}
+                              {m.departure.etaMinutes !== null && ` · 約${m.departure.etaMinutes}分後到着`}
+                            </span>
                           )}
-                          {m.clockOut && (
-                            <div className="text-zinc-400">退 {fmtTime(m.clockOut)}</div>
+                          {m.absence && (
+                            <span className="text-red-500">欠勤理由: {m.absence.reason ?? "未記入"}</span>
+                          )}
+                          {m.late && !m.clockIn && (
+                            <span className="text-amber-600 dark:text-amber-400">
+                              遅刻連絡: {m.late.reason ?? "未記入"}
+                              {m.late.expectedArrival && ` · 到着予定 ${m.late.expectedArrival.slice(0, 5)}`}
+                            </span>
                           )}
                         </div>
                       </div>
-
-                      {/* 追加情報行 */}
-                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-zinc-500">
-                        {m.departure && !m.clockIn && (
-                          <span className="text-blue-600 dark:text-blue-400">
-                            出発済 {fmtTime(m.departure.reportedAt)}
-                            {m.departure.etaMinutes !== null && ` (到着予定 ${m.departure.etaMinutes}分)`}
-                          </span>
-                        )}
-                        {m.absence && (
-                          <span className="text-red-600 dark:text-red-400">
-                            欠勤理由: {m.absence.reason ?? "未記入"}
-                          </span>
-                        )}
-                        {m.late && !m.clockIn && (
-                          <span className="text-amber-600 dark:text-amber-400">
-                            遅刻連絡: {m.late.reason ?? "未記入"}
-                            {m.late.expectedArrival && ` / 到着予定 ${m.late.expectedArrival.slice(0, 5)}`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          ))}
-        </div>
-
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        )}
       </div>
     </main>
   );
