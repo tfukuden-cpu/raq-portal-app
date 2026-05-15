@@ -139,12 +139,14 @@ export default async function PortalLayout({
       logoutAction={logoutAction}
       initialCollapsed={initialCollapsed}
     >
-      {/* 切替バナー：2種以上のモードがある場合のみ表示 */}
+      {/* 切替バナー：PCのみ・2種以上のモードがある場合のみ表示 */}
       {availableModes.length > 1 && (
-        <DevBanner
-          viewMode={viewMode}
-          availableModes={availableModes}
-        />
+        <div className="hidden md:block">
+          <DevBanner
+            viewMode={viewMode}
+            availableModes={availableModes}
+          />
+        </div>
       )}
       {children}
     </AppNav>

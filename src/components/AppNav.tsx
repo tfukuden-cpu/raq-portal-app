@@ -39,14 +39,6 @@ export default function AppNav({
   const isCol = collapsed;
   const initial = staffName.charAt(0).toUpperCase();
 
-  // モバイル: 現在のパスが属するセクションを初期表示
-  const defaultSectionIdx = Math.max(
-    0,
-    sections.findIndex(s => s.items.some(item => isActive(item.href)))
-  );
-  const [activeSectionIdx, setActiveSectionIdx] = useState(defaultSectionIdx);
-  const activeSection = sections[activeSectionIdx] ?? sections[0];
-  const showSectionTabs = sections.length > 1;
 
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -155,72 +147,32 @@ export default function AppNav({
       </div>
 
       {/* ── モバイル bottom nav ── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 px-3 nav-safe bg-transparent">
-        <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 shadow-2xl shadow-black/10 overflow-hidden">
-
-          {/* セクション切り替えタブ（2セクション以上のときのみ表示） */}
-          {showSectionTabs && (
-            <div className="flex border-b border-zinc-100 dark:border-zinc-800">
-              {sections.map((section, idx) => {
-                const isActiveSec = idx === activeSectionIdx;
-                const SectionIcon = section.icon ? ICON_MAP[section.icon] : null;
-                const label = section.title ?? section.mobileLabel ?? "メニュー";
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setActiveSectionIdx(idx)}
-                    className={`flex-1 flex flex-col items-center py-1.5 gap-[2px] transition-colors relative ${
-                      isActiveSec
-                        ? "text-blue-600 dark:text-blue-400"
-                        : "text-zinc-300 dark:text-zinc-600 hover:text-zinc-500"
-                    }`}
-                  >
-                    {SectionIcon && <SectionIcon className="w-[13px] h-[13px]" />}
-                    <span className="text-[8px] font-semibold leading-none tracking-tight">
-                      {label}
-                    </span>
-                    {isActiveSec && (
-                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-blue-500 rounded-t-full" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* アイテム行（選択中セクションの項目を横スクロールで表示） */}
-          <nav
-            key={activeSectionIdx}
-            className="flex overflow-x-auto"
-            style={{ scrollbarWidth: "none" }}
-          >
-            {activeSection.items.map((item) => {
-              const active = isActive(item.href);
-              const Icon = ICON_MAP[item.icon];
-              return (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className={`relative flex-shrink-0 flex flex-col items-center pt-2.5 pb-2 px-3 gap-[3px] transition-colors min-w-[64px] ${
-                    active
-                      ? "text-blue-600 dark:text-blue-400"
-                      : "text-zinc-400 dark:text-zinc-600"
-                  }`}
-                >
-                  {active && (
-                    <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-blue-500 rounded-b-full" />
-                  )}
-                  <Icon className="w-[20px] h-[20px]" />
-                  <span className="text-[9px] font-medium leading-none tracking-tight">
-                    {item.label}
-                  </span>
-                </a>
-              );
-            })}
-          </nav>
-
-        </div>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border-t border-zinc-200/70 dark:border-zinc-800/70" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <nav className="flex overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          {sections.flatMap(s => s.items).map((item) => {
+            const active = isActive(item.href);
+            const Icon = ICON_MAP[item.icon];
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                className={`relative flex-shrink-0 flex flex-col items-center justify-center pt-2 pb-2 px-3 gap-[3px] min-w-[60px] transition-colors ${
+                  active
+                    ? "text-blue-600 dark:text-blue-400"
+                    : "text-zinc-400 dark:text-zinc-500"
+                }`}
+              >
+                {active && (
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-blue-500 rounded-b-full" />
+                )}
+                <Icon className="w-5 h-5" />
+                <span className={`text-[10px] leading-none tracking-tight ${active ? "font-semibold" : "font-medium"}`}>
+                  {item.label}
+                </span>
+              </a>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );
