@@ -64,7 +64,6 @@ export default function AttendanceEditClient({
 
   const [startDate, setStartDate] = useState(initStart);
   const [endDate,   setEndDate]   = useState(initEnd);
-  const [filterStatus, setFilterStatus] = useState<"issues" | "all">("issues");
   const [search, setSearch] = useState("");
   const [localRows, setLocalRows] = useState<AttendanceRow[]>(rows);
   const [editState, setEditState] = useState<EditState | null>(null);
@@ -72,10 +71,7 @@ export default function AttendanceEditClient({
   const [toast, setToast] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
-    let list = localRows.filter(r => r.date >= startDate && r.date <= endDate);
-    if (filterStatus === "issues") {
-      list = list.filter(r => r.status !== "ok");
-    }
+    let list = localRows.filter(r => r.date >= startDate && r.date <= endDate && r.status !== "ok");
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(r =>
@@ -85,7 +81,7 @@ export default function AttendanceEditClient({
       );
     }
     return list;
-  }, [localRows, startDate, endDate, filterStatus, search]);
+  }, [localRows, startDate, endDate, search]);
 
   function openEdit(row: AttendanceRow) {
     setEditState({
@@ -133,9 +129,7 @@ export default function AttendanceEditClient({
     });
   }
 
-  const issueCount = localRows.filter(r =>
-    r.date >= startDate && r.date <= endDate && r.status !== "ok"
-  ).length;
+  const issueCount = filtered.length;
 
   return (
     <div className="space-y-4">
@@ -153,24 +147,9 @@ export default function AttendanceEditClient({
             onChange={e => setSearch(e.target.value)}
             className="flex-1 min-w-40 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setFilterStatus("issues")}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-              filterStatus === "issues"
-                ? "bg-red-600 text-white border-red-600"
-                : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-            }`}>
-            問題あり {issueCount > 0 && `(${issueCount})`}
-          </button>
-          <button onClick={() => setFilterStatus("all")}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-              filterStatus === "all"
-                ? "bg-blue-600 text-white border-blue-600"
-                : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-            }`}>
-            全件
-          </button>
-        </div>
+        {issueCount > 0 && (
+          <p className="text-xs text-red-500 font-medium">問題あり {issueCount}件</p>
+        )}
       </div>
 
       {/* 一覧テーブル */}
@@ -188,7 +167,7 @@ export default function AttendanceEditClient({
 
         {filtered.length === 0 ? (
           <p className="py-10 text-center text-sm text-zinc-400">
-            {filterStatus === "issues" ? "問題のある打刻はありません" : "データがありません"}
+            問題のある打刻はありません
           </p>
         ) : (
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800">

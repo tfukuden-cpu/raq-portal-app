@@ -14,11 +14,6 @@ function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
 
-function addDays(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00+09:00`);
-  d.setDate(d.getDate() + days);
-  return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
-}
 
 export default async function AttendanceEditPage() {
   const supabase = await createClient();
@@ -42,7 +37,7 @@ export default async function AttendanceEditPage() {
 
   const admin = createAdminClient();
   const today     = tokyoToday();
-  const startDate = addDays(today, -13); // デフォルト：過去2週間
+  const startDate = today.slice(0, 7) + "-01"; // 当月1日
   const endDate   = today;
   const startISO  = `${startDate}T00:00:00+09:00`;
   const endISO    = `${endDate}T23:59:59+09:00`;
