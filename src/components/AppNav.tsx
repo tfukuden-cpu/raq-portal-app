@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import Link from "next/link";
 import type { NavItem, NavSection } from "@/app/(portal)/layout";
 import { ICON_MAP, MenuIcon, LogOutIcon } from "@/components/icons";
 
@@ -92,7 +93,7 @@ export default function AppNav({
                 const active = isActive(item.href);
                 const Icon = ICON_MAP[item.icon];
                 return (
-                  <a
+                  <Link
                     key={item.href}
                     href={item.href}
                     title={isCol ? item.label : undefined}
@@ -113,7 +114,7 @@ export default function AppNav({
                         {item.label}
                       </span>
                     )}
-                  </a>
+                  </Link>
                 );
               })}
             </div>
@@ -192,7 +193,7 @@ export default function AppNav({
             const active = isActive(item.href);
             const Icon = ICON_MAP[item.icon];
             return (
-              <a
+              <Link
                 key={item.href}
                 href={item.href}
                 className={`flex-shrink-0 flex flex-col items-center justify-center py-1.5 px-2.5 gap-0.5 min-w-[58px] rounded-xl transition-colors ${
@@ -207,7 +208,7 @@ export default function AppNav({
                 <span className={`text-[10px] leading-none ${active ? "font-semibold" : "font-medium"}`}>
                   {item.label}
                 </span>
-              </a>
+              </Link>
             );
           })}
         </nav>
