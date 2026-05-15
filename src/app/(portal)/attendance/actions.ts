@@ -21,40 +21,60 @@ async function requireAdmin(projectId: string) {
   if (!ok) redirect("/dashboard");
 }
 
-/** 出発報告未提出スタッフへLINEリマインダー送信 */
-export async function sendDepartureReminderAction(
+export type SendResult = { staffId: string; name: string; ok: boolean; error?: string };
+
+/** 出発報告未提出スタッフへLINEリマインダー一括送信 */
+export async function sendBulkDepartureReminderAction(
   projectId: string,
-  targetStaffId: string,
-): Promise<{ ok: boolean; error?: string }> {
+  staffIds: string[],
+): Promise<{ results: SendResult[] }> {
   await requireAdmin(projectId);
   const admin = createAdminClient();
-  const { data: staff } = await admin
-    .from("staffs").select("line_user_id, display_name, name")
-    .eq("id", targetStaffId).maybeSingle();
-  if (!staff?.line_user_id) return { ok: false, error: "LINE未連携" };
-  const name = staff.display_name ?? staff.name ?? targetStaffId;
-  await pushLine(
-    staff.line_user_id,
-    `【出発確認】${name}さん、出発報告がまだのようです。出発時にアプリから報告をお願いします。`,
-  );
-  return { ok: true };
+  const { data: staffList } = await admin
+    .from("staffs").select("id, display_name, name, line_user_id")
+    .in("id", staffIds);
+  const staffMap = new Map((staffList ?? []).map(s => [s.id, s]));
+  const results: SendResult[] = [];
+  for (const staffId of staffIds) {
+    const staff = staffMap.get(staffId);
+    const name = staff?.display_name ?? staff?.name ?? staffId;
+    if (!staff?.line_user_id) {
+      results.push({ staffId, name, ok: false, error: "LINE未連携" });
+      continue;
+    }
+    await pushLine(
+      staff.line_user_id,
+      `【出発確認】${name}さん、出発報告がまだのようです。出発時にアプリから報告をお願いします。`,
+    );
+    results.push({ staffId, name, ok: true });
+  }
+  return { results };
 }
 
-/** 公休スタッフへ出勤依頼LINE送信 */
-export async function sendWorkRequestAction(
+/** 公休スタッフへ出勤依頼LINE一括送信 */
+export async function sendBulkWorkRequestAction(
   projectId: string,
-  targetStaffId: string,
-): Promise<{ ok: boolean; error?: string }> {
+  staffIds: string[],
+): Promise<{ results: SendResult[] }> {
   await requireAdmin(projectId);
   const admin = createAdminClient();
-  const { data: staff } = await admin
-    .from("staffs").select("line_user_id, display_name, name")
-    .eq("id", targetStaffId).maybeSingle();
-  if (!staff?.line_user_id) return { ok: false, error: "LINE未連携" };
-  const name = staff.display_name ?? staff.name ?? targetStaffId;
-  await pushLine(
-    staff.line_user_id,
-    `【出勤依頼】${name}さん、本日はお休みのところ恐れ入ります。急なご連絡で申し訳ございませんが、本日の出勤は可能でしょうか？ご確認いただけますと幸いです。`,
-  );
-  return { ok: true };
+  const { data: staffList } = await admin
+    .from("staffs").select("id, display_name, name, line_user_id")
+    .in("id", staffIds);
+  const staffMap = new Map((staffList ?? []).map(s => [s.id, s]));
+  const results: SendResult[] = [];
+  for (const staffId of staffIds) {
+    const staff = staffMap.get(staffId);
+    const name = staff?.display_name ?? staff?.name ?? staffId;
+    if (!staff?.line_user_id) {
+      results.push({ staffId, name, ok: false, error: "LINE未連携" });
+      continue;
+    }
+    await pushLine(
+      staff.line_user_id,
+      `【出勤依頼】${name}さん、本日はお休みのところ恐れ入ります。急なご連絡で申し訳ございませんが、本日の出勤は可能でしょうか？ご確認いただけますと幸いです。`,
+    );
+    results.push({ staffId, name, ok: true });
+  }
+  return { results };
 }
