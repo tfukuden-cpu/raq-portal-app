@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
+import { sendEventNotify } from "@/lib/notify";
 
 export type CorrectionResult = { success: boolean; message?: string };
 
@@ -135,6 +136,18 @@ export async function reviewCorrectionAction(
       await admin.from("punch_logs").insert(inserts);
     }
   }
+
+  // スタッフへLINE通知
+  const { data: staffRow } = await admin.from("staffs").select("display_name, name").eq("id", correction.staff_id).maybeSingle();
+  const staffName = (staffRow as { display_name?: string | null; name?: string | null } | null)?.display_name
+    ?? (staffRow as { display_name?: string | null; name?: string | null } | null)?.name
+    ?? correction.staff_id;
+  await sendEventNotify(
+    correction.project_id as string,
+    "correction_result",
+    { 名前: staffName, 日付: correction.target_date as string, 結果: status === "approved" ? "承認" : "却下" },
+    correction.staff_id as string,
+  );
 
   revalidatePath("/corrections/manage");
   return { success: true };

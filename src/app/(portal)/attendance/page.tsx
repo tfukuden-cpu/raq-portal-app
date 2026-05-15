@@ -231,10 +231,11 @@ export default async function AttendancePage() {
   const grouped = buildGrouped(allInternal);
 
   // 全体サマリー
-  const total     = allInternal.length;
-  const departed  = allInternal.filter(m => m.departureTime || m.clockIn).length;
-  const clockedIn = allInternal.filter(m => m.clockIn).length;
-  const absent    = allInternal.filter(m => m.status === "absent").length;
+  const total      = allInternal.length;
+  const departed   = allInternal.filter(m => m.departureTime || m.clockIn).length;
+  const clockedIn  = allInternal.filter(m => m.clockIn).length;
+  const absent     = allInternal.filter(m => m.status === "absent").length;
+  const notClocked = total - clockedIn - absent;
 
   // 日付ラベル
   const [, monthStr, dayStr] = today.split("-");
@@ -251,6 +252,7 @@ export default async function AttendancePage() {
       departed={departed}
       clockedIn={clockedIn}
       absent={absent}
+      notClocked={notClocked}
       grouped={grouped}
       offMembers={offMembers}
     />

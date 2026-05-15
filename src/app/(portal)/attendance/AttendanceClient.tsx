@@ -78,6 +78,7 @@ interface Props {
   departed: number;
   clockedIn: number;
   absent: number;
+  notClocked: number;
   grouped: SectionGroup[];
   offMembers: OffMember[];
 }
@@ -88,7 +89,7 @@ type ModalState = null | "confirm" | "sending" | "results";
 // ── メインコンポーネント ──────────────────────────────────
 export default function AttendanceClient({
   projectId, dateLabel, projectName,
-  total, departed, clockedIn, absent,
+  total, departed, clockedIn, absent, notClocked,
   grouped, offMembers,
 }: Props) {
   // 催促・依頼の選択（トグル式）
@@ -165,7 +166,14 @@ export default function AttendanceClient({
           </a>
           <div className="flex items-baseline justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">当日状況</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">当日状況</h1>
+                {notClocked > 0 && (
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500 text-white tabular-nums">
+                    未打刻 {notClocked}名
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-zinc-400 mt-0.5">{projectName}</p>
             </div>
             <span className="text-sm font-semibold text-zinc-500">{dateLabel}</span>
