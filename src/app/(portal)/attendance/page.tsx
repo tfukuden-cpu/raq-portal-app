@@ -349,7 +349,7 @@ export default async function AttendancePage() {
                                       {STATUS_LABEL[m.status]}
                                     </span>
                                     {/* 未出発・遅刻のLINEリマインダー */}
-                                    {(m.status === "not_departed" || m.status === "late") && m.hasLine && (
+                                    {(m.status === "not_departed" || m.status === "late") && (
                                       <LineButton
                                         action={sendDepartureReminderAction.bind(null, projectId, m.staffId)}
                                         label="出発催促"
@@ -415,14 +415,10 @@ export default async function AttendancePage() {
                     </div>
                   </div>
                   <div className="flex-shrink-0">
-                    {m.hasLine ? (
-                      <LineButton
-                        action={sendWorkRequestAction.bind(null, projectId, m.staffId)}
-                        label="出勤依頼"
-                      />
-                    ) : (
-                      <span className="text-xs text-zinc-300 dark:text-zinc-600">LINE未連携</span>
-                    )}
+                    <LineButton
+                      action={sendWorkRequestAction.bind(null, projectId, m.staffId)}
+                      label="出勤依頼"
+                    />
                   </div>
                 </div>
               ))}
