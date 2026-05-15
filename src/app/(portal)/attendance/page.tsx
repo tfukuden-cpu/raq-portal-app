@@ -121,8 +121,10 @@ export default async function AttendancePage() {
   const clockedOut = members.filter((m) => m.clockOut).length;
   const notYet = members.filter((m) => !m.clockIn).length;
 
-  const todayDate = new Date(today + "T00:00:00+09:00");
-  const dateLabel = `${todayDate.getMonth() + 1}月${todayDate.getDate()}日（${WEEKDAY_JP[todayDate.getDay()]}）`;
+  const [, monthStr, dayStr] = today.split("-");
+  const noonJST = new Date(`${today}T12:00:00+09:00`);
+  const weekday = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", weekday: "narrow" }).format(noonJST);
+  const dateLabel = `${parseInt(monthStr)}月${parseInt(dayStr)}日（${weekday}）`;
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
