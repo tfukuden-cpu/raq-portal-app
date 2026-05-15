@@ -258,6 +258,16 @@ export function UserCircleIcon({ className }: IconProps) {
   );
 }
 
+export function DownloadIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
 export function BarChart2Icon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>
@@ -343,6 +353,7 @@ export const ICON_MAP = {
   IdCard: IdCardIcon,
   MessageSquare: MessageSquareIcon,
   Briefcase: BriefcaseIcon,
+  Download: DownloadIcon,
 } as const;
 
 export type IconKey = keyof typeof ICON_MAP;

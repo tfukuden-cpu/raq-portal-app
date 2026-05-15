@@ -25,6 +25,7 @@ const PROJECT_ADMIN_ITEMS: NavItem[] = [
   { href: "/corrections/manage", icon: "ClipboardCheck", label: "補正審査" },
   { href: "/inquiries/manage", icon: "MessageSquare", label: "問い合わせ" },
   { href: "/notices/manage", icon: "Megaphone", label: "周知管理" },
+  { href: "/admin/work-records", icon: "Download", label: "実績出力" },
   { href: "/admin/project-settings", icon: "Settings", label: "案件設定" },
 ];
 
@@ -35,6 +36,7 @@ const EXECUTIVE_ITEMS: NavItem[] = [
   { href: "/admin/notices", icon: "Megaphone", label: "周知一覧" },
   { href: "/admin/posts", icon: "PenSquare", label: "投稿一覧" },
   { href: "/inquiries/manage", icon: "MessageSquare", label: "問い合わせ" },
+  { href: "/admin/work-records", icon: "Download", label: "実績出力" },
   { href: "/admin/my", icon: "UserCircle", label: "My" },
 ];
 

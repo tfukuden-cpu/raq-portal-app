@@ -62,7 +62,14 @@
       "Bash(grep -n \"last\\\\|first\\\\|苗字\\\\|名前\\\\|fullName\\\\|\\\\`\\\\${\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/staffs/actions.ts\")",
       "Bash(grep -n \"last\\\\|first\\\\|苗字\\\\|名前\\\\|fullName\\\\|\\\\`\\\\${\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/operators/OperatorsClient.tsx\")",
       "Bash(grep -n \"last\\\\|first\\\\|苗字\\\\|名前\\\\|fullName\\\\|\\\\`\\\\${.*}\\\\`\\\\|trim\" \"C:/dev/raq-portal-app/src/app/\\(portal\\)/admin/staffs/StaffsClient.tsx\")",
-      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__list_tables"
+      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__list_tables",
+      "mcp__Claude_in_Chrome__form_input",
+      "Bash(findstr /i supabase)",
+      "PowerShell(Select-String -Path \".env.local\" -Pattern \"supabase\" -CaseSensitive:$false | Select-Object -ExpandProperty Line | ForEach-Object { \\($_ -split \"=\"\\)[0] })",
+      "PowerShell(\\(Get-Content .env.local -Raw\\).Substring\\(0, 300\\))",
+      "mcp__Claude_in_Chrome__read_page",
+      "mcp__Claude_in_Chrome__resize_window",
+      "mcp__Claude_in_Chrome__list_connected_browsers"
     ]
   }
 }

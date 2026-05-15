@@ -16,6 +16,7 @@ export function getLineAuthUrl(state: string): string {
     redirect_uri:  redirectUri,
     state,
     scope:         "profile openid",
+    bot_prompt:    "aggressive",
   });
   return `${LINE_LOGIN}/oauth2/v2.1/authorize?${params}`;
 }
@@ -23,7 +24,7 @@ export function getLineAuthUrl(state: string): string {
 /** OAuthコードをアクセストークンに交換してプロフィールを返す */
 export async function fetchLineProfile(
   code: string
-): Promise<{ userId: string; displayName: string; pictureUrl?: string } | null> {
+): Promise<{ userId: string; displayName: string; pictureUrl?: string; accessToken: string } | null> {
   const redirectUri = getRedirectUri();
 
   // トークン取得
@@ -51,7 +52,17 @@ export async function fetchLineProfile(
   if (!profileRes.ok) return null;
   const p = await profileRes.json();
 
-  return { userId: p.userId, displayName: p.displayName, pictureUrl: p.pictureUrl };
+  return { userId: p.userId, displayName: p.displayName, pictureUrl: p.pictureUrl, accessToken: access_token };
+}
+
+/** 公式アカウントを友達追加しているか確認 */
+export async function checkLineFriendship(accessToken: string): Promise<boolean> {
+  const res = await fetch(`${LINE_API}/friendship/v1/status`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return false;
+  const { friendFlag } = await res.json();
+  return friendFlag === true;
 }
 
 function getRedirectUri() {

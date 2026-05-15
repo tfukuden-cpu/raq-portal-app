@@ -4,12 +4,34 @@
  */
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { loginAction } from "./actions";
 
+const URL_ERROR_MESSAGES: Record<string, string> = {
+  line_not_friend:    "公式LINEを友達追加してから連携してください",
+  line_not_registered: "このLINEアカウントはシステムに登録されていません",
+  line_cancelled:     "LINEログインをキャンセルしました",
+  line_failed:        "LINEログインに失敗しました。再度お試しください",
+};
+
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const code = searchParams.get("error");
+    if (code && URL_ERROR_MESSAGES[code]) setError(URL_ERROR_MESSAGES[code]);
+  }, [searchParams]);
 
   const handleSubmit = (formData: FormData) => {
     setError(null);

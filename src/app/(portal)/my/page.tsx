@@ -49,9 +49,10 @@ export default async function MyPage({
 
   const displayName = staff?.display_name ?? staff?.name ?? staffId;
   const lineLinked  = !!staff?.line_user_id;
-  const lineFlash   = sp.success === "line_linked"   ? "LINEアカウントを連携しました"
+  const lineFlash   = sp.success === "line_linked"      ? "LINEアカウントを連携しました"
                     : sp.error   === "line_already_used" ? "このLINEアカウントは他のスタッフに紐付いています"
                     : sp.error   === "line_cancelled"    ? "LINE連携をキャンセルしました"
+                    : sp.error   === "line_not_friend"   ? "公式LINEを友達追加してから連携してください"
                     : null;
 
   const roleLabel =

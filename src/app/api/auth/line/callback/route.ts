@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { fetchLineProfile } from "@/lib/line";
+import { fetchLineProfile, checkLineFriendship } from "@/lib/line";
 
 function adminClient() {
   return createSupabaseAdminClient(
@@ -48,6 +48,10 @@ export async function GET(req: NextRequest) {
   // LINEプロフィール取得
   const profile = await fetchLineProfile(code);
   if (!profile) return errRedirect(req, "line_failed");
+
+  // 公式アカウントの友達登録チェック
+  const isFriend = await checkLineFriendship(profile.accessToken);
+  if (!isFriend) return errRedirect(req, "line_not_friend");
 
   const clearState = (res: NextResponse) => {
     res.cookies.delete("line_oauth_state");
