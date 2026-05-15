@@ -156,39 +156,38 @@ export default function AppNav({
       </div>
 
       {/* ── モバイル bottom nav ── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border-t border-zinc-200/60 dark:border-zinc-800/60" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
 
-        {/* セクション切り替えタブ */}
+        {/* セクション切り替え（セグメントコントロール） */}
         {showSectionTabs && (
-          <div className="flex border-b border-zinc-100 dark:border-zinc-800">
-            {sections.map((section, idx) => {
-              const isActiveSec = idx === activeSectionIdx;
-              const SectionIcon = section.icon ? ICON_MAP[section.icon] : null;
-              const label = section.mobileLabel ?? section.title ?? "メニュー";
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setActiveSectionIdx(idx)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-colors relative ${
-                    isActiveSec
-                      ? "text-blue-600 dark:text-blue-400"
-                      : "text-zinc-400 dark:text-zinc-500"
-                  }`}
-                >
-                  {SectionIcon && <SectionIcon className="w-3.5 h-3.5" />}
-                  <span>{label}</span>
-                  {isActiveSec && (
-                    <span className="absolute bottom-0 left-1/4 right-1/4 h-[2px] bg-blue-500 rounded-t-full" />
-                  )}
-                </button>
-              );
-            })}
+          <div className="px-3 pt-2 pb-1">
+            <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+              {sections.map((section, idx) => {
+                const isActiveSec = idx === activeSectionIdx;
+                const SectionIcon = section.icon ? ICON_MAP[section.icon] : null;
+                const label = section.mobileLabel ?? section.title ?? "メニュー";
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setActiveSectionIdx(idx)}
+                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
+                      isActiveSec
+                        ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm"
+                        : "text-zinc-500 dark:text-zinc-400"
+                    }`}
+                  >
+                    {SectionIcon && <SectionIcon className="w-3 h-3" />}
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
         {/* ナビアイテム */}
-        <nav className="flex overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+        <nav className="flex overflow-x-auto px-1 pb-1" style={{ scrollbarWidth: "none" }}>
           {activeSection.items.map((item) => {
             const active = isActive(item.href);
             const Icon = ICON_MAP[item.icon];
@@ -196,16 +195,15 @@ export default function AppNav({
               <a
                 key={item.href}
                 href={item.href}
-                className={`relative flex-shrink-0 flex flex-col items-center justify-center pt-2 pb-2.5 px-3 gap-1 min-w-[60px] transition-colors ${
+                className={`flex-shrink-0 flex flex-col items-center justify-center py-1.5 px-2.5 gap-0.5 min-w-[58px] rounded-xl transition-colors ${
                   active
                     ? "text-blue-600 dark:text-blue-400"
                     : "text-zinc-400 dark:text-zinc-500"
                 }`}
               >
-                {active && (
-                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-blue-500 rounded-b-full" />
-                )}
-                <Icon className="w-[22px] h-[22px]" />
+                <div className={`p-1.5 rounded-xl transition-colors ${active ? "bg-blue-50 dark:bg-blue-950/60" : ""}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
                 <span className={`text-[10px] leading-none ${active ? "font-semibold" : "font-medium"}`}>
                   {item.label}
                 </span>
