@@ -1,14 +1,17 @@
 /**
  * 当日状況（案件管理者用）
- * - 本日シフトがあるメンバーのみ表示
+ * - 本日シフトがあるメンバーのみ表示（公休等は除外）
  * - セクション別アコーディオン（初期折りたたみ）
- * - ヘッダーに出発済/出勤済/欠勤サマリー表示
+ * - 未出発/遅刻メンバーにLINEリマインダー送信ボタン
+ * - 本日休みスタッフへLINE出勤依頼ボタン
  */
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import { ChevronLeftIcon } from "@/components/icons";
+import LineButton from "./LineButton";
+import { sendDepartureReminderAction, sendWorkRequestAction } from "./actions";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -25,7 +28,6 @@ function fmtTime(ts: string): string {
 
 const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク"];
 
-// これらのシフト名は「出勤なし」扱い → 当日状況に表示しない
 const OFF_SHIFT_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤"];
 
 type StatusKey = "working" | "clocked_out" | "departed" | "absent" | "late" | "not_departed";
@@ -85,6 +87,7 @@ export default async function AttendancePage() {
     { data: departureRows },
     { data: absenceRows },
     { data: lateRows },
+    { data: lineRows },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -113,6 +116,10 @@ export default async function AttendancePage() {
       .select("staff_id, reason, expected_arrival")
       .eq("project_id", projectId)
       .eq("late_date", today),
+    // LINE連携状況（projectメンバー全員）
+    admin.from("project_members")
+      .select("staff_id, staffs(line_user_id)")
+      .eq("project_id", projectId),
   ]);
 
   // マップ構築
@@ -120,6 +127,13 @@ export default async function AttendancePage() {
   for (const m of memberRows ?? []) {
     const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as { display_name?: string | null; name?: string | null } | null;
     memberMap.set(m.staff_id, { name: s?.display_name ?? s?.name ?? m.staff_id, section: m.section ?? null });
+  }
+
+  // LINE連携マップ (staff_id → has LINE)
+  const lineMap = new Map<string, boolean>();
+  for (const r of lineRows ?? []) {
+    const s = (Array.isArray(r.staffs) ? r.staffs[0] : r.staffs) as { line_user_id?: string | null } | null;
+    lineMap.set(r.staff_id, !!s?.line_user_id);
   }
 
   const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null }>();
@@ -140,7 +154,7 @@ export default async function AttendancePage() {
     (lateRows ?? []).map(l => [l.staff_id, { reason: l.reason as string | null, expectedArrival: l.expected_arrival as string | null }])
   );
 
-  // セクション判定: シフト名の先頭がセクション名と一致すればそちらを優先、なければ memberSection を使う
+  // セクション判定: シフト名の先頭がセクション名と一致すればそちらを優先
   const resolveSection = (shiftName: string, memberSection: string | null): string => {
     for (const sec of SECTION_ORDER) {
       if (shiftName.startsWith(sec)) return sec;
@@ -148,11 +162,11 @@ export default async function AttendancePage() {
     return SECTION_ORDER.includes(memberSection ?? "") ? (memberSection as string) : "その他";
   };
 
-  // 今日シフトのあるメンバーを組み立て
   type MemberData = {
     staffId: string;
     name: string;
-    section: string | null;
+    section: string;
+    hasLine: boolean;
     shift: { shift_name: string; shift_start: string | null; shift_end: string | null };
     clockIn: string | null;
     clockOut: string | null;
@@ -162,30 +176,40 @@ export default async function AttendancePage() {
     status: StatusKey;
   };
 
+  // 出勤予定メンバー（休日系シフト除外）
   const allMembers: MemberData[] = [];
+  // 本日休みメンバー（公休・有休等）
+  const offMembers: { staffId: string; name: string; shiftName: string; hasLine: boolean }[] = [];
+
   for (const shift of todayShifts ?? []) {
     const member = memberMap.get(shift.staff_id);
     if (!member) continue;
-    // 休日系シフトは表示しない
-    if (OFF_SHIFT_NAMES.includes(shift.shift_name ?? "")) continue;
+    const shiftName = shift.shift_name ?? "";
+    const hasLine = lineMap.get(shift.staff_id) ?? false;
+
+    if (OFF_SHIFT_NAMES.includes(shiftName)) {
+      offMembers.push({ staffId: shift.staff_id, name: member.name, shiftName, hasLine });
+      continue;
+    }
+
     const punch     = punchMap.get(shift.staff_id) ?? null;
     const departure = departureMap.get(shift.staff_id) ?? null;
     const absence   = absenceMap.get(shift.staff_id) ?? null;
     const late      = lateMap.get(shift.staff_id) ?? null;
 
     let status: StatusKey;
-    if (absence)             status = "absent";
+    if (absence)              status = "absent";
     else if (punch?.clockOut) status = "clocked_out";
     else if (punch?.clockIn)  status = "working";
     else if (late)            status = "late";
     else if (departure)       status = "departed";
     else                      status = "not_departed";
 
-    const shiftName = shift.shift_name ?? "";
     allMembers.push({
       staffId:   shift.staff_id,
       name:      member.name,
       section:   resolveSection(shiftName, member.section),
+      hasLine,
       shift:     { shift_name: shiftName, shift_start: shift.shift_start, shift_end: shift.shift_end },
       clockIn:   punch?.clockIn  ?? null,
       clockOut:  punch?.clockOut ?? null,
@@ -196,7 +220,7 @@ export default async function AttendancePage() {
     });
   }
 
-  // セクション内をシフト名でグループ化（shift_start順に並べる）
+  // セクション内をシフト名でグループ化（shift_start順）
   function groupByShift(members: MemberData[]) {
     const shiftOrder: string[] = [];
     const shiftMap = new Map<string, MemberData[]>();
@@ -205,7 +229,6 @@ export default async function AttendancePage() {
       if (!shiftMap.has(key)) { shiftMap.set(key, []); shiftOrder.push(key); }
       shiftMap.get(key)!.push(m);
     }
-    // 各シフトグループを shift_start → status の順にソート
     for (const [, list] of shiftMap) {
       list.sort((a, b) => {
         const ta = a.shift.shift_start ?? "99:99";
@@ -214,7 +237,6 @@ export default async function AttendancePage() {
         return statusSortOrder.indexOf(a.status) - statusSortOrder.indexOf(b.status);
       });
     }
-    // シフトグループ自体も shift_start の昇順で並べる
     shiftOrder.sort((a, b) => {
       const ta = shiftMap.get(a)![0].shift.shift_start ?? "99:99";
       const tb = shiftMap.get(b)![0].shift.shift_start ?? "99:99";
@@ -304,11 +326,9 @@ export default async function AttendancePage() {
                     </div>
                   </summary>
 
-                  {/* シフト名ごとのグループ */}
                   <div className="border-t border-zinc-100 dark:border-zinc-800">
                     {shiftGroups.map(({ shiftName, members: gMembers }) => (
                       <div key={shiftName}>
-                        {/* シフト名ヘッダー */}
                         <div className="px-4 py-1.5 bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-between">
                           <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                             {shiftName}
@@ -317,18 +337,24 @@ export default async function AttendancePage() {
                           </span>
                           <span className="text-xs text-zinc-400">{gMembers.length}名</span>
                         </div>
-                        {/* メンバー一覧 */}
                         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                           {gMembers.map(m => (
                             <div key={m.staffId} className="px-4 py-3">
                               <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{m.name}</span>
                                     <span className="text-xs text-zinc-400 font-mono">{m.staffId}</span>
                                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${STATUS_COLOR[m.status]}`}>
                                       {STATUS_LABEL[m.status]}
                                     </span>
+                                    {/* 未出発・遅刻のLINEリマインダー */}
+                                    {(m.status === "not_departed" || m.status === "late") && m.hasLine && (
+                                      <LineButton
+                                        action={sendDepartureReminderAction.bind(null, projectId, m.staffId)}
+                                        label="出発催促"
+                                      />
+                                    )}
                                   </div>
                                 </div>
                                 <div className="flex-shrink-0 text-right text-xs font-mono tabular-nums space-y-0.5">
@@ -364,6 +390,46 @@ export default async function AttendancePage() {
             })}
           </div>
         )}
+
+        {/* 本日休みスタッフ（欠勤補填調整用） */}
+        {offMembers.length > 0 && (
+          <details className="group mt-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+            <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none list-none hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-90 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="text-sm font-bold text-zinc-500 dark:text-zinc-400">本日休み（補填調整）</span>
+                <span className="text-xs text-zinc-400">{offMembers.length}名</span>
+              </div>
+              <span className="text-xs text-zinc-400">出勤依頼LINE送信可</span>
+            </summary>
+            <div className="border-t border-zinc-100 dark:border-zinc-800 divide-y divide-zinc-100 dark:divide-zinc-800">
+              {offMembers.map(m => (
+                <div key={m.staffId} className="px-4 py-3 flex items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{m.name}</span>
+                      <span className="text-xs text-zinc-400 font-mono">{m.staffId}</span>
+                      <span className="text-xs text-zinc-400">{m.shiftName}</span>
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0">
+                    {m.hasLine ? (
+                      <LineButton
+                        action={sendWorkRequestAction.bind(null, projectId, m.staffId)}
+                        label="出勤依頼"
+                      />
+                    ) : (
+                      <span className="text-xs text-zinc-300 dark:text-zinc-600">LINE未連携</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+
       </div>
     </main>
   );
