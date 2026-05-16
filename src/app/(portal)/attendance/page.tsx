@@ -246,6 +246,7 @@ export default async function AttendancePage() {
   return (
     <AttendanceClient
       projectId={projectId}
+      today={today}
       dateLabel={dateLabel}
       projectName={project?.name ?? ""}
       total={total}

@@ -152,53 +152,66 @@ export default function AttendanceEditClient({
         )}
       </div>
 
-      {/* 一覧テーブル */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
-        {/* ヘッダー */}
-        <div className="grid grid-cols-[5rem_2.5rem_1fr_4rem_4rem_5rem_2rem] gap-x-2 px-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 text-xs font-semibold text-zinc-500 dark:text-zinc-400 border-b border-zinc-100 dark:border-zinc-800">
-          <span>日付</span>
-          <span>No.</span>
-          <span>名前</span>
-          <span className="tabular-nums text-center">出勤</span>
-          <span className="tabular-nums text-center">退勤</span>
-          <span className="text-center">状態</span>
-          <span></span>
+      {/* 一覧 */}
+      {filtered.length === 0 ? (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-12 text-center text-sm text-zinc-400">
+          問題のある打刻はありません
         </div>
-
-        {filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-zinc-400">
-            問題のある打刻はありません
-          </p>
-        ) : (
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {filtered.map(row => {
-              const st = STATUS_LABEL[row.status];
-              return (
-                <div key={`${row.date}_${row.staffId}`}
-                  className="grid grid-cols-[5rem_2.5rem_1fr_4rem_4rem_5rem_2rem] gap-x-2 px-3 py-2.5 items-center hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-                  <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">{row.date.slice(5)}</span>
-                  <span className="text-xs tabular-nums text-zinc-400 dark:text-zinc-500 truncate">{row.accountNumber ?? ""}</span>
-                  <div className="min-w-0">
-                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate block">{row.name}</span>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500 truncate block">{row.shiftName}</span>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(row => {
+            const st = STATUS_LABEL[row.status];
+            return (
+              <div key={`${row.date}_${row.staffId}`}
+                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-3">
+                {/* 上段：日付・名前・ステータス・編集ボタン */}
+                <div className="flex items-start gap-2">
+                  <span className="text-xs tabular-nums text-zinc-400 dark:text-zinc-500 pt-0.5 flex-shrink-0 w-10">
+                    {row.date.slice(5)}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{row.name}</p>
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500 truncate">
+                      {row.accountNumber && <span className="mr-1">{row.accountNumber}</span>}
+                      {row.shiftName}
+                    </p>
                   </div>
-                  <span className="text-xs tabular-nums text-center text-zinc-700 dark:text-zinc-300">
-                    {row.clockIn ? toHHMM(row.clockIn) : <span className="text-red-400">─</span>}
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${st.color}`}>
+                    {st.label}
                   </span>
-                  <span className="text-xs tabular-nums text-center text-zinc-700 dark:text-zinc-300">
-                    {row.clockOut ? toHHMM(row.clockOut) : <span className="text-orange-400">─</span>}
-                  </span>
-                  <span className={`text-xs text-center ${st.color}`}>{st.label}</span>
-                  <button onClick={() => openEdit(row)}
-                    className="text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-sm">
-                    ✏️
+                  <button
+                    onClick={() => openEdit(row)}
+                    className="flex-shrink-0 px-3 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+                  >
+                    修正
                   </button>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                {/* 下段：出退勤時刻 */}
+                <div className="mt-2 flex items-center gap-3 pl-12">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-zinc-400 font-semibold">出勤</span>
+                    <span className={`text-sm tabular-nums font-mono font-semibold ${row.clockIn ? "text-zinc-700 dark:text-zinc-300" : "text-red-400"}`}>
+                      {row.clockIn ? toHHMM(row.clockIn) : "─"}
+                    </span>
+                  </div>
+                  <span className="text-zinc-300 dark:text-zinc-600">→</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-zinc-400 font-semibold">退勤</span>
+                    <span className={`text-sm tabular-nums font-mono font-semibold ${row.clockOut ? "text-zinc-700 dark:text-zinc-300" : "text-orange-400"}`}>
+                      {row.clockOut ? toHHMM(row.clockOut) : "─"}
+                    </span>
+                  </div>
+                  {(row.shiftStart || row.shiftEnd) && (
+                    <span className="text-[10px] text-zinc-300 dark:text-zinc-600 ml-auto">
+                      予定 {row.shiftStart ?? "─"}〜{row.shiftEnd ?? "─"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* 修正モーダル */}
       {editState && (

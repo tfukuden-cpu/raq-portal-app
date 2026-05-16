@@ -522,12 +522,11 @@ export default function ShiftDayList({
   return (
     <>
       {/* ━━ タブ / フィルター ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="bg-white dark:bg-zinc-950 px-4 pt-2 pb-0 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
 
-        {/* ① セクション + タブ（同一行） */}
-        <div className="flex items-center justify-between mb-3 gap-2">
-          {/* タブ */}
-          <div className="flex items-center gap-0.5">
+        {/* ① タブ行（出勤 / 公休 / 希望休） */}
+        <div className="px-4 pt-2 pb-2 flex items-center gap-1">
+          <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5 flex-1">
             {tabs.map((t) => {
               const isSel = tabKey === t.key;
               return (
@@ -535,60 +534,60 @@ export default function ShiftDayList({
                   key={t.key} type="button"
                   onClick={() => setTabKey(t.key)}
                   className={cx(
-                    "px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
+                    "flex-1 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition-all",
                     isSel
-                      ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                      : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300",
+                      ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm"
+                      : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
                   )}
                 >
                   {t.label}
                 </button>
               );
             })}
-            {/* 全折りたたみ / 展開（出勤タブのみ） */}
-            {tabKey === "shukkin" && visibleShiftPatterns.length > 1 && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (collapsedPatterns.size < visibleShiftPatterns.length) {
-                    setCollapsedPatterns(new Set(visibleShiftPatterns.map(p => p.name)));
-                  } else {
-                    setCollapsedPatterns(new Set());
-                  }
-                }}
-                className="ml-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 whitespace-nowrap transition-colors"
-              >
-                {collapsedPatterns.size < visibleShiftPatterns.length ? "全畳" : "全開"}
-              </button>
-            )}
           </div>
-
-          {/* セクションフィルター（セクションがある案件のみ） */}
-          {hasSection && (
-            <div className="flex overflow-x-auto gap-1 flex-shrink" style={{ scrollbarWidth: "none" }}>
-              <button type="button" onClick={() => setSectionFilter(null)}
-                className={cx(
-                  "px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all flex-shrink-0",
-                  sectionFilter === null
-                    ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                    : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
-                )}>
-                全班
-              </button>
-              {sections.map((sec) => (
-                <button key={sec} type="button" onClick={() => setSectionFilter(sec)}
-                  className={cx(
-                    "px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all flex-shrink-0",
-                    sectionFilter === sec
-                      ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                      : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
-                  )}>
-                  {sec}
-                </button>
-              ))}
-            </div>
+          {/* 全折りたたみ / 展開（出勤タブのみ） */}
+          {tabKey === "shukkin" && visibleShiftPatterns.length > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (collapsedPatterns.size < visibleShiftPatterns.length) {
+                  setCollapsedPatterns(new Set(visibleShiftPatterns.map(p => p.name)));
+                } else {
+                  setCollapsedPatterns(new Set());
+                }
+              }}
+              className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 whitespace-nowrap transition-colors border border-zinc-200 dark:border-zinc-700"
+            >
+              {collapsedPatterns.size < visibleShiftPatterns.length ? "全畳" : "全開"}
+            </button>
           )}
         </div>
+
+        {/* ② セクションフィルター行（セクションがある案件のみ） */}
+        {hasSection && (
+          <div className="px-4 pb-2 flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
+            <button type="button" onClick={() => setSectionFilter(null)}
+              className={cx(
+                "px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all flex-shrink-0",
+                sectionFilter === null
+                  ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
+              )}>
+              全班
+            </button>
+            {sections.map((sec) => (
+              <button key={sec} type="button" onClick={() => setSectionFilter(sec)}
+                className={cx(
+                  "px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all flex-shrink-0",
+                  sectionFilter === sec
+                    ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
+                )}>
+                {sec}
+              </button>
+            ))}
+          </div>
+        )}
 
       </div>
 

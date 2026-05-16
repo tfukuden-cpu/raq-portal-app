@@ -1,7 +1,7 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { ChevronLeftIcon } from "@/components/icons";
-import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction } from "./actions";
+import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction } from "./actions";
 import type { SendResult } from "./actions";
 
 // ── 型定義 ────────────────────────────────────────────────
@@ -72,6 +72,7 @@ const REQUEST_MSG  = "本日はお休みのところ恐れ入ります。急な�
 // ── Props ─────────────────────────────────────────────────
 interface Props {
   projectId: string;
+  today: string;
   dateLabel: string;
   projectName: string;
   total: number;
@@ -88,13 +89,41 @@ type ModalState = null | "confirm" | "sending" | "results";
 
 // ── メインコンポーネント ──────────────────────────────────
 export default function AttendanceClient({
-  projectId, dateLabel, projectName,
+  projectId, today, dateLabel, projectName,
   total, departed, clockedIn, absent, notClocked,
   grouped, offMembers,
 }: Props) {
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
+
+  // ステータス手動変更
+  const [isPending, startTransition] = useTransition();
+  const [statusToast, setStatusToast] = useState<string | null>(null);
+  const [localStatuses, setLocalStatuses] = useState<Map<string, StatusKey>>(
+    () => {
+      const map = new Map<string, StatusKey>();
+      grouped.flatMap(g => g.shiftGroups.flatMap(sg => sg.members))
+        .forEach(m => map.set(m.staffId, m.status));
+      return map;
+    }
+  );
+  const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
+
+  function handleStatusChange(staffId: string, newStatus: StatusKey) {
+    setStatusMenuId(null);
+    startTransition(async () => {
+      const res = await changeAttendanceStatusAction(projectId, staffId, today, newStatus);
+      if (!res.ok) {
+        setStatusToast(`エラー: ${res.error}`);
+        setTimeout(() => setStatusToast(null), 4000);
+        return;
+      }
+      setLocalStatuses(prev => new Map(prev).set(staffId, newStatus));
+      setStatusToast("ステータスを変更しました");
+      setTimeout(() => setStatusToast(null), 2500);
+    });
+  }
 
   function toggleReminder(staffId: string, mode: SelectionMode) {
     if (selectedMode !== null && selectedMode !== mode) return;
@@ -227,8 +256,10 @@ export default function AttendanceClient({
                         {/* メンバー1行リスト */}
                         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                           {gMembers.map(m => {
-                            const canRemind = m.status === "not_departed" || m.status === "late";
+                            const currentStatus = localStatuses.get(m.staffId) ?? m.status;
+                            const canRemind = currentStatus === "not_departed" || currentStatus === "late";
                             const isSelected = selectedIds.has(m.staffId);
+                            const isMenuOpen = statusMenuId === m.staffId;
                             return (
                               <div
                                 key={m.staffId}
@@ -242,18 +273,29 @@ export default function AttendanceClient({
                                 <span className="flex-1 min-w-0 text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                                   {m.name}
                                 </span>
-                                {/* ステータス + 時刻 */}
-                                <div className="flex items-center gap-1.5 flex-shrink-0">
-                                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded whitespace-nowrap ${STATUS_COLOR[m.status]}`}>
-                                    {STATUS_LABEL[m.status]}
-                                  </span>
-                                  <span className="text-xs font-mono tabular-nums text-zinc-400 whitespace-nowrap">
-                                    {m.clockIn  && `出${fmtTime(m.clockIn)}`}
-                                    {m.clockOut && ` 退${fmtTime(m.clockOut)}`}
-                                    {m.departureTime && !m.clockIn && `出発${fmtTime(m.departureTime)}`}
-                                    {m.status === "late" && m.expectedArrival && `→${m.expectedArrival.slice(0,5)}`}
-                                  </span>
+                                {/* ステータスバッジ（タップで変更メニュー） */}
+                                <div className="relative flex-shrink-0">
+                                  <button
+                                    onClick={() => setStatusMenuId(isMenuOpen ? null : m.staffId)}
+                                    className={`text-xs font-semibold px-1.5 py-0.5 rounded whitespace-nowrap transition-opacity ${STATUS_COLOR[currentStatus]} ${isPending ? "opacity-50" : ""}`}
+                                  >
+                                    {STATUS_LABEL[currentStatus]} ▾
+                                  </button>
+                                  {isMenuOpen && (
+                                    <StatusMenu
+                                      current={currentStatus}
+                                      onSelect={s => handleStatusChange(m.staffId, s)}
+                                      onClose={() => setStatusMenuId(null)}
+                                    />
+                                  )}
                                 </div>
+                                {/* 時刻 */}
+                                <span className="text-xs font-mono tabular-nums text-zinc-400 whitespace-nowrap flex-shrink-0">
+                                  {m.clockIn  && `出${fmtTime(m.clockIn)}`}
+                                  {m.clockOut && ` 退${fmtTime(m.clockOut)}`}
+                                  {m.departureTime && !m.clockIn && `出発${fmtTime(m.departureTime)}`}
+                                  {currentStatus === "late" && m.expectedArrival && `→${m.expectedArrival.slice(0,5)}`}
+                                </span>
                                 {/* 催促トグルボタン */}
                                 {canRemind ? (
                                   <button
@@ -428,7 +470,56 @@ export default function AttendanceClient({
           </div>
         </div>
       )}
+
+      {/* ステータス変更トースト */}
+      {statusToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-zinc-800 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium shadow-lg whitespace-nowrap">
+          {statusToast}
+        </div>
+      )}
     </main>
+  );
+}
+
+// ── ステータス変更メニュー ──────────────────────────────────
+const ALL_STATUSES: StatusKey[] = ["not_departed", "departed", "working", "clocked_out", "late", "absent"];
+
+function StatusMenu({ current, onSelect, onClose }: {
+  current: StatusKey;
+  onSelect: (s: StatusKey) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden min-w-[110px]"
+    >
+      {ALL_STATUSES.map(s => (
+        <button
+          key={s}
+          onClick={() => onSelect(s)}
+          className={`w-full text-left px-3 py-2 text-xs font-semibold transition-colors flex items-center gap-2 ${
+            s === current
+              ? "bg-zinc-100 dark:bg-zinc-700"
+              : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
+          }`}
+        >
+          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${STATUS_COLOR[s]}`}>
+            {STATUS_LABEL[s]}
+          </span>
+          {s === current && <span className="text-zinc-400 text-[10px]">現在</span>}
+        </button>
+      ))}
+    </div>
   );
 }
 

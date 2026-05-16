@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-13（v11：セクション機能・CSV重複スキップ・各種バグ修正・Google Sheets認証問題）
+最終更新：2026-05-16（v13：UIブラッシュアップ・当日状況ステータス手動変更・勤怠修正UI改善）
 
 ---
 
@@ -43,7 +43,7 @@ Cookie `rqp_project_id`（HTTPOnly・30日）に現在選択中の案件IDを保
 
 ## 3. 現在の開発フェーズと方向性
 
-### 現状（v11時点）
+### 現状（v13時点）
 GASからの移行を進めており、**コア機能はほぼ揃った状態**。
 実際の案件・スタッフで使い始めている段階。
 
@@ -60,28 +60,15 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | LINEグループ連携 | ✅ 完成 |
 | セクション管理（IDOM案件対応） | ✅ 完成（v11新設） |
 | CSV一括登録（IDOM形式・重複スキップ） | ✅ 完成（v11更新） |
-| **Google Sheets連携** | ❌ **現在未動作（認証問題）** |
-| 希望休ルール適用（バリデーション） | ⏳ 未着手 |
+| **Google Sheets連携** | ✅ 完成（OAuth2認証、本番動作中） |
+| 希望休ルール適用（バリデーション） | ✅ 完成 |
+| 当日状況 ステータス手動変更 | ✅ 完成（v13新設） |
+| 勤怠修正 カードUI・直接編集 | ✅ 完成（v13改善） |
 | アバターシステム | 🔄 設計済み・パーツ未実装 |
-
-### ⚠️ Google Sheets連携について（重要）
-
-**現状：スプシ連携機能は動作していない。**
-
-確認済みの事実：
-- GCPプロジェクト「Raq app」のサービスアカウント `raq-portal@raq-app-495214.iam.gserviceaccount.com` にキーは存在しない
-- GCPの組織ポリシー `iam.disableServiceAccountKeyCreation` によりキーの新規作成も不可
-- Vercelに `GOOGLE_SERVICE_ACCOUNT_JSON` は設定されているが、動作しない状態
-- `GOOGLE_REFRESH_TOKEN` / `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` はVercelに存在しない
-
-コード側（`src/lib/gsheets.ts`）が対応している認証方式：
-1. OAuth2（`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `GOOGLE_REFRESH_TOKEN`）← 未設定
-2. サービスアカウントJSON（`GOOGLE_SERVICE_ACCOUNT_JSON`）← 未動作
-3. 個別環境変数（`GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`）← 未設定
 
 ### 次に優先すべきこと（新しいセッションはここから）
 
-1. **Google Sheets連携の復旧** — 認証が通るように環境変数を正しく設定する
+1. **スケジュール通知の本番テスト** — cronエンドポイントを叩いて出勤前リマインドが飛ぶか確認
 2. **スケジュール通知の本番テスト** — `CRON_SECRET` を使ってcronエンドポイントを叩き、出勤前リマインドなどが飛ぶか確認
 3. **シフト追加申請の管理者審査画面** — `/shifts/manage` に申請タブを追加
 4. **希望休ルールのバリデーション** — 月上限・締切・連続上限チェック
@@ -684,3 +671,4 @@ export default async function Page({
 | 2026-05-11 | v10 | 問い合わせシステム新設（/inquiries・/inquiries/manage）、LINE Login magic link修正（/auth/confirm）、LINEグループ連携（project_settings.line_group_id）、inquiry/inquiry_reply通知種別追加、通知カードアコーディオンUI、notify.ts個別try-catch、ops向け問い合わせ管理修正 |
 | 2026-05-13 | v11 | セクション機能（project_members.section）、CSVフォーマットをIDOM形式に変更（所属会社,氏名,役割,セクション）、CSV重複スキップ、姓名スペース削除、LINE連携状況の表示、初期PW変更（1234）、問い合わせ返信バグ修正、シフト管理セクションフィルタ、シフト生成エラーハンドリング改善、Google Sheets認証を3段階フォールバック＋OAuth2個別環境変数対応 |
 | 2026-05-09 | v12 | シフト管理UI全面刷新（ShiftDayList：日付タブ・充足バッジ・未登録折りたたみ・メンバー外シフト表示・router.refresh）、adminClient化（RLSバイパス）、/api/set-project Route Handler新設、Google Sheets連携セクション追記（セクション8）、運用者メニューへの管理者メニュー追加を残タスクに追記 |
+| 2026-05-16 | v13 | UIブラッシュアップ多数：モバイルボトムナビをiOSセグメントコントロール風に刷新・`<a>`→`<Link>`でプリフェッチ有効化・loading.tsxを主要ページに追加・DevBannerをモバイルで非表示・シフト管理タブを2行レイアウトに改善。当日状況：未打刻バッジ追加・勤怠ステータスをバッジタップで手動変更可能に（changeAttendanceStatusAction実装）。勤怠修正：カード形式UIに刷新・異常打刻のみ表示＋修正ボタンで即時編集。補正申請承認時のpunch_logs自動上書き・LINE結果通知（correction_result通知種別追加）。 |
