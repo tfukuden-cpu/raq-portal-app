@@ -446,7 +446,7 @@ function EditModal({
             <p className="text-[11px] text-zinc-400 uppercase tracking-wide mb-1.5">パターンを変更</p>
             <div className="space-y-1 max-h-44 overflow-y-auto mb-3">
               {patterns
-                .filter((p) => p.name !== target.patternName && (!staffMember || canAssign(staffMember, p)))
+                .filter((p) => p.name !== target.patternName)
                 .map((p) => (
                   <button key={p.name} onClick={() => onChangePattern(p.name)}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
