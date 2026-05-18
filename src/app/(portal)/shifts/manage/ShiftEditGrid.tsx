@@ -730,6 +730,14 @@ export default function ShiftEditGrid({
     const tPat = patternByName.get(targetPattern);
     const member = memberById.get(staffId);
     if (tPat && member && !canAssign(member, tPat)) return;
+    // 別日ドロップ時：対象日に既にシフトがある場合はエラー
+    if (sourceDate !== targetDate) {
+      const existingOnTarget = resolveCell(staffId, targetDate);
+      if (existingOnTarget !== null) {
+        setError(`${member?.name ?? staffId} はすでに ${fmtDate(targetDate)} にシフトが登録されています`);
+        return;
+      }
+    }
     setDrafts((prev) => {
       const next = new Map(prev);
       const sourceKey = `${staffId}__${sourceDate}`;
