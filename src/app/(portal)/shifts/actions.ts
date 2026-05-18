@@ -580,7 +580,6 @@ export async function bulkUpsertShiftsAction(
     shift_name:  u.shiftName,
     shift_start: u.shiftStart,
     shift_end:   u.shiftEnd,
-    created_by:  myStaffId,
   }));
 
   const upsertLogs: object[] = [];
