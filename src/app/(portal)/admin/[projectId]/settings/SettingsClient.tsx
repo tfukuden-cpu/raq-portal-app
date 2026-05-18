@@ -17,6 +17,7 @@ import {
   saveLineSettingsAction,
   saveLineGroupAction,
   saveDepartureSettingAction,
+  departStaffAction,
 } from "./actions";
 import {
   buildDefaultNotificationSettings,
@@ -501,6 +502,8 @@ export function MemberList({
   const [editShiftNote, setEditShiftNote]     = useState("");
   const [editWorkDaysType, setEditWorkDaysType] = useState<"monthly" | "weekly" | "">("");
   const [editWorkDaysCount, setEditWorkDaysCount] = useState("");
+  const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
+  const [departDate, setDepartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const startEdit = (m: Member) => {
     setEditId(m.staffId);
@@ -514,6 +517,8 @@ export function MemberList({
     setEditShiftNote(m.shift_note ?? "");
     setEditWorkDaysType((m.work_days_type as "monthly" | "weekly" | "") ?? "");
     setEditWorkDaysCount(m.work_days_count != null ? String(m.work_days_count) : "");
+    setDepartStep("hidden");
+    setDepartDate(new Date().toISOString().slice(0, 10));
   };
 
   const handleSaveEdit = () => {
@@ -1058,6 +1063,57 @@ export function MemberList({
                       )}
                     </div>
                   </div>
+                  {/* 離脱処理 */}
+                  {departStep === "hidden" ? (
+                    <button
+                      type="button"
+                      onClick={() => setDepartStep("input")}
+                      className="w-full text-left text-xs text-red-500 hover:text-red-600 dark:text-red-400 font-semibold py-1"
+                    >
+                      離脱処理…
+                    </button>
+                  ) : (
+                    <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50/40 dark:bg-red-950/20 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-red-600 dark:text-red-400">離脱処理</p>
+                      <p className="text-[10px] text-zinc-500">指定日より後のシフトが削除されます</p>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-semibold">離脱日</label>
+                        <input
+                          type="date"
+                          value={departDate}
+                          onChange={e => setDepartDate(e.target.value)}
+                          className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setDepartStep("hidden")}
+                          className="flex-1 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                          戻る
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPending || !departDate}
+                          onClick={() => {
+                            if (!editId) return;
+                            start(async () => {
+                              const r = await departStaffAction(projectId, editId, departDate);
+                              if (r.success) {
+                                setEditId(null);
+                                setDepartStep("hidden");
+                                setResult({ ok: true, msg: "離脱処理が完了しました" });
+                              } else {
+                                setResult({ ok: false, msg: r.message ?? "エラーが発生しました" });
+                              }
+                            });
+                          }}
+                          className="flex-1 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold disabled:opacity-40"
+                        >
+                          {isPending ? "処理中…" : "離脱を確定"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setEditId(null)}
                       className="flex-1 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
@@ -1141,17 +1197,6 @@ export function MemberList({
                   fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a4 4 0 01-2.828 1.172H7v-2a4 4 0 011.172-2.828z" />
                 </svg>
-                {/* 削除 */}
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); handleRemove(m.staffId); }}
-                  disabled={isPending}
-                  className="w-6 h-6 flex items-center justify-center rounded-lg text-zinc-300 dark:text-zinc-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all disabled:opacity-0 flex-shrink-0"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
               </div>
             );
           })}
