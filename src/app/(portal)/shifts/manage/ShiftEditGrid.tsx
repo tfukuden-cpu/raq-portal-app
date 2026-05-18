@@ -996,7 +996,8 @@ export default function ShiftEditGrid({
   const COL_W = 42;
   const NAME_W = 100;
   const totalW = NAME_W + COL_W * allDates.length;
-  const alertCount = shortageList.length + duplicateList.length;
+  // 不足人数 = 全パターン×日付の (必要人数 - 配置人数) の合計
+  const totalShortage = shortageList.reduce((sum, s) => sum + (s.required - s.assigned), 0);
 
   return (
     <div className="flex flex-col h-full">
@@ -1005,6 +1006,11 @@ export default function ShiftEditGrid({
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 leading-tight">
             {draftCount > 0 ? `${draftCount}件 変更中` : slotReqChanged ? "必要人数 変更中" : "グリッド編集"}
+            {totalShortage > 0 && (
+              <span className="ml-2 text-[11px] font-bold text-red-500 dark:text-red-400 tabular-nums">
+                不足 -{totalShortage}人
+              </span>
+            )}
           </span>
           {hasDraftFromDB && draftCount === 0 && (
             <span className="text-[10px] text-amber-600 dark:text-amber-400">下書きなし</span>
@@ -1024,10 +1030,10 @@ export default function ShiftEditGrid({
             disabled={isPending || isSavingDraft}
             className="relative px-2.5 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
           >
-            サマリー
-            {alertCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center tabular-nums">
-                {alertCount}
+            変更履歴
+            {draftChanges.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center tabular-nums">
+                {draftChanges.length}
               </span>
             )}
           </button>
@@ -1083,16 +1089,12 @@ export default function ShiftEditGrid({
                   const dw = dowLabel(date);
                   const dn = dowNum(date);
                   const isSun = dn === 0, isSat = dn === 6, isToday = date === todayJST;
-                  const hasShortage = shortageList.some(s => s.date === date);
                   return (
                     <th key={date} className={[
                       "sticky top-0 z-20 h-11 border-b-2 border-r border-zinc-200 dark:border-zinc-700",
                       isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950",
                     ].join(" ")}>
-                      <div className="flex flex-col items-center justify-center h-full gap-0.5 relative">
-                        {hasShortage && !isToday && (
-                          <span className="absolute top-1 right-1 w-1 h-1 rounded-full bg-amber-400" />
-                        )}
+                      <div className="flex flex-col items-center justify-center h-full gap-0.5">
                         <span className={`text-[11px] font-bold tabular-nums leading-none ${
                           isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"
                         }`}>{day}</span>
