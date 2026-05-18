@@ -631,8 +631,8 @@ function EditModal({
                 ))}
             </div>
             <button onClick={onRemove}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 mb-2 transition-colors">
-              シフトから外す
+              className="w-full py-2.5 rounded-xl text-sm font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 mb-2 transition-colors">
+              公休に変更
             </button>
 
             {/* 変更履歴 */}
@@ -1037,7 +1037,8 @@ export default function ShiftEditGrid({
     const key = `${editTarget.staffId}__${editTarget.date}`;
     setDrafts((prev) => {
       const next = new Map(prev);
-      if (shiftsByKey.has(key)) next.set(key, null); else next.delete(key);
+      // 削除ではなく公休に変更
+      next.set(key, { shiftName: "公休", shiftStart: null, shiftEnd: null });
       return next;
     });
     closeModal();
@@ -1364,15 +1365,17 @@ export default function ShiftEditGrid({
                           const hasLog = draftKey ? (changeLogMap.get(draftKey)?.length ?? 0) > 0 : false;
                           const isDuplicate = draftKey ? duplicateStaffDates.set.has(draftKey) : false;
 
-                          // 吹き出しメッセージの決定（rowIdx===0の行にのみ表示）
-                          const isErrorTarget = rowIdx === 0 &&
+                          // エラー配置元セルを赤くハイライト＋吹き出し（同一セル）
+                          const isErrorSource =
                             !!errorAnnotation &&
-                            errorAnnotation.patternName === pattern.name &&
-                            errorAnnotation.date === date;
+                            staffId === errorAnnotation.srcStaffId &&
+                            date === errorAnnotation.srcDate;
+
+                          // 吹き出しメッセージの決定
                           const dupPatterns = isDuplicate && draftKey
                             ? (duplicateStaffDates.map.get(draftKey) ?? []).filter(p => p !== pattern.name)
                             : [];
-                          const bubbleMessage: string | undefined = isErrorTarget
+                          const bubbleMessage: string | undefined = isErrorSource
                             ? errorAnnotation!.message
                             : rowIdx === 0 && isDuplicate && dupPatterns.length > 0
                             ? `重複: ${dupPatterns.join("・")}`
@@ -1383,13 +1386,6 @@ export default function ShiftEditGrid({
                             !!draggingStaffId &&
                             staffId === draggingStaffId &&
                             `${staffId}__${date}` !== activeId;
-
-                          // エラー配置元セルを赤くハイライト（該当スタッフのセルのみ）
-                          const isErrorSource =
-                            !!errorAnnotation &&
-                            errorAnnotation.srcPatternName === pattern.name &&
-                            errorAnnotation.srcDate === date &&
-                            staffId === errorAnnotation.srcStaffId;
 
                           return (
                             <SlotCellFull

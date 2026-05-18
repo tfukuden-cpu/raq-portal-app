@@ -73,8 +73,10 @@ export default function ShiftDayList({
 }) {
   const [tabKey, setTabKey]               = useState<TabKey>("shukkin");
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
-  // パターンごとの折りたたみ状態
-  const [collapsedPatterns, setCollapsedPatterns] = useState<Set<string>>(new Set());
+  // パターンごとの折りたたみ状態（初期値: 全折りたたみ）
+  const [collapsedPatterns, setCollapsedPatterns] = useState<Set<string>>(
+    () => new Set(shiftPatterns.map(p => p.name))
+  );
   // 月次ストリップの横スクロールコンテナ
   const stripRef = useRef<HTMLDivElement>(null);
   // 日付ヘッダーストリップの内部 div（translateX でスクロール同期）
@@ -363,13 +365,29 @@ export default function ShiftDayList({
                             <div key={pattern.name} className={cx("flex flex-col", isLastGrp ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
                               {/* 充足数行 (h-9) */}
                               <div className="h-9 flex items-center justify-center border-b border-zinc-100 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-800/30">
-                                {req > 0 ? (
+                                {pattern.section === "SV" ? (
+                                  /* SVパターン: 配置人数のみ */
+                                  <span className="tabular-nums text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+                                    {actual > 0 ? actual : "—"}
+                                  </span>
+                                ) : req > 0 ? (
                                   <div className="flex flex-col items-center gap-px">
                                     <span className={cx(
                                       "tabular-nums text-[11px] font-bold leading-none",
-                                      ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400",
-                                    )}>{actual}</span>
-                                    <span className="text-[8px] text-zinc-300 dark:text-zinc-600 leading-none tabular-nums">/{req}</span>
+                                      actual > req ? "text-emerald-600 dark:text-emerald-400"
+                                      : actual < req ? "text-red-500 dark:text-red-400"
+                                      : "text-emerald-600 dark:text-emerald-400",
+                                    )}>{actual}/{req}</span>
+                                    <span className={cx(
+                                      "tabular-nums text-[8px] font-bold leading-none",
+                                      actual > req ? "text-emerald-500 dark:text-emerald-400"
+                                      : actual < req ? "text-red-400 dark:text-red-500"
+                                      : "text-zinc-300 dark:text-zinc-600",
+                                    )}>
+                                      {actual > req ? `+${actual - req}人`
+                                      : actual < req ? `-${req - actual}人`
+                                      : "✓"}
+                                    </span>
                                   </div>
                                 ) : (
                                   <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
