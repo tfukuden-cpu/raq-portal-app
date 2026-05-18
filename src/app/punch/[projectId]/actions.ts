@@ -5,33 +5,102 @@ import { sendEventNotify } from "@/lib/notify";
 import { revalidatePath } from "next/cache";
 
 export type TerminalPunchResult = { ok: boolean; message: string };
+export type PunchKind = "normal" | "late" | "early" | "overtime";
+
+// ── 打刻時刻の丸め処理 ─────────────────────────────────────────
+
+/** JST の現在時刻を 15分単位で切り上げた ISO 文字列を返す */
+function ceil15minISO(): string {
+  const now  = new Date();
+  const date = now.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }); // YYYY-MM-DD
+  const hhmm = now.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false });
+  const [h, m] = hhmm.split(":").map(Number);
+  const rounded = Math.ceil((h * 60 + m) / 15) * 15;
+  const rh = Math.floor(rounded / 60) % 24;
+  const rm = rounded % 60;
+  return `${date}T${String(rh).padStart(2, "0")}:${String(rm).padStart(2, "0")}:00+09:00`;
+}
+
+/** JST の現在時刻を 15分単位で切り下げた ISO 文字列を返す */
+function floor15minISO(): string {
+  const now  = new Date();
+  const date = now.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }); // YYYY-MM-DD
+  const hhmm = now.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false });
+  const [h, m] = hhmm.split(":").map(Number);
+  const rounded = Math.floor((h * 60 + m) / 15) * 15;
+  const rh = Math.floor(rounded / 60) % 24;
+  const rm = rounded % 60;
+  return `${date}T${String(rh).padStart(2, "0")}:${String(rm).padStart(2, "0")}:00+09:00`;
+}
+
+/** シフト時刻（"HH:MM" または "HH:MM:SS"）を今日の JST ISO 文字列に変換 */
+function shiftTimeToISO(shiftTime: string): string {
+  const date = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }); // YYYY-MM-DD
+  const [h, m] = shiftTime.split(":").map(Number);
+  return `${date}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00+09:00`;
+}
+
+/**
+ * punchKind と shift 時刻から記録すべき打刻時刻を決定する
+ *   normal   → シフト開始/終了時刻
+ *   late     → 15分繰り上げ（ceil）
+ *   early    → 15分切り下げ（floor）
+ *   overtime → 15分切り下げ（floor）
+ */
+function resolveRecordedAt(
+  punchType: "clock_in" | "clock_out",
+  punchKind: PunchKind,
+  shiftStart: string | null | undefined,
+  shiftEnd:   string | null | undefined,
+): string {
+  if (punchKind === "normal") {
+    if (punchType === "clock_in"  && shiftStart) return shiftTimeToISO(shiftStart);
+    if (punchType === "clock_out" && shiftEnd)   return shiftTimeToISO(shiftEnd);
+    // シフト時刻が未設定の場合は現在時刻
+    return new Date().toISOString();
+  }
+  if (punchKind === "late")                       return ceil15minISO();
+  if (punchKind === "early" || punchKind === "overtime") return floor15minISO();
+  return new Date().toISOString();
+}
 
 /**
  * 現場端末用打刻アクション（認証不要・adminClient使用）
  */
 export async function terminalPunchAction(
-  projectId: string,
-  staffId: string,
-  punchType: "clock_in" | "clock_out",
-  punchKind: "normal" | "late" | "early",
+  projectId:  string,
+  staffId:    string,
+  punchType:  "clock_in" | "clock_out",
+  punchKind:  PunchKind,
   approverName?: string,
+  shiftStart?: string | null,
+  shiftEnd?:   string | null,
 ): Promise<TerminalPunchResult> {
   if (!projectId || !staffId) {
     return { ok: false, message: "パラメータが不正です" };
   }
 
   const admin = createAdminClient();
-  const now = new Date().toISOString();
 
-  const baseNote = punchKind === "late" ? "遅刻" : punchKind === "early" ? "早退" : null;
+  // 打刻時刻を決定
+  const recordedAt = resolveRecordedAt(punchType, punchKind, shiftStart, shiftEnd);
+
+  const NOTE_LABEL: Record<PunchKind, string | null> = {
+    normal:   null,
+    late:     "遅刻",
+    early:    "早退",
+    overtime: "残業",
+  };
+  const baseNote = NOTE_LABEL[punchKind];
   const note = baseNote && approverName
     ? `${baseNote} [承認: ${approverName}]`
     : baseNote;
 
   const { error } = await admin.from("punch_logs").insert({
-    project_id: projectId,
-    staff_id:   staffId,
-    punch_type: punchType,
+    project_id:  projectId,
+    staff_id:    staffId,
+    punch_type:  punchType,
+    recorded_at: recordedAt,
     note,
   });
 
@@ -45,7 +114,7 @@ export async function terminalPunchAction(
   const { data: staffData } = await admin
     .from("staffs").select("display_name, name").eq("id", staffId).maybeSingle();
   const name    = staffData?.display_name ?? staffData?.name ?? staffId;
-  const timeJST = new Date(now).toLocaleTimeString("ja-JP", {
+  const timeJST = new Date(recordedAt).toLocaleTimeString("ja-JP", {
     timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit",
   });
   void sendEventNotify(projectId, "clock", {
@@ -54,8 +123,10 @@ export async function terminalPunchAction(
     "種別": LABEL[punchType],
   });
 
-  const kindLabel = punchKind === "late" ? "（遅刻）" : punchKind === "early" ? "（早退）" : "";
-  return { ok: true, message: `${LABEL[punchType]}${kindLabel}を記録しました` };
+  const kindLabel: Record<PunchKind, string> = {
+    normal: "", late: "（遅刻）", early: "（早退）", overtime: "（残業）",
+  };
+  return { ok: true, message: `${LABEL[punchType]}${kindLabel[punchKind]}を記録しました` };
 }
 
 /**

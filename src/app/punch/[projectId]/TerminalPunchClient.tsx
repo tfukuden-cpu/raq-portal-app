@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useTransition } from "react";
-import { terminalPunchAction, saveConsentAction } from "./actions";
+import { terminalPunchAction, saveConsentAction, type PunchKind } from "./actions";
 
 // ── 型 ───────────────────────────────────────────────────────
 export type TerminalMember = {
@@ -50,7 +50,7 @@ type Step =
   | { kind: "consent"; member: TerminalMember }
   | { kind: "punch"; member: TerminalMember }
   | { kind: "kind"; member: TerminalMember; punchType: "clock_in" | "clock_out" }
-  | { kind: "approver"; member: TerminalMember; punchType: "clock_in" | "clock_out"; punchKind: "late" | "early" }
+  | { kind: "approver"; member: TerminalMember; punchType: "clock_in" | "clock_out"; punchKind: Exclude<PunchKind, "normal"> }
   | { kind: "done"; message: string };
 
 // ── 同意書の本文 ─────────────────────────────────────────────
@@ -173,7 +173,7 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   function handleKindSelect(
     member: TerminalMember,
     punchType: "clock_in" | "clock_out",
-    punchKind: "normal" | "late" | "early"
+    punchKind: PunchKind
   ) {
     if (punchKind === "normal") {
       handleConfirm(member, punchType, "normal", undefined);
@@ -185,11 +185,14 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   function handleConfirm(
     member: TerminalMember,
     punchType: "clock_in" | "clock_out",
-    punchKind: "normal" | "late" | "early",
+    punchKind: PunchKind,
     approverName: string | undefined
   ) {
     startTransition(async () => {
-      const res = await terminalPunchAction(projectId, member.staffId, punchType, punchKind, approverName);
+      const res = await terminalPunchAction(
+        projectId, member.staffId, punchType, punchKind, approverName,
+        member.shiftStart, member.shiftEnd,
+      );
       if (res.ok) {
         setLocalMembers(prev => prev.map(m => {
           if (m.staffId !== member.staffId) return m;
@@ -447,6 +450,11 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
               className="w-full py-5 rounded-2xl bg-zinc-700 hover:bg-zinc-600 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-50"
             >
               {isClockIn ? "定時出勤" : "定時退勤"}
+              <span className="block text-xs font-normal text-zinc-400 mt-0.5">
+                {isClockIn
+                  ? (member.shiftStart ? `→ ${member.shiftStart.slice(0, 5)} で記録` : "シフト開始時刻で記録")
+                  : (member.shiftEnd   ? `→ ${member.shiftEnd.slice(0, 5)} で記録`   : "シフト終了時刻で記録")}
+              </span>
             </button>
             {isClockIn ? (
               <button
@@ -455,18 +463,26 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
                 className="w-full py-5 rounded-2xl bg-amber-700 hover:bg-amber-600 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-50"
               >
                 遅刻出勤
-                <span className="block text-xs font-normal text-amber-200 mt-0.5">SV承認が必要です</span>
+                <span className="block text-xs font-normal text-amber-200 mt-0.5">実打刻時刻を15分繰り上げ　SV承認必要</span>
               </button>
-            ) : (
+            ) : (<>
               <button
                 onClick={() => handleKindSelect(member, punchType, "early")}
                 disabled={isPending}
                 className="w-full py-5 rounded-2xl bg-amber-700 hover:bg-amber-600 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-50"
               >
                 早退退勤
-                <span className="block text-xs font-normal text-amber-200 mt-0.5">SV承認が必要です</span>
+                <span className="block text-xs font-normal text-amber-200 mt-0.5">実打刻時刻を15分切り下げ　SV承認必要</span>
               </button>
-            )}
+              <button
+                onClick={() => handleKindSelect(member, punchType, "overtime")}
+                disabled={isPending}
+                className="w-full py-5 rounded-2xl bg-blue-800 hover:bg-blue-700 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-50"
+              >
+                残業退勤
+                <span className="block text-xs font-normal text-blue-200 mt-0.5">実打刻時刻を15分切り下げ　SV承認必要</span>
+              </button>
+            </>)}
           </div>
 
           <button
@@ -485,7 +501,7 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   // ══════════════════════════════════════════════════════════
   if (step.kind === "approver") {
     const { member, punchType, punchKind } = step;
-    const kindLabel = punchKind === "late" ? "遅刻出勤" : "早退退勤";
+    const kindLabel = punchKind === "late" ? "遅刻出勤" : punchKind === "early" ? "早退退勤" : "残業退勤";
 
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
