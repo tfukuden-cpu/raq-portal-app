@@ -1334,6 +1334,13 @@ export default function ShiftEditGrid({
             <tbody>
               {shiftPatterns.map((pattern) => {
                 const rowCount = rowCountByPattern.get(pattern.name) ?? 2;
+                const isSVPat = pattern.section === "SV";
+                // パターン月次合計
+                const patTotalAssigned = allDates.reduce((s, d) =>
+                  s + (resolvedGrid.get(`${pattern.name}__${d}`) ?? []).length, 0);
+                const patTotalRequired = isSVPat ? 0 : allDates.reduce((s, d) =>
+                  s + getRequired(pattern.name, d), 0);
+                const patNet = patTotalRequired - patTotalAssigned; // 正=不足
                 return (
                   <React.Fragment key={pattern.name}>
                     {Array.from({ length: rowCount }, (_, rowIdx) => (
@@ -1406,7 +1413,30 @@ export default function ShiftEditGrid({
                     ))}
                     {/* 充足状況行（クリックで必要人数を編集） */}
                     <tr>
-                      <td className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-900/60 border-b-2 border-r-2 border-zinc-200 dark:border-zinc-700 h-5" />
+                      <td className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-900/60 border-b-2 border-r-2 border-zinc-200 dark:border-zinc-700 px-1.5 align-middle">
+                        {isSVPat ? (
+                          <span className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                            {patTotalAssigned > 0 ? `${patTotalAssigned}人` : ""}
+                          </span>
+                        ) : patTotalRequired > 0 ? (
+                          <div className="flex flex-col items-start py-0.5">
+                            <span className={`text-[9px] font-bold tabular-nums leading-snug ${
+                              patNet > 0 ? "text-red-500 dark:text-red-400"
+                              : patNet < 0 ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-zinc-400 dark:text-zinc-500"
+                            }`}>
+                              {patTotalAssigned}/{patTotalRequired}
+                            </span>
+                            {patNet !== 0 && (
+                              <span className={`text-[8px] tabular-nums leading-none ${
+                                patNet > 0 ? "text-red-400 dark:text-red-500" : "text-emerald-500 dark:text-emerald-400"
+                              }`}>
+                                {patNet > 0 ? `-${patNet}人` : `+${-patNet}人`}
+                              </span>
+                            )}
+                          </div>
+                        ) : null}
+                      </td>
                       {allDates.map((date) => {
                         const countKey = `${pattern.name}__${date}`;
                         return (
