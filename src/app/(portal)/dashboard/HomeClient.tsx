@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import {
   recordDepartureAction,
   submitAbsenceAction,
@@ -197,6 +197,14 @@ export default function HomeClient({
   const canReport = state === "pre_departure" || state === "pre_clock_in";
   const isHoliday = shift?.name === "公休" || shift?.name === "休" || shift?.name === "公休日";
 
+  // ライブクロック（出発報告OFF時に使用）
+  const [liveTime, setLiveTime] = useState(nowJST);
+  useEffect(() => {
+    if (enableDeparture) return;
+    const id = setInterval(() => setLiveTime(nowJST()), 10000);
+    return () => clearInterval(id);
+  }, [enableDeparture]);
+
   // ── 丸ボタン設定 ──
   type BtnDef = {
     label: string;
@@ -253,126 +261,188 @@ export default function HomeClient({
             {todayLabel}
           </h1>
 
-          {/* シフト情報：小さなタグ */}
-          <div className="mb-16">
-            {!shift && (
-              <p className="text-sm text-zinc-300 dark:text-zinc-700">シフト未登録</p>
-            )}
-            {shift && isHoliday && (
-              <p className="text-sm text-zinc-400">公休日</p>
-            )}
-            {shift && !isHoliday && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{shift.name}</span>
-                {shift.start && (
-                  <span className="text-sm font-mono tabular-nums text-zinc-400">
-                    {shift.start.slice(0, 5)}–{shift.end?.slice(0, 5) ?? "--:--"}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          {/* ────────────────────────────────────────────────────
+              出発報告 ON レイアウト（既存）
+          ──────────────────────────────────────────────────── */}
+          {enableDeparture && (<>
+            {/* シフト情報 */}
+            <div className="mb-16">
+              {!shift && <p className="text-sm text-zinc-300 dark:text-zinc-700">シフト未登録</p>}
+              {shift && isHoliday && <p className="text-sm text-zinc-400">公休日</p>}
+              {shift && !isHoliday && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{shift.name}</span>
+                  {shift.start && (
+                    <span className="text-sm font-mono tabular-nums text-zinc-400">
+                      {shift.start.slice(0, 5)}–{shift.end?.slice(0, 5) ?? "--:--"}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
 
-          {/* 状態ボタン */}
-          <div className="flex flex-col items-center gap-4 mb-12">
-            <button
-              type="button"
-              onClick={() => !isPending && btn.onClick?.()}
-              disabled={!btn.onClick || isPending}
-              className={[
-                "w-32 h-32 rounded-full flex flex-col items-center justify-center gap-2",
-                "font-semibold text-[15px] transition-transform duration-150 select-none",
-                btn.onClick ? "active:scale-95" : "cursor-default",
-                btn.bg,
-              ].filter(Boolean).join(" ")}
-            >
-              {btn.Icon && <btn.Icon className="w-6 h-6" />}
-              <span>{isPending ? "処理中..." : btn.label}</span>
-            </button>
-            <p className="text-[12px] text-zinc-400 text-center">{btn.sub}</p>
-          </div>
+            {/* 状態ボタン */}
+            <div className="flex flex-col items-center gap-4 mb-12">
+              <button
+                type="button"
+                onClick={() => !isPending && btn.onClick?.()}
+                disabled={!btn.onClick || isPending}
+                className={[
+                  "w-32 h-32 rounded-full flex flex-col items-center justify-center gap-2",
+                  "font-semibold text-[15px] transition-transform duration-150 select-none",
+                  btn.onClick ? "active:scale-95" : "cursor-default",
+                  btn.bg,
+                ].filter(Boolean).join(" ")}
+              >
+                {btn.Icon && <btn.Icon className="w-6 h-6" />}
+                <span>{isPending ? "処理中..." : btn.label}</span>
+              </button>
+              <p className="text-[12px] text-zinc-400 text-center">{btn.sub}</p>
+            </div>
 
-          {/* タイムスタンプ */}
-          {enableDeparture ? (
+            {/* タイムスタンプ（出発 / 出勤 / 退勤） */}
             <div className="grid grid-cols-3 mb-10">
               {[
                 { label: "出発", time: optDeparture },
                 { label: "出勤", time: optClockIn },
                 { label: "退勤", time: optClockOut },
               ].map(({ label, time }, i) => (
-                <div key={label} className={`${i === 1 ? "text-center" : i === 2 ? "text-right" : ""}`}>
+                <div key={label} className={i === 1 ? "text-center" : i === 2 ? "text-right" : ""}>
                   <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-2">{label}</p>
-                  <p className={`text-xl font-light tabular-nums ${
-                    time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
-                  }`}>
+                  <p className={`text-xl font-light tabular-nums ${time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"}`}>
                     {time ?? "--:--"}
                   </p>
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 mb-10">
-              {[
-                { label: "出勤", time: optClockIn },
-                { label: "退勤", time: optClockOut },
-              ].map(({ label, time }, i) => (
-                <div key={label} className={i === 1 ? "text-right" : ""}>
-                  <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-2">{label}</p>
-                  <p className={`text-xl font-light tabular-nums ${
-                    time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
-                  }`}>
-                    {time ?? "--:--"}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
 
-          {/* 次回出勤 */}
-          {upcomingShifts && upcomingShifts.length > 0 && (
-            <div className="mb-10">
-              <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-3">次回出勤</p>
-              <div className="flex flex-col gap-2">
-                {upcomingShifts.map((s) => (
-                  <div key={s.date} className="flex items-center justify-between">
-                    <span className="text-sm text-zinc-500">{fmtUpcomingDate(s.date)}</span>
-                    <div className="flex items-center gap-2">
-                      {s.name && <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{s.name}</span>}
-                      {s.start && (
-                        <span className="text-xs font-mono tabular-nums text-zinc-400">
-                          {s.start.slice(0, 5)}–{s.end?.slice(0, 5) ?? "--:--"}
-                        </span>
-                      )}
+            {/* 次回出勤 */}
+            {upcomingShifts && upcomingShifts.length > 0 && (
+              <div className="mb-10">
+                <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-3">次回出勤</p>
+                <div className="flex flex-col gap-2">
+                  {upcomingShifts.map((s) => (
+                    <div key={s.date} className="flex items-center justify-between">
+                      <span className="text-sm text-zinc-500">{fmtUpcomingDate(s.date)}</span>
+                      <div className="flex items-center gap-2">
+                        {s.name && <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{s.name}</span>}
+                        {s.start && (
+                          <span className="text-xs font-mono tabular-nums text-zinc-400">
+                            {s.start.slice(0, 5)}–{s.end?.slice(0, 5) ?? "--:--"}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* 欠勤・遅刻：テキストリンクのみ */}
-          {canReport && (
-            <div className="flex items-center justify-center gap-8">
-              {hasAbsenceReport ? (
-                <span className="text-xs text-zinc-300 dark:text-zinc-700">
-                  欠勤報告済（{statusBadge(absenceStatus)}）
-                </span>
-              ) : (
-                <button type="button" onClick={() => !isPending && setModal("absence")} disabled={isPending}
-                  className="text-sm text-zinc-400 hover:text-red-500 disabled:opacity-40 transition-colors">
-                  欠勤報告
-                </button>
+            {/* 欠勤・遅刻リンク */}
+            {canReport && (
+              <div className="flex items-center justify-center gap-8">
+                {hasAbsenceReport ? (
+                  <span className="text-xs text-zinc-300 dark:text-zinc-700">欠勤報告済（{statusBadge(absenceStatus)}）</span>
+                ) : (
+                  <button type="button" onClick={() => !isPending && setModal("absence")} disabled={isPending}
+                    className="text-sm text-zinc-400 hover:text-red-500 disabled:opacity-40 transition-colors">
+                    欠勤報告
+                  </button>
+                )}
+                <span className="text-zinc-200 dark:text-zinc-800">|</span>
+                {hasLateReport ? (
+                  <span className="text-xs text-zinc-300 dark:text-zinc-700">遅刻報告済（{statusBadge(lateStatus)}）</span>
+                ) : (
+                  <button type="button" onClick={() => !isPending && setModal("late")} disabled={isPending}
+                    className="text-sm text-zinc-400 hover:text-amber-500 disabled:opacity-40 transition-colors">
+                    遅刻報告
+                  </button>
+                )}
+              </div>
+            )}
+          </>)}
+
+          {/* ────────────────────────────────────────────────────
+              出発報告 OFF レイアウト（中央寄せ）
+          ──────────────────────────────────────────────────── */}
+          {!enableDeparture && (
+            <div className="flex flex-col items-center text-center gap-10 mt-2">
+
+              {/* 現在時刻 */}
+              <p className="text-7xl font-extralight tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100 leading-none">
+                {liveTime}
+              </p>
+
+              {/* 本日シフト */}
+              <div className="space-y-1">
+                {!shift && <p className="text-sm text-zinc-400">シフト未登録</p>}
+                {shift && isHoliday && <p className="text-sm text-zinc-400">公休日</p>}
+                {shift && !isHoliday && (
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{shift.name}</span>
+                    {shift.start && (
+                      <span className="text-base font-mono tabular-nums text-zinc-400">
+                        {shift.start.slice(0, 5)}–{shift.end?.slice(0, 5) ?? "--:--"}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {/* 出勤 / 退勤タイムスタンプ */}
+                <div className="flex items-center justify-center gap-6 pt-2">
+                  {[{ label: "出勤", time: optClockIn }, { label: "退勤", time: optClockOut }].map(({ label, time }) => (
+                    <div key={label} className="text-center">
+                      <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-1">{label}</p>
+                      <p className={`text-lg font-light tabular-nums ${time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"}`}>
+                        {time ?? "--:--"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 遅刻・欠勤ボタン */}
+              {canReport && (
+                <div className="flex items-center justify-center gap-8">
+                  {hasAbsenceReport ? (
+                    <span className="text-xs text-zinc-300 dark:text-zinc-700">欠勤報告済（{statusBadge(absenceStatus)}）</span>
+                  ) : (
+                    <button type="button" onClick={() => !isPending && setModal("absence")} disabled={isPending}
+                      className="text-sm text-zinc-400 hover:text-red-500 disabled:opacity-40 transition-colors">
+                      欠勤報告
+                    </button>
+                  )}
+                  <span className="text-zinc-200 dark:text-zinc-800">|</span>
+                  {hasLateReport ? (
+                    <span className="text-xs text-zinc-300 dark:text-zinc-700">遅刻報告済（{statusBadge(lateStatus)}）</span>
+                  ) : (
+                    <button type="button" onClick={() => !isPending && setModal("late")} disabled={isPending}
+                      className="text-sm text-zinc-400 hover:text-amber-500 disabled:opacity-40 transition-colors">
+                      遅刻報告
+                    </button>
+                  )}
+                </div>
               )}
-              <span className="text-zinc-200 dark:text-zinc-800">|</span>
-              {hasLateReport ? (
-                <span className="text-xs text-zinc-300 dark:text-zinc-700">
-                  遅刻報告済（{statusBadge(lateStatus)}）
-                </span>
-              ) : (
-                <button type="button" onClick={() => !isPending && setModal("late")} disabled={isPending}
-                  className="text-sm text-zinc-400 hover:text-amber-500 disabled:opacity-40 transition-colors">
-                  遅刻報告
-                </button>
+
+              {/* 次回出勤 */}
+              {upcomingShifts && upcomingShifts.length > 0 && (
+                <div className="w-full mt-2">
+                  <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-3 text-left">次回出勤</p>
+                  <div className="flex flex-col gap-2">
+                    {upcomingShifts.map((s) => (
+                      <div key={s.date} className="flex items-center justify-between">
+                        <span className="text-sm text-zinc-500">{fmtUpcomingDate(s.date)}</span>
+                        <div className="flex items-center gap-2">
+                          {s.name && <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{s.name}</span>}
+                          {s.start && (
+                            <span className="text-xs font-mono tabular-nums text-zinc-400">
+                              {s.start.slice(0, 5)}–{s.end?.slice(0, 5) ?? "--:--"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )}
