@@ -14,7 +14,7 @@
  * 確定:    実際の shifts テーブルへ反映（変更ログ付き）
  */
 
-import React, { useState, useMemo, useTransition, useEffect } from "react";
+import React, { useState, useMemo, useTransition } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -74,7 +74,7 @@ type EditTarget =
 
 interface Props {
   projectId: string;
-  targetMonth: string; // "2026-05"
+  targetMonth: string;
   allDates: string[];
   shifts: Shift[];
   activeMembers: Member[];
@@ -89,10 +89,9 @@ interface Props {
 }
 
 // ── Section compatibility ──────────────────────────────────────
-// パターンにセクションが指定されている場合、スタッフのセクションと一致する必要がある
 function canAssign(member: Member, pattern: Pattern): boolean {
-  if (!pattern.section) return true;   // パターンにセクション制限なし
-  if (!member.section) return true;    // スタッフにセクション未設定
+  if (!pattern.section) return true;
+  if (!member.section) return true;
   return member.section === pattern.section;
 }
 
@@ -106,6 +105,9 @@ function dowLabel(d: string) {
 function dowNum(d: string) {
   return new Date(d + "T00:00:00+09:00").getDay();
 }
+function fmtDate(d: string) {
+  return `${parseInt(d.slice(5, 7))}/${parseInt(d.slice(8))}（${dowLabel(d)}）`;
+}
 function fmtAt(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
     timeZone: "Asia/Tokyo", month: "numeric", day: "numeric",
@@ -116,9 +118,10 @@ function fmtAt(iso: string): string {
 // ── DraggableChip ──────────────────────────────────────────────
 
 function DraggableChip({
-  staffId, shiftDate, name, isDraft, hasLog,
+  staffId, shiftDate, name, isDraft, hasLog, isDuplicate,
 }: {
-  staffId: string; shiftDate: string; name: string; isDraft: boolean; hasLog: boolean;
+  staffId: string; shiftDate: string; name: string;
+  isDraft: boolean; hasLog: boolean; isDuplicate: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `${staffId}__${shiftDate}`,
@@ -134,29 +137,34 @@ function DraggableChip({
         "block text-[11px] leading-tight px-0.5 rounded",
         "cursor-grab active:cursor-grabbing select-none touch-none truncate w-full",
         isDragging ? "opacity-20" : "",
-        isDraft
+        isDuplicate
+          ? "text-red-600 dark:text-red-400 font-bold"
+          : isDraft
           ? "text-blue-700 dark:text-blue-400 font-bold"
           : "text-zinc-800 dark:text-zinc-200",
       ].filter(Boolean).join(" ")}
     >
       {name}
-      {hasLog && !isDraft && (
+      {isDuplicate && (
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 align-top ml-0.5 mt-0.5" />
+      )}
+      {hasLog && !isDraft && !isDuplicate && (
         <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5 mt-0.5" />
       )}
     </span>
   );
 }
 
-// ── SlotCell ────────────────────────────────────────────────────
+// ── SlotCellFull ────────────────────────────────────────────────
 
-function SlotCell({
+function SlotCellFull({
   patternName, date, rowIdx, staffId, staffName,
-  isDraft, isToday, isOverCol, onClick,
+  isDraft, isToday, isOverCol, hasLog, isDuplicate, onClick,
 }: {
   patternName: string; date: string; rowIdx: number;
   staffId: string | null; staffName: string | null;
   isDraft: boolean; isToday: boolean; isOverCol: boolean;
-  onClick: () => void;
+  hasLog: boolean; isDuplicate: boolean; onClick: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `slot__${rowIdx}__${patternName}__${date}`,
@@ -179,58 +187,9 @@ function SlotCell({
       <div className="px-0.5 h-full flex items-center overflow-hidden">
         {staffId && staffName && (
           <DraggableChip
-            staffId={staffId}
-            shiftDate={date}
-            name={staffName}
-            isDraft={isDraft}
-            hasLog={false /* passed separately via resolved grid */}
+            staffId={staffId} shiftDate={date} name={staffName}
+            isDraft={isDraft} hasLog={hasLog && !isDraft} isDuplicate={isDuplicate}
           />
-        )}
-      </div>
-    </td>
-  );
-}
-
-// ── SlotCellWithLog (変更ログ対応) ────────────────────────────
-
-function SlotCellFull({
-  patternName, date, rowIdx, staffId, staffName,
-  isDraft, isToday, isOverCol, hasLog, onClick,
-}: {
-  patternName: string; date: string; rowIdx: number;
-  staffId: string | null; staffName: string | null;
-  isDraft: boolean; isToday: boolean; isOverCol: boolean;
-  hasLog: boolean; onClick: () => void;
-}) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `slot__${rowIdx}__${patternName}__${date}`,
-    data: { type: "slot", patternName, date, rowIdx },
-  });
-
-  return (
-    <td
-      ref={setNodeRef}
-      onClick={onClick}
-      className={[
-        "border-b border-r border-zinc-100 dark:border-zinc-800",
-        "h-8 align-middle p-0 cursor-pointer overflow-hidden",
-        isToday && !isOver && !isOverCol ? "bg-blue-50/40 dark:bg-blue-950/10" : "",
-        isOver
-          ? "bg-blue-100 dark:bg-blue-900/50 ring-inset ring-2 ring-blue-400"
-          : isOverCol ? "bg-blue-50/60 dark:bg-blue-950/20" : "",
-      ].filter(Boolean).join(" ")}
-    >
-      <div className="px-0.5 h-full flex items-center overflow-hidden relative">
-        {staffId && staffName && (
-          <>
-            <DraggableChip
-              staffId={staffId}
-              shiftDate={date}
-              name={staffName}
-              isDraft={isDraft}
-              hasLog={hasLog && !isDraft}
-            />
-          </>
         )}
       </div>
     </td>
@@ -258,10 +217,134 @@ function CountCell({ assigned, required, isToday }: {
   );
 }
 
+// ── SummaryModal ────────────────────────────────────────────────
+
+function SummaryModal({
+  shortages, draftChanges, duplicates, onClose,
+}: {
+  shortages: { patternName: string; date: string; assigned: number; required: number }[];
+  draftChanges: { staffName: string; date: string; from: string | null; to: string | null }[];
+  duplicates: { staffName: string; date: string; patterns: string[] }[];
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85dvh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-4 pt-4 pb-2 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+          <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">変更サマリー</h2>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-4 py-3 space-y-4">
+
+          {/* 重複エラー */}
+          {duplicates.length > 0 && (
+            <section>
+              <p className="text-xs font-bold text-red-600 dark:text-red-400 mb-2 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                重複エラー（{duplicates.length}件）
+              </p>
+              <div className="space-y-1.5">
+                {duplicates.map((d, i) => (
+                  <div key={i} className="px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900">
+                    <p className="text-sm font-semibold text-red-700 dark:text-red-300">{d.staffName}</p>
+                    <p className="text-xs text-red-500 dark:text-red-400">
+                      {fmtDate(d.date)} — {d.patterns.join("・")}に重複配置
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 人数不足アラート */}
+          {shortages.length > 0 && (
+            <section>
+              <p className="text-xs font-bold text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                人数不足（{shortages.length}件）
+              </p>
+              <div className="space-y-1.5">
+                {shortages.map((s, i) => (
+                  <div key={i} className="px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">{s.patternName}</p>
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400">{fmtDate(s.date)}</p>
+                    </div>
+                    <span className="text-sm font-bold tabular-nums text-red-500 dark:text-red-400">
+                      {s.assigned}/{s.required}名
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 変更一覧 */}
+          <section>
+            <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-2 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+              変更一覧（{draftChanges.length}件）
+            </p>
+            {draftChanges.length === 0 ? (
+              <p className="text-sm text-zinc-400 text-center py-3">変更なし</p>
+            ) : (
+              <div className="space-y-1.5">
+                {draftChanges.map((c, i) => (
+                  <div key={i} className="px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-700 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 truncate">{c.staffName}</p>
+                      <p className="text-[11px] text-zinc-400">{fmtDate(c.date)}</p>
+                    </div>
+                    <div className="text-xs shrink-0 text-right leading-snug">
+                      {!c.from && c.to && (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">新規 {c.to}</span>
+                      )}
+                      {c.from && !c.to && (
+                        <span className="text-red-500 dark:text-red-400 font-bold">{c.from} 削除</span>
+                      )}
+                      {c.from && c.to && (
+                        <span>
+                          <span className="text-zinc-400">{c.from}</span>
+                          <span className="text-zinc-300 mx-1">→</span>
+                          <span className="text-blue-600 dark:text-blue-400 font-semibold">{c.to}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {duplicates.length === 0 && shortages.length === 0 && (
+            <div className="px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900">
+              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">✓ 重複・人数不足なし</p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 pb-4 pt-2 shrink-0">
+          <button onClick={onClose}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Edit Modal ─────────────────────────────────────────────────
 
 function EditModal({
   target, patterns, availableStaff, logs, staffMember,
+  originalPattern, consecutiveDays, isDuplicate,
   onClose, onChangePattern, onRemove, onAdd,
 }: {
   target: EditTarget;
@@ -269,13 +352,19 @@ function EditModal({
   availableStaff: Member[];
   logs: ChangeLog[];
   staffMember: Member | null;
+  originalPattern: string | null;
+  consecutiveDays: number;
+  isDuplicate: boolean;
   onClose: () => void;
   onChangePattern: (p: string) => void;
   onRemove: () => void;
   onAdd: (staffId: string) => void;
 }) {
-  const dow = dowLabel(target.date);
-  const dateLabel = `${target.date.slice(5).replace("-", "/")}（${dow}）`;
+  const dateLabel = fmtDate(target.date);
+  const wasMoved =
+    target.kind === "existing" &&
+    originalPattern !== null &&
+    originalPattern !== target.patternName;
 
   return (
     <div
@@ -287,24 +376,65 @@ function EditModal({
         style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px))" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{target.patternName}</p>
-        <p className="text-xs text-zinc-400 mb-3">{dateLabel}</p>
+        {/* ヘッダー */}
+        <div className="mb-3">
+          <p className="text-xs text-zinc-400 mb-0.5">{dateLabel}</p>
+          {target.kind === "existing" && staffMember ? (
+            <>
+              <p className="text-base font-bold text-zinc-800 dark:text-zinc-100 leading-snug">{staffMember.name}</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">{target.patternName}</p>
+              {staffMember.section && (
+                <span className="inline-block mt-0.5 text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+                  {staffMember.section}
+                </span>
+              )}
+            </>
+          ) : (
+            <p className="text-base font-bold text-zinc-800 dark:text-zinc-100">{target.patternName} に追加</p>
+          )}
+        </div>
+
+        {/* エラー・警告バナー */}
+        {isDuplicate && (
+          <div className="mb-2 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+            <p className="text-xs font-bold text-red-600 dark:text-red-400">⚠ この日に重複配置があります</p>
+          </div>
+        )}
+        {consecutiveDays >= 5 && (
+          <div className="mb-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            <p className="text-xs font-bold text-amber-700 dark:text-amber-300">⚠ {consecutiveDays}連勤になります</p>
+          </div>
+        )}
+
+        {/* 移動前の配置 */}
+        {wasMoved && (
+          <div className="mb-3 px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-700">
+            <p className="text-[10px] text-zinc-400 mb-0.5">移動前の配置</p>
+            <p className="text-xs font-semibold">
+              <span className="text-zinc-400">{originalPattern ?? "（なし）"}</span>
+              <span className="text-zinc-300 dark:text-zinc-600 mx-1.5">→</span>
+              <span className="text-blue-600 dark:text-blue-400">{target.patternName}</span>
+            </p>
+          </div>
+        )}
 
         {target.kind === "existing" && (
           <>
             <p className="text-[11px] text-zinc-400 uppercase tracking-wide mb-1.5">パターンを変更</p>
             <div className="space-y-1 max-h-44 overflow-y-auto mb-3">
-              {patterns.filter((p) => p.name !== target.patternName && (!staffMember || canAssign(staffMember, p))).map((p) => (
-                <button key={p.name} onClick={() => onChangePattern(p.name)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-                  <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{p.name}</span>
-                  {p.start_time && p.end_time && (
-                    <span className="text-xs text-zinc-400 tabular-nums ml-auto">
-                      {p.start_time.slice(0, 5)}～{p.end_time.slice(0, 5)}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {patterns
+                .filter((p) => p.name !== target.patternName && (!staffMember || canAssign(staffMember, p)))
+                .map((p) => (
+                  <button key={p.name} onClick={() => onChangePattern(p.name)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{p.name}</span>
+                    {p.start_time && p.end_time && (
+                      <span className="text-xs text-zinc-400 tabular-nums ml-auto">
+                        {p.start_time.slice(0, 5)}～{p.end_time.slice(0, 5)}
+                      </span>
+                    )}
+                  </button>
+                ))}
             </div>
             <button onClick={onRemove}
               className="w-full py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 mb-2 transition-colors">
@@ -344,8 +474,9 @@ function EditModal({
               <div className="space-y-1 max-h-64 overflow-y-auto mb-3">
                 {availableStaff.map((m) => (
                   <button key={m.id} onClick={() => onAdd(m.id)}
-                    className="w-full px-3 py-2 rounded-xl text-left text-sm text-zinc-700 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-                    {m.name}
+                    className="w-full px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{m.name}</span>
+                    {m.section && <span className="ml-1.5 text-[10px] text-zinc-400">{m.section}</span>}
                   </button>
                 ))}
               </div>
@@ -386,6 +517,7 @@ export default function ShiftEditGrid({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overColKey, setOverColKey] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isSavingDraft, startDraftTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -487,6 +619,91 @@ export default function ShiftEditGrid({
     }
     return m;
   }, [shiftPatterns, allDates, resolvedGrid]);
+
+  // ── 重複検出: staffId__date → 配置パターン[] ─────────────────
+  const duplicateStaffDates = useMemo(() => {
+    // staffId__date → patternName[]
+    const countMap = new Map<string, string[]>();
+    for (const date of allDates) {
+      for (const p of shiftPatterns) {
+        const staffList = resolvedGrid.get(`${p.name}__${date}`) ?? [];
+        for (const staffId of staffList) {
+          const k = `${staffId}__${date}`;
+          const arr = countMap.get(k) ?? [];
+          arr.push(p.name);
+          countMap.set(k, arr);
+        }
+      }
+    }
+    const dupSet = new Set<string>();
+    for (const [k, patterns] of countMap) {
+      if (patterns.length > 1) dupSet.add(k);
+    }
+    return { set: dupSet, map: countMap };
+  }, [resolvedGrid, allDates, shiftPatterns]);
+
+  // ── 人数不足リスト ─────────────────────────────────────────────
+  const shortageList = useMemo(() => {
+    const list: { patternName: string; date: string; assigned: number; required: number }[] = [];
+    for (const p of shiftPatterns) {
+      for (const date of allDates) {
+        const assigned = (resolvedGrid.get(`${p.name}__${date}`) ?? []).length;
+        const required = getRequired(p.name, date);
+        if (required > 0 && assigned < required) {
+          list.push({ patternName: p.name, date, assigned, required });
+        }
+      }
+    }
+    return list.sort((a, b) => a.date.localeCompare(b.date));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedGrid, allDates, shiftPatterns, slotReqMap]);
+
+  // ── 変更一覧（サマリー用） ─────────────────────────────────────
+  const draftChanges = useMemo(() => {
+    const changes: { staffName: string; date: string; from: string | null; to: string | null }[] = [];
+    for (const [key, draftVal] of drafts) {
+      const [staffId, shiftDate] = key.split("__");
+      const staffName = memberById.get(staffId)?.name ?? staffId;
+      const fromPattern = shiftsByKey.get(key)?.shift_name ?? null;
+      const toPattern = draftVal?.shiftName ?? null;
+      changes.push({ staffName, date: shiftDate, from: fromPattern, to: toPattern });
+    }
+    return changes.sort((a, b) => a.date.localeCompare(b.date) || a.staffName.localeCompare(b.staffName));
+  }, [drafts, memberById, shiftsByKey]);
+
+  // ── 重複サマリー用リスト ───────────────────────────────────────
+  const duplicateList = useMemo(() => {
+    const list: { staffName: string; date: string; patterns: string[] }[] = [];
+    for (const [key, patterns] of duplicateStaffDates.map) {
+      if (patterns.length > 1) {
+        const [staffId, date] = key.split("__");
+        list.push({ staffName: memberById.get(staffId)?.name ?? staffId, date, patterns });
+      }
+    }
+    return list.sort((a, b) => a.date.localeCompare(b.date));
+  }, [duplicateStaffDates, memberById]);
+
+  // ── 連続勤務日数計算 ───────────────────────────────────────────
+  function isStaffWorkingOn(staffId: string, date: string): boolean {
+    for (const p of shiftPatterns) {
+      if ((resolvedGrid.get(`${p.name}__${date}`) ?? []).includes(staffId)) return true;
+    }
+    return false;
+  }
+  function getConsecutiveDays(staffId: string, date: string): number {
+    const idx = allDates.indexOf(date);
+    if (idx < 0) return 1;
+    let before = 0, after = 0;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (!isStaffWorkingOn(staffId, allDates[i])) break;
+      before++;
+    }
+    for (let i = idx + 1; i < allDates.length; i++) {
+      if (!isStaffWorkingOn(staffId, allDates[i])) break;
+      after++;
+    }
+    return before + 1 + after;
+  }
 
   // ── DnD ───────────────────────────────────────────────────────
   function handleDragStart(event: DragStartEvent) {
@@ -650,12 +867,32 @@ export default function ShiftEditGrid({
     return changeLogMap.get(`${editTarget.staffId}__${editTarget.date}`) ?? [];
   }, [editTarget, changeLogMap]);
 
+  // モーダル用: 移動前のパターン・連続勤務・重複
+  const modalOriginalPattern = useMemo(() => {
+    if (!editTarget || editTarget.kind !== "existing") return null;
+    const key = `${editTarget.staffId}__${editTarget.date}`;
+    if (!drafts.has(key)) return null;
+    return shiftsByKey.get(key)?.shift_name ?? null;
+  }, [editTarget, drafts, shiftsByKey]);
+
+  const modalConsecutiveDays = useMemo(() => {
+    if (!editTarget || editTarget.kind !== "existing") return 1;
+    return getConsecutiveDays(editTarget.staffId, editTarget.date);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTarget, resolvedGrid, allDates, shiftPatterns]);
+
+  const modalIsDuplicate = useMemo(() => {
+    if (!editTarget || editTarget.kind !== "existing") return false;
+    return duplicateStaffDates.set.has(`${editTarget.staffId}__${editTarget.date}`);
+  }, [editTarget, duplicateStaffDates]);
+
   // ── Render ────────────────────────────────────────────────────
   const draftCount = drafts.size;
   const activeName = activeId ? (memberById.get(activeId.split("__")[0])?.name ?? "") : null;
   const COL_W = 42;
   const NAME_W = 100;
   const totalW = NAME_W + COL_W * allDates.length;
+  const alertCount = shortageList.length + duplicateList.length;
 
   return (
     <div className="flex flex-col h-full">
@@ -678,6 +915,19 @@ export default function ShiftEditGrid({
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* サマリーボタン（不足・重複バッジ） */}
+          <button
+            onClick={() => setShowSummary(true)}
+            disabled={isPending || isSavingDraft}
+            className="relative px-2.5 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+          >
+            サマリー
+            {alertCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center tabular-nums">
+                {alertCount}
+              </span>
+            )}
+          </button>
           {draftCount > 0 && (
             <button onClick={resetDrafts} disabled={isPending || isSavingDraft}
               className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
@@ -701,9 +951,32 @@ export default function ShiftEditGrid({
         </div>
       </div>
 
+      {/* エラーバナー */}
       {error && (
         <div className="px-4 py-2 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 border-b border-red-200 shrink-0">
           {error}
+        </div>
+      )}
+
+      {/* 不足・重複インラインアラート */}
+      {(duplicateList.length > 0 || shortageList.length > 0) && !showSummary && (
+        <div
+          className="px-3 py-1.5 shrink-0 flex items-center gap-2 border-b border-zinc-100 dark:border-zinc-800 cursor-pointer bg-zinc-50 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
+          onClick={() => setShowSummary(true)}
+        >
+          {duplicateList.length > 0 && (
+            <span className="text-[11px] font-semibold text-red-600 dark:text-red-400 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+              重複 {duplicateList.length}件
+            </span>
+          )}
+          {shortageList.length > 0 && (
+            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+              人数不足 {shortageList.length}件
+            </span>
+          )}
+          <span className="text-[11px] text-zinc-400 ml-auto">詳細 →</span>
         </div>
       )}
 
@@ -728,12 +1001,17 @@ export default function ShiftEditGrid({
                   const dw = dowLabel(date);
                   const dn = dowNum(date);
                   const isSun = dn === 0, isSat = dn === 6, isToday = date === todayJST;
+                  // 不足している日付をヘッダーでも示す
+                  const hasShortage = shortageList.some(s => s.date === date);
                   return (
                     <th key={date} className={[
                       "sticky top-0 z-20 h-11 border-b-2 border-r border-zinc-200 dark:border-zinc-700",
                       isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950",
                     ].join(" ")}>
-                      <div className="flex flex-col items-center justify-center h-full gap-0.5">
+                      <div className="flex flex-col items-center justify-center h-full gap-0.5 relative">
+                        {hasShortage && !isToday && (
+                          <span className="absolute top-1 right-1 w-1 h-1 rounded-full bg-amber-400" />
+                        )}
                         <span className={`text-[11px] font-bold tabular-nums leading-none ${
                           isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"
                         }`}>{day}</span>
@@ -775,6 +1053,7 @@ export default function ShiftEditGrid({
                           const draftKey = staffId ? `${staffId}__${date}` : null;
                           const isDraft = draftKey ? drafts.has(draftKey) : false;
                           const hasLog = draftKey ? (changeLogMap.get(draftKey)?.length ?? 0) > 0 : false;
+                          const isDuplicate = draftKey ? duplicateStaffDates.set.has(draftKey) : false;
                           return (
                             <SlotCellFull
                               key={date}
@@ -782,7 +1061,7 @@ export default function ShiftEditGrid({
                               staffId={staffId} staffName={staffName}
                               isDraft={isDraft} isToday={date === todayJST}
                               isOverCol={overColKey === `${pattern.name}__${date}`}
-                              hasLog={hasLog}
+                              hasLog={hasLog} isDuplicate={isDuplicate}
                               onClick={() => openModal(pattern.name, date, staffId)}
                             />
                           );
@@ -822,8 +1101,21 @@ export default function ShiftEditGrid({
         <span className="flex items-center gap-0.5">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />＝変更履歴あり
         </span>
+        <span className="flex items-center gap-0.5">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />＝重複
+        </span>
         <span className="ml-auto">タップ：編集　ドラッグ：移動</span>
       </div>
+
+      {/* Summary Modal */}
+      {showSummary && (
+        <SummaryModal
+          shortages={shortageList}
+          draftChanges={draftChanges}
+          duplicates={duplicateList}
+          onClose={() => setShowSummary(false)}
+        />
+      )}
 
       {/* Edit Modal */}
       {editTarget && (
@@ -831,6 +1123,9 @@ export default function ShiftEditGrid({
           target={editTarget} patterns={shiftPatterns}
           availableStaff={availableStaff} logs={modalLogs}
           staffMember={editTarget.kind === "existing" ? (memberById.get(editTarget.staffId) ?? null) : null}
+          originalPattern={modalOriginalPattern}
+          consecutiveDays={modalConsecutiveDays}
+          isDuplicate={modalIsDuplicate}
           onClose={closeModal} onChangePattern={handleChangePattern}
           onRemove={handleRemove} onAdd={handleAdd}
         />
