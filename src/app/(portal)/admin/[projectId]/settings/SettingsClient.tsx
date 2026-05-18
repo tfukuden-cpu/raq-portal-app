@@ -507,6 +507,7 @@ export function MemberList({
   const [editWorkDaysCount, setEditWorkDaysCount] = useState("");
   const [editPreferredShift, setEditPreferredShift] = useState("");
   const [editMaxConsecDays, setEditMaxConsecDays] = useState("");
+  const [shiftSettingsOpen, setShiftSettingsOpen] = useState(false);
   const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
   const [departDate, setDepartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
@@ -524,6 +525,8 @@ export function MemberList({
     setEditWorkDaysCount(m.work_days_count != null ? String(m.work_days_count) : "");
     setEditPreferredShift(m.preferred_shift ?? "");
     setEditMaxConsecDays(m.max_consecutive_days != null ? String(m.max_consecutive_days) : "");
+    // シフト設定に値があれば自動展開
+    setShiftSettingsOpen(!!(m.work_days_type || m.preferred_shift || m.max_consecutive_days || m.shift_note));
     setDepartStep("hidden");
     setDepartDate(new Date().toISOString().slice(0, 10));
   };
@@ -1044,53 +1047,78 @@ export function MemberList({
                       placeholder="任意"
                       className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                   </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">シフト備考</label>
-                    <textarea value={editShiftNote} onChange={e => setEditShiftNote(e.target.value)}
-                      placeholder="例：基本遅番、3連勤避ける など"
-                      rows={2}
-                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">稼働日数</label>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly" | "")}
-                        className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300">
-                        <option value="">未設定</option>
-                        <option value="monthly">月</option>
-                        <option value="weekly">週</option>
-                      </select>
-                      {editWorkDaysType && (
-                        <>
-                          <input type="number" value={editWorkDaysCount} onChange={e => setEditWorkDaysCount(e.target.value)}
-                            placeholder="0" min={1} max={31}
-                            className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums" />
-                          <span className="text-xs text-zinc-500">
-                            日/{editWorkDaysType === "monthly" ? "月" : "週"}
-                          </span>
-                        </>
+                  {/* ── シフト設定（仮組用）折りたたみ ── */}
+                  <button
+                    type="button"
+                    onClick={() => setShiftSettingsOpen(v => !v)}
+                    className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-700/60 transition-colors"
+                  >
+                    <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                      シフト設定（仮組用）
+                      {(editWorkDaysType || editPreferredShift || editMaxConsecDays || editShiftNote) && (
+                        <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block align-middle" />
                       )}
+                    </span>
+                    <svg className={`w-3 h-3 text-zinc-400 transition-transform ${shiftSettingsOpen ? "rotate-180" : ""}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {shiftSettingsOpen && (
+                    <div className="space-y-2 pl-1">
+                      {/* 稼働日数 */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-semibold">稼働日数</label>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly" | "")}
+                            className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300">
+                            <option value="">未設定</option>
+                            <option value="monthly">月</option>
+                            <option value="weekly">週</option>
+                          </select>
+                          {editWorkDaysType && (
+                            <>
+                              <input type="number" value={editWorkDaysCount} onChange={e => setEditWorkDaysCount(e.target.value)}
+                                placeholder="0" min={1} max={31}
+                                className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums" />
+                              <span className="text-xs text-zinc-500">
+                                日/{editWorkDaysType === "monthly" ? "月" : "週"}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {/* 優先パターン・連勤上限 */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-zinc-500 font-semibold">優先パターン</label>
+                          <select value={editPreferredShift} onChange={e => setEditPreferredShift(e.target.value)}
+                            className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                            <option value="">未設定</option>
+                            {shiftPatternNames.map(n => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-500 font-semibold">連勤上限（日）</label>
+                          <input type="number" value={editMaxConsecDays} onChange={e => setEditMaxConsecDays(e.target.value)}
+                            placeholder="5（デフォルト）" min={1} max={31}
+                            className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                        </div>
+                      </div>
+                      {/* SVメモ */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-semibold">SVメモ</label>
+                        <p className="text-[9px] text-zinc-400 mb-0.5">シフトを組む際の考慮事項（スタッフには非表示）</p>
+                        <textarea value={editShiftNote} onChange={e => setEditShiftNote(e.target.value)}
+                          placeholder="例：月末は早番希望、土日は入れない 等"
+                          rows={2}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none" />
+                      </div>
                     </div>
-                  </div>
-                  {/* 優先シフトパターン・連勤上限 */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-zinc-500 font-semibold">優先パターン</label>
-                      <select value={editPreferredShift} onChange={e => setEditPreferredShift(e.target.value)}
-                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                        <option value="">未設定</option>
-                        {shiftPatternNames.map(n => (
-                          <option key={n} value={n}>{n}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-zinc-500 font-semibold">連勤上限（日）</label>
-                      <input type="number" value={editMaxConsecDays} onChange={e => setEditMaxConsecDays(e.target.value)}
-                        placeholder="5" min={1} max={31}
-                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                    </div>
-                  </div>
+                  )}
 
                   {/* 離脱処理 */}
                   {departStep === "hidden" ? (
@@ -1218,7 +1246,9 @@ export function MemberList({
                     )}
                   </div>
                   {m.shift_note && (
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate leading-tight mt-0.5">{m.shift_note}</p>
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate leading-tight mt-0.5">
+                      <span className="font-semibold text-zinc-300 dark:text-zinc-600">SV: </span>{m.shift_note}
+                    </p>
                   )}
                 </div>
                 {/* 編集アイコン（ホバー時） */}
