@@ -13,7 +13,7 @@ type Shift = {
   shift_end: string | null;
   note: string | null;
 };
-type Member  = { id: string; name: string; role: string; section: string | null };
+type Member  = { id: string; name: string; role: string; section: string | null; sections: string[] };
 type Pattern = {
   name: string;
   required_count: number;
@@ -108,12 +108,17 @@ export default function ShiftDayList({
     return next;
   });
 
-  // セクション一覧（nullでない値のみ・ソート）
-  const sections = [...new Set(activeMembers.map(m => m.section).filter((s): s is string => !!s))].sort();
+  // セクション一覧（sections配列 + section単体 からユニーク・ソート）
+  const sections = [...new Set(
+    activeMembers.flatMap(m => m.sections.length > 0 ? m.sections : (m.section ? [m.section] : []))
+  )].sort();
   const hasSection = sections.length > 0;
   // フィルター適用済みメンバー
   const visibleMembers = sectionFilter
-    ? activeMembers.filter(m => m.section === sectionFilter)
+    ? activeMembers.filter(m => {
+        const ms = m.sections.length > 0 ? m.sections : (m.section ? [m.section] : []);
+        return ms.includes(sectionFilter);
+      })
     : activeMembers;
 
   // シフトルックアップ

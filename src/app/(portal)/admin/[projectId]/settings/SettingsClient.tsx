@@ -32,7 +32,7 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; account_number: string | null; shift_note: string | null; work_days_type: string | null; work_days_count: number | null; compliance: number | null };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; sections: string[]; account_number: string | null; shift_note: string | null; work_days_type: string | null; work_days_count: number | null; compliance: number | null };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -490,7 +490,9 @@ export function MemberList({
   const [editId, setEditId]                   = useState<string | null>(null);
   const [editName, setEditName]               = useState("");
   const [editCompany, setEditCompany]         = useState("");
-  const [editSection, setEditSection]         = useState("");
+  const [editSection, setEditSection]         = useState("");  // legacy single
+  const [editSections, setEditSections]       = useState<string[]>([]);
+  const [editSectionInput, setEditSectionInput] = useState("");
   const [editRole, setEditRole]               = useState("staff");
   const [editAccountNumber, setEditAccountNumber] = useState("");
   const [editShiftNote, setEditShiftNote]     = useState("");
@@ -502,6 +504,8 @@ export function MemberList({
     setEditName(m.name);
     setEditCompany(m.company_name ?? "");
     setEditSection(m.section ?? "");
+    setEditSections(m.sections.length > 0 ? m.sections : (m.section ? [m.section] : []));
+    setEditSectionInput("");
     setEditRole(m.role);
     setEditAccountNumber(m.account_number ?? "");
     setEditShiftNote(m.shift_note ?? "");
@@ -516,7 +520,8 @@ export function MemberList({
     fd.set("staffId",         editId);
     fd.set("name",            editName.trim());
     fd.set("company_name",    editCompany.trim());
-    fd.set("section",         editSection.trim());
+    fd.set("section",         editSections[0] ?? editSection.trim());
+    fd.set("sections",        editSections.join(","));
     fd.set("role",            editRole);
     fd.set("account_number",  editAccountNumber.trim());
     fd.set("shift_note",      editShiftNote.trim());
@@ -534,9 +539,9 @@ export function MemberList({
     members.map(m => m.company_name).filter((c): c is string => Boolean(c))
   )].sort();
 
-  // セクション一覧（ユニーク・ソート済み）
+  // セクション一覧（sections配列 + section単体 からユニーク・ソート済み）
   const sections = [...new Set(
-    members.map(m => m.section).filter((s): s is string => Boolean(s))
+    members.flatMap(m => m.sections.length > 0 ? m.sections : (m.section ? [m.section] : []))
   )].sort();
 
   // 会社名 → パレットインデックスのマップ
@@ -553,9 +558,10 @@ export function MemberList({
     const matchCompany = !companyFilter ? true
       : companyFilter === "__unset__" ? !m.company_name
       : m.company_name === companyFilter;
+    const mSections = m.sections.length > 0 ? m.sections : (m.section ? [m.section] : []);
     const matchSection = !sectionFilter ? true
-      : sectionFilter === "__unset__" ? !m.section
-      : m.section === sectionFilter;
+      : sectionFilter === "__unset__" ? mSections.length === 0
+      : mSections.includes(sectionFilter);
     return matchSearch && matchCompany && matchSection;
   });
 
@@ -971,12 +977,6 @@ export function MemberList({
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] text-zinc-500 font-semibold">セクション</label>
-                      <input type="text" value={editSection} onChange={e => setEditSection(e.target.value)}
-                        placeholder="A班など（任意）"
-                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                    </div>
-                    <div>
                       <label className="text-[10px] text-zinc-500 font-semibold">ロール</label>
                       <select value={editRole} onChange={e => setEditRole(e.target.value)}
                         className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
@@ -984,6 +984,37 @@ export function MemberList({
                         <option value="project_admin">管理者</option>
                       </select>
                     </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 font-semibold">セクション（複数可）</label>
+                    <div className="mt-0.5 flex flex-wrap gap-1 min-h-[32px] px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                      {editSections.map(s => (
+                        <span key={s} className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                          {s}
+                          <button type="button" onClick={() => setEditSections(prev => prev.filter(x => x !== s))}
+                            className="ml-0.5 text-blue-400 hover:text-blue-600 dark:hover:text-blue-200 leading-none">×</button>
+                        </span>
+                      ))}
+                      <input
+                        type="text"
+                        value={editSectionInput}
+                        onChange={e => setEditSectionInput(e.target.value)}
+                        onKeyDown={e => {
+                          if ((e.key === "Enter" || e.key === ",") && editSectionInput.trim()) {
+                            e.preventDefault();
+                            const v = editSectionInput.trim();
+                            if (!editSections.includes(v)) setEditSections(prev => [...prev, v]);
+                            setEditSectionInput("");
+                          }
+                          if (e.key === "Backspace" && !editSectionInput && editSections.length > 0) {
+                            setEditSections(prev => prev.slice(0, -1));
+                          }
+                        }}
+                        placeholder={editSections.length === 0 ? "入力してEnter" : ""}
+                        className="flex-1 min-w-[80px] text-sm bg-transparent outline-none text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-300"
+                      />
+                    </div>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">Enterまたはカンマで追加、×で削除</p>
                   </div>
                   <div>
                     <label className="text-[10px] text-zinc-500 font-semibold">アカウント番号</label>
@@ -1056,11 +1087,11 @@ export function MemberList({
                       ? <p className="text-[11px] text-zinc-400 truncate leading-tight">{m.company_name}</p>
                       : <p className="text-[11px] text-amber-400 leading-tight">会社名未設定</p>
                     }
-                    {m.section && (
-                      <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex-shrink-0">
-                        {m.section}
+                    {(m.sections.length > 0 ? m.sections : m.section ? [m.section] : []).map(s => (
+                      <span key={s} className="text-[10px] px-1.5 py-0 rounded font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex-shrink-0">
+                        {s}
                       </span>
-                    )}
+                    ))}
                     <span className={`text-[10px] px-1 py-0 rounded font-medium flex-shrink-0 ${
                       m.lineLinked
                         ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"

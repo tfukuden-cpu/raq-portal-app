@@ -16,7 +16,7 @@ type Shift = {
   shift_end: string | null;
   note: string | null;
 };
-type Member = { id: string; name: string; role: string; section: string | null };
+type Member = { id: string; name: string; role: string; section: string | null; sections: string[] };
 type Pattern = {
   name: string;
   required_count: number;

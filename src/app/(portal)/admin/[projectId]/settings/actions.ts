@@ -667,6 +667,8 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   const workDaysType  = (workDaysTypeRaw === "monthly" || workDaysTypeRaw === "weekly") ? workDaysTypeRaw : null;
   const workDaysCountRaw = String(fd.get("work_days_count") ?? "").trim();
   const workDaysCount = workDaysCountRaw && workDaysType ? (parseInt(workDaysCountRaw, 10) || null) : null;
+  const sectionsRaw   = String(fd.get("sections") ?? "");
+  const sections      = sectionsRaw ? sectionsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
 
   if (!name) return { success: false, message: "氏名を入力してください" };
 
@@ -681,9 +683,10 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   if (staffErr) return { success: false, message: staffErr.message };
 
   // project_members テーブル更新（ロール・セクション・シフト備考・稼働日数）
+  const primarySection = sections[0] ?? null;
   const { error: memberErr } = await admin
     .from("project_members")
-    .update({ role, section, shift_note: shiftNote, work_days_type: workDaysType, work_days_count: workDaysCount })
+    .update({ role, section: primarySection, sections, shift_note: shiftNote, work_days_type: workDaysType, work_days_count: workDaysCount })
     .eq("project_id", projectId)
     .eq("staff_id", staffId);
   if (memberErr) return { success: false, message: memberErr.message };

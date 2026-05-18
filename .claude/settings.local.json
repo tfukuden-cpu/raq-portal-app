@@ -73,7 +73,8 @@
       "Bash(npx vercel *)",
       "PowerShell(Get-ChildItem \"$env:APPDATA\\\\vercel\" -ErrorAction SilentlyContinue; Get-ChildItem \"$env:USERPROFILE\\\\.config\\\\vercel\" -ErrorAction SilentlyContinue; Get-ChildItem \"$env:LOCALAPPDATA\\\\vercel\" -ErrorAction SilentlyContinue)",
       "Bash(node_modules/.bin/vercel deploy *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(findstr /i \"deploy\\\\|vercel\\\\|build\")"
     ]
   }
 }

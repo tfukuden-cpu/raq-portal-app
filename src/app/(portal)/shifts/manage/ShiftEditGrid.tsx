@@ -47,7 +47,7 @@ type Shift = {
   shift_start: string | null;
   shift_end: string | null;
 };
-type Member = { id: string; name: string; section: string | null };
+type Member = { id: string; name: string; section: string | null; sections: string[] };
 type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
   name: string;

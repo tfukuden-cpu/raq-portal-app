@@ -96,7 +96,7 @@ export async function generateShiftDraftAction(
     { data: existingShiftRows },
   ] = await Promise.all([
     admin.from("project_members")
-      .select("staff_id, role, section")
+      .select("staff_id, role, section, sections")
       .eq("project_id", projectId),
     admin.from("shift_slot_requirements")
       .select("pattern_name, shift_date, required_count")
@@ -178,7 +178,11 @@ export async function generateShiftDraftAction(
         if (holidaySet.has(`${m.staff_id}__${date}`)) return false;
         if (assignedOnDate.has(m.staff_id)) return false;
         if (existingMap.has(`${m.staff_id}__${date}`)) return false;
-        if (pattern.section && m.section !== pattern.section) return false;
+        if (pattern.section) {
+          const ms = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
+          const effectiveSections = ms.length > 0 ? ms : (m.section ? [m.section] : []);
+          if (effectiveSections.length > 0 && !effectiveSections.includes(pattern.section)) return false;
+        }
         if (pattern.target_role === "admin" && m.role !== "project_admin") return false;
         if (pattern.target_role === "staff" && m.role !== "staff") return false;
         return true;
