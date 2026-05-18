@@ -14,6 +14,7 @@ export async function terminalPunchAction(
   staffId: string,
   punchType: "clock_in" | "clock_out",
   punchKind: "normal" | "late" | "early", // 定時/遅刻/早退
+  approverName?: string,                   // 遅刻・早退時の承認SV名
 ): Promise<TerminalPunchResult> {
   if (!projectId || !staffId) {
     return { ok: false, message: "パラメータが不正です" };
@@ -22,11 +23,17 @@ export async function terminalPunchAction(
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
+  // note: 遅刻 [承認: 田中SV] / 早退 [承認: 田中SV]
+  const baseNote = punchKind === "late" ? "遅刻" : punchKind === "early" ? "早退" : null;
+  const note = baseNote && approverName
+    ? `${baseNote} [承認: ${approverName}]`
+    : baseNote;
+
   const { error } = await admin.from("punch_logs").insert({
     project_id: projectId,
     staff_id:   staffId,
     punch_type: punchType,
-    note:       punchKind === "late" ? "遅刻" : punchKind === "early" ? "早退" : null,
+    note,
   });
 
   if (error) {
