@@ -669,6 +669,9 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   const workDaysCount = workDaysCountRaw && workDaysType ? (parseInt(workDaysCountRaw, 10) || null) : null;
   const sectionsRaw   = String(fd.get("sections") ?? "");
   const sections      = sectionsRaw ? sectionsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
+  const preferredShift = String(fd.get("preferred_shift") ?? "").trim() || null;
+  const maxConsecRaw   = String(fd.get("max_consecutive_days") ?? "").trim();
+  const maxConsecDays  = maxConsecRaw ? (parseInt(maxConsecRaw, 10) || null) : null;
 
   if (!name) return { success: false, message: "氏名を入力してください" };
 
@@ -682,11 +685,15 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
     .eq("id", staffId);
   if (staffErr) return { success: false, message: staffErr.message };
 
-  // project_members テーブル更新（ロール・セクション・シフト備考・稼働日数）
+  // project_members テーブル更新（ロール・セクション・シフト備考・稼働日数・優先パターン・連勤上限）
   const primarySection = sections[0] ?? null;
   const { error: memberErr } = await admin
     .from("project_members")
-    .update({ role, section: primarySection, sections, shift_note: shiftNote, work_days_type: workDaysType, work_days_count: workDaysCount })
+    .update({
+      role, section: primarySection, sections,
+      shift_note: shiftNote, work_days_type: workDaysType, work_days_count: workDaysCount,
+      preferred_shift: preferredShift, max_consecutive_days: maxConsecDays,
+    })
     .eq("project_id", projectId)
     .eq("staff_id", staffId);
   if (memberErr) return { success: false, message: memberErr.message };

@@ -33,7 +33,7 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; sections: string[]; account_number: string | null; shift_note: string | null; work_days_type: string | null; work_days_count: number | null; compliance: number | null };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; sections: string[]; account_number: string | null; shift_note: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; max_consecutive_days: number | null; compliance: number | null };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -216,6 +216,7 @@ export function SettingsContainer({
           projectId={projectId}
           members={members}
           availableSections={[...new Set(shiftPatterns.map(p => p.section).filter(Boolean))].sort()}
+          shiftPatternNames={shiftPatterns.map(p => p.name).filter(Boolean)}
         />
       )}
 
@@ -468,10 +469,12 @@ export function MemberList({
   projectId,
   members,
   availableSections = [],
+  shiftPatternNames = [],
 }: {
   projectId: string;
   members: Member[];
   availableSections?: string[];
+  shiftPatternNames?: string[];
 }) {
   const [addMode, setAddMode]       = useState<AddMode>("none");
   const [newLast, setNewLast]         = useState("");
@@ -502,6 +505,8 @@ export function MemberList({
   const [editShiftNote, setEditShiftNote]     = useState("");
   const [editWorkDaysType, setEditWorkDaysType] = useState<"monthly" | "weekly" | "">("");
   const [editWorkDaysCount, setEditWorkDaysCount] = useState("");
+  const [editPreferredShift, setEditPreferredShift] = useState("");
+  const [editMaxConsecDays, setEditMaxConsecDays] = useState("");
   const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
   const [departDate, setDepartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
@@ -517,6 +522,8 @@ export function MemberList({
     setEditShiftNote(m.shift_note ?? "");
     setEditWorkDaysType((m.work_days_type as "monthly" | "weekly" | "") ?? "");
     setEditWorkDaysCount(m.work_days_count != null ? String(m.work_days_count) : "");
+    setEditPreferredShift(m.preferred_shift ?? "");
+    setEditMaxConsecDays(m.max_consecutive_days != null ? String(m.max_consecutive_days) : "");
     setDepartStep("hidden");
     setDepartDate(new Date().toISOString().slice(0, 10));
   };
@@ -533,8 +540,10 @@ export function MemberList({
     fd.set("role",            editRole);
     fd.set("account_number",  editAccountNumber.trim());
     fd.set("shift_note",      editShiftNote.trim());
-    fd.set("work_days_type",  editWorkDaysType);
-    fd.set("work_days_count", editWorkDaysCount);
+    fd.set("work_days_type",       editWorkDaysType);
+    fd.set("work_days_count",      editWorkDaysCount);
+    fd.set("preferred_shift",      editPreferredShift);
+    fd.set("max_consecutive_days", editMaxConsecDays);
     start(async () => {
       const r = await updateMemberInfoAction(fd);
       setResult({ ok: r.success, msg: r.message ?? (r.success ? "更新しました" : "エラー") });
@@ -1063,6 +1072,26 @@ export function MemberList({
                       )}
                     </div>
                   </div>
+                  {/* 優先シフトパターン・連勤上限 */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">優先パターン</label>
+                      <select value={editPreferredShift} onChange={e => setEditPreferredShift(e.target.value)}
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                        <option value="">未設定</option>
+                        {shiftPatternNames.map(n => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">連勤上限（日）</label>
+                      <input type="number" value={editMaxConsecDays} onChange={e => setEditMaxConsecDays(e.target.value)}
+                        placeholder="5" min={1} max={31}
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                    </div>
+                  </div>
+
                   {/* 離脱処理 */}
                   {departStep === "hidden" ? (
                     <button
