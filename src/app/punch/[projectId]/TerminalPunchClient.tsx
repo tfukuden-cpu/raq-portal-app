@@ -43,104 +43,6 @@ function LiveClock() {
   );
 }
 
-// ── 署名キャンバス ─────────────────────────────────────────────
-function SignatureCanvas({
-  onChange,
-}: {
-  onChange: (dataUrl: string | null) => void;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
-  const lastPos = useRef<{ x: number; y: number } | null>(null);
-  const [hasSigned, setHasSigned] = useState(false);
-
-  function getXY(
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
-    canvas: HTMLCanvasElement
-  ) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width  / rect.width;
-    const scaleY = canvas.height / rect.height;
-    if ("touches" in e) {
-      const t = e.touches[0];
-      return { x: (t.clientX - rect.left) * scaleX, y: (t.clientY - rect.top) * scaleY };
-    }
-    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
-  }
-
-  function startDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
-    e.preventDefault();
-    drawing.current = true;
-    lastPos.current = getXY(e, canvasRef.current!);
-  }
-
-  function moveDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
-    if (!drawing.current) return;
-    e.preventDefault();
-    const canvas = canvasRef.current!;
-    const ctx = canvas.getContext("2d")!;
-    const pos = getXY(e, canvas);
-    ctx.beginPath();
-    ctx.moveTo(lastPos.current!.x, lastPos.current!.y);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.stroke();
-    lastPos.current = pos;
-    if (!hasSigned) {
-      setHasSigned(true);
-      onChange(canvas.toDataURL("image/png"));
-    } else {
-      onChange(canvas.toDataURL("image/png"));
-    }
-  }
-
-  function endDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
-    e.preventDefault();
-    drawing.current = false;
-    lastPos.current = null;
-  }
-
-  function clear() {
-    const canvas = canvasRef.current!;
-    canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
-    setHasSigned(false);
-    onChange(null);
-  }
-
-  return (
-    <div className="space-y-2">
-      <canvas
-        ref={canvasRef}
-        width={640}
-        height={200}
-        className="w-full rounded-2xl border-2 border-zinc-600 bg-zinc-900 touch-none cursor-crosshair"
-        style={{ height: "140px" }}
-        onMouseDown={startDraw}
-        onMouseMove={moveDraw}
-        onMouseUp={endDraw}
-        onMouseLeave={endDraw}
-        onTouchStart={startDraw}
-        onTouchMove={moveDraw}
-        onTouchEnd={endDraw}
-      />
-      <div className="flex justify-between items-center">
-        <p className="text-zinc-600 text-xs">↑ 上の枠内にサインしてください</p>
-        {hasSigned && (
-          <button
-            type="button"
-            onClick={clear}
-            className="text-xs text-zinc-500 hover:text-zinc-300 underline transition-colors"
-          >
-            やり直す
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ── ステップ定義 ──────────────────────────────────────────────
 type Step =
@@ -199,8 +101,9 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   const [approverInput, setApproverInput] = useState("");
   const approverRef = useRef<HTMLInputElement>(null);
 
-  // 同意書サイン
-  const [signatureData, setSignatureData] = useState<string | null>(null);
+  // 同意書確認名
+  const [consentName, setConsentName] = useState("");
+  const consentNameRef = useRef<HTMLInputElement>(null);
 
   // 未打刻者のみ
   const unclockedMembers = localMembers.filter(m => !m.clockedIn);
@@ -230,7 +133,8 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
       setTimeout(() => approverRef.current?.focus(), 50);
     }
     if (step.kind === "consent") {
-      setSignatureData(null);
+      setConsentName("");
+      setTimeout(() => consentNameRef.current?.focus(), 50);
     }
   }, [step.kind]);
 
@@ -251,9 +155,9 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   }
 
   function handleConsentConfirm(member: TerminalMember) {
-    if (!signatureData) return;
+    if (!consentName.trim()) return;
     startTransition(async () => {
-      await saveConsentAction(projectId, member.staffId, signatureData);
+      await saveConsentAction(projectId, member.staffId, consentName.trim());
       // ローカルでneedsConsentをfalseに
       setLocalMembers(prev => prev.map(m =>
         m.staffId === member.staffId ? { ...m, needsConsent: false } : m
@@ -422,17 +326,27 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
             </p>
           </div>
 
-          {/* 署名エリア */}
+          {/* 氏名入力 */}
           <div className="space-y-2">
-            <p className="text-zinc-400 text-sm font-semibold">署名</p>
-            <SignatureCanvas onChange={setSignatureData} />
+            <p className="text-zinc-400 text-sm font-semibold">お名前を入力して同意を確認してください</p>
+            <input
+              ref={consentNameRef}
+              type="text"
+              placeholder="例：山田 太郎"
+              value={consentName}
+              onChange={e => setConsentName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && consentName.trim()) handleConsentConfirm(member);
+              }}
+              className="w-full bg-zinc-900 border-2 border-zinc-600 rounded-2xl px-5 py-4 text-white text-xl placeholder-zinc-600 focus:outline-none focus:border-blue-500 text-center"
+            />
           </div>
 
           {/* ボタン */}
           <div className="space-y-3 pb-8">
             <button
               onClick={() => handleConsentConfirm(member)}
-              disabled={!signatureData || isPending}
+              disabled={!consentName.trim() || isPending}
               className="w-full py-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-40"
             >
               {isPending ? "保存中…" : "同意して打刻へ進む"}

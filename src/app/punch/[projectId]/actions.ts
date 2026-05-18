@@ -73,11 +73,11 @@ export async function saveConsentAction(
 
   const { error } = await admin.from("consent_records").upsert(
     {
-      staff_id:      staffId,
-      project_id:    projectId,
-      consent_month: consentMonth,
-      signature_data: signatureData,
-      signed_at:     new Date().toISOString(),
+      staff_id:       staffId,
+      project_id:     projectId,
+      consent_month:  consentMonth,
+      confirmed_name: signatureData, // 名前テキストを保存
+      signed_at:      new Date().toISOString(),
     },
     { onConflict: "staff_id,project_id,consent_month" }
   );

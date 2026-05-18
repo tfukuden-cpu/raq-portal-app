@@ -5,6 +5,7 @@ import {
   toggleStaffActiveAction,
   resetStaffPasswordAction,
   updateStaffInfoAction,
+  getConsentRecordsAction,
 } from "./actions";
 
 type StaffProject = { id: string; name: string; role: string };
@@ -41,6 +42,21 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
   const [filterProject, setFilterProject] = useState("");
   const [filterRole, setFilterRole]       = useState("");
   const [showInactive, setShowInactive]   = useState(false);
+
+  // 同意書履歴モーダル
+  type ConsentRecord = { month: string; projectName: string; confirmedName: string; signedAt: string };
+  const [consentStaff, setConsentStaff]     = useState<StaffEntry | null>(null);
+  const [consentRecords, setConsentRecords] = useState<ConsentRecord[]>([]);
+  const [consentLoading, setConsentLoading] = useState(false);
+
+  async function openConsentModal(s: StaffEntry) {
+    setConsentStaff(s);
+    setConsentRecords([]);
+    setConsentLoading(true);
+    const records = await getConsentRecordsAction(s.id);
+    setConsentRecords(records);
+    setConsentLoading(false);
+  }
 
   const [editId, setEditId]                   = useState<string | null>(null);
   const [editName, setEditName]               = useState("");
@@ -326,6 +342,12 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
                   >
                     {s.is_active ? "無効化" : "有効化"}
                   </button>
+                  <button
+                    onClick={() => openConsentModal(s)}
+                    className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
+                  >
+                    同意書
+                  </button>
                 </div>
               )}
             </li>
@@ -340,6 +362,77 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
           </li>
         )}
       </ul>
+
+      {/* ── 同意書履歴モーダル ── */}
+      {consentStaff && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setConsentStaff(null)}
+        >
+          <div
+            className="w-full max-w-lg bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* ヘッダー */}
+            <div className="px-5 pt-5 pb-4 border-b border-zinc-100 dark:border-zinc-800 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs text-zinc-400 mb-0.5">同意書確認履歴</p>
+                <p className="text-lg font-bold text-zinc-900 dark:text-zinc-50">{consentStaff.name}</p>
+              </div>
+              <button
+                onClick={() => setConsentStaff(null)}
+                className="w-7 h-7 flex items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-lg leading-none flex-shrink-0"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="px-5 py-4 max-h-96 overflow-y-auto">
+              {consentLoading ? (
+                <p className="text-sm text-zinc-400 text-center py-8">読み込み中…</p>
+              ) : consentRecords.length === 0 ? (
+                <p className="text-sm text-zinc-400 text-center py-8">同意書の記録がありません</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-zinc-400 border-b border-zinc-100 dark:border-zinc-800">
+                      <th className="pb-2 font-semibold">年月</th>
+                      <th className="pb-2 font-semibold">案件</th>
+                      <th className="pb-2 font-semibold">確認氏名</th>
+                      <th className="pb-2 font-semibold text-right">日時</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {consentRecords.map((r, i) => {
+                      const [y, m] = r.month.split("-");
+                      const dt = new Date(r.signedAt);
+                      const dateStr = `${dt.getMonth() + 1}/${dt.getDate()} ${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+                      return (
+                        <tr key={i} className="text-zinc-700 dark:text-zinc-300">
+                          <td className="py-2.5 font-semibold tabular-nums">{y}年{parseInt(m)}月</td>
+                          <td className="py-2.5 text-xs text-zinc-500">{r.projectName}</td>
+                          <td className="py-2.5">{r.confirmedName}</td>
+                          <td className="py-2.5 text-xs text-zinc-400 text-right tabular-nums">{dateStr}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => setConsentStaff(null)}
+                className="w-full py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

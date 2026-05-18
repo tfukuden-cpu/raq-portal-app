@@ -108,6 +108,29 @@ export async function updateStaffInfoAction(
   return { success: true, message: "更新しました" };
 }
 
+export async function getConsentRecordsAction(
+  staffId: string
+): Promise<{ month: string; projectName: string; confirmedName: string; signedAt: string }[]> {
+  await assertExecutive();
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from("consent_records")
+    .select("consent_month, confirmed_name, signed_at, projects(name)")
+    .eq("staff_id", staffId)
+    .order("consent_month", { ascending: false });
+
+  return (data ?? []).map(r => {
+    const proj = (Array.isArray(r.projects) ? r.projects[0] : r.projects) as { name?: string | null } | null;
+    return {
+      month:         r.consent_month as string,
+      projectName:   proj?.name ?? "不明",
+      confirmedName: r.confirmed_name as string,
+      signedAt:      r.signed_at as string,
+    };
+  });
+}
+
 export async function resetStaffPasswordAction(
   fd: FormData
 ): Promise<{ success: boolean; message?: string }> {
