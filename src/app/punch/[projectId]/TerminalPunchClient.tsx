@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import { terminalPunchAction } from "./actions";
 
 // ── 型 ───────────────────────────────────────────────────────
@@ -42,6 +42,17 @@ function LiveClock() {
   );
 }
 
+// ── 打刻ステータスバッジ ─────────────────────────────────────
+function StatusDot({ member }: { member: TerminalMember }) {
+  if (member.clockedOut) {
+    return <span className="text-xs text-zinc-500 font-semibold">退勤済</span>;
+  }
+  if (member.clockedIn) {
+    return <span className="text-xs text-emerald-400 font-semibold">勤務中</span>;
+  }
+  return <span className="text-xs text-zinc-400">未打刻</span>;
+}
+
 // ── メイン ────────────────────────────────────────────────────
 type Step =
   | { kind: "list" }
@@ -53,13 +64,43 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [localMembers, setLocalMembers] = useState(members);
   const [isPending, startTransition] = useTransition();
+
+  // ── プルダウン状態 ─────────────────────────────────────────
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // 外クリックで閉じる
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // ドロップダウンを開いたら検索欄にフォーカス
+  useEffect(() => {
+    if (dropdownOpen) {
+      setTimeout(() => searchRef.current?.focus(), 50);
+    }
+  }, [dropdownOpen]);
 
   const filtered = localMembers.filter(m =>
     search === "" || m.name.includes(search)
   );
 
+  function openDropdown() {
+    setDropdownOpen(true);
+    setSearch("");
+  }
+
   function handleMemberSelect(member: TerminalMember) {
+    setDropdownOpen(false);
     setSearch("");
     setStep({ kind: "punch", member });
   }
@@ -76,7 +117,6 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
     startTransition(async () => {
       const res = await terminalPunchAction(projectId, member.staffId, punchType, punchKind);
       if (res.ok) {
-        // ローカル状態を更新
         setLocalMembers(prev => prev.map(m => {
           if (m.staffId !== member.staffId) return m;
           return {
@@ -94,58 +134,103 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
     });
   }
 
-  // ── スタッフ一覧 ────────────────────────────────────────────
+  // ── スタッフ選択（プルダウン） ──────────────────────────────
   if (step.kind === "list") {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col">
-        {/* ヘッダー */}
-        <div className="px-6 pt-8 pb-4 text-center">
-          <p className="text-zinc-500 text-sm font-semibold tracking-widest uppercase mb-1">{projectName}</p>
-          <LiveClock />
-        </div>
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-md space-y-10">
 
-        {/* 検索 */}
-        <div className="px-6 pb-4">
-          <input
-            type="search"
-            placeholder="名前で絞り込み…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 text-white placeholder-zinc-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {/* スタッフグリッド */}
-        <div className="flex-1 overflow-y-auto px-4 pb-8">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {filtered.map(m => {
-              const status = m.clockedOut
-                ? { label: "退勤済", color: "text-zinc-500", bg: "bg-zinc-800/40", border: "border-zinc-700/50" }
-                : m.clockedIn
-                ? { label: "勤務中", color: "text-emerald-400", bg: "bg-emerald-900/20", border: "border-emerald-700/50" }
-                : { label: "未打刻", color: "text-zinc-400", bg: "bg-zinc-900", border: "border-zinc-700" };
-
-              return (
-                <button
-                  key={m.staffId}
-                  onClick={() => handleMemberSelect(m)}
-                  className={`${status.bg} ${status.border} border rounded-2xl px-4 py-5 flex flex-col items-center gap-2 transition-all active:scale-95 hover:brightness-110`}
-                >
-                  <div className="w-12 h-12 rounded-full bg-zinc-700 flex items-center justify-center text-white text-xl font-bold">
-                    {m.name.charAt(0)}
-                  </div>
-                  <span className="text-white font-bold text-sm text-center leading-tight">{m.name}</span>
-                  {m.shiftName && (
-                    <span className="text-zinc-400 text-xs">{m.shiftName}</span>
-                  )}
-                  <span className={`text-xs font-semibold ${status.color}`}>{status.label}</span>
-                </button>
-              );
-            })}
+          {/* ヘッダー */}
+          <div className="text-center">
+            <p className="text-zinc-500 text-sm font-semibold tracking-widest uppercase mb-6">
+              {projectName}
+            </p>
+            <LiveClock />
           </div>
-          {filtered.length === 0 && (
-            <p className="text-zinc-500 text-center mt-10">該当するスタッフがいません</p>
-          )}
+
+          {/* プルダウン */}
+          <div ref={dropdownRef} className="relative">
+            {/* トリガーボタン */}
+            <button
+              onClick={openDropdown}
+              className="w-full bg-zinc-800 hover:bg-zinc-750 border border-zinc-600 rounded-2xl px-6 py-5 flex items-center justify-between gap-3 transition-colors active:scale-[0.98]"
+            >
+              <span className="text-zinc-400 text-lg">スタッフを選択してください</span>
+              <svg
+                className={`w-5 h-5 text-zinc-400 flex-shrink-0 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`}
+                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" strokeWidth={2}
+                strokeLinecap="round" strokeLinejoin="round"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+
+            {/* ドロップダウンリスト */}
+            {dropdownOpen && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-800 border border-zinc-600 rounded-2xl shadow-2xl shadow-black/60 z-50 overflow-hidden">
+                {/* 検索 */}
+                <div className="p-3 border-b border-zinc-700">
+                  <input
+                    ref={searchRef}
+                    type="search"
+                    placeholder="名前で絞り込み…"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 text-white placeholder-zinc-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* リスト */}
+                <ul className="max-h-80 overflow-y-auto overscroll-contain divide-y divide-zinc-700/50">
+                  {filtered.length === 0 ? (
+                    <li className="px-5 py-6 text-center text-zinc-500 text-sm">
+                      該当するスタッフがいません
+                    </li>
+                  ) : (
+                    filtered.map(m => {
+                      const rowBg = m.clockedOut
+                        ? "hover:bg-zinc-700/40 opacity-60"
+                        : m.clockedIn
+                        ? "hover:bg-emerald-900/30"
+                        : "hover:bg-zinc-700/60";
+
+                      return (
+                        <li key={m.staffId}>
+                          <button
+                            onClick={() => handleMemberSelect(m)}
+                            className={`w-full flex items-center gap-4 px-5 py-4 text-left transition-colors ${rowBg}`}
+                          >
+                            {/* アバター */}
+                            <div className="w-10 h-10 rounded-full bg-zinc-600 flex items-center justify-center text-white font-bold text-base flex-shrink-0">
+                              {m.name.charAt(0)}
+                            </div>
+                            {/* 名前・シフト */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-bold text-base leading-tight">{m.name}</p>
+                              {m.shiftName && (
+                                <p className="text-zinc-400 text-xs mt-0.5">
+                                  {m.shiftName}
+                                  {m.shiftStart && m.shiftEnd && `　${m.shiftStart}〜${m.shiftEnd}`}
+                                </p>
+                              )}
+                            </div>
+                            {/* ステータス */}
+                            <StatusDot member={m} />
+                          </button>
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* ヒント */}
+          <p className="text-center text-zinc-600 text-sm">
+            名前を選択して打刻してください
+          </p>
         </div>
       </div>
     );
