@@ -77,7 +77,7 @@ type EditTarget =
 
 type ErrorAnnotation = {
   patternName: string; date: string; message: string;
-  srcPatternName: string; srcDate: string;
+  srcPatternName: string; srcDate: string; srcStaffId: string;
 };
 type PendingNotify = {
   changes: { staffId: string; staffName: string; date: string; from: string | null; to: string | null }[];
@@ -967,6 +967,7 @@ export default function ShiftEditGrid({
         message: `${member.name} は${sectionLabel}セクション外のため配置できません`,
         srcPatternName: sourcePattern,
         srcDate: sourceDate,
+        srcStaffId: staffId,
       });
       setTimeout(() => setErrorAnnotation(null), 3500);
       return;
@@ -981,6 +982,7 @@ export default function ShiftEditGrid({
           message: `${member?.name ?? staffId} はすでに ${fmtDate(targetDate)} に「${existingOnTarget.shiftName}」が入っています`,
           srcPatternName: sourcePattern,
           srcDate: sourceDate,
+          srcStaffId: staffId,
         });
         setTimeout(() => setErrorAnnotation(null), 4000);
         return;
@@ -1382,11 +1384,12 @@ export default function ShiftEditGrid({
                             staffId === draggingStaffId &&
                             `${staffId}__${date}` !== activeId;
 
-                          // エラー配置元セルを赤くハイライト
+                          // エラー配置元セルを赤くハイライト（該当スタッフのセルのみ）
                           const isErrorSource =
                             !!errorAnnotation &&
                             errorAnnotation.srcPatternName === pattern.name &&
-                            errorAnnotation.srcDate === date;
+                            errorAnnotation.srcDate === date &&
+                            staffId === errorAnnotation.srcStaffId;
 
                           return (
                             <SlotCellFull
