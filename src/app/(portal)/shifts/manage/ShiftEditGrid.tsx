@@ -541,6 +541,7 @@ function NotifyModal({
 function EditModal({
   target, patterns, availableStaff, logs, staffMember,
   originalPattern, consecutiveDays, isDuplicate,
+  projectId,
   onClose, onChangePattern, onRemove, onAdd,
 }: {
   target: EditTarget;
@@ -551,6 +552,7 @@ function EditModal({
   originalPattern: string | null;
   consecutiveDays: number;
   isDuplicate: boolean;
+  projectId: string;
   onClose: () => void;
   onChangePattern: (p: string) => void;
   onRemove: () => void;
@@ -577,7 +579,15 @@ function EditModal({
           <p className="text-xs text-zinc-400 mb-0.5">{dateLabel}</p>
           {target.kind === "existing" && staffMember ? (
             <>
-              <p className="text-base font-bold text-zinc-800 dark:text-zinc-100 leading-snug">{staffMember.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-base font-bold text-zinc-800 dark:text-zinc-100 leading-snug">{staffMember.name}</p>
+                <a
+                  href={`/admin/${projectId}/settings?tab=members`}
+                  className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+                >
+                  設定
+                </a>
+              </div>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">{target.patternName}</p>
               {staffMember.section && (
                 <span className="inline-block mt-0.5 text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
@@ -1507,6 +1517,7 @@ export default function ShiftEditGrid({
           originalPattern={modalOriginalPattern}
           consecutiveDays={modalConsecutiveDays}
           isDuplicate={modalIsDuplicate}
+          projectId={projectId}
           onClose={closeModal} onChangePattern={handleChangePattern}
           onRemove={handleRemove} onAdd={handleAdd}
         />

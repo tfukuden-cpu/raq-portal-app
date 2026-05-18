@@ -851,3 +851,36 @@ export async function createProjectAction(fd: FormData): Promise<SettingsResult 
   revalidatePath("/admin");
   return { success: true, projectId: id };
 }
+
+export async function departStaffAction(
+  projectId: string,
+  staffId: string,
+  departDate: string,
+): Promise<SettingsResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = adminSupa();
+
+  const { error: memberErr } = await admin
+    .from("project_members")
+    .update({ end_date: departDate })
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId);
+
+  if (memberErr) return { success: false, message: memberErr.message };
+
+  const { error: shiftErr } = await admin
+    .from("shifts")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .gt("shift_date", departDate);
+
+  if (shiftErr) return { success: false, message: shiftErr.message };
+
+  revalidatePath(`/admin/${projectId}`);
+  revalidatePath(`/shifts/manage`);
+  return { success: true };
+}

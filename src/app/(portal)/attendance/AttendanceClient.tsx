@@ -1,6 +1,7 @@
 "use client";
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { ChevronLeftIcon } from "@/components/icons";
+import StaffPopupMenu from "@/components/StaffPopupMenu";
 import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction } from "./actions";
 import type { SendResult } from "./actions";
 
@@ -109,6 +110,7 @@ export default function AttendanceClient({
     }
   );
   const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
+  const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string } | null>(null);
 
   function handleStatusChange(staffId: string, newStatus: StatusKey) {
     setStatusMenuId(null);
@@ -270,9 +272,13 @@ export default function AttendanceClient({
                                   {m.accountNumber ?? ""}
                                 </span>
                                 {/* 名前 */}
-                                <span className="flex-1 min-w-0 text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                                <button
+                                  type="button"
+                                  onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name })}
+                                  className="flex-1 min-w-0 text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                >
                                   {m.name}
-                                </span>
+                                </button>
                                 {/* ステータスバッジ（タップで変更メニュー） */}
                                 <div className="relative flex-shrink-0">
                                   <button
@@ -346,9 +352,13 @@ export default function AttendanceClient({
                     <span className="w-10 text-xs font-mono text-zinc-400 tabular-nums flex-shrink-0 truncate">
                       {m.accountNumber ?? ""}
                     </span>
-                    <span className="flex-1 min-w-0 text-sm font-semibold text-zinc-700 dark:text-zinc-300 truncate">
+                    <button
+                      type="button"
+                      onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name })}
+                      className="flex-1 min-w-0 text-sm font-semibold text-zinc-700 dark:text-zinc-300 truncate text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    >
                       {m.name}
-                    </span>
+                    </button>
                     <span className="text-xs text-zinc-400 flex-shrink-0">{m.shiftName}</span>
                     <button
                       onClick={() => !isLocked && toggleReminder(m.staffId, "request")}
@@ -476,6 +486,15 @@ export default function AttendanceClient({
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-zinc-800 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium shadow-lg whitespace-nowrap">
           {statusToast}
         </div>
+      )}
+
+      {staffMenu && (
+        <StaffPopupMenu
+          staffId={staffMenu.staffId}
+          staffName={staffMenu.staffName}
+          projectId={projectId}
+          onClose={() => setStaffMenu(null)}
+        />
       )}
     </main>
   );

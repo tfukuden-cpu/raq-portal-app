@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import StaffPopupMenu from "@/components/StaffPopupMenu";
 
 const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -58,7 +59,7 @@ type TabKey = "shukkin" | "kyukyu" | "kiboshu";
 type SlotReq = { section: string; pattern_name: string; shift_date: string; required_count: number };
 
 export default function ShiftDayList({
-  allDates, shifts, activeMembers, shiftPatterns, slotRequirements, selectedDate, onDateChange,
+  allDates, shifts, activeMembers, shiftPatterns, slotRequirements, selectedDate, onDateChange, projectId,
 }: {
   allDates: string[];
   shifts: Shift[];
@@ -73,6 +74,7 @@ export default function ShiftDayList({
 }) {
   const [tabKey, setTabKey]               = useState<TabKey>("shukkin");
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
+  const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string } | null>(null);
   // パターンごとの折りたたみ状態（初期値: 全折りたたみ）
   const [collapsedPatterns, setCollapsedPatterns] = useState<Set<string>>(
     () => new Set(shiftPatterns.map(p => p.name))
@@ -410,10 +412,16 @@ export default function ShiftDayList({
                                     )}
                                   >
                                     {member ? (
-                                      <span className={cx(
-                                        "text-[10px] font-semibold leading-none truncate px-0.5",
-                                        isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
-                                      )}>{shortName(member.name)}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setStaffMenu({ staffId: member.id, staffName: member.name })}
+                                        className={cx(
+                                          "text-[10px] font-semibold leading-none truncate px-0.5 hover:underline",
+                                          isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
+                                        )}
+                                      >
+                                        {shortName(member.name)}
+                                      </button>
                                     ) : slotIdx < req ? (
                                       <span className="w-4 h-px bg-zinc-100 dark:bg-zinc-800 rounded-full" />
                                     ) : null}
@@ -557,10 +565,16 @@ export default function ShiftDayList({
                               )}
                             >
                               {member && (
-                                <span className={cx(
-                                  "text-[10px] font-semibold leading-none truncate px-0.5",
-                                  isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
-                                )}>{shortName(member.name)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setStaffMenu({ staffId: member.id, staffName: member.name })}
+                                  className={cx(
+                                    "text-[10px] font-semibold leading-none truncate px-0.5 hover:underline",
+                                    isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
+                                  )}
+                                >
+                                  {shortName(member.name)}
+                                </button>
                               )}
                             </div>
                           );
@@ -576,6 +590,15 @@ export default function ShiftDayList({
           );
         })()}
       </div>
+
+      {staffMenu && (
+        <StaffPopupMenu
+          staffId={staffMenu.staffId}
+          staffName={staffMenu.staffName}
+          projectId={projectId}
+          onClose={() => setStaffMenu(null)}
+        />
+      )}
     </>
   );
 }
