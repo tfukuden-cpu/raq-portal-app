@@ -38,9 +38,6 @@ type ShiftPattern = {
   short_name: string;
   start_time: string;
   end_time: string;
-  required_count: string;
-  required_weekday: string;
-  required_weekend: string;
   section: string;
   target_role: string; // "all" | "admin" | "staff"
 };
@@ -1079,13 +1076,14 @@ export function ShiftPatternList({
   const [patterns, setPatterns] = useState<ShiftPattern[]>(
     initialPatterns.length > 0 ? initialPatterns : []
   );
+  const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set(initialPatterns.map((_, i) => i)));
   const [result, setResult]   = useState<{ ok: boolean; msg: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const update = (i: number, field: keyof ShiftPattern, value: string) =>
     setPatterns(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
   const add = () =>
-    setPatterns(prev => [...prev, { name: "", short_name: "", start_time: "", end_time: "", required_count: "", required_weekday: "", required_weekend: "", section: "", target_role: "all" }]);
+    setPatterns(prev => [...prev, { name: "", short_name: "", start_time: "", end_time: "", section: "", target_role: "all" }]);
   const remove = (i: number) =>
     setPatterns(prev => prev.filter((_, idx) => idx !== i));
 
@@ -1100,9 +1098,9 @@ export function ShiftPatternList({
         short_name:       p.short_name.trim() || p.name.trim().slice(0, 2),
         start_time:       p.start_time || null,
         end_time:         p.end_time   || null,
-        required_count:   p.required_weekday ? Number(p.required_weekday) : (p.required_count ? Number(p.required_count) : null),
-        required_weekday: p.required_weekday  ? Number(p.required_weekday)  : null,
-        required_weekend: p.required_weekend  ? Number(p.required_weekend)  : null,
+        required_count:   null,
+        required_weekday: null,
+        required_weekend: null,
         section:          p.section.trim() || null,
         target_role:      p.target_role || "all",
         sort_order:       i,
@@ -1116,59 +1114,74 @@ export function ShiftPatternList({
 
   return (
     <div className="space-y-2">
-      {patterns.map((p, i) => (
-        <div key={i} className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <input type="text" value={p.name} onChange={e => update(i, "name", e.target.value)}
-              placeholder="パターン名（例：早番）"
-              className="flex-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 min-w-0" />
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <span className="text-[10px] text-zinc-400">略称</span>
-              <input type="text" value={p.short_name} onChange={e => update(i, "short_name", e.target.value.slice(0, 4))}
-                placeholder="早"
-                className="w-16 px-1.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 text-center" />
+      {patterns.map((p, i) => {
+        const isCollapsed = collapsed.has(i);
+        const toggle = () => setCollapsed(prev => {
+          const next = new Set(prev);
+          next.has(i) ? next.delete(i) : next.add(i);
+          return next;
+        });
+        return (
+          <div key={i} className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+            {/* ヘッダー行（常に表示） */}
+            <div className="flex items-center gap-2 p-3">
+              <button type="button" onClick={toggle}
+                className="flex-1 flex items-center gap-2 min-w-0 text-left">
+                <span className={`text-zinc-400 text-xs transition-transform ${isCollapsed ? "" : "rotate-90"}`}>▶</span>
+                <span className="font-medium text-sm text-zinc-800 dark:text-zinc-100 truncate">
+                  {p.name || <span className="text-zinc-300 dark:text-zinc-600">（名称未設定）</span>}
+                </span>
+                {p.short_name && (
+                  <span className="text-[10px] text-zinc-400 bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5 rounded-md flex-shrink-0">{p.short_name}</span>
+                )}
+                {(p.start_time || p.end_time) && (
+                  <span className="text-[10px] text-zinc-400 flex-shrink-0 tabular-nums">{p.start_time}〜{p.end_time}</span>
+                )}
+              </button>
+              <button type="button" onClick={() => remove(i)}
+                className="w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">×</button>
             </div>
-            <button type="button" onClick={() => remove(i)}
-              className="w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">×</button>
+            {/* 詳細フォーム（展開時のみ） */}
+            {!isCollapsed && (
+              <div className="px-3 pb-3 space-y-2 border-t border-zinc-100 dark:border-zinc-700 pt-2">
+                <div className="flex items-center gap-2">
+                  <input type="text" value={p.name} onChange={e => update(i, "name", e.target.value)}
+                    placeholder="パターン名（例：早番）"
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 min-w-0" />
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-[10px] text-zinc-400">略称</span>
+                    <input type="text" value={p.short_name} onChange={e => update(i, "short_name", e.target.value.slice(0, 4))}
+                      placeholder="早"
+                      className="w-16 px-1.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 text-center" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="time" value={p.start_time} onChange={e => update(i, "start_time", e.target.value)}
+                    className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100" />
+                  <span className="text-zinc-400 text-sm flex-shrink-0">〜</span>
+                  <input type="time" value={p.end_time} onChange={e => update(i, "end_time", e.target.value)}
+                    className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-400 font-semibold flex-shrink-0 w-12">セクション</span>
+                  <input type="text" value={p.section} onChange={e => update(i, "section", e.target.value)}
+                    placeholder="査定・販売 など"
+                    className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-400 font-semibold flex-shrink-0 w-12">対象</span>
+                  <select value={p.target_role} onChange={e => update(i, "target_role", e.target.value)}
+                    className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-xs text-zinc-700 dark:text-zinc-300">
+                    <option value="all">全員</option>
+                    <option value="staff">スタッフのみ</option>
+                    <option value="admin">管理者のみ</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <input type="time" value={p.start_time} onChange={e => update(i, "start_time", e.target.value)}
-              className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100" />
-            <span className="text-zinc-400 text-sm flex-shrink-0">〜</span>
-            <input type="time" value={p.end_time} onChange={e => update(i, "end_time", e.target.value)}
-              className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-zinc-400 font-semibold flex-shrink-0 w-12">セクション</span>
-            <input type="text" value={p.section} onChange={e => update(i, "section", e.target.value)}
-              placeholder="査定・販売 など"
-              className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-zinc-400 font-semibold flex-shrink-0 w-12">必要人数</span>
-            <div className="flex items-center gap-1 flex-1">
-              <span className="text-[10px] text-zinc-400 flex-shrink-0">平日</span>
-              <input type="number" value={p.required_weekday} onChange={e => update(i, "required_weekday", e.target.value)}
-                placeholder="0" min={0}
-                className="w-14 px-1.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 text-center" />
-              <span className="text-[10px] text-zinc-400 flex-shrink-0 ml-2">土日祝</span>
-              <input type="number" value={p.required_weekend} onChange={e => update(i, "required_weekend", e.target.value)}
-                placeholder="0" min={0}
-                className="w-14 px-1.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 text-center" />
-              <span className="text-[10px] text-zinc-400">人</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-zinc-400 font-semibold flex-shrink-0 w-12">対象</span>
-            <select value={p.target_role} onChange={e => update(i, "target_role", e.target.value)}
-              className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-xs text-zinc-700 dark:text-zinc-300">
-              <option value="all">全員</option>
-              <option value="staff">スタッフのみ</option>
-              <option value="admin">管理者のみ</option>
-            </select>
-          </div>
-        </div>
-      ))}
+        );
+      })}
       {patterns.length === 0 && <p className="text-xs text-zinc-300 dark:text-zinc-700 py-1">パターンなし</p>}
       <div className="flex items-center justify-between pt-1">
         <button type="button" onClick={add}
