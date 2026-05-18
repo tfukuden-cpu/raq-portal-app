@@ -214,6 +214,7 @@ export function SettingsContainer({
         <MemberList
           projectId={projectId}
           members={members}
+          availableSections={[...new Set(shiftPatterns.map(p => p.section).filter(Boolean))].sort()}
         />
       )}
 
@@ -465,9 +466,11 @@ type CsvResult = { id: string; name: string; ok: boolean; message: string; noCom
 export function MemberList({
   projectId,
   members,
+  availableSections = [],
 }: {
   projectId: string;
   members: Member[];
+  availableSections?: string[];
 }) {
   const [addMode, setAddMode]       = useState<AddMode>("none");
   const [newLast, setNewLast]         = useState("");
@@ -986,35 +989,40 @@ export function MemberList({
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">セクション（複数可）</label>
-                    <div className="mt-0.5 flex flex-wrap gap-1 min-h-[32px] px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
-                      {editSections.map(s => (
-                        <span key={s} className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
-                          {s}
-                          <button type="button" onClick={() => setEditSections(prev => prev.filter(x => x !== s))}
-                            className="ml-0.5 text-blue-400 hover:text-blue-600 dark:hover:text-blue-200 leading-none">×</button>
-                        </span>
-                      ))}
-                      <input
-                        type="text"
-                        value={editSectionInput}
-                        onChange={e => setEditSectionInput(e.target.value)}
-                        onKeyDown={e => {
-                          if ((e.key === "Enter" || e.key === ",") && editSectionInput.trim()) {
-                            e.preventDefault();
-                            const v = editSectionInput.trim();
-                            if (!editSections.includes(v)) setEditSections(prev => [...prev, v]);
-                            setEditSectionInput("");
-                          }
-                          if (e.key === "Backspace" && !editSectionInput && editSections.length > 0) {
-                            setEditSections(prev => prev.slice(0, -1));
-                          }
-                        }}
-                        placeholder={editSections.length === 0 ? "入力してEnter" : ""}
-                        className="flex-1 min-w-[80px] text-sm bg-transparent outline-none text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-300"
-                      />
-                    </div>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">Enterまたはカンマで追加、×で削除</p>
+                    <label className="text-[10px] text-zinc-500 font-semibold">セクション（複数選択可）</label>
+                    {availableSections.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {availableSections.map(s => {
+                          const active = editSections.includes(s);
+                          return (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setEditSections(prev =>
+                                active ? prev.filter(x => x !== s) : [...prev, s]
+                              )}
+                              className={[
+                                "px-2.5 py-1 rounded-full text-xs font-semibold transition-colors border",
+                                active
+                                  ? "bg-blue-600 text-white border-blue-600"
+                                  : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-300 dark:hover:border-blue-700",
+                              ].join(" ")}
+                            >
+                              {s}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-zinc-400 mt-1">
+                        シフトタブでパターンを登録するとセクションが選択できます
+                      </p>
+                    )}
+                    {editSections.length > 0 && (
+                      <p className="text-[10px] text-zinc-400 mt-1">
+                        選択中: {editSections.join("・")}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="text-[10px] text-zinc-500 font-semibold">アカウント番号</label>
