@@ -616,7 +616,8 @@ export default function ShiftEditGrid({
   function getRequired(patternName: string, date: string): number {
     const k = `${patternName}__${date}`;
     if (localSlotReqs.has(k)) return localSlotReqs.get(k)!;
-    return patternByName.get(patternName)?.required_count ?? 0;
+    // パターンのデフォルトは使わず、日毎に明示設定した分だけ返す
+    return slotReqMap.get(k) ?? 0;
   }
 
   // ── Resolve cell ───────────────────────────────────────────────
@@ -1037,7 +1038,7 @@ export default function ShiftEditGrid({
               </span>
             )}
           </button>
-          {draftCount > 0 && (
+          {hasChanges && (
             <button onClick={resetDrafts} disabled={isPending || isSavingDraft}
               className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
               リセット
@@ -1047,12 +1048,10 @@ export default function ShiftEditGrid({
             className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
             閉じる
           </button>
-          {draftCount > 0 && (
-            <button onClick={handleSaveDraft} disabled={isPending || isSavingDraft}
-              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 hover:bg-amber-200 disabled:opacity-40 transition-colors">
-              {isSavingDraft ? "保存中…" : "仮保存"}
-            </button>
-          )}
+          <button onClick={handleSaveDraft} disabled={isPending || isSavingDraft}
+            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 hover:bg-amber-200 disabled:opacity-40 transition-colors">
+            {isSavingDraft ? "保存中…" : "仮保存"}
+          </button>
           <button onClick={handleCommit} disabled={isPending || isSavingDraft || !hasChanges}
             className="px-3 py-1.5 text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 transition-colors">
             {isPending ? "確定中…" : "確定"}

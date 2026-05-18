@@ -97,8 +97,8 @@ export default function ShiftManageClient({
   return (
     <>
       <div className="px-4 flex items-center justify-between mb-2">
-        {/* 仮保存バッジ */}
-        {initialDraft && initialDraft.length > 0 ? (
+        {/* 下書きバッジ（あれば） */}
+        {initialDraft && initialDraft.length > 0 && (
           <button
             onClick={() => setEditMode(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-colors"
@@ -106,12 +106,10 @@ export default function ShiftManageClient({
             <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
             下書きあり — 続きから編集
           </button>
-        ) : (
-          <div />
         )}
         <button
           onClick={() => setEditMode(true)}
-          className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors border border-blue-200 dark:border-blue-800"
+          className="ml-auto px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors border border-blue-200 dark:border-blue-800"
         >
           グリッド編集
         </button>
