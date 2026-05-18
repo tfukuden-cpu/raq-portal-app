@@ -34,6 +34,30 @@ async function fetchRequestInfo(requestId: string) {
   };
 }
 
+export async function updatePatternRequiredCountsAction(
+  projectId: string,
+  changes: { name: string; required_count: number }[],
+): Promise<ActionResult> {
+  if (changes.length === 0) return { success: true };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+  for (const { name, required_count } of changes) {
+    const { error } = await admin
+      .from("shift_patterns")
+      .update({ required_count })
+      .eq("project_id", projectId)
+      .eq("name", name);
+    if (error) return { success: false, message: error.message };
+  }
+
+  revalidatePath("/shifts/manage");
+  return { success: true };
+}
+
 export async function approveShiftRequestAction(requestId: string): Promise<ActionResult> {
   if (!requestId) return { success: false, message: "IDが必要です" };
 

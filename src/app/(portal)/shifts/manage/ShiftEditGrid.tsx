@@ -34,6 +34,7 @@ import {
   type BulkDeleteItem,
   type GridDraftEntry,
 } from "../actions";
+import { updatePatternRequiredCountsAction } from "./actions";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -514,6 +515,13 @@ export default function ShiftEditGrid({
     initialDraft !== null && initialDraft.length > 0
   );
 
+  // 必要人数のローカル編集状態
+  const [localRequired, setLocalRequired] = useState<Map<string, number>>(() => {
+    const m = new Map<string, number>();
+    for (const p of shiftPatterns) m.set(p.name, p.required_count);
+    return m;
+  });
+
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overColKey, setOverColKey] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
@@ -568,7 +576,8 @@ export default function ShiftEditGrid({
 
   function getRequired(patternName: string, date: string): number {
     return slotReqMap.get(`${patternName}__${date}`)
-      ?? (patternByName.get(patternName)?.required_count ?? 0);
+      ?? localRequired.get(patternName)
+      ?? 0;
   }
 
   // ── Resolve cell ───────────────────────────────────────────────
@@ -615,7 +624,7 @@ export default function ShiftEditGrid({
         const c = (resolvedGrid.get(`${p.name}__${date}`) ?? []).length;
         if (c > maxOnDate) maxOnDate = c;
       }
-      m.set(p.name, Math.max(maxOnDate + 1, p.required_count, 2));
+      m.set(p.name, Math.max(maxOnDate + 1, 2));
     }
     return m;
   }, [shiftPatterns, allDates, resolvedGrid]);
@@ -844,16 +853,22 @@ export default function ShiftEditGrid({
       if (draft === null) { if (shiftsByKey.has(key)) dels.push({ staffId, shiftDate }); }
       else upserts.push({ staffId, shiftDate, shiftName: draft.shiftName, shiftStart: draft.shiftStart, shiftEnd: draft.shiftEnd });
     }
-    if (upserts.length === 0 && dels.length === 0) { onCancel(); return; }
+    const requiredChanges = shiftPatterns
+      .filter(p => localRequired.get(p.name) !== p.required_count)
+      .map(p => ({ name: p.name, required_count: localRequired.get(p.name) ?? p.required_count }));
+    if (upserts.length === 0 && dels.length === 0 && requiredChanges.length === 0) { onCancel(); return; }
     setError(null);
     startTransition(async () => {
-      const r = await bulkUpsertShiftsAction(projectId, upserts, dels);
-      if (r.success) {
-        await clearGridDraftAction(projectId, targetMonth);
-        onSaved();
-      } else {
-        setError(r.message ?? "保存に失敗しました");
+      if (requiredChanges.length > 0) {
+        const rc = await updatePatternRequiredCountsAction(projectId, requiredChanges);
+        if (!rc.success) { setError(rc.message ?? "必要人数の保存に失敗しました"); return; }
       }
+      if (upserts.length > 0 || dels.length > 0) {
+        const r = await bulkUpsertShiftsAction(projectId, upserts, dels);
+        if (!r.success) { setError(r.message ?? "保存に失敗しました"); return; }
+      }
+      await clearGridDraftAction(projectId, targetMonth);
+      onSaved();
     });
   }
 
@@ -896,6 +911,8 @@ export default function ShiftEditGrid({
 
   // ── Render ────────────────────────────────────────────────────
   const draftCount = drafts.size;
+  const requiredChanged = shiftPatterns.some(p => localRequired.get(p.name) !== p.required_count);
+  const hasChanges = draftCount > 0 || requiredChanged;
   const activeName = activeId ? (memberById.get(activeId.split("__")[0])?.name ?? "") : null;
   const COL_W = 42;
   const NAME_W = 100;
@@ -908,7 +925,7 @@ export default function ShiftEditGrid({
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 shrink-0">
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 leading-tight">
-            {draftCount > 0 ? `${draftCount}件 変更中` : "グリッド編集"}
+            {draftCount > 0 ? `${draftCount}件 変更中` : requiredChanged ? "必要人数 変更中" : "グリッド編集"}
           </span>
           {hasDraftFromDB && draftCount === 0 && (
             <span className="text-[10px] text-amber-600 dark:text-amber-400">下書きなし</span>
@@ -952,7 +969,7 @@ export default function ShiftEditGrid({
               {isSavingDraft ? "保存中…" : "仮保存"}
             </button>
           )}
-          <button onClick={handleCommit} disabled={isPending || isSavingDraft || draftCount === 0}
+          <button onClick={handleCommit} disabled={isPending || isSavingDraft || !hasChanges}
             className="px-3 py-1.5 text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 transition-colors">
             {isPending ? "確定中…" : "確定"}
           </button>
@@ -1044,13 +1061,30 @@ export default function ShiftEditGrid({
                         {rowIdx === 0 && (
                           <td rowSpan={rowCount}
                             className="sticky left-0 z-10 bg-white dark:bg-zinc-950 border-r-2 border-b border-zinc-200 dark:border-zinc-700 align-top p-0">
-                            <div className="px-2 pt-2">
+                            <div className="px-2 pt-1.5 pb-1">
                               <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200 block leading-snug">{pattern.name}</span>
                               {pattern.start_time && pattern.end_time && (
                                 <span className="text-[9px] text-zinc-400 tabular-nums block">
                                   {pattern.start_time.slice(0, 5)}～{pattern.end_time.slice(0, 5)}
                                 </span>
                               )}
+                              {/* 必要人数インライン編集 */}
+                              <div className="flex items-center gap-0.5 mt-1">
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); setLocalRequired(prev => { const n = new Map(prev); n.set(pattern.name, Math.max(0, (prev.get(pattern.name) ?? 0) - 1)); return n; }); }}
+                                  className="w-4 h-4 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs leading-none transition-colors"
+                                >−</button>
+                                <span className={`text-[10px] tabular-nums w-5 text-center font-bold ${requiredChanged && localRequired.get(pattern.name) !== pattern.required_count ? "text-blue-600 dark:text-blue-400" : "text-zinc-500 dark:text-zinc-400"}`}>
+                                  {localRequired.get(pattern.name) ?? 0}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); setLocalRequired(prev => { const n = new Map(prev); n.set(pattern.name, (prev.get(pattern.name) ?? 0) + 1); return n; }); }}
+                                  className="w-4 h-4 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs leading-none transition-colors"
+                                >+</button>
+                                <span className="text-[9px] text-zinc-400">人</span>
+                              </div>
                             </div>
                           </td>
                         )}
