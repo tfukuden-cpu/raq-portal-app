@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
+import ShiftDraftSection from "./ShiftDraftSection";
 import {
   updateProjectNameAction,
   saveSheetUrlAction,
@@ -173,6 +174,23 @@ export function SettingsContainer({
               sub="保存するとスプシの「シフトパターン」シートにも反映されます"
             />
             <ShiftPatternList projectId={projectId} initialPatterns={shiftPatterns} />
+          </section>
+          <Divider />
+          <section className="space-y-3">
+            <SectionHeading
+              title="シフト仮組"
+              sub="月と必要人数を設定して自動でシフトを生成します"
+            />
+            <ShiftDraftSection
+              projectId={projectId}
+              patterns={shiftPatterns.map(p => ({
+                name:        p.name,
+                section:     p.section || null,
+                start_time:  p.start_time || null,
+                end_time:    p.end_time   || null,
+                target_role: p.target_role,
+              }))}
+            />
           </section>
           <Divider />
           <section className="space-y-3">

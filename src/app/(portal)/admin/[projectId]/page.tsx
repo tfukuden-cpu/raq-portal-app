@@ -56,19 +56,13 @@ export default async function ProjectDetailPage(props: {
   if (!project) redirect("/admin");
 
   const patternList = (shiftPatterns ?? []).map((p) => ({
-    id:                p.id,
-    name:              p.name,
-    short_name:        (p as { short_name?: string }).short_name ?? "",
-    start_time:        (p.start_time ?? "") as string,
-    end_time:          (p.end_time   ?? "") as string,
-    required_count:    (p as { required_count?: number | null }).required_count != null
-      ? String((p as { required_count?: number | null }).required_count) : "",
-    required_weekday:  (p as { required_weekday?: number | null }).required_weekday != null
-      ? String((p as { required_weekday?: number | null }).required_weekday) : "",
-    required_weekend:  (p as { required_weekend?: number | null }).required_weekend != null
-      ? String((p as { required_weekend?: number | null }).required_weekend) : "",
-    section:           (p as { section?: string | null }).section ?? "",
-    target_role:       (p as { target_role?: string }).target_role ?? "all",
+    id:          p.id,
+    name:        p.name,
+    short_name:  (p as { short_name?: string }).short_name ?? "",
+    start_time:  (p.start_time ?? "") as string,
+    end_time:    (p.end_time   ?? "") as string,
+    section:     (p as { section?: string | null }).section ?? "",
+    target_role: (p as { target_role?: string }).target_role ?? "all",
   }));
 
   const memberList = (members ?? []).map((m) => {
