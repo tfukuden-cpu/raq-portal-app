@@ -49,6 +49,7 @@ type Member = { id: string; name: string; section: string | null };
 type Pattern = {
   name: string;
   required_count: number;
+  section: string | null;
   start_time: string | null;
   end_time: string | null;
 };
@@ -85,6 +86,14 @@ interface Props {
   draftSavedAt: string | null;
   onSaved: () => void;
   onCancel: () => void;
+}
+
+// ── Section compatibility ──────────────────────────────────────
+// パターンにセクションが指定されている場合、スタッフのセクションと一致する必要がある
+function canAssign(member: Member, pattern: Pattern): boolean {
+  if (!pattern.section) return true;   // パターンにセクション制限なし
+  if (!member.section) return true;    // スタッフにセクション未設定
+  return member.section === pattern.section;
 }
 
 // ── Date helpers ───────────────────────────────────────────────
@@ -252,13 +261,14 @@ function CountCell({ assigned, required, isToday }: {
 // ── Edit Modal ─────────────────────────────────────────────────
 
 function EditModal({
-  target, patterns, availableStaff, logs,
+  target, patterns, availableStaff, logs, staffMember,
   onClose, onChangePattern, onRemove, onAdd,
 }: {
   target: EditTarget;
   patterns: Pattern[];
   availableStaff: Member[];
   logs: ChangeLog[];
+  staffMember: Member | null;
   onClose: () => void;
   onChangePattern: (p: string) => void;
   onRemove: () => void;
@@ -284,7 +294,7 @@ function EditModal({
           <>
             <p className="text-[11px] text-zinc-400 uppercase tracking-wide mb-1.5">パターンを変更</p>
             <div className="space-y-1 max-h-44 overflow-y-auto mb-3">
-              {patterns.filter((p) => p.name !== target.patternName).map((p) => (
+              {patterns.filter((p) => p.name !== target.patternName && (!staffMember || canAssign(staffMember, p))).map((p) => (
                 <button key={p.name} onClick={() => onChangePattern(p.name)}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
                   <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{p.name}</span>
@@ -499,7 +509,10 @@ export default function ShiftEditGrid({
     const sourcePattern = sourceVal?.shiftName ?? null;
     if (!sourcePattern) return;
     if (sourcePattern === targetPattern && sourceDate === targetDate) return;
+    // セクション互換チェック
     const tPat = patternByName.get(targetPattern);
+    const member = memberById.get(staffId);
+    if (tPat && member && !canAssign(member, tPat)) return;
     setDrafts((prev) => {
       const next = new Map(prev);
       const sourceKey = `${staffId}__${sourceDate}`;
@@ -622,10 +635,14 @@ export default function ShiftEditGrid({
   // ── Available staff for "empty" modal ─────────────────────────
   const availableStaff = useMemo(() => {
     if (!editTarget || editTarget.kind !== "empty") return [];
-    const { date } = editTarget;
-    return activeMembers.filter((m) => resolveCell(m.id, date) === null);
+    const { date, patternName } = editTarget;
+    const pat = patternByName.get(patternName);
+    return activeMembers.filter((m) =>
+      resolveCell(m.id, date) === null &&
+      (!pat || canAssign(m, pat))
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editTarget, drafts, activeMembers, shiftsByKey]);
+  }, [editTarget, drafts, activeMembers, shiftsByKey, patternByName]);
 
   // 編集対象の変更ログ
   const modalLogs = useMemo(() => {
@@ -813,6 +830,7 @@ export default function ShiftEditGrid({
         <EditModal
           target={editTarget} patterns={shiftPatterns}
           availableStaff={availableStaff} logs={modalLogs}
+          staffMember={editTarget.kind === "existing" ? (memberById.get(editTarget.staffId) ?? null) : null}
           onClose={closeModal} onChangePattern={handleChangePattern}
           onRemove={handleRemove} onAdd={handleAdd}
         />
