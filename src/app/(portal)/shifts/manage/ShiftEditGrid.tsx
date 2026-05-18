@@ -75,7 +75,7 @@ type EditTarget =
   | { kind: "existing"; staffId: string; patternName: string; date: string }
   | { kind: "empty";    patternName: string; date: string };
 
-type ErrorAnnotation = { staffId: string; date: string; message: string };
+type ErrorAnnotation = { patternName: string; date: string; message: string };
 
 interface Props {
   projectId: string;
@@ -94,9 +94,10 @@ interface Props {
 }
 
 // ── Section compatibility ──────────────────────────────────────
+// パターンにセクション指定がある場合、スタッフも同じセクションでなければ配置不可
+// （セクション未設定スタッフはセクション指定パターンには入れない）
 function canAssign(member: Member, pattern: Pattern): boolean {
   if (!pattern.section) return true;
-  if (!member.section) return true;
   return member.section === pattern.section;
 }
 
@@ -232,17 +233,33 @@ function SlotCellFull({
 // ── CountCell ──────────────────────────────────────────────────
 
 function CountCell({
-  assigned, required, isToday, isEditing,
+  assigned, required, isToday, isSV, isEditing,
   onStartEdit, onChange, onEndEdit,
 }: {
   assigned: number; required: number; isToday: boolean;
+  isSV: boolean;
   isEditing: boolean;
   onStartEdit: () => void;
   onChange: (v: number) => void;
   onEndEdit: () => void;
 }) {
-  const shortage = required > 0 && assigned < required;
-  const ok = required === 0 || assigned >= required;
+  const shortage = !isSV && required > 0 && assigned < required;
+  const surplus  = !isSV && required > 0 && assigned > required;
+  const ok       = isSV || required === 0 || assigned >= required;
+
+  // SVパターン：配置人数のみ表示（不足管理なし）
+  if (isSV) {
+    return (
+      <td className={[
+        "text-center tabular-nums font-medium border-b-2 border-r border-zinc-200 dark:border-zinc-700 select-none",
+        isToday ? "bg-blue-50/50 dark:bg-blue-950/20" : "bg-zinc-50 dark:bg-zinc-900/60",
+      ].join(" ")}>
+        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 py-1 block">
+          {assigned > 0 ? assigned : ""}
+        </span>
+      </td>
+    );
+  }
 
   if (isEditing) {
     return (
@@ -277,6 +294,8 @@ function CountCell({
           ? "bg-blue-50/50 dark:bg-blue-950/20"
           : shortage
           ? "bg-red-50/70 dark:bg-red-950/20"
+          : surplus
+          ? "bg-emerald-50/60 dark:bg-emerald-950/15"
           : "bg-zinc-50 dark:bg-zinc-900/60",
       ].filter(Boolean).join(" ")}
     >
@@ -284,12 +303,21 @@ function CountCell({
         <span className="text-[9px] text-zinc-300 dark:text-zinc-600 py-1 block">-</span>
       ) : (
         <div className="flex flex-col items-center justify-center py-0.5">
-          <span className={`text-[10px] leading-none ${ok ? "text-zinc-400 dark:text-zinc-500" : "text-red-500 dark:text-red-400 font-bold"}`}>
+          <span className={`text-[10px] leading-none ${
+            shortage ? "text-red-500 dark:text-red-400 font-bold"
+            : surplus ? "text-emerald-600 dark:text-emerald-400 font-bold"
+            : "text-zinc-400 dark:text-zinc-500"
+          }`}>
             {assigned}/{required}
           </span>
           {shortage && (
             <span className="text-[8px] leading-none text-red-400 dark:text-red-500 tabular-nums mt-px">
               -{required - assigned}人
+            </span>
+          )}
+          {surplus && (
+            <span className="text-[8px] leading-none text-emerald-500 dark:text-emerald-400 tabular-nums mt-px">
+              +{assigned - required}人
             </span>
           )}
         </div>
@@ -792,8 +820,8 @@ export default function ShiftEditGrid({
     if (tPat && member && !canAssign(member, tPat)) {
       const sectionLabel = tPat.section ? `「${tPat.section}」` : "";
       setErrorAnnotation({
-        staffId,
-        date: sourceDate,
+        patternName: targetPattern,
+        date: targetDate,
         message: `${member.name} は${sectionLabel}セクション外のため配置できません`,
       });
       setTimeout(() => setErrorAnnotation(null), 3500);
@@ -803,12 +831,11 @@ export default function ShiftEditGrid({
     if (sourceDate !== targetDate) {
       const existingOnTarget = resolveCell(staffId, targetDate);
       if (existingOnTarget !== null && existingOnTarget.shiftName && patternNameSet.has(existingOnTarget.shiftName)) {
-        const annotation: ErrorAnnotation = {
-          staffId,
-          date: sourceDate,
+        setErrorAnnotation({
+          patternName: targetPattern,
+          date: targetDate,
           message: `${member?.name ?? staffId} はすでに ${fmtDate(targetDate)} に「${existingOnTarget.shiftName}」が入っています`,
-        };
-        setErrorAnnotation(annotation);
+        });
         setTimeout(() => setErrorAnnotation(null), 4000);
         return;
       }
@@ -1002,6 +1029,22 @@ export default function ShiftEditGrid({
     return duplicateStaffDates.set.has(`${editTarget.staffId}__${editTarget.date}`);
   }, [editTarget, duplicateStaffDates]);
 
+  // ── 不足/余剰合計（SVパターン除外、純差分） ──────────────────────
+  const netShortage = useMemo(() => {
+    let net = 0;
+    for (const p of shiftPatterns) {
+      if (p.section === "SV") continue;
+      for (const date of allDates) {
+        const req = getRequired(p.name, date);
+        if (req === 0) continue;
+        const assigned = (resolvedGrid.get(`${p.name}__${date}`) ?? []).length;
+        net += req - assigned;
+      }
+    }
+    return net;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedGrid, allDates, shiftPatterns, slotReqMap, localSlotReqs]);
+
   // ── Render ────────────────────────────────────────────────────
   const draftCount = drafts.size;
   const hasChanges = draftCount > 0 || slotReqChanged;
@@ -1011,8 +1054,6 @@ export default function ShiftEditGrid({
   const COL_W = 42;
   const NAME_W = 100;
   const totalW = NAME_W + COL_W * allDates.length;
-  // 不足人数 = 全パターン×日付の (必要人数 - 配置人数) の合計
-  const totalShortage = shortageList.reduce((sum, s) => sum + (s.required - s.assigned), 0);
 
   return (
     <div className="flex flex-col h-full">
@@ -1021,9 +1062,9 @@ export default function ShiftEditGrid({
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 leading-tight">
             {draftCount > 0 ? `${draftCount}件 変更中` : slotReqChanged ? "必要人数 変更中" : "グリッド編集"}
-            {totalShortage > 0 && (
-              <span className="ml-2 text-[11px] font-bold text-red-500 dark:text-red-400 tabular-nums">
-                不足 -{totalShortage}人
+            {netShortage !== 0 && (
+              <span className={`ml-2 text-[11px] font-bold tabular-nums ${netShortage > 0 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                {netShortage > 0 ? `不足 ${netShortage}人` : `余剰 ${-netShortage}人`}
               </span>
             )}
           </span>
@@ -1156,14 +1197,17 @@ export default function ShiftEditGrid({
                           const hasLog = draftKey ? (changeLogMap.get(draftKey)?.length ?? 0) > 0 : false;
                           const isDuplicate = draftKey ? duplicateStaffDates.set.has(draftKey) : false;
 
-                          // 吹き出しメッセージの決定
-                          const isErrorCell = !!staffId && errorAnnotation?.staffId === staffId && errorAnnotation?.date === date;
+                          // 吹き出しメッセージの決定（rowIdx===0の行にのみ表示）
+                          const isErrorTarget = rowIdx === 0 &&
+                            !!errorAnnotation &&
+                            errorAnnotation.patternName === pattern.name &&
+                            errorAnnotation.date === date;
                           const dupPatterns = isDuplicate && draftKey
                             ? (duplicateStaffDates.map.get(draftKey) ?? []).filter(p => p !== pattern.name)
                             : [];
-                          const bubbleMessage: string | undefined = isErrorCell
+                          const bubbleMessage: string | undefined = isErrorTarget
                             ? errorAnnotation!.message
-                            : isDuplicate && dupPatterns.length > 0
+                            : rowIdx === 0 && isDuplicate && dupPatterns.length > 0
                             ? `重複: ${dupPatterns.join("・")}`
                             : undefined;
 
@@ -1199,6 +1243,7 @@ export default function ShiftEditGrid({
                             assigned={(resolvedGrid.get(`${pattern.name}__${date}`) ?? []).length}
                             required={getRequired(pattern.name, date)}
                             isToday={date === todayJST}
+                            isSV={pattern.section === "SV"}
                             isEditing={editingCountKey === countKey}
                             onStartEdit={() => { setEditingCountKey(countKey); setSaveError(null); }}
                             onChange={v => setLocalSlotReqs(prev => { const n = new Map(prev); n.set(countKey, v); return n; })}
