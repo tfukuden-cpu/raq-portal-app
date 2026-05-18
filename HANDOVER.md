@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-16（v15：大規模仕様変更・実装ロードマップ策定）
+最終更新：2026-05-18（v16：Phase 1 打刻専用ページ完成・同意書機能追加）
 
 ---
 
@@ -82,8 +82,9 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | 希望休ルール適用（バリデーション） | ✅ 完成 |
 | 当日状況 ステータス手動変更 | ✅ 完成（v13新設） |
 | 勤怠修正 カードUI・直接編集 | ✅ 完成（v13改善） |
-| **打刻専用ページ（現場端末）** | ⏳ Phase 1 |
-| **出発報告ON/OFF設定** | ⏳ Phase 1 |
+| **打刻専用ページ（現場端末）** | ✅ 完成（v16） |
+| **当月初回同意書確認（氏名入力・履歴閲覧）** | ✅ 完成（v16） |
+| **出発報告ON/OFF設定** | ⏳ Phase 1 残タスク |
 | **シフト仮組（アプリ内）** | ⏳ Phase 2 |
 | **シフト編集モード（ドラッグ）** | ⏳ Phase 2 |
 | **スタッフ稼働設定・シフト設定** | ⏳ Phase 3 |
@@ -91,7 +92,13 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 
 ### 次に優先すべきこと（新しいセッションはここから）
 
-→ **セクション13「実装ロードマップ」を参照**
+**Phase 1 残タスク：**
+- P1-2a: DBカラム追加（`project_settings.enable_departure_report boolean default true`）
+- P1-2b: 案件設定UIにトグル追加
+- P1-2c: ダッシュボード（HomeClient）の出発報告ボタンを設定値に応じて非表示
+- P1-2d: スタッフ側の出発報告フォームに設定を反映
+
+→ その後 **セクション13「実装ロードマップ」を参照**
 
 ### 開発スタイルの注意点
 - **バイブコーディング**：ユーザーはJS/SQL未経験。実装はAIが担当し、ユーザーは方向性を決める
@@ -207,6 +214,15 @@ project_settings（案件ごとの設定）
 shift_change_logs（シフト変更ログ）
   project_id, staff_id, shift_date, action,
   before_data jsonb, after_data jsonb, changed_by, changed_at
+
+consent_records（同意書確認履歴）← ★v16新設
+  staff_id, project_id,
+  consent_month (text YYYY-MM),
+  confirmed_name (text),   ← 同意時に本人が入力した氏名
+  signed_at (timestamptz)
+  unique(staff_id, project_id, consent_month)
+  ※ 現場端末打刻ページ（/punch/[projectId]）で当月初回打刻時に記録
+  ※ スタッフ管理ページ（/admin/staffs）の「同意書」ボタンから閲覧可能
 ```
 
 ---
