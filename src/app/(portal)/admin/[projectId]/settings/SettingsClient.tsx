@@ -32,7 +32,7 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; account_number: string | null; shift_note: string | null; work_days_type: string | null; work_days_count: number | null };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; account_number: string | null; shift_note: string | null; work_days_type: string | null; work_days_count: number | null; compliance: number | null };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -476,8 +476,9 @@ export function MemberList({
   const [newRole, setNewRole]         = useState("staff");
   const [newSection, setNewSection]   = useState("");
   const [search, setSearch]         = useState("");
-  const [companyFilter, setCompanyFilter] = useState("");
-  const [sectionFilter, setSectionFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState(""); // "" | "__unset__" | company name
+  const [sectionFilter, setSectionFilter] = useState(""); // "" | "__unset__" | section name
+  const [filterExpanded, setFilterExpanded] = useState<"none" | "company" | "section">("none");
   const [csvText, setCsvText]       = useState("");
   const [csvPreview, setCsvPreview] = useState<CsvRow[]>([]);
   const [csvResults, setCsvResults] = useState<CsvResult[] | null>(null);
@@ -549,8 +550,12 @@ export function MemberList({
       || m.name.toLowerCase().includes(q)
       || m.staffId.toLowerCase().includes(q)
       || (m.company_name ?? "").toLowerCase().includes(q);
-    const matchCompany = !companyFilter || m.company_name === companyFilter;
-    const matchSection = !sectionFilter || m.section === sectionFilter;
+    const matchCompany = !companyFilter ? true
+      : companyFilter === "__unset__" ? !m.company_name
+      : m.company_name === companyFilter;
+    const matchSection = !sectionFilter ? true
+      : sectionFilter === "__unset__" ? !m.section
+      : m.section === sectionFilter;
     return matchSearch && matchCompany && matchSection;
   });
 
@@ -684,69 +689,137 @@ export function MemberList({
         </div>
       )}
 
-      {/* 会社フィルターチップ（2社以上のとき表示） */}
-      {companies.length > 1 && addMode === "none" && (
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-          <button
-            onClick={() => setCompanyFilter("")}
-            className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-              !companyFilter
-                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-            }`}
-          >
-            すべて
-          </button>
-          {companies.map((c, i) => {
-            const pal = AVATAR_PALETTE[i % AVATAR_PALETTE.length];
-            const active = companyFilter === c;
-            const count = members.filter(m => m.company_name === c).length;
-            return (
-              <button key={c} onClick={() => setCompanyFilter(active ? "" : c)}
-                className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-colors max-w-[160px] ${
-                  active
-                    ? `${pal.bg} ${pal.text}`
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                }`}
+      {/* フィルター（アコーディオン式） */}
+      {addMode === "none" && (companies.length > 1 || sections.length > 0) && (
+        <div className="space-y-1.5">
+          {/* カテゴリボタン行 */}
+          <div className="flex gap-2 flex-wrap">
+            {companies.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setFilterExpanded(v => v === "company" ? "none" : "company")}
+                className={[
+                  "flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-colors border",
+                  filterExpanded === "company" || companyFilter
+                    ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-transparent"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700",
+                ].join(" ")}
               >
-                <span className="truncate">{c}</span>
-                <span className={`tabular-nums flex-shrink-0 ${active ? "opacity-70" : "opacity-50"}`}>{count}</span>
+                所属会社
+                {companyFilter && (
+                  <span className="opacity-70">
+                    · {companyFilter === "__unset__" ? "未設定" : companyFilter}
+                  </span>
+                )}
+                <span className={`text-[10px] transition-transform ${filterExpanded === "company" ? "rotate-180" : ""}`}>▾</span>
               </button>
-            );
-          })}
-        </div>
-      )}
+            )}
+            {sections.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setFilterExpanded(v => v === "section" ? "none" : "section")}
+                className={[
+                  "flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-colors border",
+                  filterExpanded === "section" || sectionFilter
+                    ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-transparent"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700",
+                ].join(" ")}
+              >
+                セクション
+                {sectionFilter && (
+                  <span className="opacity-70">
+                    · {sectionFilter === "__unset__" ? "未設定" : sectionFilter}
+                  </span>
+                )}
+                <span className={`text-[10px] transition-transform ${filterExpanded === "section" ? "rotate-180" : ""}`}>▾</span>
+              </button>
+            )}
+            {(companyFilter || sectionFilter) && (
+              <button
+                type="button"
+                onClick={() => { setCompanyFilter(""); setSectionFilter(""); setFilterExpanded("none"); }}
+                className="px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+              >
+                クリア
+              </button>
+            )}
+          </div>
 
-      {/* セクションフィルターチップ（1つ以上のとき表示） */}
-      {sections.length > 0 && addMode === "none" && (
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-          <span className="flex-shrink-0 px-2 py-1 text-[10px] font-semibold text-zinc-400 self-center">班:</span>
-          <button
-            onClick={() => setSectionFilter("")}
-            className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-              !sectionFilter
-                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-            }`}
-          >
-            全班
-          </button>
-          {sections.map((s) => {
-            const active = sectionFilter === s;
-            const count = members.filter(m => m.section === s).length;
-            return (
-              <button key={s} onClick={() => setSectionFilter(active ? "" : s)}
-                className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                  active
-                    ? "bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400"
+          {/* 所属会社チップ展開 */}
+          {filterExpanded === "company" && (
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 pl-1">
+              <button onClick={() => { setCompanyFilter(""); }}
+                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                  !companyFilter ? "bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900"
                     : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                }`}
-              >
-                <span>{s}</span>
-                <span className={`tabular-nums flex-shrink-0 ${active ? "opacity-70" : "opacity-50"}`}>{count}</span>
+                }`}>
+                すべて
               </button>
-            );
-          })}
+              {companies.map((c, i) => {
+                const pal = AVATAR_PALETTE[i % AVATAR_PALETTE.length];
+                const active = companyFilter === c;
+                const count = members.filter(m => m.company_name === c).length;
+                return (
+                  <button key={c} onClick={() => setCompanyFilter(active ? "" : c)}
+                    className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-colors max-w-[160px] ${
+                      active ? `${pal.bg} ${pal.text}` : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                    }`}>
+                    <span className="truncate">{c}</span>
+                    <span className={`tabular-nums flex-shrink-0 ${active ? "opacity-70" : "opacity-50"}`}>{count}</span>
+                  </button>
+                );
+              })}
+              {members.some(m => !m.company_name) && (
+                <button onClick={() => setCompanyFilter(companyFilter === "__unset__" ? "" : "__unset__")}
+                  className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                    companyFilter === "__unset__"
+                      ? "bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                  }`}>
+                  未設定
+                  <span className="tabular-nums opacity-50">{members.filter(m => !m.company_name).length}</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* セクションチップ展開 */}
+          {filterExpanded === "section" && (
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 pl-1">
+              <button onClick={() => { setSectionFilter(""); }}
+                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                  !sectionFilter ? "bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                }`}>
+                すべて
+              </button>
+              {sections.map((s) => {
+                const active = sectionFilter === s;
+                const count = members.filter(m => m.section === s).length;
+                return (
+                  <button key={s} onClick={() => setSectionFilter(active ? "" : s)}
+                    className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                      active ? "bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400"
+                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                    }`}>
+                    <span>{s}</span>
+                    <span className={`tabular-nums flex-shrink-0 ${active ? "opacity-70" : "opacity-50"}`}>{count}</span>
+                  </button>
+                );
+              })}
+              {members.some(m => !m.section) && (
+                <button onClick={() => setSectionFilter(sectionFilter === "__unset__" ? "" : "__unset__")}
+                  className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                    sectionFilter === "__unset__"
+                      ? "bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                  }`}>
+                  未設定
+                  <span className="tabular-nums opacity-50">{members.filter(m => !m.section).length}</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -998,9 +1071,25 @@ export function MemberList({
                     <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex-shrink-0">
                       {m.role === "project_admin" ? "管理者" : "スタッフ"}
                     </span>
-                    {m.work_days_count != null && m.work_days_type && (
+                    {/* 稼働日数（未設定なら週5日をデフォルト表示） */}
+                    {m.work_days_count != null && m.work_days_type ? (
                       <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex-shrink-0 tabular-nums">
                         {m.work_days_type === "monthly" ? "月" : "週"}{m.work_days_count}日
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex-shrink-0 tabular-nums">
+                        週5日
+                      </span>
+                    )}
+                    {/* 勤怠順守率（過去30日） */}
+                    {m.compliance != null && (
+                      <span className={[
+                        "text-[10px] px-1.5 py-0 rounded font-medium flex-shrink-0 tabular-nums",
+                        m.compliance >= 90 ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+                          : m.compliance >= 70 ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
+                          : "bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400",
+                      ].join(" ")}>
+                        順守{m.compliance}%
                       </span>
                     )}
                   </div>

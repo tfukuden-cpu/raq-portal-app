@@ -33,12 +33,23 @@ export default async function ProjectDetailPage(props: {
     if (!membership) redirect("/dashboard");
   }
 
+  // 過去30日の範囲
+  const now30 = new Date();
+  const d30   = new Date(now30.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const fmt   = (d: Date) => d.toISOString().slice(0, 10);
+  const dateFrom30 = fmt(d30);
+  const dateTo30   = fmt(now30);
+
+  const admin30 = createAdminClient();
+
   const [
     { data: project },
     { data: members },
     { data: settings },
     { data: shiftPatterns },
     { data: holidayRules },
+    { data: recentShifts },
+    { data: recentPunches },
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
@@ -51,9 +62,46 @@ export default async function ProjectDetailPage(props: {
     createAdminClient().from("holiday_rules")
       .select("rule_type, value")
       .eq("project_id", projectId).order("sort_order"),
+    // 勤怠順守率計算用：過去30日のシフト
+    admin30.from("shifts")
+      .select("staff_id, shift_date, shift_name")
+      .eq("project_id", projectId)
+      .gte("shift_date", dateFrom30)
+      .lte("shift_date", dateTo30),
+    // 勤怠順守率計算用：過去30日の打刻（出勤のみ）
+    admin30.from("punch_logs")
+      .select("staff_id, punch_type, recorded_at")
+      .eq("project_id", projectId)
+      .eq("punch_type", "clock_in")
+      .gte("recorded_at", dateFrom30 + "T00:00:00+09:00")
+      .lte("recorded_at", dateTo30   + "T23:59:59+09:00"),
   ]);
 
   if (!project) redirect("/admin");
+
+  // 勤怠順守率: 過去30日の割当シフト日数 vs 実打刻日数
+  const assignedDates = new Map<string, Set<string>>();
+  for (const s of (recentShifts ?? [])) {
+    const name = s.shift_name as string | null;
+    if (!name || name === "公休" || name === "希望休") continue;
+    if (!assignedDates.has(s.staff_id)) assignedDates.set(s.staff_id, new Set());
+    assignedDates.get(s.staff_id)!.add(s.shift_date as string);
+  }
+  const attendedDates = new Map<string, Set<string>>();
+  for (const p of (recentPunches ?? [])) {
+    const jst = new Date(new Date(p.recorded_at as string).getTime() + 9 * 60 * 60 * 1000);
+    const dateStr = jst.toISOString().slice(0, 10);
+    if (!attendedDates.has(p.staff_id)) attendedDates.set(p.staff_id, new Set());
+    attendedDates.get(p.staff_id)!.add(dateStr);
+  }
+  const complianceMap = new Map<string, number>();
+  for (const [staffId, assigned] of assignedDates) {
+    if (assigned.size === 0) continue;
+    const attended = attendedDates.get(staffId);
+    let hit = 0;
+    for (const d of assigned) if (attended?.has(d)) hit++;
+    complianceMap.set(staffId, Math.round(hit / assigned.size * 100));
+  }
 
   const patternList = (shiftPatterns ?? []).map((p) => ({
     id:          p.id,
@@ -79,6 +127,7 @@ export default async function ProjectDetailPage(props: {
       shift_note:      (m as { shift_note?: string | null }).shift_note ?? null,
       work_days_type:  (m as { work_days_type?: string | null }).work_days_type ?? null,
       work_days_count: (m as { work_days_count?: number | null }).work_days_count ?? null,
+      compliance:      complianceMap.get(m.staff_id) ?? null,
     };
   });
 
