@@ -192,11 +192,7 @@ export function SettingsContainer({
               }))}
             />
           </section>
-          <Divider />
-          <section className="space-y-3">
-            <SectionHeading title="シフト表生成" sub="メンバー × 日付のマトリックス表をスプシに生成" />
-            <ShiftTableGenerator projectId={projectId} />
-          </section>
+          {/* シフト表生成（スプシ）は一時非表示 */}
         </div>
       )}
 
