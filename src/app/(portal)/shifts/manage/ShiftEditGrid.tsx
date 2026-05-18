@@ -165,12 +165,13 @@ function DraggableChip({
 function SlotCellFull({
   patternName, date, rowIdx, staffId, staffName,
   isDraft, isToday, isOverCol, hasLog, isDuplicate,
-  bubbleMessage, onClick,
+  isHoldHighlight, bubbleMessage, onClick,
 }: {
   patternName: string; date: string; rowIdx: number;
   staffId: string | null; staffName: string | null;
   isDraft: boolean; isToday: boolean; isOverCol: boolean;
   hasLog: boolean; isDuplicate: boolean;
+  isHoldHighlight: boolean;
   bubbleMessage?: string;
   onClick: () => void;
 }) {
@@ -193,6 +194,8 @@ function SlotCellFull({
           ? "bg-blue-100 dark:bg-blue-900/50 ring-inset ring-2 ring-blue-400"
           : isOverCol
           ? "bg-blue-50/60 dark:bg-blue-950/20"
+          : isHoldHighlight
+          ? "bg-amber-100 dark:bg-amber-900/30 ring-inset ring-1 ring-amber-400"
           : isDuplicate && staffId
           ? "bg-red-50/60 dark:bg-red-950/15"
           : isToday
@@ -446,7 +449,7 @@ function EditModal({
             <p className="text-[11px] text-zinc-400 uppercase tracking-wide mb-1.5">パターンを変更</p>
             <div className="space-y-1 max-h-44 overflow-y-auto mb-3">
               {patterns
-                .filter((p) => p.name !== target.patternName)
+                .filter((p) => p.name !== target.patternName && (!staffMember || canAssign(staffMember, p)))
                 .map((p) => (
                   <button key={p.name} onClick={() => onChangePattern(p.name)}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
@@ -786,7 +789,16 @@ export default function ShiftEditGrid({
     // セクション互換チェック
     const tPat = patternByName.get(targetPattern);
     const member = memberById.get(staffId);
-    if (tPat && member && !canAssign(member, tPat)) return;
+    if (tPat && member && !canAssign(member, tPat)) {
+      const sectionLabel = tPat.section ? `「${tPat.section}」` : "";
+      setErrorAnnotation({
+        staffId,
+        date: sourceDate,
+        message: `${member.name} は${sectionLabel}セクション外のため配置できません`,
+      });
+      setTimeout(() => setErrorAnnotation(null), 3500);
+      return;
+    }
     // 別日ドロップ時：対象日に既に勤務シフトがある場合はエラー
     if (sourceDate !== targetDate) {
       const existingOnTarget = resolveCell(staffId, targetDate);
@@ -993,7 +1005,9 @@ export default function ShiftEditGrid({
   // ── Render ────────────────────────────────────────────────────
   const draftCount = drafts.size;
   const hasChanges = draftCount > 0 || slotReqChanged;
-  const activeName = activeId ? (memberById.get(activeId.split("__")[0])?.name ?? "") : null;
+  // ドラッグ中のスタッフID（同一スタッフセルをハイライトするため）
+  const draggingStaffId = activeId ? activeId.split("__")[0] : null;
+  const activeName = activeId ? (memberById.get(draggingStaffId ?? "")?.name ?? "") : null;
   const COL_W = 42;
   const NAME_W = 100;
   const totalW = NAME_W + COL_W * allDates.length;
@@ -1153,6 +1167,12 @@ export default function ShiftEditGrid({
                             ? `重複: ${dupPatterns.join("・")}`
                             : undefined;
 
+                          // ドラッグ中の同一スタッフを別セルでハイライト
+                          const isHoldHighlight =
+                            !!draggingStaffId &&
+                            staffId === draggingStaffId &&
+                            `${staffId}__${date}` !== activeId;
+
                           return (
                             <SlotCellFull
                               key={date}
@@ -1161,6 +1181,7 @@ export default function ShiftEditGrid({
                               isDraft={isDraft} isToday={date === todayJST}
                               isOverCol={overColKey === `${pattern.name}__${date}`}
                               hasLog={hasLog} isDuplicate={isDuplicate}
+                              isHoldHighlight={isHoldHighlight}
                               bubbleMessage={bubbleMessage}
                               onClick={() => openModal(pattern.name, date, staffId)}
                             />
