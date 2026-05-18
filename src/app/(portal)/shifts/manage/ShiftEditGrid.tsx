@@ -52,6 +52,8 @@ type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
   name: string;
   required_count: number;
+  required_weekday: number | null;
+  required_weekend: number | null;
   section: string | null;
   start_time: string | null;
   end_time: string | null;
@@ -789,8 +791,15 @@ export default function ShiftEditGrid({
   function getRequired(patternName: string, date: string): number {
     const k = `${patternName}__${date}`;
     if (localSlotReqs.has(k)) return localSlotReqs.get(k)!;
-    // パターンのデフォルトは使わず、日毎に明示設定した分だけ返す
-    return slotReqMap.get(k) ?? 0;
+    if (slotReqMap.has(k)) return slotReqMap.get(k)!;
+    // 日別オーバーライドがなければパターンの平日/土日デフォルトを使う
+    const pattern = shiftPatterns.find(p => p.name === patternName);
+    if (!pattern) return 0;
+    const dow = new Date(date).getUTCDay();
+    const isWeekend = dow === 0 || dow === 6;
+    if (isWeekend && pattern.required_weekend != null) return pattern.required_weekend;
+    if (!isWeekend && pattern.required_weekday != null) return pattern.required_weekday;
+    return pattern.required_count;
   }
 
   // ── Resolve cell ───────────────────────────────────────────────
