@@ -95,6 +95,7 @@ export default function ShiftManageClient({
           shifts={shifts}
           activeMembers={activeMembers}
           shiftPatterns={shiftPatterns}
+          slotRequirements={slotRequirements}
           onSaved={handleSaved}
           onCancel={exitEditMode}
         />
