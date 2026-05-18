@@ -1,6 +1,6 @@
 /**
  * ホーム画面（スタッフ用）
- * 出発報告 → 出勤打刻 → 退勤打刻の状態遷移を管理
+ * 出発報告 → 現場端末打刻の状態遷移を管理
  */
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -105,7 +105,6 @@ export default async function DashboardPage() {
     { data: todayLate },
     { data: allNotices },
     { data: readNotices },
-    { data: adminMembers },
     { data: upcomingShiftRows },
   ] = await Promise.all([
     supabase
@@ -156,11 +155,6 @@ export default async function DashboardPage() {
       .select("notice_id")
       .eq("staff_id", staffId),
     supabase
-      .from("project_members")
-      .select("staff_id, staffs(name, display_name)")
-      .eq("project_id", currentProjectId!)
-      .eq("role", "project_admin"),
-    supabase
       .from("shifts")
       .select("shift_date, shift_name, shift_start, shift_end")
       .eq("staff_id", staffId)
@@ -179,15 +173,6 @@ export default async function DashboardPage() {
   const clockOutEntry = [...(todayPunches ?? [])]
     .reverse()
     .find((p) => p.punch_type === "clock_out");
-
-  const approvers = (adminMembers ?? []).map((m) => {
-    const s = Array.isArray(m.staffs) ? m.staffs[0] : m.staffs;
-    const staffInfo = s as { name: string | null; display_name: string | null } | null;
-    return {
-      id: m.staff_id,
-      name: staffInfo?.display_name ?? staffInfo?.name ?? m.staff_id,
-    };
-  });
 
   return (
     <HomeClient
@@ -220,7 +205,6 @@ export default async function DashboardPage() {
       hasLateReport={!!todayLate}
       lateStatus={todayLate?.status ?? null}
       noticeCount={unreadCount}
-      approvers={approvers}
       upcomingShifts={(upcomingShiftRows ?? []).map(s => ({
         date: s.shift_date as string,
         name: s.shift_name as string | null,

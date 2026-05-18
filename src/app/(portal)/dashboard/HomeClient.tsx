@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { recordPunchAction } from "@/app/(portal)/punch/actions";
 import {
   recordDepartureAction,
   submitAbsenceAction,
@@ -9,13 +8,11 @@ import {
 } from "./actions";
 import {
   BellIcon,
-  LoginIcon,
-  LogOutIcon,
   CheckCircleIcon,
 } from "@/components/icons";
 
 type HomeState = "pre_departure" | "pre_clock_in" | "working" | "clocked_out";
-type ModalType = "none" | "departure" | "punch_in" | "punch_out" | "absence" | "late";
+type ModalType = "none" | "departure" | "absence" | "late";
 
 export interface HomeClientProps {
   displayName: string;
@@ -31,7 +28,6 @@ export interface HomeClientProps {
   hasLateReport: boolean;
   lateStatus: string | null;
   noticeCount: number;
-  approvers: { id: string; name: string }[];
   upcomingShifts?: { date: string; name: string | null; start: string | null; end: string | null }[];
 }
 
@@ -57,6 +53,17 @@ function DepartureIcon({ className }: { className?: string }) {
       strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"
       className={className}>
       <path d="M5 12h14" /><path d="M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function ClockIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24}
+      viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"
+      className={className}>
+      <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
     </svg>
   );
 }
@@ -115,7 +122,7 @@ export default function HomeClient({
   displayName, projectName, hasMultipleProjects, todayLabel,
   shift, departureTime, clockInTime, clockOutTime,
   hasAbsenceReport, absenceStatus, hasLateReport, lateStatus, noticeCount,
-  approvers, upcomingShifts,
+  upcomingShifts,
 }: HomeClientProps) {
   const [modal, setModal] = useState<ModalType>("none");
   const [isPending, startTransition] = useTransition();
@@ -123,8 +130,8 @@ export default function HomeClient({
 
   // Optimistic timestamps
   const [optDeparture, setOptDeparture] = useState(departureTime);
-  const [optClockIn, setOptClockIn] = useState(clockInTime);
-  const [optClockOut, setOptClockOut] = useState(clockOutTime);
+  const optClockIn  = clockInTime;
+  const optClockOut = clockOutTime;
 
   // Derived state
   const state: HomeState = optClockOut ? "clocked_out"
@@ -134,10 +141,6 @@ export default function HomeClient({
 
   // 出発モーダル
   const [etaDep, setEtaDep] = useState(30);
-
-  // 打刻種別・承認者
-  const [punchKind, setPunchKind] = useState<string | null>(null);
-  const [approverName, setApproverName] = useState("");
 
   // 欠勤モーダル（3ステップ）
   const [absStep, setAbsStep] = useState<1 | 2 | 3>(1);
@@ -151,8 +154,6 @@ export default function HomeClient({
 
   const closeModal = () => {
     setModal("none");
-    setPunchKind(null);
-    setApproverName("");
     setAbsStep(1); setAbsReason(""); setAbsNextDay(true);
     setLateStep(1); setLateReason(""); setLateEta(30);
   };
@@ -165,22 +166,6 @@ export default function HomeClient({
       const r = await recordDepartureAction(fd);
       if (r.success) { setOptDeparture(nowJST()); setFeedback({ ok: true, msg: r.message ?? "出発報告しました" }); }
       else setFeedback({ ok: false, msg: r.message ?? "エラー" });
-    });
-  };
-
-  const handlePunch = (type: "clock_in" | "clock_out") => {
-    const fd = new FormData();
-    fd.set("punchType", type);
-    if (punchKind) fd.set("punchKind", punchKind);
-    if (approverName) fd.set("approverName", approverName);
-    closeModal();
-    startTransition(async () => {
-      const r = await recordPunchAction(fd);
-      if (r.success) {
-        const t = nowJST();
-        if (type === "clock_in") setOptClockIn(t); else setOptClockOut(t);
-        setFeedback({ ok: true, msg: r.message ?? "打刻しました" });
-      } else setFeedback({ ok: false, msg: r.message ?? "エラー" });
     });
   };
 
@@ -199,7 +184,7 @@ export default function HomeClient({
   const handleLate = () => {
     const fd = new FormData();
     fd.set("reason", lateReason);
-    fd.set("expectedArrival", ""); // 分後選択のため時刻は不要
+    fd.set("expectedArrival", "");
     fd.set("etaMinutes", String(lateEta));
     closeModal();
     startTransition(async () => {
@@ -211,8 +196,15 @@ export default function HomeClient({
   const canReport = state === "pre_departure" || state === "pre_clock_in";
   const isHoliday = shift?.name === "公休" || shift?.name === "休" || shift?.name === "公休日";
 
-  // ── 丸ボタン設定（ダークカード上での表示用）──
-  type BtnDef = { label: string; sub: string; bg: string; Icon: ((p: { className?: string }) => React.JSX.Element) | null; pulse: boolean; onClick: (() => void) | null; };
+  // ── 丸ボタン設定 ──
+  type BtnDef = {
+    label: string;
+    sub: string;
+    bg: string;
+    Icon: ((p: { className?: string }) => React.JSX.Element) | null;
+    pulse: boolean;
+    onClick: (() => void) | null;
+  };
   const BTN: Record<HomeState, BtnDef> = {
     pre_departure: {
       label: "出発報告", sub: "タップして出発を知らせる",
@@ -220,16 +212,14 @@ export default function HomeClient({
       Icon: DepartureIcon, pulse: false, onClick: () => setModal("departure"),
     },
     pre_clock_in: {
-      label: "出勤打刻", sub: "到着したらタップ",
-      bg: "bg-blue-500 hover:bg-blue-400 active:bg-blue-600 text-white",
-      Icon: LoginIcon, pulse: false,
-      onClick: () => setModal("punch_in"),
+      label: "出勤未打刻", sub: "現場端末で出勤打刻してください",
+      bg: "bg-zinc-700/60 text-zinc-400",
+      Icon: ClockIcon, pulse: false, onClick: null,
     },
     working: {
-      label: "退勤打刻", sub: "お疲れ様でした",
-      bg: "bg-rose-500 hover:bg-rose-400 active:bg-rose-600 text-white",
-      Icon: LogOutIcon, pulse: true,
-      onClick: () => setModal("punch_out"),
+      label: "勤務中", sub: "退勤は現場端末で打刻してください",
+      bg: "bg-emerald-900/40 text-emerald-400",
+      Icon: CheckCircleIcon, pulse: false, onClick: null,
     },
     clocked_out: {
       label: "退勤済み", sub: "お疲れ様でした！",
@@ -282,31 +272,26 @@ export default function HomeClient({
             )}
           </div>
 
-          {/* 打刻ボタン：カードなし、フロートする円 */}
+          {/* 状態ボタン */}
           <div className="flex flex-col items-center gap-4 mb-12">
-            <div className="relative">
-              {btn.pulse && !isPending && (
-                <span className="absolute -inset-3 rounded-full bg-rose-400/10 animate-ping pointer-events-none" />
-              )}
-              <button
-                type="button"
-                onClick={() => !isPending && btn.onClick?.()}
-                disabled={!btn.onClick || isPending}
-                className={[
-                  "w-32 h-32 rounded-full flex flex-col items-center justify-center gap-2",
-                  "font-semibold text-[15px] transition-transform duration-150 select-none",
-                  btn.onClick ? "active:scale-95" : "cursor-default",
-                  btn.bg,
-                ].filter(Boolean).join(" ")}
-              >
-                {btn.Icon && <btn.Icon className="w-6 h-6" />}
-                <span>{isPending ? "処理中..." : btn.label}</span>
-              </button>
-            </div>
-            <p className="text-[12px] text-zinc-400">{btn.sub}</p>
+            <button
+              type="button"
+              onClick={() => !isPending && btn.onClick?.()}
+              disabled={!btn.onClick || isPending}
+              className={[
+                "w-32 h-32 rounded-full flex flex-col items-center justify-center gap-2",
+                "font-semibold text-[15px] transition-transform duration-150 select-none",
+                btn.onClick ? "active:scale-95" : "cursor-default",
+                btn.bg,
+              ].filter(Boolean).join(" ")}
+            >
+              {btn.Icon && <btn.Icon className="w-6 h-6" />}
+              <span>{isPending ? "処理中..." : btn.label}</span>
+            </button>
+            <p className="text-[12px] text-zinc-400 text-center">{btn.sub}</p>
           </div>
 
-          {/* タイムスタンプ：ボーダーなし、テキストのみ */}
+          {/* タイムスタンプ */}
           <div className="grid grid-cols-3 mb-10">
             {[
               { label: "出発", time: optDeparture },
@@ -404,124 +389,6 @@ export default function HomeClient({
           <div className="flex gap-3">
             <button type="button" onClick={closeModal} className="flex-1 py-3 rounded-2xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-500">キャンセル</button>
             <button type="button" onClick={handleDeparture} disabled={isPending} className="flex-1 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold disabled:opacity-50">報告する</button>
-          </div>
-        </ModalWrap>
-      )}
-
-      {/* 出勤打刻 */}
-      {modal === "punch_in" && (
-        <ModalWrap onClose={closeModal}>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-1">出勤打刻</h2>
-          <p className="text-xs text-zinc-400 mb-5">種別を選択してください</p>
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {(["定時", "遅刻"] as const).map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                onClick={() => setPunchKind(kind)}
-                className={[
-                  "py-5 rounded-2xl font-bold text-base transition-colors",
-                  punchKind === kind
-                    ? kind === "遅刻"
-                      ? "bg-red-500 text-white"
-                      : "bg-blue-600 text-white"
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700",
-                ].join(" ")}
-              >
-                {kind === "定時" ? "定時出勤" : "遅刻"}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-3">
-            <button type="button" onClick={closeModal}
-              className="flex-1 py-3 rounded-2xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-500">
-              キャンセル
-            </button>
-            <button type="button" onClick={() => handlePunch("clock_in")} disabled={!punchKind || isPending}
-              className="flex-1 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold disabled:opacity-40 transition-colors">
-              記録する
-            </button>
-          </div>
-        </ModalWrap>
-      )}
-
-      {/* 退勤打刻 */}
-      {modal === "punch_out" && (
-        <ModalWrap onClose={closeModal}>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-1">退勤打刻</h2>
-          <p className="text-xs text-zinc-400 mb-5">種別を選択してください</p>
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            {(["定時", "早退", "残業"] as const).map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                onClick={() => { setPunchKind(kind); setApproverName(""); }}
-                className={[
-                  "py-5 rounded-2xl font-bold text-sm transition-colors",
-                  punchKind === kind
-                    ? kind === "早退" ? "bg-amber-500 text-white"
-                    : kind === "残業" ? "bg-purple-600 text-white"
-                    : "bg-blue-600 text-white"
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700",
-                ].join(" ")}
-              >
-                {kind === "定時" ? "定時退勤" : kind}
-              </button>
-            ))}
-          </div>
-
-          {/* 承認者選択（早退・残業のみ） */}
-          {(punchKind === "早退" || punchKind === "残業") && (
-            <div className="mb-5">
-              <p className="text-xs font-semibold text-zinc-500 mb-2">
-                承認者 <span className="text-red-500">*</span>
-              </p>
-              {approvers.length === 0 ? (
-                <p className="text-xs text-zinc-400">案件管理者が登録されていません</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {approvers.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => setApproverName(a.name)}
-                      className={[
-                        "py-2.5 px-4 rounded-xl text-sm font-semibold text-left transition-colors",
-                        approverName === a.name
-                          ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700",
-                      ].join(" ")}
-                    >
-                      {a.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <button type="button" onClick={closeModal}
-              className="flex-1 py-3 rounded-2xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-500">
-              キャンセル
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePunch("clock_out")}
-              disabled={
-                !punchKind ||
-                ((punchKind === "早退" || punchKind === "残業") && !approverName) ||
-                isPending
-              }
-              className={[
-                "flex-1 py-3 rounded-2xl text-white text-sm font-bold disabled:opacity-40 transition-colors",
-                punchKind === "早退" ? "bg-amber-500 hover:bg-amber-600"
-                : punchKind === "残業" ? "bg-purple-600 hover:bg-purple-700"
-                : "bg-rose-500 hover:bg-rose-600",
-              ].join(" ")}
-            >
-              記録する
-            </button>
           </div>
         </ModalWrap>
       )}

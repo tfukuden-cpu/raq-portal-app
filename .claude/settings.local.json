@@ -69,7 +69,9 @@
       "PowerShell(\\(Get-Content .env.local -Raw\\).Substring\\(0, 300\\))",
       "mcp__Claude_in_Chrome__read_page",
       "mcp__Claude_in_Chrome__resize_window",
-      "mcp__Claude_in_Chrome__list_connected_browsers"
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "Bash(npx vercel *)",
+      "PowerShell(Get-ChildItem \"$env:APPDATA\\\\vercel\" -ErrorAction SilentlyContinue; Get-ChildItem \"$env:USERPROFILE\\\\.config\\\\vercel\" -ErrorAction SilentlyContinue; Get-ChildItem \"$env:LOCALAPPDATA\\\\vercel\" -ErrorAction SilentlyContinue)"
     ]
   }
 }
