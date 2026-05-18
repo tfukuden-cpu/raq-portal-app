@@ -29,6 +29,7 @@ export interface HomeClientProps {
   lateStatus: string | null;
   noticeCount: number;
   upcomingShifts?: { date: string; name: string | null; start: string | null; end: string | null }[];
+  enableDeparture?: boolean;
 }
 
 function nowJST(): string {
@@ -122,7 +123,7 @@ export default function HomeClient({
   displayName, projectName, hasMultipleProjects, todayLabel,
   shift, departureTime, clockInTime, clockOutTime,
   hasAbsenceReport, absenceStatus, hasLateReport, lateStatus, noticeCount,
-  upcomingShifts,
+  upcomingShifts, enableDeparture = true,
 }: HomeClientProps) {
   const [modal, setModal] = useState<ModalType>("none");
   const [isPending, startTransition] = useTransition();
@@ -133,10 +134,10 @@ export default function HomeClient({
   const optClockIn  = clockInTime;
   const optClockOut = clockOutTime;
 
-  // Derived state
+  // Derived state（出発報告OFFの場合は pre_departure をスキップ）
   const state: HomeState = optClockOut ? "clocked_out"
     : optClockIn ? "working"
-    : optDeparture ? "pre_clock_in"
+    : (optDeparture || !enableDeparture) ? "pre_clock_in"
     : "pre_departure";
 
   // 出発モーダル
@@ -292,22 +293,40 @@ export default function HomeClient({
           </div>
 
           {/* タイムスタンプ */}
-          <div className="grid grid-cols-3 mb-10">
-            {[
-              { label: "出発", time: optDeparture },
-              { label: "出勤", time: optClockIn },
-              { label: "退勤", time: optClockOut },
-            ].map(({ label, time }, i) => (
-              <div key={label} className={`${i === 1 ? "text-center" : i === 2 ? "text-right" : ""}`}>
-                <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-2">{label}</p>
-                <p className={`text-xl font-light tabular-nums ${
-                  time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
-                }`}>
-                  {time ?? "--:--"}
-                </p>
-              </div>
-            ))}
-          </div>
+          {enableDeparture ? (
+            <div className="grid grid-cols-3 mb-10">
+              {[
+                { label: "出発", time: optDeparture },
+                { label: "出勤", time: optClockIn },
+                { label: "退勤", time: optClockOut },
+              ].map(({ label, time }, i) => (
+                <div key={label} className={`${i === 1 ? "text-center" : i === 2 ? "text-right" : ""}`}>
+                  <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-2">{label}</p>
+                  <p className={`text-xl font-light tabular-nums ${
+                    time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
+                  }`}>
+                    {time ?? "--:--"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 mb-10">
+              {[
+                { label: "出勤", time: optClockIn },
+                { label: "退勤", time: optClockOut },
+              ].map(({ label, time }, i) => (
+                <div key={label} className={i === 1 ? "text-right" : ""}>
+                  <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-2">{label}</p>
+                  <p className={`text-xl font-light tabular-nums ${
+                    time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
+                  }`}>
+                    {time ?? "--:--"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* 次回出勤 */}
           {upcomingShifts && upcomingShifts.length > 0 && (

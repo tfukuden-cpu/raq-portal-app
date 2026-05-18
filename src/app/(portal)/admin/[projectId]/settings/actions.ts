@@ -736,6 +736,28 @@ export async function saveLineSettingsAction(fd: FormData): Promise<SettingsResu
 
 // ── LINEグループID保存 ───────────────────────────────────
 
+// ── 出発報告ON/OFF保存 ──────────────────────────────────────
+
+export async function saveDepartureSettingAction(fd: FormData): Promise<SettingsResult> {
+  const projectId = String(fd.get("projectId") ?? "").trim();
+  const enabled   = fd.get("enabled") === "true";
+  if (!projectId) return { success: false, message: "パラメータ不足" };
+
+  await assertAdmin();
+
+  const { error } = await adminSupa()
+    .from("project_settings")
+    .upsert(
+      { project_id: projectId, enable_departure_report: enabled, updated_at: new Date().toISOString() },
+      { onConflict: "project_id" }
+    );
+
+  if (error) return { success: false, message: error.message };
+  revalidatePath(`/admin/${projectId}`);
+  return { success: true, message: enabled ? "出発報告をONにしました" : "出発報告をOFFにしました" };
+}
+
+// ── LINEグループID保存 ───────────────────────────────────
 export async function saveLineGroupAction(fd: FormData): Promise<SettingsResult> {
   const projectId = String(fd.get("projectId") ?? "").trim();
   const groupId   = String(fd.get("groupId")   ?? "").trim();

@@ -15,6 +15,7 @@ import {
   generateShiftTableAction,
   saveLineSettingsAction,
   saveLineGroupAction,
+  saveDepartureSettingAction,
 } from "./actions";
 import {
   buildDefaultNotificationSettings,
@@ -83,6 +84,7 @@ export function SettingsContainer({
   holidayRules,
   notificationSettings,
   lineGroupId,
+  enableDeparture,
   archiveAction,
 }: {
   projectId: string;
@@ -94,6 +96,7 @@ export function SettingsContainer({
   holidayRules: HolidayRuleInput[];
   notificationSettings: Partial<NotificationSettings>;
   lineGroupId: string | null;
+  enableDeparture: boolean;
   archiveAction: (fd: FormData) => Promise<void>;
 }) {
   const [tab, setTab] = useState<TabId>("basic");
@@ -145,6 +148,11 @@ export function SettingsContainer({
           <section className="space-y-3">
             <SectionHeading title="案件名" />
             <ProjectNameForm projectId={projectId} currentName={projectName} />
+          </section>
+          <Divider />
+          <section className="space-y-3">
+            <SectionHeading title="出発報告" sub="スタッフダッシュボードの「出発報告」ボタンを表示するかどうか" />
+            <DepartureToggle projectId={projectId} initialEnabled={enableDeparture} />
           </section>
           <Divider />
           <section className="space-y-3">
@@ -232,6 +240,57 @@ export function SettingsContainer({
           <ArchiveButton projectName={projectName} archiveAction={archiveAction} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ── 出発報告 ON/OFF ──────────────────────────────────────
+
+function DepartureToggle({ projectId, initialEnabled }: { projectId: string; initialEnabled: boolean }) {
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [result, setResult]   = useState<{ ok: boolean; msg: string } | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const toggle = (next: boolean) => {
+    setEnabled(next);
+    const fd = new FormData();
+    fd.set("projectId", projectId);
+    fd.set("enabled", String(next));
+    startTransition(async () => {
+      const r = await saveDepartureSettingAction(fd);
+      setResult({ ok: r.success, msg: r.message ?? (r.success ? "保存しました" : "エラー") });
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center justify-between cursor-pointer group select-none">
+        <div>
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+            出発報告ボタンを表示する
+          </p>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            OFFにするとスタッフの「出発報告」ボタンが非表示になります
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          disabled={isPending}
+          onClick={() => toggle(!enabled)}
+          className={[
+            "relative flex-shrink-0 w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50",
+            enabled ? "bg-blue-600" : "bg-zinc-300 dark:bg-zinc-700",
+          ].join(" ")}
+        >
+          <span className={[
+            "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+            enabled ? "translate-x-6" : "translate-x-0",
+          ].join(" ")} />
+        </button>
+      </label>
+      {result && <Flash ok={result.ok} msg={result.msg} />}
     </div>
   );
 }

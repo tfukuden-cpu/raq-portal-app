@@ -44,7 +44,7 @@ export default async function ProjectDetailPage(props: {
     supabase.from("project_members")
       .select("staff_id, role, section, staffs(name, display_name, company_name, line_user_id, account_number)")
       .eq("project_id", projectId),
-    createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id").eq("project_id", projectId).maybeSingle(),
+    createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id, enable_departure_report").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
       .select("id, name, short_name, start_time, end_time, required_count, required_weekday, required_weekend, section, target_role")
       .eq("project_id", projectId).order("sort_order"),
@@ -123,6 +123,7 @@ export default async function ProjectDetailPage(props: {
             (settings?.notification_settings as Record<string, boolean> | null) ?? {}
           }
           lineGroupId={settings?.line_group_id ?? null}
+          enableDeparture={(settings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true}
           archiveAction={archiveAction}
         />
       </div>

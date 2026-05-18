@@ -106,6 +106,7 @@ export default async function DashboardPage() {
     { data: allNotices },
     { data: readNotices },
     { data: upcomingShiftRows },
+    { data: projectSettings },
   ] = await Promise.all([
     supabase
       .from("punch_logs")
@@ -164,6 +165,11 @@ export default async function DashboardPage() {
       .not("shift_name", "in", '("公休","休","公休日")')
       .order("shift_date")
       .limit(5),
+    supabase
+      .from("project_settings")
+      .select("enable_departure_report")
+      .eq("project_id", currentProjectId!)
+      .maybeSingle(),
   ]);
 
   const readIds = new Set((readNotices ?? []).map(r => r.notice_id as string));
@@ -204,6 +210,7 @@ export default async function DashboardPage() {
       absenceStatus={todayAbsence?.status ?? null}
       hasLateReport={!!todayLate}
       lateStatus={todayLate?.status ?? null}
+      enableDeparture={(projectSettings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true}
       noticeCount={unreadCount}
       upcomingShifts={(upcomingShiftRows ?? []).map(s => ({
         date: s.shift_date as string,
