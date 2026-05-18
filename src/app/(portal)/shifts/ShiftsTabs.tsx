@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import ShiftCalendar from "./ShiftCalendar";
+import ShiftCalendar, { type ShiftChangeLog } from "./ShiftCalendar";
 import HolidayCalendar from "@/app/(portal)/holidays/HolidayCalendar";
 import RequestClient from "./request/RequestClient";
 
@@ -44,6 +44,7 @@ type ShiftOpening = {
 
 type Props = {
   shifts: ShiftData[];
+  changeLogs?: ShiftChangeLog[];
   todayStr: string;
   initialYear: number;
   initialMonth: number;
@@ -65,7 +66,7 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 export default function ShiftsTabs({
-  shifts, todayStr, initialYear, initialMonth, minMonth, maxMonth,
+  shifts, changeLogs = [], todayStr, initialYear, initialMonth, minMonth, maxMonth,
   holidayRequests, shiftRequests, shiftOpenings,
   holidayDeadlineDay = null, holidayMaxDaysPerMonth = null,
 }: Props) {
@@ -99,6 +100,7 @@ export default function ShiftsTabs({
         {tab === "shift" && (
           <ShiftCalendar
             shifts={shifts}
+            changeLogs={changeLogs}
             todayStr={todayStr}
             initialYear={initialYear}
             initialMonth={initialMonth}

@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import ShiftsTabs from "./ShiftsTabs";
+import type { ShiftChangeLog } from "./ShiftCalendar";
 
 function dateKey(d: Date) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(d).slice(0, 10);
@@ -27,7 +28,9 @@ export default async function ShiftsPage() {
   const rangeStart = new Date(today.getFullYear(), today.getMonth() - 3, 1);
   const rangeEnd   = new Date(today.getFullYear(), today.getMonth() + 4, 0);
 
-  const [shiftsRes, holidaysRes, requestsRes, openingsRes, rulesRes] = await Promise.all([
+  const admin = createAdminClient();
+
+  const [shiftsRes, holidaysRes, requestsRes, openingsRes, rulesRes, changeLogsRes, staffsRes] = await Promise.all([
     supabase
       .from("shifts")
       .select("shift_date, shift_name, shift_start, shift_end, note")
@@ -65,13 +68,42 @@ export default async function ShiftsPage() {
       .order("opening_date"),
 
     // 希望休ルール（RLSバイパスで確実に取得）
-    createAdminClient()
-      .from("holiday_rules")
+    admin.from("holiday_rules")
       .select("rule_type, value")
       .eq("project_id", projectId),
+
+    // このスタッフのシフト変更ログ（前後3ヶ月）
+    admin.from("shift_change_logs")
+      .select("shift_date, action, before_data, after_data, changed_by, created_at")
+      .eq("project_id", projectId)
+      .eq("staff_id", staffId)
+      .gte("shift_date", dateKey(rangeStart))
+      .lte("shift_date", dateKey(rangeEnd))
+      .order("created_at", { ascending: false })
+      .limit(200),
+
+    // 変更者名解決
+    admin.from("staffs").select("id, display_name, name"),
   ]);
 
   const ruleMap = new Map((rulesRes.data ?? []).map(r => [r.rule_type, r.value as number]));
+
+  // 変更ログ整形
+  const staffNameLookup = new Map(
+    (staffsRes.data ?? []).map((s) => [s.id as string, (s.display_name ?? s.name ?? s.id) as string])
+  );
+  const changeLogs: ShiftChangeLog[] = (changeLogsRes.data ?? []).map((l) => {
+    const before = l.before_data as { shift_name?: string | null } | null;
+    const after  = l.after_data  as { shift_name?: string | null } | null;
+    return {
+      shift_date:        l.shift_date as string,
+      action:            l.action as string,
+      before_shift_name: before?.shift_name ?? null,
+      after_shift_name:  after?.shift_name  ?? null,
+      changed_by_name:   staffNameLookup.get(l.changed_by as string) ?? (l.changed_by as string),
+      changed_at:        l.created_at as string,
+    };
+  });
   const holidayDeadlineDay   = ruleMap.get("deadline_day") ?? null;
   const holidayMaxDaysPerMonth = ruleMap.get("monthly_limit_per_person") ?? null;
 
@@ -91,6 +123,7 @@ export default async function ShiftsPage() {
         <div className="flex-1 min-h-0 flex flex-col">
           <ShiftsTabs
             shifts={shiftsRes.data ?? []}
+            changeLogs={changeLogs}
             todayStr={todayStr}
             initialYear={today.getFullYear()}
             initialMonth={today.getMonth() + 1}

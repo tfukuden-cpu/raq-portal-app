@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ShiftDayList from "./ShiftDayList";
 import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
-import ShiftEditGrid from "./ShiftEditGrid";
+import ShiftEditGrid, { type ChangeLog } from "./ShiftEditGrid";
+import type { GridDraftEntry } from "../actions";
 
 type Shift = {
   id: string;
@@ -15,9 +16,7 @@ type Shift = {
   shift_end: string | null;
   note: string | null;
 };
-
 type Member = { id: string; name: string; role: string; section: string | null };
-
 type Pattern = {
   name: string;
   required_count: number;
@@ -27,22 +26,17 @@ type Pattern = {
   start_time: string | null;
   end_time: string | null;
 };
-
 type ShiftRequest = {
-  id: string;
-  staff_name: string;
-  request_date: string;
-  shift_name: string | null;
-  shift_start: string | null;
-  shift_end: string | null;
-  reason: string | null;
-  status: string;
+  id: string; staff_name: string; request_date: string;
+  shift_name: string | null; shift_start: string | null; shift_end: string | null;
+  reason: string | null; status: string;
 };
-
 type SlotReq = { section: string; pattern_name: string; shift_date: string; required_count: number };
 
 type Props = {
   projectId: string;
+  targetYear: number;
+  targetMonth: number;
   allDates: string[];
   defaultDate: string;
   shifts: Shift[];
@@ -50,33 +44,25 @@ type Props = {
   shiftPatterns: Pattern[];
   shiftRequests: ShiftRequest[];
   slotRequirements: SlotReq[];
-  targetYear: number;
-  targetMonth: number;
+  changeLogs: ChangeLog[];
+  initialDraft: GridDraftEntry[] | null;
+  draftSavedBy: string | null;
+  draftSavedAt: string | null;
 };
 
 export default function ShiftManageClient({
-  projectId,
-  allDates,
-  defaultDate,
-  shifts,
-  activeMembers,
-  shiftPatterns,
-  shiftRequests,
-  slotRequirements,
-  targetYear,
-  targetMonth,
+  projectId, targetYear, targetMonth, allDates, defaultDate,
+  shifts, activeMembers, shiftPatterns, shiftRequests, slotRequirements,
+  changeLogs, initialDraft, draftSavedBy, draftSavedAt,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(
+    // 仮保存データがあれば自動的に編集モードで開始
+    initialDraft !== null && initialDraft.length > 0
+  );
   const router = useRouter();
 
-  function enterEditMode() {
-    setEditMode(true);
-  }
-
-  function exitEditMode() {
-    setEditMode(false);
-  }
+  const targetMonthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
 
   function handleSaved() {
     setEditMode(false);
@@ -91,13 +77,18 @@ export default function ShiftManageClient({
       >
         <ShiftEditGrid
           projectId={projectId}
+          targetMonth={targetMonthStr}
           allDates={allDates}
           shifts={shifts}
           activeMembers={activeMembers}
           shiftPatterns={shiftPatterns}
           slotRequirements={slotRequirements}
+          changeLogs={changeLogs}
+          initialDraft={initialDraft}
+          draftSavedBy={draftSavedBy}
+          draftSavedAt={draftSavedAt}
           onSaved={handleSaved}
-          onCancel={exitEditMode}
+          onCancel={() => setEditMode(false)}
         />
       </div>
     );
@@ -105,10 +96,21 @@ export default function ShiftManageClient({
 
   return (
     <>
-      {/* グリッド編集ボタン */}
-      <div className="px-4 flex justify-end mb-2">
+      <div className="px-4 flex items-center justify-between mb-2">
+        {/* 仮保存バッジ */}
+        {initialDraft && initialDraft.length > 0 ? (
+          <button
+            onClick={() => setEditMode(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-colors"
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+            下書きあり — 続きから編集
+          </button>
+        ) : (
+          <div />
+        )}
         <button
-          onClick={enterEditMode}
+          onClick={() => setEditMode(true)}
           className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors border border-blue-200 dark:border-blue-800"
         >
           グリッド編集

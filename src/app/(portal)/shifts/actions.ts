@@ -498,7 +498,7 @@ export type BulkDeleteItem = {
 };
 
 /**
- * グリッド編集モードの差分を一括保存する
+ * グリッド編集モードの差分を一括保存する（変更ログ付き）
  * - upserts: 追加/変更セル
  * - deletes: 削除セル
  */
@@ -514,8 +514,52 @@ export async function bulkUpsertShiftsAction(
 
   const admin = createAdminClient();
 
-  // 削除処理
+  // ── 既存データを一括フェッチ（変更ログの before_data 用） ──────
+  const allKeys = [
+    ...upserts.map(u => ({ staffId: u.staffId, shiftDate: u.shiftDate })),
+    ...deletes.map(d => ({ staffId: d.staffId, shiftDate: d.shiftDate })),
+  ];
+
+  let existingMap = new Map<string, { id: string; shift_name: string | null; shift_start: string | null; shift_end: string | null }>();
+  if (allKeys.length > 0) {
+    // OR条件で一括取得（PostgREST は .or() でサポート）
+    const orFilter = allKeys
+      .map(k => `and(staff_id.eq.${k.staffId},shift_date.eq.${k.shiftDate})`)
+      .join(",");
+    const { data: existing } = await admin
+      .from("shifts")
+      .select("id, staff_id, shift_date, shift_name, shift_start, shift_end")
+      .eq("project_id", projectId)
+      .or(orFilter);
+    for (const e of existing ?? []) {
+      existingMap.set(`${e.staff_id}__${e.shift_date}`, {
+        id: e.id as string,
+        shift_name: e.shift_name as string | null,
+        shift_start: e.shift_start as string | null,
+        shift_end: e.shift_end as string | null,
+      });
+    }
+  }
+
+  // ── 削除処理（ログ先行） ────────────────────────────────────────
+  const deleteLogs: object[] = [];
   for (const d of deletes) {
+    const key = `${d.staffId}__${d.shiftDate}`;
+    const before = existingMap.get(key);
+    if (!before) continue; // すでに存在しない
+
+    // 変更ログ（削除前に記録）
+    deleteLogs.push({
+      project_id: projectId,
+      shift_id:   before.id,
+      staff_id:   d.staffId,
+      shift_date: d.shiftDate,
+      action:     "delete",
+      before_data: before,
+      after_data:  null,
+      changed_by:  myStaffId,
+    });
+
     const { error } = await admin
       .from("shifts")
       .delete()
@@ -524,8 +568,11 @@ export async function bulkUpsertShiftsAction(
       .eq("shift_date", d.shiftDate);
     if (error) return { success: false, message: `削除失敗 (${d.staffId} ${d.shiftDate}): ${error.message}` };
   }
+  if (deleteLogs.length > 0) {
+    await admin.from("shift_change_logs").insert(deleteLogs);
+  }
 
-  // アップサート処理（500件バッチ）
+  // ── アップサート処理（500件バッチ） ───────────────────────────
   const records = upserts.map(u => ({
     project_id:  projectId,
     staff_id:    u.staffId,
@@ -536,17 +583,121 @@ export async function bulkUpsertShiftsAction(
     created_by:  myStaffId,
   }));
 
+  const upsertLogs: object[] = [];
   for (let i = 0; i < records.length; i += 500) {
-    const { error } = await admin.from("shifts").upsert(
-      records.slice(i, i + 500),
-      { onConflict: "project_id,staff_id,shift_date" },
-    );
+    const batch = records.slice(i, i + 500);
+    const { data: upserted, error } = await admin.from("shifts").upsert(
+      batch,
+      { onConflict: "project_id,staff_id,shift_date", ignoreDuplicates: false },
+    ).select("id, staff_id, shift_date, shift_name, shift_start, shift_end");
+
     if (error) return { success: false, message: "保存失敗：" + error.message };
+
+    // 変更ログ生成
+    for (const row of upserted ?? []) {
+      const key = `${row.staff_id}__${row.shift_date}`;
+      const before = existingMap.get(key) ?? null;
+      upsertLogs.push({
+        project_id:  projectId,
+        shift_id:    row.id,
+        staff_id:    row.staff_id,
+        shift_date:  row.shift_date,
+        action:      before ? "update" : "create",
+        before_data: before,
+        after_data:  { shift_name: row.shift_name, shift_start: row.shift_start, shift_end: row.shift_end },
+        changed_by:  myStaffId,
+      });
+    }
+  }
+  if (upsertLogs.length > 0) {
+    await admin.from("shift_change_logs").insert(upsertLogs);
   }
 
   revalidatePath("/shifts");
   revalidatePath("/shifts/manage");
   return { success: true };
+}
+
+// ────────────────────────────────────────────────────────────
+//  グリッド仮保存
+// ────────────────────────────────────────────────────────────
+
+/** 仮保存エントリ（Map のシリアライズ形式） */
+export type GridDraftEntry = {
+  k: string;   // "staffId__shiftDate"
+  n: string | null;   // shiftName  (null かつ d=true → delete)
+  s: string | null;   // shiftStart
+  e: string | null;   // shiftEnd
+  d: boolean;         // true = delete
+};
+
+/** 仮保存（上書き upsert） */
+export async function saveGridDraftAction(
+  projectId: string,
+  targetMonth: string,
+  entries: GridDraftEntry[],
+): Promise<{ ok: boolean; message?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "ログインしてください" };
+  const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("shift_grid_drafts").upsert(
+    {
+      project_id:  projectId,
+      target_month: targetMonth,
+      draft_data:  entries,
+      saved_by:    myStaffId,
+      saved_at:    new Date().toISOString(),
+    },
+    { onConflict: "project_id,target_month" },
+  );
+
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+/** 仮保存データ読み込み */
+export async function loadGridDraftAction(
+  projectId: string,
+  targetMonth: string,
+): Promise<{ ok: boolean; entries: GridDraftEntry[] | null; savedBy?: string | null; savedAt?: string | null }> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("shift_grid_drafts")
+    .select("draft_data, saved_by, saved_at")
+    .eq("project_id", projectId)
+    .eq("target_month", targetMonth)
+    .maybeSingle();
+
+  if (error) return { ok: false, entries: null };
+  if (!data) return { ok: true, entries: null };
+
+  // saved_by を名前に変換
+  let savedByName: string | null = null;
+  if (data.saved_by) {
+    const { data: s } = await admin.from("staffs").select("display_name, name").eq("id", data.saved_by).maybeSingle();
+    savedByName = s?.display_name ?? s?.name ?? data.saved_by;
+  }
+  return {
+    ok: true,
+    entries: data.draft_data as GridDraftEntry[],
+    savedBy: savedByName,
+    savedAt: data.saved_at as string | null,
+  };
+}
+
+/** 仮保存クリア（確定後に呼ぶ） */
+export async function clearGridDraftAction(
+  projectId: string,
+  targetMonth: string,
+): Promise<void> {
+  const admin = createAdminClient();
+  await admin.from("shift_grid_drafts")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("target_month", targetMonth);
 }
 
 export type CsvImportResult = {

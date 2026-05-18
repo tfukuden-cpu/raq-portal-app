@@ -11,8 +11,18 @@ type ShiftData = {
   note?: string | null;
 };
 
+export type ShiftChangeLog = {
+  shift_date: string;
+  action: string;
+  before_shift_name: string | null;
+  after_shift_name: string | null;
+  changed_by_name: string;
+  changed_at: string;
+};
+
 type Props = {
   shifts: ShiftData[];
+  changeLogs?: ShiftChangeLog[];
   todayStr: string;
   initialYear: number;
   initialMonth: number;
@@ -27,8 +37,15 @@ function isHoliday(name: string | null) {
   return name === "公休" || name === "休" || name === "公休日";
 }
 
+function fmtLogAt(iso: string): string {
+  return new Date(iso).toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo", month: "numeric", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
 export default function ShiftCalendar({
-  shifts, todayStr, initialYear, initialMonth, minMonth, maxMonth,
+  shifts, changeLogs = [], todayStr, initialYear, initialMonth, minMonth, maxMonth,
 }: Props) {
   const [year, setYear]         = useState(initialYear);
   const [month, setMonth]       = useState(initialMonth);
@@ -48,6 +65,14 @@ export default function ShiftCalendar({
   const shiftMap = new Map<string, ShiftData>();
   for (const s of shifts) {
     if (s.shift_date.startsWith(monthStr)) shiftMap.set(s.shift_date, s);
+  }
+
+  // 変更ログ map (shift_date → logs)
+  const logMap = new Map<string, ShiftChangeLog[]>();
+  for (const l of changeLogs) {
+    const arr = logMap.get(l.shift_date) ?? [];
+    arr.push(l);
+    logMap.set(l.shift_date, arr);
   }
 
   const firstDow    = new Date(year, month - 1, 1).getDay();
@@ -140,13 +165,15 @@ export default function ShiftCalendar({
             : hol   ? "text-zinc-400 dark:text-zinc-500"
                     : "text-zinc-700 dark:text-zinc-300";
 
+          const hasLog = logMap.has(ds);
+
           return (
             <button
               key={ds}
               type="button"
               onClick={() => setSelected(isSel ? null : ds)}
               className={[
-                "flex flex-col items-center justify-center gap-0 rounded-xl transition-colors",
+                "flex flex-col items-center justify-center gap-0 rounded-xl transition-colors relative",
                 cellBg,
                 isToday && !isSel ? "ring-2 ring-blue-400 dark:ring-blue-500 ring-inset" : "",
               ].filter(Boolean).join(" ")}
@@ -158,6 +185,10 @@ export default function ShiftCalendar({
                 <span className={`text-[9px] leading-none ${isSel ? "text-white/75" : "text-blue-500 dark:text-blue-400"}`}>
                   {s.shift_name.charAt(0)}
                 </span>
+              )}
+              {/* 変更履歴インジケーター */}
+              {hasLog && !isSel && (
+                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
               )}
             </button>
           );
@@ -202,6 +233,27 @@ export default function ShiftCalendar({
             )}
             {selShift.note && (
               <p className="text-xs text-zinc-400">{selShift.note}</p>
+            )}
+            {/* 変更履歴 */}
+            {selected && (logMap.get(selected) ?? []).length > 0 && (
+              <div className="pt-1 border-t border-zinc-200 dark:border-zinc-700">
+                <p className="text-[10px] text-zinc-400 mb-1 flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  変更履歴
+                </p>
+                <div className="space-y-0.5 max-h-24 overflow-y-auto">
+                  {(logMap.get(selected) ?? []).map((l, i) => (
+                    <p key={i} className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-snug">
+                      <span className="font-semibold text-zinc-600 dark:text-zinc-300">{l.changed_by_name}</span>
+                      {" が "}
+                      {l.action === "delete" ? "削除"
+                        : l.action === "create" ? "追加"
+                        : `${l.before_shift_name ?? "（なし）"} → ${l.after_shift_name ?? "（なし）"}`}
+                      <span className="ml-1 text-zinc-400">{fmtLogAt(l.changed_at)}</span>
+                    </p>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}

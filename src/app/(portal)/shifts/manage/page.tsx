@@ -9,6 +9,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import ShiftManageClient from "./ShiftManageClient";
+import type { ChangeLog } from "./ShiftEditGrid";
+import type { GridDraftEntry } from "../actions";
 import SheetMenuButton from "./SheetMenuButton";
 import HeaderHeightSetter from "./HeaderHeightSetter";
 import { isGSheetsConfigured } from "@/lib/gsheets";
@@ -91,6 +93,9 @@ export default async function ManageShiftsPage(props: {
     { data: shiftPatternRows },
     { data: shiftRequestsRaw },
     { data: slotRequirementsRaw },
+    { data: changeLogsRaw },
+    { data: staffsForLogs },
+    { data: draftRow },
     shiftBatch0,
     shiftBatch1,
     shiftBatch2,
@@ -115,6 +120,22 @@ export default async function ManageShiftsPage(props: {
       .eq("project_id", selectedProjectId)
       .gte("shift_date", startDate)
       .lte("shift_date", endDate),
+    // 当月の変更ログ（最新300件）
+    admin.from("shift_change_logs")
+      .select("staff_id, shift_date, action, before_data, after_data, changed_by, created_at")
+      .eq("project_id", selectedProjectId)
+      .gte("shift_date", startDate)
+      .lte("shift_date", endDate)
+      .order("created_at", { ascending: false })
+      .limit(300),
+    // 変更者名解決用
+    admin.from("staffs").select("id, display_name, name"),
+    // 仮保存データ
+    admin.from("shift_grid_drafts")
+      .select("draft_data, saved_by, saved_at")
+      .eq("project_id", selectedProjectId)
+      .eq("target_month", `${targetYear}-${String(targetMonth).padStart(2, "0")}`)
+      .maybeSingle(),
     shiftSelect().range(0,    999),
     shiftSelect().range(1000, 1999),
     shiftSelect().range(2000, 2999),
@@ -177,6 +198,33 @@ export default async function ManageShiftsPage(props: {
   }));
 
   const shifts = shiftsRaw ?? [];
+
+  // ── 変更ログ整形 ──────────────────────────────────────────────
+  const staffNameMap2 = new Map(
+    (staffsForLogs ?? []).map((s) => [s.id as string, (s.display_name ?? s.name ?? s.id) as string])
+  );
+  const changeLogs: ChangeLog[] = (changeLogsRaw ?? []).map((l) => {
+    const before = l.before_data as { shift_name?: string | null } | null;
+    const after  = l.after_data  as { shift_name?: string | null } | null;
+    return {
+      staff_id:          l.staff_id as string,
+      shift_date:        l.shift_date as string,
+      action:            l.action as string,
+      before_shift_name: before?.shift_name ?? null,
+      after_shift_name:  after?.shift_name  ?? null,
+      changed_by_name:   staffNameMap2.get(l.changed_by as string) ?? (l.changed_by as string),
+      changed_at:        l.created_at as string,
+    };
+  });
+
+  // ── 仮保存データ ──────────────────────────────────────────────
+  const initialDraft = draftRow
+    ? (draftRow.draft_data as GridDraftEntry[])
+    : null;
+  const draftSavedBy = draftRow?.saved_by
+    ? (staffNameMap2.get(draftRow.saved_by as string) ?? draftRow.saved_by as string)
+    : null;
+  const draftSavedAt = draftRow?.saved_at as string | null ?? null;
 
   const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
   const allDates = Array.from({ length: daysInMonth }, (_, i) =>
@@ -266,6 +314,10 @@ export default async function ManageShiftsPage(props: {
           slotRequirements={slotRequirements}
           targetYear={targetYear}
           targetMonth={targetMonth}
+          changeLogs={changeLogs}
+          initialDraft={initialDraft}
+          draftSavedBy={draftSavedBy}
+          draftSavedAt={draftSavedAt}
         />
       </div>
     </main>
