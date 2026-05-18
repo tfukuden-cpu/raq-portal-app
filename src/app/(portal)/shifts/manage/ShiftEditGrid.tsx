@@ -8,7 +8,7 @@
  *
  * ドラッグ: スタッフ名チップを別セルへ → パターン/日付を変更
  * タップ:  スタッフチップ → パターン変更/削除
- *          空セル        → スタッフを追加
+ *          空セル        → スタッフを追加（希望休・公休スタッフも選択可）
  *          カウント行    → 必要人数をインライン編集
  *
  * 仮保存:  確定しないまま DB に下書きを保存、次回ロード時に続きから編集
@@ -48,6 +48,7 @@ type Shift = {
   shift_end: string | null;
 };
 type Member = { id: string; name: string; section: string | null };
+type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
   name: string;
   required_count: number;
@@ -73,6 +74,8 @@ type DraftCell = DraftValue | null;
 type EditTarget =
   | { kind: "existing"; staffId: string; patternName: string; date: string }
   | { kind: "empty";    patternName: string; date: string };
+
+type ErrorAnnotation = { staffId: string; date: string; message: string };
 
 interface Props {
   projectId: string;
@@ -161,17 +164,22 @@ function DraggableChip({
 
 function SlotCellFull({
   patternName, date, rowIdx, staffId, staffName,
-  isDraft, isToday, isOverCol, hasLog, isDuplicate, onClick,
+  isDraft, isToday, isOverCol, hasLog, isDuplicate,
+  bubbleMessage, onClick,
 }: {
   patternName: string; date: string; rowIdx: number;
   staffId: string | null; staffName: string | null;
   isDraft: boolean; isToday: boolean; isOverCol: boolean;
-  hasLog: boolean; isDuplicate: boolean; onClick: () => void;
+  hasLog: boolean; isDuplicate: boolean;
+  bubbleMessage?: string;
+  onClick: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `slot__${rowIdx}__${patternName}__${date}`,
     data: { type: "slot", patternName, date, rowIdx },
   });
+
+  const hasBubble = !!bubbleMessage;
 
   return (
     <td
@@ -179,18 +187,33 @@ function SlotCellFull({
       onClick={onClick}
       className={[
         "border-b border-r border-zinc-100 dark:border-zinc-800",
-        "h-8 align-middle p-0 cursor-pointer overflow-hidden",
+        "h-8 align-middle p-0 cursor-pointer",
+        hasBubble ? "overflow-visible relative" : "overflow-hidden",
         isOver
           ? "bg-blue-100 dark:bg-blue-900/50 ring-inset ring-2 ring-blue-400"
           : isOverCol
           ? "bg-blue-50/60 dark:bg-blue-950/20"
           : isDuplicate && staffId
-          ? "bg-red-50/50 dark:bg-red-950/10"
+          ? "bg-red-50/60 dark:bg-red-950/15"
           : isToday
           ? "bg-blue-50/40 dark:bg-blue-950/10"
           : "",
       ].filter(Boolean).join(" ")}
     >
+      {/* 吹き出しバブル（エラー or 重複） */}
+      {hasBubble && (
+        <div
+          className="absolute top-full left-0 z-50 pointer-events-none mt-0.5"
+          style={{ minWidth: "120px", maxWidth: "200px" }}
+        >
+          {/* 上向き三角（吹き出しの根元） */}
+          <div className="ml-3 w-0 h-0 border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent border-b-red-500" />
+          <div className="bg-red-500 text-white text-[9px] leading-snug px-2 py-1.5 rounded-lg shadow-lg whitespace-normal -mt-px">
+            {bubbleMessage}
+          </div>
+        </div>
+      )}
+      {/* セル本体 */}
       <div className="px-0.5 h-full flex items-center overflow-hidden">
         {staffId && staffName && (
           <DraggableChip
@@ -349,7 +372,7 @@ function EditModal({
 }: {
   target: EditTarget;
   patterns: Pattern[];
-  availableStaff: Member[];
+  availableStaff: MemberWithStatus[];
   logs: ChangeLog[];
   staffMember: Member | null;
   originalPattern: string | null;
@@ -474,9 +497,16 @@ function EditModal({
               <div className="space-y-1 max-h-64 overflow-y-auto mb-3">
                 {availableStaff.map((m) => (
                   <button key={m.id} onClick={() => onAdd(m.id)}
-                    className="w-full px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{m.name}</span>
-                    {m.section && <span className="ml-1.5 text-[10px] text-zinc-400">{m.section}</span>}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{m.name}</span>
+                      {m.section && <span className="ml-1.5 text-[10px] text-zinc-400">{m.section}</span>}
+                    </div>
+                    {m.currentShift && (
+                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-medium">
+                        {m.currentShift}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -528,7 +558,10 @@ export default function ShiftEditGrid({
   const [showSummary, setShowSummary] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isSavingDraft, startDraftTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  // 保存系エラー（上部バナー）
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // ドラッグ検証エラー（セル吹き出し）
+  const [errorAnnotation, setErrorAnnotation] = useState<ErrorAnnotation | null>(null);
   const [draftMsg, setDraftMsg] = useState<string | null>(null);
 
   // ── センサー ───────────────────────────────────────────────────
@@ -555,6 +588,12 @@ export default function ShiftEditGrid({
     for (const p of shiftPatterns) m.set(p.name, p);
     return m;
   }, [shiftPatterns]);
+
+  // 勤務パターン名セット（希望休・公休を区別するため）
+  const patternNameSet = useMemo(
+    () => new Set(shiftPatterns.map(p => p.name)),
+    [shiftPatterns]
+  );
 
   const slotReqMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -723,7 +762,8 @@ export default function ShiftEditGrid({
 
   // ── DnD ───────────────────────────────────────────────────────
   function handleDragStart(event: DragStartEvent) {
-    setActiveId(event.active.id as string); setError(null);
+    setActiveId(event.active.id as string);
+    setErrorAnnotation(null);
   }
   function handleDragOver(event: DragOverEvent) {
     const d = event.over?.data.current as { type?: string; patternName?: string; date?: string } | undefined;
@@ -746,11 +786,17 @@ export default function ShiftEditGrid({
     const tPat = patternByName.get(targetPattern);
     const member = memberById.get(staffId);
     if (tPat && member && !canAssign(member, tPat)) return;
-    // 別日ドロップ時：対象日に既にシフトがある場合はエラー
+    // 別日ドロップ時：対象日に既に勤務シフトがある場合はエラー
     if (sourceDate !== targetDate) {
       const existingOnTarget = resolveCell(staffId, targetDate);
-      if (existingOnTarget !== null) {
-        setError(`${member?.name ?? staffId} はすでに ${fmtDate(targetDate)} にシフトが登録されています`);
+      if (existingOnTarget !== null && existingOnTarget.shiftName && patternNameSet.has(existingOnTarget.shiftName)) {
+        const annotation: ErrorAnnotation = {
+          staffId,
+          date: sourceDate,
+          message: `${member?.name ?? staffId} はすでに ${fmtDate(targetDate)} に「${existingOnTarget.shiftName}」が入っています`,
+        };
+        setErrorAnnotation(annotation);
+        setTimeout(() => setErrorAnnotation(null), 4000);
         return;
       }
     }
@@ -781,7 +827,7 @@ export default function ShiftEditGrid({
   function openModal(patternName: string, date: string, staffId: string | null) {
     if (staffId) setEditTarget({ kind: "existing", staffId, patternName, date });
     else setEditTarget({ kind: "empty", patternName, date });
-    setError(null);
+    setErrorAnnotation(null);
   }
   function closeModal() { setEditTarget(null); }
 
@@ -835,7 +881,7 @@ export default function ShiftEditGrid({
 
   function handleSaveDraft() {
     const entries = serializeDrafts();
-    setError(null);
+    setSaveError(null);
     startDraftTransition(async () => {
       const r = await saveGridDraftAction(projectId, targetMonth, entries);
       if (r.ok) {
@@ -844,13 +890,13 @@ export default function ShiftEditGrid({
         setDraftMsg(`仮保存しました（${now}）`);
         setTimeout(() => setDraftMsg(null), 3000);
       } else {
-        setError(r.message ?? "仮保存に失敗しました");
+        setSaveError(r.message ?? "仮保存に失敗しました");
       }
     });
   }
 
   // ── 確定保存 ─────────────────────────────────────────────────
-  function resetDrafts() { setDrafts(new Map()); setError(null); }
+  function resetDrafts() { setDrafts(new Map()); setSaveError(null); }
 
   function handleCommit() {
     const upserts: BulkUpsertItem[] = [];
@@ -861,7 +907,6 @@ export default function ShiftEditGrid({
       else upserts.push({ staffId, shiftDate, shiftName: draft.shiftName, shiftStart: draft.shiftStart, shiftEnd: draft.shiftEnd });
     }
 
-    // 必要人数の変更分
     const slotChanges: { patternName: string; date: string; section: string | null; requiredCount: number }[] = [];
     for (const [k, v] of localSlotReqs) {
       if (v !== (slotReqMap.get(k) ?? 0)) {
@@ -876,15 +921,15 @@ export default function ShiftEditGrid({
     }
 
     if (upserts.length === 0 && dels.length === 0 && slotChanges.length === 0) { onCancel(); return; }
-    setError(null);
+    setSaveError(null);
     startTransition(async () => {
       if (slotChanges.length > 0) {
         const rc = await upsertSlotRequirementsAction(projectId, slotChanges);
-        if (!rc.success) { setError(rc.message ?? "必要人数の保存に失敗しました"); return; }
+        if (!rc.success) { setSaveError(rc.message ?? "必要人数の保存に失敗しました"); return; }
       }
       if (upserts.length > 0 || dels.length > 0) {
         const r = await bulkUpsertShiftsAction(projectId, upserts, dels);
-        if (!r.success) { setError(r.message ?? "保存に失敗しました"); return; }
+        if (!r.success) { setSaveError(r.message ?? "保存に失敗しました"); return; }
       }
       await clearGridDraftAction(projectId, targetMonth);
       onSaved();
@@ -892,16 +937,32 @@ export default function ShiftEditGrid({
   }
 
   // ── Available staff for "empty" modal ─────────────────────────
-  const availableStaff = useMemo(() => {
+  // 希望休・公休スタッフも含む（勤務パターンへの配置済みのみ除外）
+  const availableStaff = useMemo((): MemberWithStatus[] => {
     if (!editTarget || editTarget.kind !== "empty") return [];
     const { date, patternName } = editTarget;
     const pat = patternByName.get(patternName);
-    return activeMembers.filter((m) =>
-      resolveCell(m.id, date) === null &&
-      (!pat || canAssign(m, pat))
-    );
+    return activeMembers
+      .filter(m => {
+        const cell = resolveCell(m.id, date);
+        // 勤務パターンに配置済みなら除外
+        if (cell !== null && cell.shiftName && patternNameSet.has(cell.shiftName)) return false;
+        // セクション互換チェック
+        if (pat && !canAssign(m, pat)) return false;
+        return true;
+      })
+      .map(m => {
+        const cell = resolveCell(m.id, date);
+        return { ...m, currentShift: cell?.shiftName ?? null };
+      })
+      .sort((a, b) => {
+        // シフトなしを先に
+        if (a.currentShift === null && b.currentShift !== null) return -1;
+        if (a.currentShift !== null && b.currentShift === null) return 1;
+        return a.name.localeCompare(b.name);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editTarget, drafts, activeMembers, shiftsByKey, patternByName]);
+  }, [editTarget, drafts, activeMembers, shiftsByKey, patternByName, patternNameSet]);
 
   // 編集対象の変更ログ
   const modalLogs = useMemo(() => {
@@ -958,7 +1019,6 @@ export default function ShiftEditGrid({
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* サマリーボタン（重複・不足バッジ） */}
           <button
             onClick={() => setShowSummary(true)}
             disabled={isPending || isSavingDraft}
@@ -994,10 +1054,11 @@ export default function ShiftEditGrid({
         </div>
       </div>
 
-      {/* エラーバナー */}
-      {error && (
-        <div className="px-4 py-2 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 border-b border-red-200 shrink-0">
-          {error}
+      {/* 保存エラーバナー（保存失敗時のみ） */}
+      {saveError && (
+        <div className="px-4 py-2 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 border-b border-red-200 shrink-0 flex items-center justify-between gap-2">
+          <span>{saveError}</span>
+          <button onClick={() => setSaveError(null)} className="text-red-400 hover:text-red-600 shrink-0 text-xs">✕</button>
         </div>
       )}
 
@@ -1079,6 +1140,18 @@ export default function ShiftEditGrid({
                           const isDraft = draftKey ? drafts.has(draftKey) : false;
                           const hasLog = draftKey ? (changeLogMap.get(draftKey)?.length ?? 0) > 0 : false;
                           const isDuplicate = draftKey ? duplicateStaffDates.set.has(draftKey) : false;
+
+                          // 吹き出しメッセージの決定
+                          const isErrorCell = !!staffId && errorAnnotation?.staffId === staffId && errorAnnotation?.date === date;
+                          const dupPatterns = isDuplicate && draftKey
+                            ? (duplicateStaffDates.map.get(draftKey) ?? []).filter(p => p !== pattern.name)
+                            : [];
+                          const bubbleMessage: string | undefined = isErrorCell
+                            ? errorAnnotation!.message
+                            : isDuplicate && dupPatterns.length > 0
+                            ? `重複: ${dupPatterns.join("・")}`
+                            : undefined;
+
                           return (
                             <SlotCellFull
                               key={date}
@@ -1087,6 +1160,7 @@ export default function ShiftEditGrid({
                               isDraft={isDraft} isToday={date === todayJST}
                               isOverCol={overColKey === `${pattern.name}__${date}`}
                               hasLog={hasLog} isDuplicate={isDuplicate}
+                              bubbleMessage={bubbleMessage}
                               onClick={() => openModal(pattern.name, date, staffId)}
                             />
                           );
@@ -1104,7 +1178,7 @@ export default function ShiftEditGrid({
                             required={getRequired(pattern.name, date)}
                             isToday={date === todayJST}
                             isEditing={editingCountKey === countKey}
-                            onStartEdit={() => { setEditingCountKey(countKey); setError(null); }}
+                            onStartEdit={() => { setEditingCountKey(countKey); setSaveError(null); }}
                             onChange={v => setLocalSlotReqs(prev => { const n = new Map(prev); n.set(countKey, v); return n; })}
                             onEndEdit={() => setEditingCountKey(null)}
                           />
