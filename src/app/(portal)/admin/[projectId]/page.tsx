@@ -42,7 +42,7 @@ export default async function ProjectDetailPage(props: {
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
-      .select("staff_id, role, section, staffs(name, display_name, company_name, line_user_id, account_number)")
+      .select("staff_id, role, section, shift_note, work_days_type, work_days_count, staffs(name, display_name, company_name, line_user_id, account_number)")
       .eq("project_id", projectId),
     createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id, enable_departure_report").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
@@ -69,13 +69,16 @@ export default async function ProjectDetailPage(props: {
     const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
       { name: string | null; display_name: string | null; company_name: string | null; line_user_id: string | null; account_number: string | null } | null;
     return {
-      staffId:        m.staff_id,
-      name:           s?.display_name ?? s?.name ?? m.staff_id,
-      company_name:   s?.company_name ?? null,
-      role:           m.role ?? "staff",
-      lineLinked:     !!s?.line_user_id,
-      section:        m.section ?? null,
-      account_number: s?.account_number ?? null,
+      staffId:         m.staff_id,
+      name:            s?.display_name ?? s?.name ?? m.staff_id,
+      company_name:    s?.company_name ?? null,
+      role:            m.role ?? "staff",
+      lineLinked:      !!s?.line_user_id,
+      section:         m.section ?? null,
+      account_number:  s?.account_number ?? null,
+      shift_note:      (m as { shift_note?: string | null }).shift_note ?? null,
+      work_days_type:  (m as { work_days_type?: string | null }).work_days_type ?? null,
+      work_days_count: (m as { work_days_count?: number | null }).work_days_count ?? null,
     };
   });
 

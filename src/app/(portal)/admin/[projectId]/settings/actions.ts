@@ -655,13 +655,18 @@ export async function updateMemberRoleAction(fd: FormData): Promise<SettingsResu
  * メンバー情報を更新（氏名・会社・セクション・ロール）してスプシに同期
  */
 export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResult> {
-  const projectId    = String(fd.get("projectId")    ?? "").trim();
-  const staffId      = String(fd.get("staffId")      ?? "").trim().toUpperCase();
-  const name         = String(fd.get("name")         ?? "").trim();
-  const companyName  = String(fd.get("company_name") ?? "").trim() || null;
-  const section      = String(fd.get("section")      ?? "").trim() || null;
-  const role         = String(fd.get("role")         ?? "staff");
-  const accountNumber= String(fd.get("account_number") ?? "").trim() || null;
+  const projectId     = String(fd.get("projectId")      ?? "").trim();
+  const staffId       = String(fd.get("staffId")        ?? "").trim().toUpperCase();
+  const name          = String(fd.get("name")           ?? "").trim();
+  const companyName   = String(fd.get("company_name")   ?? "").trim() || null;
+  const section       = String(fd.get("section")        ?? "").trim() || null;
+  const role          = String(fd.get("role")           ?? "staff");
+  const accountNumber = String(fd.get("account_number") ?? "").trim() || null;
+  const shiftNote     = String(fd.get("shift_note")     ?? "").trim() || null;
+  const workDaysTypeRaw = String(fd.get("work_days_type") ?? "").trim();
+  const workDaysType  = (workDaysTypeRaw === "monthly" || workDaysTypeRaw === "weekly") ? workDaysTypeRaw : null;
+  const workDaysCountRaw = String(fd.get("work_days_count") ?? "").trim();
+  const workDaysCount = workDaysCountRaw && workDaysType ? (parseInt(workDaysCountRaw, 10) || null) : null;
 
   if (!name) return { success: false, message: "氏名を入力してください" };
 
@@ -675,10 +680,10 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
     .eq("id", staffId);
   if (staffErr) return { success: false, message: staffErr.message };
 
-  // project_members テーブル更新（ロール・セクション）
+  // project_members テーブル更新（ロール・セクション・シフト備考・稼働日数）
   const { error: memberErr } = await admin
     .from("project_members")
-    .update({ role, section })
+    .update({ role, section, shift_note: shiftNote, work_days_type: workDaysType, work_days_count: workDaysCount })
     .eq("project_id", projectId)
     .eq("staff_id", staffId);
   if (memberErr) return { success: false, message: memberErr.message };

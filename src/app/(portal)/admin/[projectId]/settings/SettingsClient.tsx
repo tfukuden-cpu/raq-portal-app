@@ -32,7 +32,7 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; account_number: string | null };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; account_number: string | null; shift_note: string | null; work_days_type: string | null; work_days_count: number | null };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -496,6 +496,9 @@ export function MemberList({
   const [editSection, setEditSection]         = useState("");
   const [editRole, setEditRole]               = useState("staff");
   const [editAccountNumber, setEditAccountNumber] = useState("");
+  const [editShiftNote, setEditShiftNote]     = useState("");
+  const [editWorkDaysType, setEditWorkDaysType] = useState<"monthly" | "weekly" | "">("");
+  const [editWorkDaysCount, setEditWorkDaysCount] = useState("");
 
   const startEdit = (m: Member) => {
     setEditId(m.staffId);
@@ -504,18 +507,24 @@ export function MemberList({
     setEditSection(m.section ?? "");
     setEditRole(m.role);
     setEditAccountNumber(m.account_number ?? "");
+    setEditShiftNote(m.shift_note ?? "");
+    setEditWorkDaysType((m.work_days_type as "monthly" | "weekly" | "") ?? "");
+    setEditWorkDaysCount(m.work_days_count != null ? String(m.work_days_count) : "");
   };
 
   const handleSaveEdit = () => {
     if (!editId || !editName.trim()) return;
     const fd = new FormData();
-    fd.set("projectId",      projectId);
-    fd.set("staffId",        editId);
-    fd.set("name",           editName.trim());
-    fd.set("company_name",   editCompany.trim());
-    fd.set("section",        editSection.trim());
-    fd.set("role",           editRole);
-    fd.set("account_number", editAccountNumber.trim());
+    fd.set("projectId",       projectId);
+    fd.set("staffId",         editId);
+    fd.set("name",            editName.trim());
+    fd.set("company_name",    editCompany.trim());
+    fd.set("section",         editSection.trim());
+    fd.set("role",            editRole);
+    fd.set("account_number",  editAccountNumber.trim());
+    fd.set("shift_note",      editShiftNote.trim());
+    fd.set("work_days_type",  editWorkDaysType);
+    fd.set("work_days_count", editWorkDaysCount);
     start(async () => {
       const r = await updateMemberInfoAction(fd);
       setResult({ ok: r.success, msg: r.message ?? (r.success ? "更新しました" : "エラー") });
@@ -913,6 +922,34 @@ export function MemberList({
                       placeholder="任意"
                       className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                   </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 font-semibold">シフト備考</label>
+                    <textarea value={editShiftNote} onChange={e => setEditShiftNote(e.target.value)}
+                      placeholder="例：基本遅番、3連勤避ける など"
+                      rows={2}
+                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 font-semibold">稼働日数</label>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly" | "")}
+                        className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300">
+                        <option value="">未設定</option>
+                        <option value="monthly">月</option>
+                        <option value="weekly">週</option>
+                      </select>
+                      {editWorkDaysType && (
+                        <>
+                          <input type="number" value={editWorkDaysCount} onChange={e => setEditWorkDaysCount(e.target.value)}
+                            placeholder="0" min={1} max={31}
+                            className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums" />
+                          <span className="text-xs text-zinc-500">
+                            日/{editWorkDaysType === "monthly" ? "月" : "週"}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setEditId(null)}
                       className="flex-1 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
@@ -965,7 +1002,15 @@ export function MemberList({
                     <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex-shrink-0">
                       {m.role === "project_admin" ? "管理者" : "スタッフ"}
                     </span>
+                    {m.work_days_count != null && m.work_days_type && (
+                      <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex-shrink-0 tabular-nums">
+                        {m.work_days_type === "monthly" ? "月" : "週"}{m.work_days_count}日
+                      </span>
+                    )}
                   </div>
+                  {m.shift_note && (
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate leading-tight mt-0.5">{m.shift_note}</p>
+                  )}
                 </div>
                 {/* 編集アイコン（ホバー時） */}
                 <svg className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity"
