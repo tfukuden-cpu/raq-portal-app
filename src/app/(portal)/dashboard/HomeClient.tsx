@@ -256,8 +256,11 @@ export default function HomeClient({
             </a>
           </div>
 
-          {/* 日付：ページの主役 */}
-          <h1 className="text-5xl font-bold tracking-tighter text-zinc-900 dark:text-white leading-[1.05] mb-3">
+          {/* 日付 */}
+          <h1 className={enableDeparture
+            ? "text-5xl font-bold tracking-tighter text-zinc-900 dark:text-white leading-[1.05] mb-3"
+            : "text-lg font-medium text-zinc-400 dark:text-zinc-500 mb-2 tracking-wide"
+          }>
             {todayLabel}
           </h1>
 
@@ -363,36 +366,58 @@ export default function HomeClient({
           </>)}
 
           {/* ────────────────────────────────────────────────────
-              出発報告 OFF レイアウト（中央寄せ）
+              出発報告 OFF レイアウト（Apple スタイル）
           ──────────────────────────────────────────────────── */}
           {!enableDeparture && (
-            <div className="flex flex-col items-center text-center gap-10 mt-2">
+            <div className="flex flex-col gap-7">
 
-              {/* 現在時刻 */}
-              <p className="text-7xl font-extralight tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100 leading-none">
+              {/* ── Hero：現在時刻 ── */}
+              <p className="text-[90px] font-thin tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white -mt-1">
                 {liveTime}
               </p>
 
-              {/* 本日シフト */}
-              <div className="space-y-1">
-                {!shift && <p className="text-sm text-zinc-400">シフト未登録</p>}
-                {shift && isHoliday && <p className="text-sm text-zinc-400">公休日</p>}
+              {/* ── シフト ＋ 打刻カード ── */}
+              <div className="bg-zinc-50 dark:bg-zinc-900 rounded-2xl overflow-hidden">
+
+                {/* シフト行 */}
+                {!shift && (
+                  <div className="px-5 py-4">
+                    <p className="text-sm text-zinc-400">シフト未登録</p>
+                  </div>
+                )}
+                {shift && isHoliday && (
+                  <div className="px-5 py-4">
+                    <p className="text-sm font-medium text-zinc-500">公休日</p>
+                  </div>
+                )}
                 {shift && !isHoliday && (
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{shift.name}</span>
+                  <div className="px-5 pt-4 pb-3.5 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-semibold tracking-widest text-zinc-400 uppercase mb-1">本日のシフト</p>
+                      <p className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-100 leading-tight">{shift.name}</p>
+                    </div>
                     {shift.start && (
-                      <span className="text-base font-mono tabular-nums text-zinc-400">
-                        {shift.start.slice(0, 5)}–{shift.end?.slice(0, 5) ?? "--:--"}
-                      </span>
+                      <p className="text-sm font-mono tabular-nums text-zinc-400">
+                        {shift.start.slice(0, 5)}<span className="mx-0.5 text-zinc-300 dark:text-zinc-600">–</span>{shift.end?.slice(0, 5) ?? "--:--"}
+                      </p>
                     )}
                   </div>
                 )}
-                {/* 出勤 / 退勤タイムスタンプ */}
-                <div className="flex items-center justify-center gap-6 pt-2">
-                  {[{ label: "出勤", time: optClockIn }, { label: "退勤", time: optClockOut }].map(({ label, time }) => (
-                    <div key={label} className="text-center">
-                      <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-1">{label}</p>
-                      <p className={`text-lg font-light tabular-nums ${time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"}`}>
+
+                {/* 区切り */}
+                <div className="mx-5 border-t border-zinc-200 dark:border-zinc-800" />
+
+                {/* 出勤 / 退勤 */}
+                <div className="grid grid-cols-2 px-5 py-4 gap-4">
+                  {[
+                    { label: "出勤", time: optClockIn },
+                    { label: "退勤", time: optClockOut },
+                  ].map(({ label, time }) => (
+                    <div key={label}>
+                      <p className="text-[10px] font-semibold tracking-widest text-zinc-400 uppercase mb-1.5">{label}</p>
+                      <p className={`text-3xl font-light tabular-nums tracking-tight ${
+                        time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
+                      }`}>
                         {time ?? "--:--"}
                       </p>
                     </div>
@@ -400,48 +425,49 @@ export default function HomeClient({
                 </div>
               </div>
 
-              {/* 遅刻・欠勤ボタン */}
+              {/* ── 欠勤・遅刻 ── */}
               {canReport && (
-                <div className="flex items-center justify-center gap-8">
+                <div className="flex items-center justify-center gap-7">
                   {hasAbsenceReport ? (
                     <span className="text-xs text-zinc-300 dark:text-zinc-700">欠勤報告済（{statusBadge(absenceStatus)}）</span>
                   ) : (
                     <button type="button" onClick={() => !isPending && setModal("absence")} disabled={isPending}
-                      className="text-sm text-zinc-400 hover:text-red-500 disabled:opacity-40 transition-colors">
+                      className="text-[13px] font-medium text-zinc-400 hover:text-red-500 active:opacity-60 disabled:opacity-40 transition-colors">
                       欠勤報告
                     </button>
                   )}
-                  <span className="text-zinc-200 dark:text-zinc-800">|</span>
+                  <span className="w-px h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded-full" />
                   {hasLateReport ? (
                     <span className="text-xs text-zinc-300 dark:text-zinc-700">遅刻報告済（{statusBadge(lateStatus)}）</span>
                   ) : (
                     <button type="button" onClick={() => !isPending && setModal("late")} disabled={isPending}
-                      className="text-sm text-zinc-400 hover:text-amber-500 disabled:opacity-40 transition-colors">
+                      className="text-[13px] font-medium text-zinc-400 hover:text-amber-500 active:opacity-60 disabled:opacity-40 transition-colors">
                       遅刻報告
                     </button>
                   )}
                 </div>
               )}
 
-              {/* 次回出勤 */}
+              {/* ── 次回出勤カード ── */}
               {upcomingShifts && upcomingShifts.length > 0 && (
-                <div className="w-full mt-2">
-                  <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-3 text-left">次回出勤</p>
-                  <div className="flex flex-col gap-2">
-                    {upcomingShifts.map((s) => (
-                      <div key={s.date} className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-500">{fmtUpcomingDate(s.date)}</span>
+                <div className="bg-zinc-50 dark:bg-zinc-900 rounded-2xl overflow-hidden">
+                  <p className="px-5 pt-4 pb-1 text-[10px] font-semibold tracking-widest text-zinc-400 uppercase">次回出勤</p>
+                  {upcomingShifts.map((s, i) => (
+                    <div key={s.date}>
+                      {i > 0 && <div className="mx-5 border-t border-zinc-100 dark:border-zinc-800/60" />}
+                      <div className="flex items-center justify-between px-5 py-3">
+                        <span className="text-[14px] font-medium text-zinc-700 dark:text-zinc-300">{fmtUpcomingDate(s.date)}</span>
                         <div className="flex items-center gap-2">
-                          {s.name && <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{s.name}</span>}
+                          {s.name && <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{s.name}</span>}
                           {s.start && (
-                            <span className="text-xs font-mono tabular-nums text-zinc-400">
+                            <span className="text-xs font-mono tabular-nums text-zinc-400 dark:text-zinc-600">
                               {s.start.slice(0, 5)}–{s.end?.slice(0, 5) ?? "--:--"}
                             </span>
                           )}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
