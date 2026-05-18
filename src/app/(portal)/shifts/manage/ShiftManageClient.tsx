@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import ShiftDayList from "./ShiftDayList";
 import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
+import ShiftEditGrid from "./ShiftEditGrid";
 
 type Shift = {
   id: string;
@@ -65,12 +67,57 @@ export default function ShiftManageClient({
   targetMonth,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
+  const [editMode, setEditMode] = useState(false);
+  const router = useRouter();
+
+  function enterEditMode() {
+    setEditMode(true);
+  }
+
+  function exitEditMode() {
+    setEditMode(false);
+  }
+
+  function handleSaved() {
+    setEditMode(false);
+    router.refresh();
+  }
+
+  if (editMode) {
+    return (
+      <div
+        className="flex flex-col"
+        style={{ height: "calc(100dvh - var(--header-height, 120px) - 60px)" }}
+      >
+        <ShiftEditGrid
+          projectId={projectId}
+          allDates={allDates}
+          shifts={shifts}
+          activeMembers={activeMembers}
+          shiftPatterns={shiftPatterns}
+          onSaved={handleSaved}
+          onCancel={exitEditMode}
+        />
+      </div>
+    );
+  }
 
   return (
     <>
+      {/* グリッド編集ボタン */}
+      <div className="px-4 flex justify-end mb-2">
+        <button
+          onClick={enterEditMode}
+          className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors border border-blue-200 dark:border-blue-800"
+        >
+          グリッド編集
+        </button>
+      </div>
+
       <div className="px-4">
         <ShiftRequestsAdmin requests={shiftRequests} />
       </div>
+
       <ShiftDayList
         allDates={allDates}
         shifts={shifts}

@@ -478,6 +478,77 @@ export async function swapShiftsAction(
   return { success: true };
 }
 
+// ────────────────────────────────────────────────────────────
+//  一括保存（グリッド編集モード用）
+// ────────────────────────────────────────────────────────────
+
+export type BulkUpsertResult = { success: boolean; message?: string };
+
+export type BulkUpsertItem = {
+  staffId: string;
+  shiftDate: string;
+  shiftName: string | null;
+  shiftStart: string | null;
+  shiftEnd: string | null;
+};
+
+export type BulkDeleteItem = {
+  staffId: string;
+  shiftDate: string;
+};
+
+/**
+ * グリッド編集モードの差分を一括保存する
+ * - upserts: 追加/変更セル
+ * - deletes: 削除セル
+ */
+export async function bulkUpsertShiftsAction(
+  projectId: string,
+  upserts: BulkUpsertItem[],
+  deletes: BulkDeleteItem[],
+): Promise<BulkUpsertResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+  const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+
+  const admin = createAdminClient();
+
+  // 削除処理
+  for (const d of deletes) {
+    const { error } = await admin
+      .from("shifts")
+      .delete()
+      .eq("project_id", projectId)
+      .eq("staff_id", d.staffId)
+      .eq("shift_date", d.shiftDate);
+    if (error) return { success: false, message: `削除失敗 (${d.staffId} ${d.shiftDate}): ${error.message}` };
+  }
+
+  // アップサート処理（500件バッチ）
+  const records = upserts.map(u => ({
+    project_id:  projectId,
+    staff_id:    u.staffId,
+    shift_date:  u.shiftDate,
+    shift_name:  u.shiftName,
+    shift_start: u.shiftStart,
+    shift_end:   u.shiftEnd,
+    created_by:  myStaffId,
+  }));
+
+  for (let i = 0; i < records.length; i += 500) {
+    const { error } = await admin.from("shifts").upsert(
+      records.slice(i, i + 500),
+      { onConflict: "project_id,staff_id,shift_date" },
+    );
+    if (error) return { success: false, message: "保存失敗：" + error.message };
+  }
+
+  revalidatePath("/shifts");
+  revalidatePath("/shifts/manage");
+  return { success: true };
+}
+
 export type CsvImportResult = {
   success: boolean;
   imported: number;
