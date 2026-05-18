@@ -1183,19 +1183,21 @@ export default function ShiftEditGrid({
     return duplicateStaffDates.set.has(`${editTarget.staffId}__${editTarget.date}`);
   }, [editTarget, duplicateStaffDates]);
 
-  // ── 不足/余剰合計（SVパターン除外、純差分） ──────────────────────
-  const netShortage = useMemo(() => {
-    let net = 0;
+  // ── セクション別 不足/余剰（SVパターン除外） ──────────────────────
+  const sectionShortages = useMemo(() => {
+    const map = new Map<string, number>();
     for (const p of shiftPatterns) {
       if (p.section === "SV") continue;
+      const sec = p.section ?? "";
       for (const date of allDates) {
         const req = getRequired(p.name, date);
         if (req === 0) continue;
         const assigned = (resolvedGrid.get(`${p.name}__${date}`) ?? []).length;
-        net += req - assigned;
+        map.set(sec, (map.get(sec) ?? 0) + (req - assigned));
       }
     }
-    return net;
+    // net が 0 のセクションも保持（変化を示すため）、ソートして返す
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedGrid, allDates, shiftPatterns, slotReqMap, localSlotReqs]);
 
@@ -1216,12 +1218,21 @@ export default function ShiftEditGrid({
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 leading-tight">
             {draftCount > 0 ? `${draftCount}件 変更中` : slotReqChanged ? "必要人数 変更中" : "グリッド編集"}
-            {netShortage !== 0 && (
-              <span className={`ml-2 text-[11px] font-bold tabular-nums ${netShortage > 0 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                {netShortage > 0 ? `不足 ${netShortage}人` : `余剰 ${-netShortage}人`}
-              </span>
-            )}
           </span>
+          {sectionShortages.some(([, net]) => net !== 0) && (
+            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+              {sectionShortages.map(([sec, net]) => net === 0 ? null : (
+                <span key={sec} className={[
+                  "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md leading-none",
+                  net > 0
+                    ? "bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400"
+                    : "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400",
+                ].join(" ")}>
+                  {sec || "全体"}{net > 0 ? ` 不足${net}人` : ` 余剰${-net}人`}
+                </span>
+              ))}
+            </div>
+          )}
           {hasDraftFromDB && draftCount === 0 && (
             <span className="text-[10px] text-amber-600 dark:text-amber-400">下書きなし</span>
           )}
