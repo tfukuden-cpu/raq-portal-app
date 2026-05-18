@@ -34,9 +34,9 @@ async function fetchRequestInfo(requestId: string) {
   };
 }
 
-export async function updatePatternRequiredCountsAction(
+export async function upsertSlotRequirementsAction(
   projectId: string,
-  changes: { name: string; required_count: number }[],
+  changes: { patternName: string; date: string; section: string | null; requiredCount: number }[],
 ): Promise<ActionResult> {
   if (changes.length === 0) return { success: true };
 
@@ -45,14 +45,19 @@ export async function updatePatternRequiredCountsAction(
   if (!user) return { success: false, message: "ログインしてください" };
 
   const admin = createAdminClient();
-  for (const { name, required_count } of changes) {
-    const { error } = await admin
-      .from("shift_patterns")
-      .update({ required_count })
-      .eq("project_id", projectId)
-      .eq("name", name);
-    if (error) return { success: false, message: error.message };
-  }
+  const rows = changes.map(c => ({
+    project_id:     projectId,
+    section:        c.section ?? "",
+    pattern_name:   c.patternName,
+    shift_date:     c.date,
+    required_count: c.requiredCount,
+  }));
+
+  const { error } = await admin
+    .from("shift_slot_requirements")
+    .upsert(rows, { onConflict: "project_id,section,pattern_name,shift_date" });
+
+  if (error) return { success: false, message: error.message };
 
   revalidatePath("/shifts/manage");
   return { success: true };
