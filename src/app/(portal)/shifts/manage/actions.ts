@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { sendEventNotify } from "@/lib/notify";
-import { multicastLine } from "@/lib/line";
+import { multicastLine, pushLine } from "@/lib/line";
 
 export type ActionResult = { success: boolean; message?: string };
 
@@ -203,4 +203,60 @@ export async function requestExtraShiftByLineAction(
   await multicastLine(withLine, text);
 
   return { success: true, sent: withLine.length, noLine: noLineNames };
+}
+
+export type NotifyChangesResult = {
+  success: boolean;
+  message?: string;
+  sent?: number;
+  noLine?: string[];
+};
+
+/**
+ * 確定後に変更対象スタッフへLINEで個別通知を送る
+ */
+export async function notifyShiftChangesAction(
+  projectId: string,
+  notifications: { staffId: string; staffName: string; changes: { date: string; from: string | null; to: string | null }[] }[],
+): Promise<NotifyChangesResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+  if (notifications.length === 0) return { success: true, sent: 0, noLine: [] };
+
+  const admin = createAdminClient();
+  const { data: staffRows } = await admin
+    .from("staffs")
+    .select("id, line_user_id")
+    .in("id", notifications.map(n => n.staffId));
+
+  const lineMap = new Map(
+    (staffRows ?? []).map(s => [s.id as string, s.line_user_id as string | null])
+  );
+
+  const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
+  function fmtDateLine(d: string) {
+    const dt = new Date(d + "T00:00:00+09:00");
+    return `${dt.getMonth() + 1}/${dt.getDate()}（${WEEKDAY_JP[dt.getDay()]}）`;
+  }
+
+  let sent = 0;
+  const noLine: string[] = [];
+
+  for (const n of notifications) {
+    const lineId = lineMap.get(n.staffId);
+    if (!lineId) { noLine.push(n.staffName); continue; }
+
+    const lines = n.changes.map(c => {
+      if (!c.from && c.to) return `${fmtDateLine(c.date)} ${c.to} 新規追加`;
+      if (c.from && !c.to) return `${fmtDateLine(c.date)} ${c.from} 削除`;
+      return `${fmtDateLine(c.date)} ${c.from} → ${c.to}`;
+    });
+
+    const text = `【シフト変更のお知らせ】\n以下のシフトが変更されました。\n\n${lines.join("\n")}`;
+    await pushLine(lineId, text);
+    sent++;
+  }
+
+  return { success: true, sent, noLine };
 }

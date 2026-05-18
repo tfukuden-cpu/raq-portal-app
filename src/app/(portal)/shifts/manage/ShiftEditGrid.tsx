@@ -35,7 +35,7 @@ import {
   type BulkDeleteItem,
   type GridDraftEntry,
 } from "../actions";
-import { upsertSlotRequirementsAction } from "./actions";
+import { upsertSlotRequirementsAction, notifyShiftChangesAction } from "./actions";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -75,7 +75,13 @@ type EditTarget =
   | { kind: "existing"; staffId: string; patternName: string; date: string }
   | { kind: "empty";    patternName: string; date: string };
 
-type ErrorAnnotation = { patternName: string; date: string; message: string };
+type ErrorAnnotation = {
+  patternName: string; date: string; message: string;
+  srcPatternName: string; srcDate: string;
+};
+type PendingNotify = {
+  changes: { staffId: string; staffName: string; date: string; from: string | null; to: string | null }[];
+};
 
 interface Props {
   projectId: string;
@@ -166,13 +172,14 @@ function DraggableChip({
 function SlotCellFull({
   patternName, date, rowIdx, staffId, staffName,
   isDraft, isToday, isOverCol, hasLog, isDuplicate,
-  isHoldHighlight, bubbleMessage, onClick,
+  isHoldHighlight, isErrorSource, bubbleMessage, onClick,
 }: {
   patternName: string; date: string; rowIdx: number;
   staffId: string | null; staffName: string | null;
   isDraft: boolean; isToday: boolean; isOverCol: boolean;
   hasLog: boolean; isDuplicate: boolean;
   isHoldHighlight: boolean;
+  isErrorSource: boolean;
   bubbleMessage?: string;
   onClick: () => void;
 }) {
@@ -193,6 +200,8 @@ function SlotCellFull({
         hasBubble ? "overflow-visible relative" : "overflow-hidden",
         isOver
           ? "bg-blue-100 dark:bg-blue-900/50 ring-inset ring-2 ring-blue-400"
+          : isErrorSource
+          ? "bg-red-100 dark:bg-red-950/40 ring-inset ring-1 ring-red-400"
           : isOverCol
           ? "bg-blue-50/60 dark:bg-blue-950/20"
           : isHoldHighlight
@@ -388,6 +397,137 @@ function SummaryModal({
             className="w-full py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
             閉じる
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── NotifyModal ─────────────────────────────────────────────────
+
+function NotifyModal({
+  projectId, changes, onClose,
+}: {
+  projectId: string;
+  changes: PendingNotify["changes"];
+  onClose: () => void;
+}) {
+  // スタッフ別にグループ化
+  const groups = useMemo(() => {
+    const map = new Map<string, { staffId: string; staffName: string; rows: { date: string; from: string | null; to: string | null }[] }>();
+    for (const c of changes) {
+      if (!map.has(c.staffId)) map.set(c.staffId, { staffId: c.staffId, staffName: c.staffName, rows: [] });
+      map.get(c.staffId)!.rows.push({ date: c.date, from: c.from, to: c.to });
+    }
+    return [...map.values()];
+  }, [changes]);
+
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(groups.map(g => g.staffId)));
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ sent: number; noLine: string[] } | null>(null);
+
+  function toggleAll() {
+    setSelected(prev => prev.size === groups.length ? new Set() : new Set(groups.map(g => g.staffId)));
+  }
+
+  async function handleSend() {
+    setSending(true);
+    const targets = groups
+      .filter(g => selected.has(g.staffId))
+      .map(g => ({ staffId: g.staffId, staffName: g.staffName, changes: g.rows }));
+    const r = await notifyShiftChangesAction(projectId, targets);
+    setSending(false);
+    setResult({ sent: r.sent ?? 0, noLine: r.noLine ?? [] });
+  }
+
+  const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
+  function fmtD(d: string) {
+    const dt = new Date(d + "T00:00:00+09:00");
+    return `${dt.getMonth() + 1}/${dt.getDate()}（${WEEKDAY_JP[dt.getDay()]}）`;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={result ? onClose : undefined}>
+      <div
+        className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85dvh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-4 pt-4 pb-2 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+          <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">
+            {result ? "通知完了" : "変更をLINEで通知しますか？"}
+          </h2>
+          {!result && (
+            <p className="text-xs text-zinc-400 mt-0.5">LINE未連携のスタッフには送信されません</p>
+          )}
+        </div>
+
+        {result ? (
+          <div className="px-4 py-6 flex-1 space-y-3">
+            <p className="text-sm text-zinc-700 dark:text-zinc-200">
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">{result.sent}件</span> 送信しました
+            </p>
+            {result.noLine.length > 0 && (
+              <p className="text-xs text-zinc-400">
+                LINE未連携: {result.noLine.join("、")}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-y-auto flex-1 px-4 py-3 space-y-3">
+            {/* 全選択 */}
+            <button
+              onClick={toggleAll}
+              className="text-xs text-blue-600 dark:text-blue-400 font-semibold"
+            >
+              {selected.size === groups.length ? "全て解除" : "全て選択"}
+            </button>
+
+            {groups.map(g => (
+              <div key={g.staffId} className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={selected.has(g.staffId)}
+                  onChange={() => setSelected(prev => {
+                    const n = new Set(prev);
+                    n.has(g.staffId) ? n.delete(g.staffId) : n.add(g.staffId);
+                    return n;
+                  })}
+                  className="mt-1 w-4 h-4 rounded accent-blue-600 shrink-0"
+                />
+                <div className="flex-1 min-w-0 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl px-3 py-2 border border-zinc-100 dark:border-zinc-700">
+                  <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 mb-1">{g.staffName}</p>
+                  {g.rows.map((r, i) => (
+                    <p key={i} className="text-xs text-zinc-500 dark:text-zinc-400 tabular-nums leading-snug">
+                      {fmtD(r.date)}{" "}
+                      {!r.from && r.to && <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{r.to} 新規追加</span>}
+                      {r.from && !r.to && <span className="text-red-500 dark:text-red-400 font-semibold">{r.from} 削除</span>}
+                      {r.from && r.to && <span>{r.from} → <span className="text-blue-600 dark:text-blue-400 font-semibold">{r.to}</span></span>}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="px-4 pb-4 pt-2 flex gap-2 shrink-0">
+          {result ? (
+            <button onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+              閉じる
+            </button>
+          ) : (
+            <>
+              <button onClick={onClose} disabled={sending}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors">
+                通知しない
+              </button>
+              <button onClick={handleSend} disabled={sending || selected.size === 0}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 transition-colors">
+                {sending ? "送信中…" : `LINEで送信（${selected.size}名）`}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -594,6 +734,8 @@ export default function ShiftEditGrid({
   // ドラッグ検証エラー（セル吹き出し）
   const [errorAnnotation, setErrorAnnotation] = useState<ErrorAnnotation | null>(null);
   const [draftMsg, setDraftMsg] = useState<string | null>(null);
+  // 確定後通知モーダル
+  const [pendingNotify, setPendingNotify] = useState<PendingNotify | null>(null);
 
   // ── センサー ───────────────────────────────────────────────────
   const sensors = useSensors(
@@ -739,13 +881,13 @@ export default function ShiftEditGrid({
 
   // ── 変更一覧（サマリー用） ─────────────────────────────────────
   const draftChanges = useMemo(() => {
-    const changes: { staffName: string; date: string; from: string | null; to: string | null }[] = [];
+    const changes: { staffId: string; staffName: string; date: string; from: string | null; to: string | null }[] = [];
     for (const [key, draftVal] of drafts) {
-      const [staffId, shiftDate] = key.split("__");
-      const staffName = memberById.get(staffId)?.name ?? staffId;
+      const [sId, shiftDate] = key.split("__");
+      const staffName = memberById.get(sId)?.name ?? sId;
       const fromPattern = shiftsByKey.get(key)?.shift_name ?? null;
       const toPattern = draftVal?.shiftName ?? null;
-      changes.push({ staffName, date: shiftDate, from: fromPattern, to: toPattern });
+      changes.push({ staffId: sId, staffName, date: shiftDate, from: fromPattern, to: toPattern });
     }
     return changes.sort((a, b) => a.date.localeCompare(b.date) || a.staffName.localeCompare(b.staffName));
   }, [drafts, memberById, shiftsByKey]);
@@ -823,6 +965,8 @@ export default function ShiftEditGrid({
         patternName: targetPattern,
         date: targetDate,
         message: `${member.name} は${sectionLabel}セクション外のため配置できません`,
+        srcPatternName: sourcePattern,
+        srcDate: sourceDate,
       });
       setTimeout(() => setErrorAnnotation(null), 3500);
       return;
@@ -835,6 +979,8 @@ export default function ShiftEditGrid({
           patternName: targetPattern,
           date: targetDate,
           message: `${member?.name ?? staffId} はすでに ${fmtDate(targetDate)} に「${existingOnTarget.shiftName}」が入っています`,
+          srcPatternName: sourcePattern,
+          srcDate: sourceDate,
         });
         setTimeout(() => setErrorAnnotation(null), 4000);
         return;
@@ -939,6 +1085,7 @@ export default function ShiftEditGrid({
   function resetDrafts() { setDrafts(new Map()); setSaveError(null); }
 
   function handleCommit() {
+    const snapshot = [...draftChanges]; // 通知用にスナップショット
     const upserts: BulkUpsertItem[] = [];
     const dels: BulkDeleteItem[] = [];
     for (const [key, draft] of drafts) {
@@ -972,7 +1119,14 @@ export default function ShiftEditGrid({
         if (!r.success) { setSaveError(r.message ?? "保存に失敗しました"); return; }
       }
       await clearGridDraftAction(projectId, targetMonth);
-      onSaved();
+      setDrafts(new Map());
+      setSaveError(null);
+      // スタッフへの変更がある場合は通知モーダルを表示
+      if (snapshot.length > 0) {
+        setPendingNotify({ changes: snapshot });
+      } else {
+        onSaved();
+      }
     });
   }
 
@@ -1217,6 +1371,12 @@ export default function ShiftEditGrid({
                             staffId === draggingStaffId &&
                             `${staffId}__${date}` !== activeId;
 
+                          // エラー配置元セルを赤くハイライト
+                          const isErrorSource =
+                            !!errorAnnotation &&
+                            errorAnnotation.srcPatternName === pattern.name &&
+                            errorAnnotation.srcDate === date;
+
                           return (
                             <SlotCellFull
                               key={date}
@@ -1226,6 +1386,7 @@ export default function ShiftEditGrid({
                               isOverCol={overColKey === `${pattern.name}__${date}`}
                               hasLog={hasLog} isDuplicate={isDuplicate}
                               isHoldHighlight={isHoldHighlight}
+                              isErrorSource={isErrorSource}
                               bubbleMessage={bubbleMessage}
                               onClick={() => openModal(pattern.name, date, staffId)}
                             />
@@ -1299,6 +1460,15 @@ export default function ShiftEditGrid({
           isDuplicate={modalIsDuplicate}
           onClose={closeModal} onChangePattern={handleChangePattern}
           onRemove={handleRemove} onAdd={handleAdd}
+        />
+      )}
+
+      {/* Notify Modal */}
+      {pendingNotify && (
+        <NotifyModal
+          projectId={projectId}
+          changes={pendingNotify.changes}
+          onClose={() => { setPendingNotify(null); onSaved(); }}
         />
       )}
     </div>
