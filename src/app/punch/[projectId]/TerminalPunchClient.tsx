@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useTransition } from "react";
-import { terminalPunchAction } from "./actions";
+import { terminalPunchAction, saveConsentAction } from "./actions";
 
 // ── 型 ───────────────────────────────────────────────────────
 export type TerminalMember = {
@@ -12,6 +12,7 @@ export type TerminalMember = {
   shiftEnd: string | null;
   clockedIn: boolean;
   clockedOut: boolean;
+  needsConsent: boolean; // 当月まだ同意書未サイン
 };
 
 interface Props {
@@ -42,13 +43,122 @@ function LiveClock() {
   );
 }
 
+// ── 署名キャンバス ─────────────────────────────────────────────
+function SignatureCanvas({
+  onChange,
+}: {
+  onChange: (dataUrl: string | null) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const lastPos = useRef<{ x: number; y: number } | null>(null);
+  const [hasSigned, setHasSigned] = useState(false);
+
+  function getXY(
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
+    canvas: HTMLCanvasElement
+  ) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if ("touches" in e) {
+      const t = e.touches[0];
+      return { x: (t.clientX - rect.left) * scaleX, y: (t.clientY - rect.top) * scaleY };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  }
+
+  function startDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    drawing.current = true;
+    lastPos.current = getXY(e, canvasRef.current!);
+  }
+
+  function moveDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    if (!drawing.current) return;
+    e.preventDefault();
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext("2d")!;
+    const pos = getXY(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(lastPos.current!.x, lastPos.current!.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    lastPos.current = pos;
+    if (!hasSigned) {
+      setHasSigned(true);
+      onChange(canvas.toDataURL("image/png"));
+    } else {
+      onChange(canvas.toDataURL("image/png"));
+    }
+  }
+
+  function endDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    drawing.current = false;
+    lastPos.current = null;
+  }
+
+  function clear() {
+    const canvas = canvasRef.current!;
+    canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSigned(false);
+    onChange(null);
+  }
+
+  return (
+    <div className="space-y-2">
+      <canvas
+        ref={canvasRef}
+        width={640}
+        height={200}
+        className="w-full rounded-2xl border-2 border-zinc-600 bg-zinc-900 touch-none cursor-crosshair"
+        style={{ height: "140px" }}
+        onMouseDown={startDraw}
+        onMouseMove={moveDraw}
+        onMouseUp={endDraw}
+        onMouseLeave={endDraw}
+        onTouchStart={startDraw}
+        onTouchMove={moveDraw}
+        onTouchEnd={endDraw}
+      />
+      <div className="flex justify-between items-center">
+        <p className="text-zinc-600 text-xs">↑ 上の枠内にサインしてください</p>
+        {hasSigned && (
+          <button
+            type="button"
+            onClick={clear}
+            className="text-xs text-zinc-500 hover:text-zinc-300 underline transition-colors"
+          >
+            やり直す
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── ステップ定義 ──────────────────────────────────────────────
 type Step =
   | { kind: "list" }
+  | { kind: "consent"; member: TerminalMember }
   | { kind: "punch"; member: TerminalMember }
   | { kind: "kind"; member: TerminalMember; punchType: "clock_in" | "clock_out" }
   | { kind: "approver"; member: TerminalMember; punchType: "clock_in" | "clock_out"; punchKind: "late" | "early" }
   | { kind: "done"; message: string };
+
+// ── 同意書の本文（必要に応じて編集してください）────────────────
+const CONSENT_TEXT = `以下の事項について確認し、同意します。
+
+1. 就業規則および労働条件通知書の内容を遵守します。
+2. 業務上知り得た情報（個人情報・顧客情報・機密情報）を外部に漏洩しません。
+3. ハラスメント防止に関する会社方針を遵守し、良好な職場環境の維持に努めます。
+4. 打刻記録は正確に行い、不正な打刻操作は行いません。
+5. 上記に違反した場合、就業規則に基づく措置を受けることに同意します。`;
 
 // ── メインコンポーネント ──────────────────────────────────────
 export default function TerminalPunchClient({ projectId, projectName, members }: Props) {
@@ -66,9 +176,11 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   const [approverInput, setApproverInput] = useState("");
   const approverRef = useRef<HTMLInputElement>(null);
 
-  // 未打刻者のみ表示（出勤打刻していない人）
-  const unclockedMembers = localMembers.filter(m => !m.clockedIn);
+  // 同意書サイン
+  const [signatureData, setSignatureData] = useState<string | null>(null);
 
+  // 未打刻者のみ
+  const unclockedMembers = localMembers.filter(m => !m.clockedIn);
   const filtered = unclockedMembers.filter(m =>
     search === "" || m.name.includes(search)
   );
@@ -94,6 +206,9 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
       setApproverInput("");
       setTimeout(() => approverRef.current?.focus(), 50);
     }
+    if (step.kind === "consent") {
+      setSignatureData(null);
+    }
   }, [step.kind]);
 
   function openDropdown() {
@@ -104,7 +219,24 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   function handleMemberSelect(member: TerminalMember) {
     setDropdownOpen(false);
     setSearch("");
-    setStep({ kind: "punch", member });
+    // 当月未同意なら同意書ステップへ
+    if (member.needsConsent) {
+      setStep({ kind: "consent", member });
+    } else {
+      setStep({ kind: "punch", member });
+    }
+  }
+
+  function handleConsentConfirm(member: TerminalMember) {
+    if (!signatureData) return;
+    startTransition(async () => {
+      await saveConsentAction(projectId, member.staffId, signatureData);
+      // ローカルでneedsConsentをfalseに
+      setLocalMembers(prev => prev.map(m =>
+        m.staffId === member.staffId ? { ...m, needsConsent: false } : m
+      ));
+      setStep({ kind: "punch", member: { ...member, needsConsent: false } });
+    });
   }
 
   function handlePunchTypeSelect(member: TerminalMember, punchType: "clock_in" | "clock_out") {
@@ -132,7 +264,6 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
     startTransition(async () => {
       const res = await terminalPunchAction(projectId, member.staffId, punchType, punchKind, approverName);
       if (res.ok) {
-        // 打刻済みに更新（clock_in後はプルダウンから消える）
         setLocalMembers(prev => prev.map(m => {
           if (m.staffId !== member.staffId) return m;
           return {
@@ -151,14 +282,12 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   }
 
   // ══════════════════════════════════════════════════════════
-  // ── スタッフ選択（未打刻者のみプルダウン）─────────────────
+  // ── スタッフ選択（プルダウン）─────────────────────────────
   // ══════════════════════════════════════════════════════════
   if (step.kind === "list") {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-md space-y-10">
-
-          {/* ヘッダー */}
           <div className="text-center">
             <p className="text-zinc-500 text-sm font-semibold tracking-widest uppercase mb-6">
               {projectName}
@@ -166,7 +295,6 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
             <LiveClock />
           </div>
 
-          {/* プルダウン */}
           <div ref={dropdownRef} className="relative">
             <button
               onClick={openDropdown}
@@ -224,6 +352,11 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
                               </p>
                             )}
                           </div>
+                          {m.needsConsent && (
+                            <span className="text-[10px] text-amber-400 font-semibold border border-amber-700/60 rounded px-1.5 py-0.5 flex-shrink-0">
+                              同意書
+                            </span>
+                          )}
                         </button>
                       </li>
                     ))
@@ -233,12 +366,61 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
             )}
           </div>
 
-          {/* 残人数 */}
           <p className="text-center text-zinc-600 text-sm tabular-nums">
             {unclockedMembers.length > 0
               ? `未打刻 ${unclockedMembers.length}名`
               : "本日の出勤打刻が完了しました"}
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // ── 同意書サイン ──────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  if (step.kind === "consent") {
+    const { member } = step;
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col px-6 py-10 overflow-y-auto">
+        <div className="w-full max-w-lg mx-auto space-y-6">
+
+          {/* タイトル */}
+          <div className="text-center">
+            <p className="text-zinc-400 text-sm mb-1">{member.name}</p>
+            <p className="text-white text-2xl font-bold">同意書の確認・署名</p>
+            <p className="text-zinc-500 text-sm mt-1">今月初めての打刻です。内容をご確認ください。</p>
+          </div>
+
+          {/* 同意書本文 */}
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-5">
+            <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-line">
+              {CONSENT_TEXT}
+            </p>
+          </div>
+
+          {/* 署名エリア */}
+          <div className="space-y-2">
+            <p className="text-zinc-400 text-sm font-semibold">署名</p>
+            <SignatureCanvas onChange={setSignatureData} />
+          </div>
+
+          {/* ボタン */}
+          <div className="space-y-3 pb-8">
+            <button
+              onClick={() => handleConsentConfirm(member)}
+              disabled={!signatureData || isPending}
+              className="w-full py-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-40"
+            >
+              {isPending ? "保存中…" : "同意して打刻へ進む"}
+            </button>
+            <button
+              onClick={() => setStep({ kind: "list" })}
+              className="w-full py-3 rounded-2xl border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              ← 戻る
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -362,7 +544,7 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   }
 
   // ══════════════════════════════════════════════════════════
-  // ── 承認者名入力（遅刻・早退のみ）──────────────────────────
+  // ── 承認者名入力（遅刻・早退）──────────────────────────────
   // ══════════════════════════════════════════════════════════
   if (step.kind === "approver") {
     const { member, punchType, punchKind } = step;

@@ -13,8 +13,8 @@ export async function terminalPunchAction(
   projectId: string,
   staffId: string,
   punchType: "clock_in" | "clock_out",
-  punchKind: "normal" | "late" | "early", // 定時/遅刻/早退
-  approverName?: string,                   // 遅刻・早退時の承認SV名
+  punchKind: "normal" | "late" | "early",
+  approverName?: string,
 ): Promise<TerminalPunchResult> {
   if (!projectId || !staffId) {
     return { ok: false, message: "パラメータが不正です" };
@@ -23,7 +23,6 @@ export async function terminalPunchAction(
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
-  // note: 遅刻 [承認: 田中SV] / 早退 [承認: 田中SV]
   const baseNote = punchKind === "late" ? "遅刻" : punchKind === "early" ? "早退" : null;
   const note = baseNote && approverName
     ? `${baseNote} [承認: ${approverName}]`
@@ -42,7 +41,6 @@ export async function terminalPunchAction(
 
   revalidatePath(`/attendance`);
 
-  // LINE通知
   const LABEL = { clock_in: "出勤", clock_out: "退勤" } as const;
   const { data: staffData } = await admin
     .from("staffs").select("display_name, name").eq("id", staffId).maybeSingle();
@@ -58,4 +56,31 @@ export async function terminalPunchAction(
 
   const kindLabel = punchKind === "late" ? "（遅刻）" : punchKind === "early" ? "（早退）" : "";
   return { ok: true, message: `${LABEL[punchType]}${kindLabel}を記録しました` };
+}
+
+/**
+ * 同意書サイン保存（当月初回打刻時）
+ */
+export async function saveConsentAction(
+  projectId: string,
+  staffId: string,
+  signatureData: string,
+): Promise<{ ok: boolean }> {
+  if (!projectId || !staffId || !signatureData) return { ok: false };
+
+  const admin = createAdminClient();
+  const consentMonth = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }).slice(0, 7);
+
+  const { error } = await admin.from("consent_records").upsert(
+    {
+      staff_id:      staffId,
+      project_id:    projectId,
+      consent_month: consentMonth,
+      signature_data: signatureData,
+      signed_at:     new Date().toISOString(),
+    },
+    { onConflict: "staff_id,project_id,consent_month" }
+  );
+
+  return { ok: !error };
 }

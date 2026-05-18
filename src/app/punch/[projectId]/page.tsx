@@ -18,8 +18,9 @@ export default async function PunchPage({
   const { projectId } = await params;
   const admin = createAdminClient();
   const today = tokyoToday();
-  const todayStart = `${today}T00:00:00+09:00`;
-  const todayEnd   = `${today}T23:59:59+09:00`;
+  const todayStart    = `${today}T00:00:00+09:00`;
+  const todayEnd      = `${today}T23:59:59+09:00`;
+  const currentMonth  = today.slice(0, 7); // YYYY-MM
 
   // プロジェクト存在確認
   const { data: project } = await admin
@@ -30,11 +31,12 @@ export default async function PunchPage({
 
   if (!project) notFound();
 
-  // 並列取得：メンバー・当日シフト・打刻ログ
+  // 並列取得：メンバー・当日シフト・打刻ログ・当月同意済みスタッフ
   const [
     { data: memberRows },
     { data: todayShifts },
     { data: punchLogs },
+    { data: consentRows },
   ] = await Promise.all([
     admin
       .from("project_members")
@@ -52,9 +54,17 @@ export default async function PunchPage({
       .gte("recorded_at", todayStart)
       .lte("recorded_at", todayEnd)
       .order("recorded_at"),
+    admin
+      .from("consent_records")
+      .select("staff_id")
+      .eq("project_id", projectId)
+      .eq("consent_month", currentMonth),
   ]);
 
-  // 打刻マップ（staff_id → clockedIn/clockedOut）
+  // 当月同意済みスタッフセット
+  const consentedIds = new Set((consentRows ?? []).map(c => c.staff_id));
+
+  // 打刻マップ
   const punchMap = new Map<string, { clockedIn: boolean; clockedOut: boolean }>();
   for (const p of punchLogs ?? []) {
     if (!punchMap.has(p.staff_id)) {
@@ -65,7 +75,7 @@ export default async function PunchPage({
     if (p.punch_type === "clock_out") e.clockedOut = true;
   }
 
-  // シフトマップ（staff_id → シフト情報）
+  // シフトマップ（公休系除く）
   const OFF_SHIFTS = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤"];
   const shiftMap = new Map<string, { shiftName: string; shiftStart: string | null; shiftEnd: string | null }>();
   for (const s of todayShifts ?? []) {
@@ -78,38 +88,36 @@ export default async function PunchPage({
     }
   }
 
-  // TerminalMember 配列を組み立て
-  // 当日シフトがある（かつ休みでない）メンバーのみ表示
+  // TerminalMember 配列を組み立て（当日シフトあり・公休除く）
   const members: TerminalMember[] = [];
 
   for (const m of memberRows ?? []) {
     const staffId = m.staff_id;
     const shift = shiftMap.get(staffId);
-    if (!shift) continue; // 当日シフトなし → 表示しない
+    if (!shift) continue;
 
     const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as {
       display_name?: string | null;
       name?: string | null;
     } | null;
     const name = s?.display_name ?? s?.name ?? staffId;
-
     const punch = punchMap.get(staffId) ?? { clockedIn: false, clockedOut: false };
 
     members.push({
       staffId,
       name,
-      shiftName:  shift.shiftName  || null,
-      shiftStart: shift.shiftStart || null,
-      shiftEnd:   shift.shiftEnd   || null,
-      clockedIn:  punch.clockedIn,
-      clockedOut: punch.clockedOut,
+      shiftName:   shift.shiftName  || null,
+      shiftStart:  shift.shiftStart || null,
+      shiftEnd:    shift.shiftEnd   || null,
+      clockedIn:   punch.clockedIn,
+      clockedOut:  punch.clockedOut,
+      needsConsent: !consentedIds.has(staffId),
     });
   }
 
-  // 打刻状態順にソート：未打刻 → 勤務中 → 退勤済
+  // 未打刻が先、名前順
   members.sort((a, b) => {
-    const rank = (m: TerminalMember) =>
-      m.clockedOut ? 2 : m.clockedIn ? 1 : 0;
+    const rank = (m: TerminalMember) => m.clockedOut ? 2 : m.clockedIn ? 1 : 0;
     const r = rank(a) - rank(b);
     if (r !== 0) return r;
     return a.name.localeCompare(b.name, "ja");
