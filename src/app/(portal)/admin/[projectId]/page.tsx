@@ -53,7 +53,7 @@ export default async function ProjectDetailPage(props: {
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
-      .select("staff_id, role, section, sections, shift_note, work_days_type, work_days_count, preferred_shift, max_consecutive_days, staffs(name, display_name, company_name, line_user_id, account_number)")
+      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, staffs(name, display_name, company_name, line_user_id, account_number)")
       .eq("project_id", projectId),
     createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id, enable_departure_report").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
@@ -129,6 +129,7 @@ export default async function ProjectDetailPage(props: {
       work_days_type:       (m as { work_days_type?: string | null }).work_days_type ?? null,
       work_days_count:      (m as { work_days_count?: number | null }).work_days_count ?? null,
       preferred_shift:      (m as { preferred_shift?: string | null }).preferred_shift ?? null,
+      preferred_section:    (m as { preferred_section?: string | null }).preferred_section ?? null,
       max_consecutive_days: (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? null,
       compliance:           complianceMap.get(m.staff_id) ?? null,
     };

@@ -662,16 +662,16 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   const section       = String(fd.get("section")        ?? "").trim() || null;
   const role          = String(fd.get("role")           ?? "staff");
   const accountNumber = String(fd.get("account_number") ?? "").trim() || null;
-  const shiftNote     = String(fd.get("shift_note")     ?? "").trim() || null;
   const workDaysTypeRaw = String(fd.get("work_days_type") ?? "").trim();
   const workDaysType  = (workDaysTypeRaw === "monthly" || workDaysTypeRaw === "weekly") ? workDaysTypeRaw : null;
   const workDaysCountRaw = String(fd.get("work_days_count") ?? "").trim();
   const workDaysCount = workDaysCountRaw && workDaysType ? (parseInt(workDaysCountRaw, 10) || null) : null;
   const sectionsRaw   = String(fd.get("sections") ?? "");
   const sections      = sectionsRaw ? sectionsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
-  const preferredShift = String(fd.get("preferred_shift") ?? "").trim() || null;
-  const maxConsecRaw   = String(fd.get("max_consecutive_days") ?? "").trim();
-  const maxConsecDays  = maxConsecRaw ? (parseInt(maxConsecRaw, 10) || null) : null;
+  const preferredShift   = String(fd.get("preferred_shift")   ?? "").trim() || null;
+  const preferredSection = String(fd.get("preferred_section") ?? "").trim() || null;
+  const maxConsecRaw     = String(fd.get("max_consecutive_days") ?? "").trim();
+  const maxConsecDays    = maxConsecRaw ? (parseInt(maxConsecRaw, 10) || null) : null;
 
   if (!name) return { success: false, message: "氏名を入力してください" };
 
@@ -691,8 +691,9 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
     .from("project_members")
     .update({
       role, section: primarySection, sections,
-      shift_note: shiftNote, work_days_type: workDaysType, work_days_count: workDaysCount,
-      preferred_shift: preferredShift, max_consecutive_days: maxConsecDays,
+      work_days_type: workDaysType, work_days_count: workDaysCount,
+      preferred_shift: preferredShift, preferred_section: preferredSection,
+      max_consecutive_days: maxConsecDays,
     })
     .eq("project_id", projectId)
     .eq("staff_id", staffId);

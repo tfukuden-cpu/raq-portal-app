@@ -33,7 +33,7 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; sections: string[]; account_number: string | null; shift_note: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; max_consecutive_days: number | null; compliance: number | null };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; compliance: number | null };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -502,10 +502,10 @@ export function MemberList({
   const [editSectionInput, setEditSectionInput] = useState("");
   const [editRole, setEditRole]               = useState("staff");
   const [editAccountNumber, setEditAccountNumber] = useState("");
-  const [editShiftNote, setEditShiftNote]     = useState("");
   const [editWorkDaysType, setEditWorkDaysType] = useState<"monthly" | "weekly" | "">("");
   const [editWorkDaysCount, setEditWorkDaysCount] = useState("");
   const [editPreferredShift, setEditPreferredShift] = useState("");
+  const [editPreferredSection, setEditPreferredSection] = useState("");
   const [editMaxConsecDays, setEditMaxConsecDays] = useState("");
   const [shiftSettingsOpen, setShiftSettingsOpen] = useState(false);
   const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
@@ -520,13 +520,12 @@ export function MemberList({
     setEditSectionInput("");
     setEditRole(m.role);
     setEditAccountNumber(m.account_number ?? "");
-    setEditShiftNote(m.shift_note ?? "");
     setEditWorkDaysType((m.work_days_type as "monthly" | "weekly" | "") ?? "");
     setEditWorkDaysCount(m.work_days_count != null ? String(m.work_days_count) : "");
     setEditPreferredShift(m.preferred_shift ?? "");
+    setEditPreferredSection(m.preferred_section ?? "");
     setEditMaxConsecDays(m.max_consecutive_days != null ? String(m.max_consecutive_days) : "");
-    // シフト設定に値があれば自動展開
-    setShiftSettingsOpen(!!(m.work_days_type || m.preferred_shift || m.max_consecutive_days || m.shift_note));
+    setShiftSettingsOpen(!!(m.work_days_type || m.preferred_shift || m.preferred_section || m.max_consecutive_days));
     setDepartStep("hidden");
     setDepartDate(new Date().toISOString().slice(0, 10));
   };
@@ -541,11 +540,11 @@ export function MemberList({
     fd.set("section",         editSections[0] ?? editSection.trim());
     fd.set("sections",        editSections.join(","));
     fd.set("role",            editRole);
-    fd.set("account_number",  editAccountNumber.trim());
-    fd.set("shift_note",      editShiftNote.trim());
+    fd.set("account_number",      editAccountNumber.trim());
     fd.set("work_days_type",       editWorkDaysType);
     fd.set("work_days_count",      editWorkDaysCount);
     fd.set("preferred_shift",      editPreferredShift);
+    fd.set("preferred_section",    editPreferredSection);
     fd.set("max_consecutive_days", editMaxConsecDays);
     start(async () => {
       const r = await updateMemberInfoAction(fd);
@@ -1055,7 +1054,7 @@ export function MemberList({
                   >
                     <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
                       シフト設定（仮組用）
-                      {(editWorkDaysType || editPreferredShift || editMaxConsecDays || editShiftNote) && (
+                      {(editWorkDaysType || editPreferredShift || editPreferredSection || editMaxConsecDays) && (
                         <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block align-middle" />
                       )}
                     </span>
@@ -1108,15 +1107,27 @@ export function MemberList({
                             className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                         </div>
                       </div>
-                      {/* SVメモ */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 font-semibold">SVメモ</label>
-                        <p className="text-[9px] text-zinc-400 mb-0.5">シフトを組む際の考慮事項（スタッフには非表示）</p>
-                        <textarea value={editShiftNote} onChange={e => setEditShiftNote(e.target.value)}
-                          placeholder="例：月末は早番希望、土日は入れない 等"
-                          rows={2}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none" />
-                      </div>
+                      {/* 優先セクション（複数セクション設定時のみ表示） */}
+                      {editSections.length > 1 && (
+                        <div>
+                          <label className="text-[10px] text-zinc-500 font-semibold">優先セクション</label>
+                          <p className="text-[9px] text-zinc-400 mb-0.5">仮組で複数セクションのどちらを優先するか</p>
+                          <div className="flex flex-wrap gap-1.5 mt-0.5">
+                            <button type="button" onClick={() => setEditPreferredSection("")}
+                              className={["px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors",
+                                !editPreferredSection ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"].join(" ")}>
+                              未設定
+                            </button>
+                            {editSections.map(s => (
+                              <button key={s} type="button" onClick={() => setEditPreferredSection(s)}
+                                className={["px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors",
+                                  editPreferredSection === s ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-300"].join(" ")}>
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1245,11 +1256,6 @@ export function MemberList({
                       </span>
                     )}
                   </div>
-                  {m.shift_note && (
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate leading-tight mt-0.5">
-                      <span className="font-semibold text-zinc-300 dark:text-zinc-600">SV: </span>{m.shift_note}
-                    </p>
-                  )}
                 </div>
                 {/* 編集アイコン（ホバー時） */}
                 <svg className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity"

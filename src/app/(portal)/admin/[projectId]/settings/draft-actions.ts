@@ -116,7 +116,7 @@ export async function generateShiftDraftAction(
     { data: existingShiftRows },
   ] = await Promise.all([
     admin.from("project_members")
-      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, max_consecutive_days")
+      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days")
       .eq("project_id", projectId),
     admin.from("shift_slot_requirements")
       .select("pattern_name, shift_date, required_count")
@@ -262,14 +262,23 @@ export async function generateShiftDraftAction(
         return true;
       });
 
-      // preferred_shift 一致を優先し、残りをシャッフル
-      const preferred = candidates.filter(
-        m => (m as { preferred_shift?: string | null }).preferred_shift === pattern.name
-      );
-      const others = candidates
-        .filter(m => (m as { preferred_shift?: string | null }).preferred_shift !== pattern.name)
-        .sort(() => Math.random() - 0.5);
-      const sorted = [...preferred, ...others];
+      // 優先度スコアでソート（高いほど先に割当）
+      // 2: preferred_shift + preferred_section 両方一致
+      // 1: どちらか一方一致
+      // 0: 一致なし → シャッフル
+      const scored = candidates.map(m => {
+        const ps = (m as { preferred_shift?: string | null }).preferred_shift;
+        const pSec = (m as { preferred_section?: string | null }).preferred_section;
+        let score = 0;
+        if (ps === pattern.name) score++;
+        if (pattern.section && pSec === pattern.section) score++;
+        return { m, score };
+      });
+      scored.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return Math.random() - 0.5; // 同スコアはランダム
+      });
+      const sorted = scored.map(s => s.m);
       const toAssign = sorted.slice(0, needMore);
 
       for (const m of toAssign) {
