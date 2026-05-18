@@ -56,9 +56,6 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   const [localMembers, setLocalMembers] = useState(members);
   const [isPending, startTransition] = useTransition();
 
-  // 未打刻タブ
-  const [tab, setTab] = useState<"punch" | "unclocked">("punch");
-
   // プルダウン
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -68,6 +65,13 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   // 承認者
   const [approverInput, setApproverInput] = useState("");
   const approverRef = useRef<HTMLInputElement>(null);
+
+  // 未打刻者のみ表示（出勤打刻していない人）
+  const unclockedMembers = localMembers.filter(m => !m.clockedIn);
+
+  const filtered = unclockedMembers.filter(m =>
+    search === "" || m.name.includes(search)
+  );
 
   // 外クリックでドロップダウンを閉じる
   useEffect(() => {
@@ -81,24 +85,16 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ドロップダウンを開いたら検索欄にフォーカス
   useEffect(() => {
     if (dropdownOpen) setTimeout(() => searchRef.current?.focus(), 50);
   }, [dropdownOpen]);
 
-  // 承認者ステップに移ったらinputにフォーカス
   useEffect(() => {
     if (step.kind === "approver") {
       setApproverInput("");
       setTimeout(() => approverRef.current?.focus(), 50);
     }
   }, [step.kind]);
-
-  const filtered = localMembers.filter(m =>
-    search === "" || m.name.includes(search)
-  );
-
-  const unclockedMembers = localMembers.filter(m => !m.clockedIn && !m.clockedOut);
 
   function openDropdown() {
     setDropdownOpen(true);
@@ -121,10 +117,8 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
     punchKind: "normal" | "late" | "early"
   ) {
     if (punchKind === "normal") {
-      // 定時はそのまま確定
       handleConfirm(member, punchType, "normal", undefined);
     } else {
-      // 遅刻・早退はSV承認者名入力へ
       setStep({ kind: "approver", member, punchType, punchKind });
     }
   }
@@ -138,6 +132,7 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
     startTransition(async () => {
       const res = await terminalPunchAction(projectId, member.staffId, punchType, punchKind, approverName);
       if (res.ok) {
+        // 打刻済みに更新（clock_in後はプルダウンから消える）
         setLocalMembers(prev => prev.map(m => {
           if (m.staffId !== member.staffId) return m;
           return {
@@ -156,12 +151,12 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
   }
 
   // ══════════════════════════════════════════════════════════
-  // ── スタッフ選択（打刻 / 未打刻一覧）──────────────────────
+  // ── スタッフ選択（未打刻者のみプルダウン）─────────────────
   // ══════════════════════════════════════════════════════════
   if (step.kind === "list") {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
-        <div className="w-full max-w-md space-y-8">
+        <div className="w-full max-w-md space-y-10">
 
           {/* ヘッダー */}
           <div className="text-center">
@@ -171,45 +166,17 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
             <LiveClock />
           </div>
 
-          {/* タブ */}
-          <div className="flex rounded-xl bg-zinc-800 p-1 gap-1">
+          {/* プルダウン */}
+          <div ref={dropdownRef} className="relative">
             <button
-              onClick={() => setTab("punch")}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors ${
-                tab === "punch"
-                  ? "bg-white text-zinc-900 shadow"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
+              onClick={openDropdown}
+              disabled={unclockedMembers.length === 0}
+              className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-6 py-5 flex items-center justify-between gap-3 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
             >
-              打刻する
-            </button>
-            <button
-              onClick={() => setTab("unclocked")}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors relative ${
-                tab === "unclocked"
-                  ? "bg-white text-zinc-900 shadow"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              未打刻一覧
+              <span className="text-zinc-400 text-lg">
+                {unclockedMembers.length === 0 ? "全員打刻済み" : "名前を選択してください"}
+              </span>
               {unclockedMembers.length > 0 && (
-                <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold ${
-                  tab === "unclocked" ? "bg-red-500 text-white" : "bg-red-600 text-white"
-                }`}>
-                  {unclockedMembers.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* ── 打刻タブ：プルダウン選択 ── */}
-          {tab === "punch" && (
-            <div ref={dropdownRef} className="relative">
-              <button
-                onClick={openDropdown}
-                className="w-full bg-zinc-800 hover:bg-zinc-750 border border-zinc-600 rounded-2xl px-6 py-5 flex items-center justify-between gap-3 transition-colors active:scale-[0.98]"
-              >
-                <span className="text-zinc-400 text-lg">スタッフを選択してください</span>
                 <svg
                   className={`w-5 h-5 text-zinc-400 flex-shrink-0 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`}
                   xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
@@ -218,106 +185,59 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
                 >
                   <path d="M6 9l6 6 6-6" />
                 </svg>
-              </button>
-
-              {dropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-800 border border-zinc-600 rounded-2xl shadow-2xl shadow-black/60 z-50 overflow-hidden">
-                  <div className="p-3 border-b border-zinc-700">
-                    <input
-                      ref={searchRef}
-                      type="search"
-                      placeholder="名前で絞り込み…"
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 text-white placeholder-zinc-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <ul className="max-h-80 overflow-y-auto overscroll-contain divide-y divide-zinc-700/50">
-                    {filtered.length === 0 ? (
-                      <li className="px-5 py-6 text-center text-zinc-500 text-sm">
-                        該当するスタッフがいません
-                      </li>
-                    ) : (
-                      filtered.map(m => {
-                        const rowBg = m.clockedOut
-                          ? "hover:bg-zinc-700/40 opacity-60"
-                          : m.clockedIn
-                          ? "hover:bg-emerald-900/30"
-                          : "hover:bg-zinc-700/60";
-                        const statusLabel = m.clockedOut
-                          ? <span className="text-xs text-zinc-500 font-semibold">退勤済</span>
-                          : m.clockedIn
-                          ? <span className="text-xs text-emerald-400 font-semibold">勤務中</span>
-                          : <span className="text-xs text-zinc-400">未打刻</span>;
-
-                        return (
-                          <li key={m.staffId}>
-                            <button
-                              onClick={() => handleMemberSelect(m)}
-                              className={`w-full flex items-center gap-4 px-5 py-4 text-left transition-colors ${rowBg}`}
-                            >
-                              <div className="w-10 h-10 rounded-full bg-zinc-600 flex items-center justify-center text-white font-bold text-base flex-shrink-0">
-                                {m.name.charAt(0)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-white font-bold text-base leading-tight">{m.name}</p>
-                                {m.shiftName && (
-                                  <p className="text-zinc-400 text-xs mt-0.5">
-                                    {m.shiftName}
-                                    {m.shiftStart && m.shiftEnd && `　${m.shiftStart}〜${m.shiftEnd}`}
-                                  </p>
-                                )}
-                              </div>
-                              {statusLabel}
-                            </button>
-                          </li>
-                        );
-                      })
-                    )}
-                  </ul>
-                </div>
               )}
-            </div>
-          )}
+            </button>
 
-          {/* ── 未打刻一覧タブ ── */}
-          {tab === "unclocked" && (
-            <div className="bg-zinc-800 border border-zinc-700 rounded-2xl overflow-hidden">
-              {unclockedMembers.length === 0 ? (
-                <div className="px-5 py-10 text-center">
-                  <p className="text-emerald-400 font-semibold">全員打刻済みです</p>
+            {dropdownOpen && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-800 border border-zinc-600 rounded-2xl shadow-2xl shadow-black/60 z-50 overflow-hidden">
+                <div className="p-3 border-b border-zinc-700">
+                  <input
+                    ref={searchRef}
+                    type="search"
+                    placeholder="名前で絞り込み…"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 text-white placeholder-zinc-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
-              ) : (
-                <ul className="divide-y divide-zinc-700/60 max-h-96 overflow-y-auto overscroll-contain">
-                  {unclockedMembers.map((m, i) => (
-                    <li key={m.staffId}
-                      className="flex items-center gap-4 px-5 py-4"
-                    >
-                      <span className="text-zinc-600 text-sm tabular-nums w-5 text-right flex-shrink-0">
-                        {i + 1}
-                      </span>
-                      <div className="w-9 h-9 rounded-full bg-zinc-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                        {m.name.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-bold text-sm leading-tight">{m.name}</p>
-                        {m.shiftName && (
-                          <p className="text-zinc-500 text-xs mt-0.5">
-                            {m.shiftName}
-                            {m.shiftStart && m.shiftEnd && `　${m.shiftStart}〜${m.shiftEnd}`}
-                          </p>
-                        )}
-                      </div>
-                      <span className="text-xs text-red-400 font-semibold flex-shrink-0">未打刻</span>
+                <ul className="max-h-80 overflow-y-auto overscroll-contain divide-y divide-zinc-700/50">
+                  {filtered.length === 0 ? (
+                    <li className="px-5 py-6 text-center text-zinc-500 text-sm">
+                      該当するスタッフがいません
                     </li>
-                  ))}
+                  ) : (
+                    filtered.map(m => (
+                      <li key={m.staffId}>
+                        <button
+                          onClick={() => handleMemberSelect(m)}
+                          className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-zinc-700/60 transition-colors"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-zinc-600 flex items-center justify-center text-white font-bold text-base flex-shrink-0">
+                            {m.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-bold text-base leading-tight">{m.name}</p>
+                            {m.shiftName && (
+                              <p className="text-zinc-400 text-xs mt-0.5">
+                                {m.shiftName}
+                                {m.shiftStart && m.shiftEnd && `　${m.shiftStart}〜${m.shiftEnd}`}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      </li>
+                    ))
+                  )}
                 </ul>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
 
-          <p className="text-center text-zinc-600 text-sm">
-            {tab === "punch" ? "名前を選択して打刻してください" : `未打刻 ${unclockedMembers.length}名`}
+          {/* 残人数 */}
+          <p className="text-center text-zinc-600 text-sm tabular-nums">
+            {unclockedMembers.length > 0
+              ? `未打刻 ${unclockedMembers.length}名`
+              : "本日の出勤打刻が完了しました"}
           </p>
         </div>
       </div>
@@ -402,7 +322,6 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
           </div>
 
           <div className="space-y-3">
-            {/* 定時：そのまま確定 */}
             <button
               onClick={() => handleKindSelect(member, punchType, "normal")}
               disabled={isPending}
@@ -410,8 +329,6 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
             >
               {isClockIn ? "定時出勤" : "定時退勤"}
             </button>
-
-            {/* 遅刻 / 早退：SV承認が必要 */}
             {isClockIn ? (
               <button
                 onClick={() => handleKindSelect(member, punchType, "late")}
@@ -460,21 +377,19 @@ export default function TerminalPunchClient({ projectId, projectName, members }:
             <p className="text-zinc-500 text-sm mt-2">承認を受けたSVの名前を入力してください</p>
           </div>
 
-          <div className="space-y-2">
-            <input
-              ref={approverRef}
-              type="text"
-              placeholder="例：田中SV"
-              value={approverInput}
-              onChange={e => setApproverInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter" && approverInput.trim()) {
-                  handleConfirm(member, punchType, punchKind, approverInput.trim());
-                }
-              }}
-              className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-5 py-4 text-white text-xl placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 text-center"
-            />
-          </div>
+          <input
+            ref={approverRef}
+            type="text"
+            placeholder="例：田中SV"
+            value={approverInput}
+            onChange={e => setApproverInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && approverInput.trim()) {
+                handleConfirm(member, punchType, punchKind, approverInput.trim());
+              }
+            }}
+            className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-5 py-4 text-white text-xl placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 text-center"
+          />
 
           <div className="space-y-3">
             <button
