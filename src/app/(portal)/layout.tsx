@@ -15,6 +15,7 @@ const STAFF_ITEMS: NavItem[] = [
   { href: "/record", icon: "BarChart2", label: "勤怠実績" },
   { href: "/post", icon: "PenSquare", label: "投稿" },
   { href: "/inquiries", icon: "MessageSquare", label: "問い合わせ" },
+  { href: "/help", icon: "HelpCircle", label: "ヘルプ" },
 ];
 
 const PROJECT_ADMIN_ITEMS: NavItem[] = [
