@@ -48,6 +48,11 @@ export default function HolidayTab({
   const todayMonth = today.getMonth() + 1;
   const todayDay   = today.getDate();
 
+  // 申請画面の初期表示月：締切後は翌月、それ以外は今月
+  const afterDeadline = deadlineDay !== null && todayDay > deadlineDay;
+  const applyInitialYear  = afterDeadline ? (todayMonth === 12 ? todayYear + 1 : todayYear) : todayYear;
+  const applyInitialMonth = afterDeadline ? (todayMonth === 12 ? 1 : todayMonth + 1) : todayMonth;
+
   function handleWithdraw(id: string) {
     const fd = new FormData();
     fd.set("id", id);
@@ -71,8 +76,8 @@ export default function HolidayTab({
           一覧に戻る
         </button>
         <HolidayCalendar
-          initialYear={initialYear}
-          initialMonth={initialMonth}
+          initialYear={applyInitialYear}
+          initialMonth={applyInitialMonth}
           appliedRequests={localRequests}
           deadlineDay={deadlineDay}
           maxDaysPerMonth={maxDaysPerMonth}

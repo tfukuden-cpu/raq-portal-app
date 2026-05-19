@@ -54,6 +54,16 @@ export default function HolidayCalendar({
   const todayYear = today.getFullYear();
   const todayMonth = today.getMonth() + 1;
 
+  // 申請可能な最大月：締切日を過ぎていれば翌月まで、それ以外は今月のみ
+  const afterDeadline = deadlineDay !== null && todayDay > deadlineDay;
+  const maxApplyYear  = afterDeadline
+    ? (todayMonth === 12 ? todayYear + 1 : todayYear)
+    : todayYear;
+  const maxApplyMonth = afterDeadline
+    ? (todayMonth === 12 ? 1 : todayMonth + 1)
+    : todayMonth;
+  const canGoNext = !(year === maxApplyYear && month >= maxApplyMonth);
+
   // 申請済み日付マップ
   const appliedMap = new Map(appliedRequests.map((r) => [r.request_date, r]));
 
@@ -67,6 +77,10 @@ export default function HolidayCalendar({
   // 締切チェック：表示中の月が今月で、今日 > deadline_day なら締切済み
   const isCurrentMonth = year === todayYear && month === todayMonth;
   const pastDeadline = deadlineDay !== null && isCurrentMonth && todayDay > deadlineDay;
+
+  // 表示月が申請可能範囲外か（今月より前 or 最大月より後）
+  const isFutureBlocked = year > maxApplyYear || (year === maxApplyYear && month > maxApplyMonth);
+  const isPastMonth = year < todayYear || (year === todayYear && month < todayMonth);
 
   // 月の日数・開始曜日
   const firstDow = new Date(year, month - 1, 1).getDay();
@@ -84,7 +98,7 @@ export default function HolidayCalendar({
       setModal({ type: "detail", request: appliedMap.get(ds)! });
       return;
     }
-    if (pastDeadline) return;
+    if (pastDeadline || isFutureBlocked || isPastMonth) return;
     if (remaining !== null && remaining <= 0 && !selected.includes(ds)) return;
     setSelected((prev) =>
       prev.includes(ds) ? prev.filter((d) => d !== ds) : [...prev, ds]
@@ -154,8 +168,9 @@ export default function HolidayCalendar({
           </div>
           <button
             type="button"
-            onClick={() => goMonth(1)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors"
+            onClick={() => canGoNext && goMonth(1)}
+            disabled={!canGoNext}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
           >
             <ChevronRightIcon className="w-4 h-4" />
           </button>
