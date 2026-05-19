@@ -191,15 +191,8 @@ export default function RecordClient({
           </div>
 
           {/* ヘッダー */}
-          <div className="print-hide flex items-center justify-between">
+          <div className="print-hide">
             <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">勤怠実績</h1>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="no-print text-xs font-semibold px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-            >
-              PDF出力
-            </button>
           </div>
 
           {/* 月ナビ */}
