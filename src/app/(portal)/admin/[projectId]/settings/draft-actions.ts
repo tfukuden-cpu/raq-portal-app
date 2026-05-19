@@ -64,6 +64,8 @@ type PatternDef = {
   target_role: string;
 };
 
+// ── ユーティリティ ──────────────────────────────────────────
+
 /** YYYY-MM-DD の前日を返す */
 function prevDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -74,21 +76,49 @@ function prevDate(dateStr: string): string {
 /** date が属する ISO 週キー (YYYY-Www) */
 function isoWeekKey(dateStr: string): string {
   const d = new Date(dateStr);
-  const day = d.getUTCDay() || 7; // 月=1, 日=7
+  const day = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - day);
-  const year = d.getUTCFullYear();
-  const week = Math.ceil(((d.getTime() - Date.UTC(year, 0, 1)) / 86400000 + 1) / 7);
-  return `${year}-W${String(week).padStart(2, "0")}`;
+  const y = d.getUTCFullYear();
+  const week = Math.ceil(((d.getTime() - Date.UTC(y, 0, 1)) / 86400000 + 1) / 7);
+  return `${y}-W${String(week).padStart(2, "0")}`;
+}
+
+/**
+ * 前のシフトの終了から次のシフトの開始まで MIN_INTERVAL_HOURS 以上あるか判定
+ * 例: 前日22:00終了 → 当日09:00開始 = 11時間 → OK
+ *     前日23:00終了 → 当日09:00開始 = 10時間 → NG
+ */
+const MIN_INTERVAL_HOURS = 11;
+
+function hasAdequateInterval(
+  prevEndTime: string | null | undefined,
+  nextStartTime: string | null | undefined,
+): boolean {
+  if (!prevEndTime || !nextStartTime) return true; // 時間未設定は制約なし
+  const [pH, pM] = prevEndTime.split(":").map(Number);
+  const [nH, nM] = nextStartTime.split(":").map(Number);
+  const prevMin = pH * 60 + pM;
+  const nextMin = nH * 60 + nM;
+  // 前日終了〜当日開始の間隔（翌日なので 24*60 加算）
+  const gap = 24 * 60 - prevMin + nextMin;
+  return gap >= MIN_INTERVAL_HOURS * 60;
 }
 
 /**
  * 仮組生成：slot_requirements の必要数に従いスタッフを自動割当て
+ *
+ * フィルタリングルール:
  * - 希望休スタッフは当日除外
- * - 同日すでに別パターン確定済み/仮組済みスタッフは除外
- * - 月稼働日数・週稼働日数上限を超えない
- * - 連勤上限（max_consecutive_days、デフォルト5日）を超えない
- * - preferred_shift が一致するスタッフを優先配置
- * - 結果は shift_grid_drafts にドラフト保存
+ * - 同日すでに割当済みスタッフは除外
+ * - セクション・ロール一致
+ * - 月/週 稼働日数上限を超えない
+ * - 連勤上限を超えない（前月末連勤も引き継ぎ）
+ * - 勤務間インターバル 11時間未満になるパターンは除外
+ *
+ * 優先度スコア（高い順に割当）:
+ * - 優先パターン + 優先セクション 両方一致 → 2点
+ * - どちらか一方 → 1点
+ * - 一致なし → 0点（ランダム）
  */
 export async function generateShiftDraftAction(
   projectId: string,
@@ -106,6 +136,13 @@ export async function generateShiftDraftAction(
   const lastDay  = new Date(year, month, 0).getDate();
   const dateTo   = `${monthStr}-${pad(lastDay)}`;
 
+  // 前月末7日間（連勤引き継ぎ用）
+  const prevMonthLastDay = new Date(year, month - 1, 0);
+  const prevMonthDateTo  = prevMonthLastDay.toISOString().slice(0, 10);
+  const prevMonthStart   = new Date(prevMonthLastDay);
+  prevMonthStart.setUTCDate(prevMonthStart.getUTCDate() - 6);
+  const prevMonthDateFrom = prevMonthStart.toISOString().slice(0, 10);
+
   const admin = createAdminClient();
 
   // ── データ取得 ──────────────────────────────────────────────
@@ -114,6 +151,7 @@ export async function generateShiftDraftAction(
     { data: slotReqRows },
     { data: holidayRows },
     { data: existingShiftRows },
+    { data: prevMonthShiftRows },
   ] = await Promise.all([
     admin.from("project_members")
       .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days")
@@ -133,6 +171,12 @@ export async function generateShiftDraftAction(
       .eq("project_id", projectId)
       .gte("shift_date", dateFrom)
       .lte("shift_date", dateTo),
+    // 前月末7日間（連勤引き継ぎ・インターバル計算用）
+    admin.from("shifts")
+      .select("staff_id, shift_date, shift_name")
+      .eq("project_id", projectId)
+      .gte("shift_date", prevMonthDateFrom)
+      .lte("shift_date", prevMonthDateTo),
   ]);
 
   if (!memberRows || memberRows.length === 0) {
@@ -141,6 +185,9 @@ export async function generateShiftDraftAction(
   if (!slotReqRows || slotReqRows.length === 0) {
     return { success: false, message: "必要人数が設定されていません。先に必要数を保存してください" };
   }
+
+  // パターンマップ（インターバル計算で参照）
+  const patternMap = new Map<string, PatternDef>(patterns.map(p => [p.name, p]));
 
   // 希望休セット: "staffId__date"
   const holidaySet = new Set<string>(
@@ -153,7 +200,7 @@ export async function generateShiftDraftAction(
     if (s.shift_name) existingMap.set(`${s.staff_id}__${s.shift_date}`, s.shift_name as string);
   }
 
-  // スロット必要数マップ: "patternName__date" → count
+  // スロット必要数マップ
   const slotMap = new Map<string, number>();
   for (const r of slotReqRows) {
     slotMap.set(`${r.pattern_name}__${r.shift_date}`, r.required_count as number);
@@ -165,24 +212,47 @@ export async function generateShiftDraftAction(
   );
 
   // ── 稼働カウンタ ────────────────────────────────────────────
-  // 月内のドラフト割当日数: staffId → count
-  const draftMonthCount = new Map<string, number>();
-  // ドラフト割当日セット: staffId → Set<date>
-  const draftDates = new Map<string, Set<string>>();
+  const draftMonthCount = new Map<string, number>();   // staffId → 月内draft割当日数
+  const draftDates      = new Map<string, Set<string>>(); // staffId → 割当日セット
+  // ドラフトの日別パターン名: staffId → date → patternName（インターバル計算用）
+  const draftPatternByDate = new Map<string, Map<string, string>>();
 
-  // 既存シフトの月内割当日数（公休・希望休除く）
+  // 既存シフト（当月）の月内割当日数・日セット
   const existingMonthCount = new Map<string, number>();
-  // 既存シフトの割当日セット（連勤計算用）
-  const existingDateSet = new Map<string, Set<string>>();
-  for (const s of (existingShiftRows ?? [])) {
+  const existingDateSet    = new Map<string, Set<string>>();
+
+  // 既存シフト（当月 + 前月末）の日別パターン名（インターバル・連勤計算用）
+  const existingPatternByDate = new Map<string, Map<string, string>>();
+
+  const allExistingRows = [
+    ...(existingShiftRows ?? []),
+    ...(prevMonthShiftRows ?? []),
+  ];
+  for (const s of allExistingRows) {
     const name = s.shift_name as string | null;
     if (!name || name === "公休" || name === "希望休") continue;
-    existingMonthCount.set(s.staff_id, (existingMonthCount.get(s.staff_id) ?? 0) + 1);
     if (!existingDateSet.has(s.staff_id)) existingDateSet.set(s.staff_id, new Set());
     existingDateSet.get(s.staff_id)!.add(s.shift_date as string);
+    // 当月分のみカウント（月稼働日数上限チェック用）
+    if ((s.shift_date as string) >= dateFrom) {
+      existingMonthCount.set(s.staff_id, (existingMonthCount.get(s.staff_id) ?? 0) + 1);
+    }
+    if (!existingPatternByDate.has(s.staff_id)) existingPatternByDate.set(s.staff_id, new Map());
+    existingPatternByDate.get(s.staff_id)!.set(s.shift_date as string, name);
   }
 
-  // ── 連勤日数を計算するヘルパー ──────────────────────────────
+  // ── ヘルパー関数 ────────────────────────────────────────────
+
+  /** 指定日の前日に割り当たっているパターン定義を返す */
+  function getPrevDayPattern(staffId: string, date: string): PatternDef | null {
+    const prev = prevDate(date);
+    const draftName  = draftPatternByDate.get(staffId)?.get(prev);
+    const existName  = existingPatternByDate.get(staffId)?.get(prev);
+    const name = draftName ?? existName;
+    return name ? (patternMap.get(name) ?? null) : null;
+  }
+
+  /** 指定日以前の連続出勤日数を返す（前月末も参照） */
   function consecutiveDaysBefore(staffId: string, date: string): number {
     const dDraft    = draftDates.get(staffId) ?? new Set<string>();
     const dExisting = existingDateSet.get(staffId) ?? new Set<string>();
@@ -201,7 +271,6 @@ export async function generateShiftDraftAction(
   for (const date of allDates) {
     const weekKey = isoWeekKey(date);
 
-    // その日に既に割当済みのスタッフ（既存 or ドラフト）
     const assignedOnDate = new Set<string>();
     for (const [k] of existingMap) {
       if (k.endsWith(`__${date}`)) assignedOnDate.add(k.replace(`__${date}`, ""));
@@ -220,25 +289,24 @@ export async function generateShiftDraftAction(
       const needMore = required - alreadyAssigned;
       if (needMore <= 0) continue;
 
-      // 候補スタッフをフィルタリング
       const candidates = (memberRows ?? []).filter(m => {
-        // 希望休・当日割当済み
+        // 希望休・同日割当済み
         if (holidaySet.has(`${m.staff_id}__${date}`)) return false;
         if (assignedOnDate.has(m.staff_id)) return false;
         if (existingMap.has(`${m.staff_id}__${date}`)) return false;
 
-        // セクション一致チェック
+        // セクション一致
         if (pattern.section) {
           const ms = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
           const effectiveSections = ms.length > 0 ? ms : (m.section ? [m.section] : []);
           if (effectiveSections.length > 0 && !effectiveSections.includes(pattern.section)) return false;
         }
 
-        // ロール一致チェック
+        // ロール一致
         if (pattern.target_role === "admin" && m.role !== "project_admin") return false;
         if (pattern.target_role === "staff" && m.role !== "staff") return false;
 
-        // 月稼働日数上限チェック
+        // 月稼働日数上限
         const wdType  = (m as { work_days_type?: string | null }).work_days_type;
         const wdCount = (m as { work_days_count?: number | null }).work_days_count;
         if (wdType === "monthly" && wdCount != null) {
@@ -246,40 +314,38 @@ export async function generateShiftDraftAction(
           if (current >= wdCount) return false;
         }
 
-        // 週稼働日数上限チェック
+        // 週稼働日数上限
         if (wdType === "weekly" && wdCount != null) {
           const draftWeekCount = [...(draftDates.get(m.staff_id) ?? new Set<string>())]
             .filter(d => isoWeekKey(d) === weekKey).length;
           const existWeekCount = [...(existingDateSet.get(m.staff_id) ?? new Set<string>())]
-            .filter(d => isoWeekKey(d) === weekKey).length;
+            .filter(d => isoWeekKey(d) === weekKey && d >= dateFrom).length;
           if (draftWeekCount + existWeekCount >= wdCount) return false;
         }
 
-        // 連勤上限チェック（未設定はデフォルト5日）
+        // 連勤上限（前月末引き継ぎ込み）
         const maxConsec = (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? 5;
         if (consecutiveDaysBefore(m.staff_id, date) >= maxConsec) return false;
+
+        // 勤務間インターバル（前日終了〜当日開始が11時間未満なら除外）
+        const prevPattern = getPrevDayPattern(m.staff_id, date);
+        if (!hasAdequateInterval(prevPattern?.end_time, pattern.start_time)) return false;
 
         return true;
       });
 
-      // 優先度スコアでソート（高いほど先に割当）
-      // 2: preferred_shift + preferred_section 両方一致
-      // 1: どちらか一方一致
-      // 0: 一致なし → シャッフル
+      // 優先度スコアでソート
       const scored = candidates.map(m => {
-        const ps = (m as { preferred_shift?: string | null }).preferred_shift;
+        const ps   = (m as { preferred_shift?: string | null }).preferred_shift;
         const pSec = (m as { preferred_section?: string | null }).preferred_section;
         let score = 0;
         if (ps === pattern.name) score++;
         if (pattern.section && pSec === pattern.section) score++;
         return { m, score };
       });
-      scored.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return Math.random() - 0.5; // 同スコアはランダム
-      });
-      const sorted = scored.map(s => s.m);
-      const toAssign = sorted.slice(0, needMore);
+      scored.sort((a, b) => b.score !== a.score ? b.score - a.score : Math.random() - 0.5);
+
+      const toAssign = scored.slice(0, needMore).map(s => s.m);
 
       for (const m of toAssign) {
         draft.set(`${m.staff_id}__${date}`, {
@@ -293,6 +359,8 @@ export async function generateShiftDraftAction(
         draftMonthCount.set(m.staff_id, (draftMonthCount.get(m.staff_id) ?? 0) + 1);
         if (!draftDates.has(m.staff_id)) draftDates.set(m.staff_id, new Set());
         draftDates.get(m.staff_id)!.add(date);
+        if (!draftPatternByDate.has(m.staff_id)) draftPatternByDate.set(m.staff_id, new Map());
+        draftPatternByDate.get(m.staff_id)!.set(date, pattern.name);
       }
     }
   }
@@ -301,7 +369,6 @@ export async function generateShiftDraftAction(
     return { success: false, message: "割当可能なスタッフがいませんでした" };
   }
 
-  // draft を GridDraftEntry[] 形式に変換して保存
   const draftEntries = [...draft.entries()].map(([key, val]) => {
     const [staffId, date] = key.split("__");
     return { staffId, date, shiftName: val.shiftName, shiftStart: val.shiftStart, shiftEnd: val.shiftEnd };
