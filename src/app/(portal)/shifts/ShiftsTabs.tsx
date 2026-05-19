@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import ShiftCalendar, { type ShiftChangeLog } from "./ShiftCalendar";
-import HolidayCalendar from "@/app/(portal)/holidays/HolidayCalendar";
+import HolidayTab from "./HolidayTab";
 import RequestClient from "./request/RequestClient";
 
 // ── 型定義 ──────────────────────────────────────────────
@@ -110,15 +110,13 @@ export default function ShiftsTabs({
         )}
 
         {tab === "holiday" && (
-          <div className="h-full overflow-y-auto">
-            <HolidayCalendar
-              initialYear={initialYear}
-              initialMonth={initialMonth}
-              appliedRequests={holidayRequests}
-              deadlineDay={holidayDeadlineDay}
-              maxDaysPerMonth={holidayMaxDaysPerMonth}
-            />
-          </div>
+          <HolidayTab
+            holidayRequests={holidayRequests}
+            initialYear={initialYear}
+            initialMonth={initialMonth}
+            deadlineDay={holidayDeadlineDay}
+            maxDaysPerMonth={holidayMaxDaysPerMonth}
+          />
         )}
 
         {tab === "request" && (
