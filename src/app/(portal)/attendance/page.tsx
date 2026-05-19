@@ -114,6 +114,8 @@ export default async function AttendancePage() {
     { data: departureRows },
     { data: absenceRows },
     { data: lateRows },
+    { data: shiftPatterns },
+    { data: projectSettings },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -142,7 +144,23 @@ export default async function AttendancePage() {
       .select("staff_id, reason, expected_arrival")
       .eq("project_id", projectId)
       .eq("late_date", today),
+    admin.from("shift_patterns")
+      .select("name, start_time, end_time")
+      .eq("project_id", projectId),
+    admin.from("project_settings")
+      .select("enable_departure_report")
+      .eq("project_id", projectId)
+      .maybeSingle(),
   ]);
+
+  // シフトパターンの時刻マップ
+  const patternTimeMap = new Map<string, { start: string; end: string }>(
+    (shiftPatterns ?? [])
+      .filter(p => p.start_time && p.end_time)
+      .map(p => [p.name as string, { start: p.start_time as string, end: p.end_time as string }])
+  );
+
+  const enableDeparture = (projectSettings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true;
 
   // メンバーマップ
   type MemberInfo = { name: string; section: string | null; accountNumber: string | null };
@@ -209,6 +227,7 @@ export default async function AttendancePage() {
     else if (departure)       status = "departed";
     else                      status = "not_departed";
 
+    const pattern = patternTimeMap.get(shiftName);
     allInternal.push({
       staffId:        shift.staff_id,
       name:           member.name,
@@ -223,8 +242,8 @@ export default async function AttendancePage() {
       lateReason:     late?.reason           ?? null,
       expectedArrival: late?.expectedArrival ?? null,
       shiftName,
-      shiftStart:     shift.shift_start,
-      shiftEnd:       shift.shift_end,
+      shiftStart:     shift.shift_start ?? pattern?.start ?? null,
+      shiftEnd:       shift.shift_end   ?? pattern?.end   ?? null,
     });
   }
 
@@ -256,6 +275,7 @@ export default async function AttendancePage() {
       notClocked={notClocked}
       grouped={grouped}
       offMembers={offMembers}
+      enableDeparture={enableDeparture}
     />
   );
 }

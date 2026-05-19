@@ -83,6 +83,7 @@ interface Props {
   notClocked: number;
   grouped: SectionGroup[];
   offMembers: OffMember[];
+  enableDeparture: boolean;
 }
 
 type SelectionMode = "reminder" | "request";
@@ -92,7 +93,7 @@ type ModalState = null | "confirm" | "sending" | "results";
 export default function AttendanceClient({
   projectId, today, dateLabel, projectName,
   total, departed, clockedIn, absent, notClocked,
-  grouped, offMembers,
+  grouped, offMembers, enableDeparture,
 }: Props) {
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
@@ -212,8 +213,10 @@ export default function AttendanceClient({
         </div>
 
         {/* 全体サマリー */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          <SummaryCard value={departed}  total={total} label="出発済" color="text-blue-500" />
+        <div className={`grid gap-3 mb-5 ${enableDeparture ? "grid-cols-3" : "grid-cols-2"}`}>
+          {enableDeparture && (
+            <SummaryCard value={departed}  total={total} label="出発済" color="text-blue-500" />
+          )}
           <SummaryCard value={clockedIn} total={total} label="出勤済" color="text-green-500" />
           <SummaryCard value={absent}               label="欠勤"   color="text-red-500" />
         </div>
@@ -239,7 +242,9 @@ export default function AttendanceClient({
                       <span className="text-xs text-zinc-400">{sTot}名</span>
                     </div>
                     <div className="flex items-center gap-3 text-xs tabular-nums">
-                      <span className="text-blue-600 dark:text-blue-400 font-semibold">出発 {sDep}/{sTot}</span>
+                      {enableDeparture && (
+                        <span className="text-blue-600 dark:text-blue-400 font-semibold">出発 {sDep}/{sTot}</span>
+                      )}
                       <span className="text-green-600 dark:text-green-400 font-semibold">出勤 {sClk}/{sTot}</span>
                       {sAbs > 0 && <span className="text-red-500 font-semibold">欠勤 {sAbs}</span>}
                     </div>
