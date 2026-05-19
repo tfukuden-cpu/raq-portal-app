@@ -3,7 +3,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { cookies } from "next/headers";
 import AppNav from "@/components/AppNav";
-import DevBanner from "@/components/DevBanner";
 import { logoutAction } from "@/app/login/actions";
 import type { IconKey } from "@/components/icons";
 
@@ -124,8 +123,6 @@ export default async function PortalLayout({
     sections = [{ items: [...STAFF_ITEMS, MY_STAFF] }];
   }
 
-  const availableModes: ViewMode[] = isProjectAdmin ? ["staff", "admin"] : [viewMode];
-
   const staffName = staff?.display_name ?? staff?.name ?? staffId;
 
   return (
@@ -136,15 +133,6 @@ export default async function PortalLayout({
       logoutAction={logoutAction}
       initialCollapsed={initialCollapsed}
     >
-      {/* 切替バナー：PCのみ・2種以上のモードがある場合のみ表示 */}
-      {availableModes.length > 1 && (
-        <div className="hidden md:block">
-          <DevBanner
-            viewMode={viewMode}
-            availableModes={availableModes}
-          />
-        </div>
-      )}
       {children}
     </AppNav>
   );
