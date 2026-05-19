@@ -263,7 +263,7 @@ export default function AttendanceClient({
                         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                           {gMembers.map(m => {
                             const currentStatus = localStatuses.get(m.staffId) ?? m.status;
-                            const canRemind = currentStatus === "not_departed" || currentStatus === "late";
+                            const canRemind = (enableDeparture && currentStatus === "not_departed") || currentStatus === "late";
                             const isSelected = selectedIds.has(m.staffId);
                             const isMenuOpen = statusMenuId === m.staffId;
                             return (
@@ -289,13 +289,14 @@ export default function AttendanceClient({
                                     onClick={() => setStatusMenuId(isMenuOpen ? null : m.staffId)}
                                     className={`text-xs font-semibold px-1.5 py-0.5 rounded whitespace-nowrap transition-opacity ${STATUS_COLOR[currentStatus]} ${isPending ? "opacity-50" : ""}`}
                                   >
-                                    {STATUS_LABEL[currentStatus]} ▾
+                                    {(!enableDeparture && currentStatus === "not_departed") ? "未出勤" : STATUS_LABEL[currentStatus]} ▾
                                   </button>
                                   {isMenuOpen && (
                                     <StatusMenu
                                       current={currentStatus}
                                       onSelect={s => handleStatusChange(m.staffId, s)}
                                       onClose={() => setStatusMenuId(null)}
+                                      enableDeparture={enableDeparture}
                                     />
                                   )}
                                 </div>
@@ -303,7 +304,7 @@ export default function AttendanceClient({
                                 <span className="text-xs font-mono tabular-nums text-zinc-400 whitespace-nowrap flex-shrink-0">
                                   {m.clockIn  && `出${fmtTime(m.clockIn)}`}
                                   {m.clockOut && ` 退${fmtTime(m.clockOut)}`}
-                                  {m.departureTime && !m.clockIn && `出発${fmtTime(m.departureTime)}`}
+                                  {enableDeparture && m.departureTime && !m.clockIn && `出発${fmtTime(m.departureTime)}`}
                                   {currentStatus === "late" && m.expectedArrival && `→${m.expectedArrival.slice(0,5)}`}
                                 </span>
                                 {/* 催促トグルボタン */}
@@ -507,10 +508,11 @@ export default function AttendanceClient({
 // ── ステータス変更メニュー ──────────────────────────────────
 const ALL_STATUSES: StatusKey[] = ["not_departed", "departed", "working", "clocked_out", "late", "absent"];
 
-function StatusMenu({ current, onSelect, onClose }: {
+function StatusMenu({ current, onSelect, onClose, enableDeparture }: {
   current: StatusKey;
   onSelect: (s: StatusKey) => void;
   onClose: () => void;
+  enableDeparture: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -521,12 +523,21 @@ function StatusMenu({ current, onSelect, onClose }: {
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
+  const statuses = enableDeparture
+    ? ALL_STATUSES
+    : ALL_STATUSES.filter(s => s !== "departed");
+
+  function getLabel(s: StatusKey): string {
+    if (!enableDeparture && s === "not_departed") return "未出勤";
+    return STATUS_LABEL[s];
+  }
+
   return (
     <div
       ref={ref}
       className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden min-w-[110px]"
     >
-      {ALL_STATUSES.map(s => (
+      {statuses.map(s => (
         <button
           key={s}
           onClick={() => onSelect(s)}
@@ -537,7 +548,7 @@ function StatusMenu({ current, onSelect, onClose }: {
           }`}
         >
           <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${STATUS_COLOR[s]}`}>
-            {STATUS_LABEL[s]}
+            {getLabel(s)}
           </span>
           {s === current && <span className="text-zinc-400 text-[10px]">現在</span>}
         </button>
