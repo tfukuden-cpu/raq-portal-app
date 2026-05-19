@@ -16,16 +16,14 @@ const STAFF_ITEMS: NavItem[] = [
   { href: "/record", icon: "BarChart2", label: "勤怠実績" },
   { href: "/post", icon: "PenSquare", label: "投稿" },
   { href: "/inquiries", icon: "MessageSquare", label: "問い合わせ" },
-  { href: "/my", icon: "UserCircle", label: "My" },
 ];
 
 const PROJECT_ADMIN_ITEMS: NavItem[] = [
   { href: "/attendance", icon: "Users", label: "当日状況" },
-  { href: "/attendance/edit", icon: "ClipboardCheck", label: "勤怠修正" },
   { href: "/shifts/manage", icon: "CalendarSettings", label: "シフト管理" },
-  { href: "/corrections/manage", icon: "ClipboardCheck", label: "補正審査" },
-  { href: "/inquiries/manage", icon: "MessageSquare", label: "問い合わせ" },
-  { href: "/notices/manage", icon: "Megaphone", label: "周知管理" },
+  { href: "/notices/manage", icon: "Megaphone", label: "お知らせ管理" },
+  { href: "/inquiries/manage", icon: "MessageSquare", label: "問合せ管理" },
+  { href: "/attendance/edit", icon: "ClipboardCheck", label: "勤怠修正" },
   { href: "/admin/work-records", icon: "Download", label: "実績出力" },
   { href: "/admin/project-settings", icon: "Settings", label: "案件設定" },
 ];
@@ -34,12 +32,10 @@ const EXECUTIVE_ITEMS: NavItem[] = [
   { href: "/admin", icon: "Grid", label: "案件管理" },
   { href: "/admin/staffs", icon: "IdCard", label: "スタッフ管理" },
   { href: "/admin/operators", icon: "Shield", label: "運用者管理" },
-  { href: "/admin/notices", icon: "Megaphone", label: "周知一覧" },
-  { href: "/admin/posts", icon: "PenSquare", label: "投稿一覧" },
-  { href: "/inquiries/manage", icon: "MessageSquare", label: "問い合わせ" },
-  { href: "/admin/work-records", icon: "Download", label: "実績出力" },
-  { href: "/admin/my", icon: "UserCircle", label: "My" },
 ];
+
+const MY_STAFF: NavItem = { href: "/my",       icon: "UserCircle", label: "My" };
+const MY_ADMIN: NavItem = { href: "/admin/my", icon: "UserCircle", label: "My" };
 
 export default async function PortalLayout({
   children,
@@ -115,16 +111,17 @@ export default async function PortalLayout({
   let sections: NavSection[];
   if (viewMode === "ops") {
     sections = [
-      { mobileLabel: "運用者", icon: "Shield",           items: EXECUTIVE_ITEMS },
-      { title: "案件管理",     icon: "CalendarSettings", items: PROJECT_ADMIN_ITEMS },
+      { mobileLabel: "メイン", icon: "Home",     items: [...STAFF_ITEMS, MY_ADMIN] },
+      { title: "管理",         icon: "Settings", items: PROJECT_ADMIN_ITEMS },
+      { title: "運営",         icon: "Shield",   items: EXECUTIVE_ITEMS },
     ];
   } else if (viewMode === "admin") {
     sections = [
-      { mobileLabel: "メイン", icon: "Home",     items: STAFF_ITEMS },
+      { mobileLabel: "メイン", icon: "Home",     items: [...STAFF_ITEMS, MY_ADMIN] },
       { title: "管理",         icon: "Settings", items: PROJECT_ADMIN_ITEMS },
     ];
   } else {
-    sections = [{ items: STAFF_ITEMS }];
+    sections = [{ items: [...STAFF_ITEMS, MY_STAFF] }];
   }
 
   const availableModes: ViewMode[] = isProjectAdmin ? ["staff", "admin"] : [viewMode];

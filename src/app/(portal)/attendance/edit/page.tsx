@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceEditClient from "./AttendanceEditClient";
-import type { AttendanceRow } from "./AttendanceEditClient";
+import type { AttendanceRow, CorrectionRow } from "./AttendanceEditClient";
 
 const OFF_SHIFT_NAMES = ["公休","有休","休暇","振替休日","特別休暇","代休","欠勤"];
 
@@ -49,6 +49,7 @@ export default async function AttendanceEditPage() {
     { data: absences },
     { data: lates },
     { data: patterns },
+    { data: rawCorrections },
   ] = await Promise.all([
     admin.from("project_members")
       .select("staff_id, section, staffs(id, name, display_name, account_number)")
@@ -74,7 +75,29 @@ export default async function AttendanceEditPage() {
     admin.from("shift_patterns")
       .select("name, start_time, end_time")
       .eq("project_id", projectId),
+    supabase.from("punch_corrections")
+      .select("id, target_date, corrected_in, corrected_out, reason, status, review_note, created_at, staff_id, staffs(name, display_name)")
+      .eq("project_id", projectId)
+      .order("target_date", { ascending: false }),
   ]);
+
+  const corrections: CorrectionRow[] = (rawCorrections ?? []).map((c) => {
+    const staff = Array.isArray(c.staffs) ? c.staffs[0] : c.staffs;
+    return {
+      id:            c.id,
+      target_date:   c.target_date,
+      corrected_in:  c.corrected_in,
+      corrected_out: c.corrected_out,
+      reason:        c.reason,
+      status:        c.status,
+      review_note:   c.review_note,
+      created_at:    c.created_at,
+      staff_id:      c.staff_id,
+      staff_name:    (staff as { display_name?: string | null; name?: string | null } | null)?.display_name
+                     ?? (staff as { name?: string | null } | null)?.name
+                     ?? c.staff_id,
+    };
+  });
 
   // メンバーマップ
   const memberMap = new Map<string, { name: string; accountNumber: string | null; section: string | null }>();
@@ -176,6 +199,7 @@ export default async function AttendanceEditPage() {
         <AttendanceEditClient
           projectId={projectId}
           rows={rows}
+          corrections={corrections}
           startDate={startDate}
           endDate={endDate}
         />

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useTransition } from "react";
 import { savePunchCorrectionAction } from "./actions";
+import { reviewCorrectionAction } from "../../corrections/actions";
 
 export type AttendanceRow = {
   date: string;
@@ -21,6 +22,29 @@ export type AttendanceRow = {
   absenceReason: string | null;
   // ステータス
   status: "ok" | "no_clockin" | "no_clockout" | "absent" | "late" | "early";
+};
+
+export type CorrectionRow = {
+  id: string;
+  target_date: string;
+  corrected_in: string | null;
+  corrected_out: string | null;
+  reason: string;
+  status: string;
+  review_note: string | null;
+  created_at: string;
+  staff_id: string;
+  staff_name: string;
+};
+
+const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
+const CORR_STATUS_STYLE: Record<string, string> = {
+  pending:  "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300",
+  approved: "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300",
+  rejected: "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300",
+};
+const CORR_STATUS_LABEL: Record<string, string> = {
+  pending: "審査中", approved: "承認", rejected: "却下",
 };
 
 const STATUS_LABEL: Record<AttendanceRow["status"], { label: string; color: string }> = {
@@ -52,16 +76,19 @@ type EditState = {
 export default function AttendanceEditClient({
   projectId,
   rows,
+  corrections,
   startDate: initStart,
   endDate: initEnd,
 }: {
   projectId: string;
   rows: AttendanceRow[];
+  corrections: CorrectionRow[];
   startDate: string;
   endDate: string;
 }) {
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
+  const [activeTab, setActiveTab] = useState<"anomaly" | "corrections">("anomaly");
   const [startDate, setStartDate] = useState(initStart);
   const [endDate,   setEndDate]   = useState(initEnd);
   const [search, setSearch] = useState("");
@@ -69,6 +96,16 @@ export default function AttendanceEditClient({
   const [editState, setEditState] = useState<EditState | null>(null);
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<string | null>(null);
+
+  // 補正申請
+  const [localCorrections, setLocalCorrections] = useState<CorrectionRow[]>(corrections);
+  const [corrFilter, setCorrFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [corrModal, setCorrModal] = useState<{ correction: CorrectionRow; action: "approve" | "reject" } | null>(null);
+  const [corrNote, setCorrNote] = useState("");
+  const [corrPending, startCorrTransition] = useTransition();
+  const [corrError, setCorrError] = useState<string | null>(null);
+
+  const pendingCorrCount = localCorrections.filter(c => c.status === "pending").length;
 
   const filtered = useMemo(() => {
     let list = localRows.filter(r => r.date >= startDate && r.date <= endDate && r.status !== "ok");
@@ -129,10 +166,161 @@ export default function AttendanceEditClient({
     });
   }
 
+  function handleCorrReview() {
+    if (!corrModal) return;
+    setCorrError(null);
+    const fd = new FormData();
+    fd.set("id", corrModal.correction.id);
+    fd.set("status", corrModal.action === "approve" ? "approved" : "rejected");
+    fd.set("reviewNote", corrNote);
+    startCorrTransition(async () => {
+      const r = await reviewCorrectionAction(fd);
+      if (!r.success) { setCorrError(r.message ?? "失敗しました"); return; }
+      setLocalCorrections(prev => prev.map(c =>
+        c.id === corrModal.correction.id
+          ? { ...c, status: corrModal.action === "approve" ? "approved" : "rejected", review_note: corrNote }
+          : c
+      ));
+      setCorrModal(null);
+    });
+  }
+
   const issueCount = filtered.length;
 
   return (
     <div className="space-y-4">
+      {/* タブ */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setActiveTab("anomaly")}
+          className={`text-sm px-4 py-1.5 rounded-full border font-medium transition-colors ${
+            activeTab === "anomaly"
+              ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 border-transparent"
+              : "border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+          }`}
+        >
+          勤怠異常
+          {issueCount > 0 && (
+            <span className="ml-1.5 bg-red-500 text-white rounded-full px-1.5 text-[10px]">{issueCount}</span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("corrections")}
+          className={`text-sm px-4 py-1.5 rounded-full border font-medium transition-colors ${
+            activeTab === "corrections"
+              ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 border-transparent"
+              : "border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+          }`}
+        >
+          補正申請
+          {pendingCorrCount > 0 && (
+            <span className="ml-1.5 bg-red-500 text-white rounded-full px-1.5 text-[10px]">{pendingCorrCount}</span>
+          )}
+        </button>
+      </div>
+
+      {/* 補正申請タブ */}
+      {activeTab === "corrections" && (
+        <div className="space-y-3">
+          <div className="flex gap-2 flex-wrap">
+            {(["pending", "all", "approved", "rejected"] as const).map((f) => (
+              <button key={f} type="button" onClick={() => setCorrFilter(f)}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                  corrFilter === f
+                    ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 border-transparent"
+                    : "border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                }`}>
+                {f === "all" ? "すべて" : CORR_STATUS_LABEL[f]}
+                {f === "pending" && pendingCorrCount > 0 && (
+                  <span className="ml-1.5 bg-red-500 text-white rounded-full px-1.5 text-[10px]">{pendingCorrCount}</span>
+                )}
+              </button>
+            ))}
+          </div>
+          {(corrFilter === "all" ? localCorrections : localCorrections.filter(c => c.status === corrFilter)).length === 0 ? (
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-12 text-center text-sm text-zinc-400">
+              {corrFilter === "pending" ? "審査待ちの申請はありません" : "申請がありません"}
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {(corrFilter === "all" ? localCorrections : localCorrections.filter(c => c.status === corrFilter)).map((c) => {
+                const d = new Date(c.target_date + "T00:00:00+09:00");
+                return (
+                  <li key={c.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${CORR_STATUS_STYLE[c.status]}`}>
+                            {CORR_STATUS_LABEL[c.status]}
+                          </span>
+                          <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                            {d.getMonth() + 1}/{d.getDate()}（{WEEKDAY_JP[d.getDay()]}）
+                          </span>
+                          <span className="text-xs text-zinc-500">{c.staff_name}</span>
+                        </div>
+                        {(c.corrected_in || c.corrected_out) && (
+                          <p className="text-xs font-mono text-zinc-500">
+                            出勤: {c.corrected_in?.slice(0, 5) ?? "変更なし"} / 退勤: {c.corrected_out?.slice(0, 5) ?? "変更なし"}
+                          </p>
+                        )}
+                        <p className="text-xs text-zinc-500 mt-0.5 truncate">理由：{c.reason}</p>
+                        {c.review_note && <p className="text-xs text-zinc-400 mt-0.5">コメント：{c.review_note}</p>}
+                      </div>
+                      {c.status === "pending" && (
+                        <div className="flex gap-1.5 flex-shrink-0">
+                          <button type="button"
+                            onClick={() => { setCorrNote(""); setCorrError(null); setCorrModal({ correction: c, action: "approve" }); }}
+                            className="text-xs px-2.5 py-1.5 rounded-md bg-green-600 hover:bg-green-700 text-white">承認</button>
+                          <button type="button"
+                            onClick={() => { setCorrNote(""); setCorrError(null); setCorrModal({ correction: c, action: "reject" }); }}
+                            className="text-xs px-2.5 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white">却下</button>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* 補正申請モーダル */}
+      {corrModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setCorrModal(null)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl max-w-sm w-full p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h2 className={`text-base font-bold mb-3 ${corrModal.action === "approve" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
+              {corrModal.action === "approve" ? "承認しますか？" : "却下しますか？"}
+            </h2>
+            {(() => {
+              const d = new Date(corrModal.correction.target_date + "T00:00:00+09:00");
+              return (
+                <p className="text-sm text-zinc-700 dark:text-zinc-300 mb-3">
+                  {corrModal.correction.staff_name} / {d.getMonth() + 1}/{d.getDate()}（{WEEKDAY_JP[d.getDay()]}）<br />
+                  <span className="text-xs font-mono text-zinc-500">
+                    {corrModal.correction.corrected_in?.slice(0, 5) ?? "--:--"} → {corrModal.correction.corrected_out?.slice(0, 5) ?? "--:--"}
+                  </span>
+                </p>
+              );
+            })()}
+            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">コメント（任意）</label>
+            <textarea value={corrNote} onChange={e => setCorrNote(e.target.value)}
+              rows={2} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm resize-none mb-3" />
+            {corrError && <p className="text-sm text-red-600 mb-2">{corrError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setCorrModal(null)}
+                className="flex-1 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-sm">キャンセル</button>
+              <button type="button" onClick={handleCorrReview} disabled={corrPending}
+                className={`flex-1 py-2 rounded-xl text-white text-sm font-medium disabled:opacity-50 ${
+                  corrModal.action === "approve" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}>
+                {corrPending ? "処理中..." : corrModal.action === "approve" ? "承認する" : "却下する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "anomaly" && <>
       {/* フィルター */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 space-y-3">
         <div className="flex gap-2 flex-wrap items-end">
@@ -308,6 +496,7 @@ export default function AttendanceEditClient({
           {toast}
         </div>
       )}
+      </>}
     </div>
   );
 }
