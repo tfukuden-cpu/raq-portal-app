@@ -37,40 +37,6 @@ const STAFF_FAQ = [
   },
 ];
 
-const SECTIONS = [
-  {
-    title: "ホーム",
-    items: [
-      { label: "出発報告", desc: "現場に向かう前に青い丸ボタンをタップ。到着予定を選んで報告します。" },
-      { label: "欠勤・遅刻報告", desc: "ホーム画面下部のリンクからいつでも報告できます。" },
-      { label: "次回出勤", desc: "今後のシフトが表示されます。タップするとシフト詳細画面へ移動します。" },
-    ],
-  },
-  {
-    title: "シフト",
-    items: [
-      { label: "シフト確認", desc: "カレンダー形式で前後3ヶ月のシフトを確認できます。日付タップで詳細・変更履歴が表示されます。" },
-      { label: "希望休申請", desc: "「希望休タブ」→「希望休を申請する」ボタンからカレンダーで日付を選んで申請します。" },
-      { label: "希望休の取り下げ", desc: "申請済み一覧に表示されている項目をタップすると取り下げできます（締切前のみ）。" },
-      { label: "追加申請", desc: "管理者が公開したシフト募集枠に応募できます。「追加申請タブ」から操作します。" },
-    ],
-  },
-  {
-    title: "勤怠実績",
-    items: [
-      { label: "月次実績の確認", desc: "月ごとの出勤日数・労働時間・日別の出退勤時刻を確認できます。" },
-    ],
-  },
-  {
-    title: "My",
-    items: [
-      { label: "打刻補正申請", desc: "出退勤の打刻時刻に誤りがある場合に申請します。管理者承認後に実績へ反映されます。" },
-      { label: "LINE連携", desc: "連携するとシフト変更・申請結果などの通知をLINEで受け取れます。" },
-      { label: "パスワード変更", desc: "現在のパスワードと新しいパスワードを入力して変更します。" },
-    ],
-  },
-];
-
 export default async function HelpPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -105,7 +71,7 @@ export default async function HelpPage() {
           <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
             <a
               href="/help/manual-staff"
-              className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800"
+              className={`flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors ${isAdmin ? "border-b border-zinc-100 dark:border-zinc-800" : ""}`}
             >
               <div>
                 <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">スタッフ向け操作説明書</p>
@@ -126,27 +92,6 @@ export default async function HelpPage() {
               </a>
             )}
           </div>
-        </div>
-
-        {/* 機能ガイド */}
-        <div className="space-y-4">
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-1">機能ガイド</p>
-          {SECTIONS.map((section) => (
-            <div key={section.title}>
-              <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 px-1 mb-1.5">{section.title}</p>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-                {section.items.map((item, i) => (
-                  <div
-                    key={item.label}
-                    className={`px-5 py-3.5 ${i < section.items.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : ""}`}
-                  >
-                    <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{item.label}</p>
-                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">{item.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
         </div>
 
         {/* よくある質問 */}
