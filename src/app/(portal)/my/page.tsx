@@ -1,5 +1,5 @@
 /**
- * Myページ（プロフィール・設定・ログアウト）
+ * Myページ（全ロール共通）
  */
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -8,6 +8,8 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { logoutAction } from "@/app/login/actions";
 import { unlinkLineAction } from "./actions";
 import { ChevronRightIcon, UserCircleIcon } from "@/components/icons";
+import AvatarEditor from "@/app/(portal)/admin/my/AvatarEditor";
+import type { AvatarConfig } from "@/app/(portal)/admin/my/avatar-types";
 
 export default async function MyPage({
   searchParams,
@@ -25,19 +27,11 @@ export default async function MyPage({
 
   const { data: staff } = await supabase
     .from("staffs")
-    .select("id, name, display_name, global_role, line_user_id")
+    .select("id, name, display_name, global_role, line_user_id, avatar_config")
     .eq("id", staffId)
     .maybeSingle();
 
   const projectId = await getCurrentProjectId();
-  const { data: project } = projectId
-    ? await supabase
-        .from("projects")
-        .select("id, name")
-        .eq("id", projectId)
-        .maybeSingle()
-    : { data: null };
-
   const { data: membership } = projectId
     ? await supabase
         .from("project_members")
@@ -47,99 +41,116 @@ export default async function MyPage({
         .maybeSingle()
     : { data: null };
 
-  const displayName = staff?.display_name ?? staff?.name ?? staffId;
-  const lineLinked  = !!staff?.line_user_id;
-  const lineFlash   = sp.success === "line_linked"      ? "LINEアカウントを連携しました"
-                    : sp.error   === "line_already_used" ? "このLINEアカウントは他のスタッフに紐付いています"
-                    : sp.error   === "line_cancelled"    ? "LINE連携をキャンセルしました"
-                    : sp.error   === "line_not_friend"   ? "公式LINEを友達追加してから連携してください"
-                    : null;
+  const displayName  = staff?.display_name ?? staff?.name ?? staffId;
+  const lineLinked   = !!staff?.line_user_id;
+  const avatarConfig = (staff as { avatar_config?: AvatarConfig | null } | null)?.avatar_config ?? null;
+
+  const isExecutiveOrAdmin =
+    staff?.global_role === "admin" || staff?.global_role === "executive";
+  const isProjectAdmin = membership?.role === "project_admin";
+  const isStaffOnly    = !isExecutiveOrAdmin && !isProjectAdmin;
 
   const roleLabel =
-    staff?.global_role === "admin"
-      ? "システム管理者"
-      : staff?.global_role === "executive"
-      ? "役員"
-      : membership?.role === "project_admin"
-      ? "案件管理者"
-      : "スタッフ";
+    staff?.global_role === "admin"      ? "システム管理者"
+    : staff?.global_role === "executive" ? "運用者"
+    : isProjectAdmin                     ? "案件管理者"
+    : "スタッフ";
+
+  const roleBadgeClass =
+    staff?.global_role === "admin"       ? "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400"
+    : staff?.global_role === "executive" ? "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400"
+    : isProjectAdmin                     ? "bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400"
+    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500";
+
+  const lineFlash =
+    sp.success === "line_linked"         ? "LINEアカウントを連携しました"
+    : sp.error === "line_already_used"   ? "このLINEアカウントは他のスタッフに紐付いています"
+    : sp.error === "line_cancelled"      ? "LINE連携をキャンセルしました"
+    : sp.error === "line_not_friend"     ? "公式LINEを友達追加してから連携してください"
+    : null;
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-lg mx-auto px-4 pt-6 pb-28 space-y-4">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          My
-        </h1>
+      <div className="max-w-lg mx-auto px-4 pt-6 pb-28 space-y-5">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">My</h1>
 
         {/* プロフィールカード */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-            <UserCircleIcon className="w-8 h-8 text-blue-500 dark:text-blue-400" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-lg font-bold text-zinc-900 dark:text-zinc-50 truncate">
-              {displayName}
-            </p>
-            <p className="text-xs text-zinc-400 font-mono mt-0.5">{staffId}</p>
-            <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
-              {roleLabel}
-            </span>
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
+          {isExecutiveOrAdmin ? (
+            /* 運用者・管理者：アバター付き */
+            <div className="flex flex-col items-center gap-3">
+              <AvatarEditor initialConfig={avatarConfig} />
+              <div className="text-center">
+                <p className="text-xl font-bold text-zinc-900 dark:text-zinc-50 leading-tight">{displayName}</p>
+                <p className="text-xs text-zinc-400 font-mono mt-0.5">{staffId}</p>
+                <span className={`inline-block mt-2 text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${roleBadgeClass}`}>
+                  {roleLabel}
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* スタッフ・案件管理者：横並び */
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                <UserCircleIcon className="w-8 h-8 text-zinc-400 dark:text-zinc-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-lg font-bold text-zinc-900 dark:text-zinc-50 truncate">{displayName}</p>
+                <p className="text-xs text-zinc-400 font-mono mt-0.5">{staffId}</p>
+                <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${roleBadgeClass}`}>
+                  {roleLabel}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* アカウントメニュー */}
+        <div>
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-1 mb-2">アカウント</p>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
+            {/* スタッフのみ：打刻補正申請・打刻画面 */}
+            {isStaffOnly && (
+              <>
+                <a
+                  href="/corrections"
+                  className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800"
+                >
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">打刻補正申請</span>
+                  <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
+                </a>
+                <a
+                  href="/punch"
+                  className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800"
+                >
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">打刻画面</span>
+                  <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
+                </a>
+              </>
+            )}
+            <a
+              href="/change-password"
+              className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">パスワード変更</span>
+              <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
+            </a>
           </div>
         </div>
 
-        {/* メニュー */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
-          <a
-            href="/holidays"
-            className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800"
-          >
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">
-              休暇申請
-            </span>
-            <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
-          </a>
-          <a
-            href="/corrections"
-            className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800"
-          >
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">
-              打刻補正申請
-            </span>
-            <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
-          </a>
-          <a
-            href="/punch"
-            className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800"
-          >
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">
-              打刻画面
-            </span>
-            <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
-          </a>
-          <a
-            href="/change-password"
-            className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-          >
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">
-              パスワード変更
-            </span>
-            <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
-          </a>
-        </div>
-
-        {/* LINE 連携 */}
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-1">LINE連携</p>
+        {/* LINE連携 */}
+        <div>
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-1 mb-2">LINE連携</p>
 
           {lineFlash && (
-            <p className={`text-xs px-3 py-2 rounded-xl ${
+            <p className={`text-xs px-3 py-2 rounded-xl mb-2 ${
               sp.success ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600" : "bg-red-50 dark:bg-red-950/30 text-red-500"
             }`}>
               {lineFlash}
             </p>
           )}
 
-          <div className="bg-zinc-50 dark:bg-zinc-900 rounded-2xl overflow-hidden">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
             {lineLinked ? (
               <div className="px-5 py-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
@@ -155,7 +166,7 @@ export default async function MyPage({
             ) : (
               <a
                 href="/api/auth/line?mode=link"
-                className="flex items-center justify-between px-5 py-4 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="flex items-center justify-between px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
               >
                 <div className="flex items-center gap-2.5">
                   <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" style={{ fill: "#06C755" }}>
@@ -167,8 +178,8 @@ export default async function MyPage({
               </a>
             )}
           </div>
-          <p className="text-[10px] text-zinc-400 px-1">
-            連携するとLINEでログインしたり、シフト・申請の通知をLINEで受け取れます
+          <p className="text-[10px] text-zinc-400 px-1 mt-1.5">
+            連携するとLINEでログインしたり、各種通知をLINEで受け取れます
           </p>
         </div>
 

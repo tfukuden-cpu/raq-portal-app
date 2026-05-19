@@ -321,12 +321,12 @@ export default function HomeClient({
 
             {/* 次回出勤 */}
             {upcomingShifts && upcomingShifts.length > 0 && (
-              <div className="mb-10">
+              <a href="/shifts" className="block mb-10 group">
                 <p className="text-[9px] tracking-[0.15em] text-zinc-300 dark:text-zinc-700 uppercase mb-3">次回出勤</p>
                 <div className="flex flex-col gap-2">
                   {upcomingShifts.map((s) => (
                     <div key={s.date} className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-500">{fmtUpcomingDate(s.date)}</span>
+                      <span className="text-sm text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 transition-colors">{fmtUpcomingDate(s.date)}</span>
                       <div className="flex items-center gap-2">
                         {s.name && <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{s.name}</span>}
                         {s.start && (
@@ -338,7 +338,7 @@ export default function HomeClient({
                     </div>
                   ))}
                 </div>
-              </div>
+              </a>
             )}
 
             {/* 欠勤・遅刻リンク */}
@@ -450,7 +450,7 @@ export default function HomeClient({
 
               {/* ── 次回出勤カード ── */}
               {upcomingShifts && upcomingShifts.length > 0 && (
-                <div className="bg-zinc-50 dark:bg-zinc-900 rounded-2xl overflow-hidden">
+                <a href="/shifts" className="block bg-zinc-50 dark:bg-zinc-900 rounded-2xl overflow-hidden hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors">
                   <p className="px-5 pt-4 pb-1 text-[10px] font-semibold tracking-widest text-zinc-400 uppercase">次回出勤</p>
                   {upcomingShifts.map((s, i) => (
                     <div key={s.date}>
@@ -468,7 +468,7 @@ export default function HomeClient({
                       </div>
                     </div>
                   ))}
-                </div>
+                </a>
               )}
             </div>
           )}

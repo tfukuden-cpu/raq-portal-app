@@ -34,7 +34,7 @@ const EXECUTIVE_ITEMS: NavItem[] = [
 ];
 
 const MY_STAFF: NavItem = { href: "/my",       icon: "UserCircle", label: "My" };
-const MY_ADMIN: NavItem = { href: "/admin/my", icon: "UserCircle", label: "My" };
+const MY_ADMIN: NavItem = { href: "/my", icon: "UserCircle", label: "My" };
 
 export default async function PortalLayout({
   children,
