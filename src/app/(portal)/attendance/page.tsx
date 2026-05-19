@@ -253,6 +253,7 @@ export default async function AttendancePage() {
   const total      = allInternal.length;
   const departed   = allInternal.filter(m => m.departureTime || m.clockIn).length;
   const clockedIn  = allInternal.filter(m => m.clockIn).length;
+  const late       = allInternal.filter(m => m.status === "late").length;
   const absent     = allInternal.filter(m => m.status === "absent").length;
   const notClocked = total - clockedIn - absent;
 
@@ -271,6 +272,7 @@ export default async function AttendancePage() {
       total={total}
       departed={departed}
       clockedIn={clockedIn}
+      late={late}
       absent={absent}
       notClocked={notClocked}
       grouped={grouped}

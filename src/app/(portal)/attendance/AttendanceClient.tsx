@@ -79,6 +79,7 @@ interface Props {
   total: number;
   departed: number;
   clockedIn: number;
+  late: number;
   absent: number;
   notClocked: number;
   grouped: SectionGroup[];
@@ -92,7 +93,7 @@ type ModalState = null | "confirm" | "sending" | "results";
 // ── メインコンポーネント ──────────────────────────────────
 export default function AttendanceClient({
   projectId, today, dateLabel, projectName,
-  total, departed, clockedIn, absent, notClocked,
+  total, departed, clockedIn, late, absent, notClocked,
   grouped, offMembers, enableDeparture,
 }: Props) {
   // 催促・依頼の選択（トグル式）
@@ -213,12 +214,10 @@ export default function AttendanceClient({
         </div>
 
         {/* 全体サマリー */}
-        <div className={`grid gap-3 mb-5 ${enableDeparture ? "grid-cols-3" : "grid-cols-2"}`}>
-          {enableDeparture && (
-            <SummaryCard value={departed}  total={total} label="出発済" color="text-blue-500" />
-          )}
-          <SummaryCard value={clockedIn} total={total} label="出勤済" color="text-green-500" />
-          <SummaryCard value={absent}               label="欠勤"   color="text-red-500" />
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          <SummaryCard value={clockedIn} total={total} label="出勤" color="text-green-500" />
+          <SummaryCard value={late}                   label="遅刻" color="text-amber-500" />
+          <SummaryCard value={absent}                 label="欠勤" color="text-red-500" />
         </div>
 
         {/* セクション別アコーディオン */}
