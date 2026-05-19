@@ -3,6 +3,7 @@
  * 出発報告 → 現場端末打刻の状態遷移を管理
  */
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getCurrentProjectId } from "@/lib/project-context";
@@ -165,7 +166,7 @@ export default async function DashboardPage() {
       .not("shift_name", "in", '("公休","休","公休日")')
       .order("shift_date")
       .limit(5),
-    supabase
+    createAdminClient()
       .from("project_settings")
       .select("enable_departure_report")
       .eq("project_id", currentProjectId!)
