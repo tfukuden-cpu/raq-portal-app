@@ -808,10 +808,10 @@ GOOGLE_PRIVATE_KEY=...
 
 | # | タスク | 状態 | 詳細 |
 |---|---|---|---|
-| X-1 | スケジュール通知の動作確認 | ⏳ | `curl -H "Authorization: Bearer <CRON_SECRET>" /api/cron/notify` |
-| X-2 | 希望休ルールのバリデーション（申請時チェック） | ⏳ | deadline_day / monthly_limit 等 |
-| X-3 | 本番投入（GASと並行運用） | ⏳ | 社員100名移行 |
-| X-4 | SQL未実行分を Supabase に適用 | ⏳ | shift_patterns.short_name, holiday_rules テーブル |
+| X-1 | スケジュール通知の動作確認 | ✅ | 本番動作確認済み |
+| X-2 | 希望休ルールのバリデーション（申請時チェック） | ✅ | actions.ts に実装済み（締切・月上限・日別上限・連続上限） |
+| X-3 | 本番投入（GASと並行運用） | ➖ | 不要（GAS並行運用・100名移行は行わない方針） |
+| X-4 | SQL未実行分を Supabase に適用 | ✅ | 適用済み（short_name, holiday_rules テーブルは使用中） |
 
 ---
 
