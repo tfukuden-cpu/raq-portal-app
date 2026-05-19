@@ -23,15 +23,13 @@ export default async function ProjectDetailPage(props: {
   const isExecutive = myStaff?.global_role === "executive";
   const isAdmin     = myStaff?.global_role === "admin";
 
-  if (!isExecutive && !isAdmin) redirect("/dashboard");
+  // project_admin（案件管理者）も自分の担当案件にアクセス可
+  const { data: membership } = await supabase
+    .from("project_members").select("role")
+    .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle();
+  const isProjectAdmin = membership?.role === "project_admin";
 
-  // 管理者は自分の担当案件のみアクセス可
-  if (isAdmin) {
-    const { data: membership } = await supabase
-      .from("project_members").select("role")
-      .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle();
-    if (!membership) redirect("/dashboard");
-  }
+  if (!isExecutive && !isAdmin && !isProjectAdmin) redirect("/dashboard");
 
   // 過去30日の範囲
   const now30 = new Date();
@@ -175,6 +173,7 @@ export default async function ProjectDetailPage(props: {
           lineGroupId={settings?.line_group_id ?? null}
           enableDeparture={(settings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true}
           archiveAction={archiveAction}
+          canArchive={isExecutive || isAdmin}
         />
       </div>
     </main>

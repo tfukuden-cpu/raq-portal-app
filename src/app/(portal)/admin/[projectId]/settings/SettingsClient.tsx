@@ -85,6 +85,7 @@ export function SettingsContainer({
   lineGroupId,
   enableDeparture,
   archiveAction,
+  canArchive = true,
 }: {
   projectId: string;
   projectName: string;
@@ -97,6 +98,7 @@ export function SettingsContainer({
   lineGroupId: string | null;
   enableDeparture: boolean;
   archiveAction: (fd: FormData) => Promise<void>;
+  canArchive?: boolean;
 }) {
   const [tab, setTab] = useState<TabId>("basic");
 
@@ -106,7 +108,7 @@ export function SettingsContainer({
     { id: "shift",   label: "シフト" },
     { id: "holiday", label: "希望休" },
     { id: "notify",  label: "LINE通知" },
-    { id: "danger",  label: "危険操作", red: true },
+    ...(canArchive ? [{ id: "danger" as TabId, label: "危険操作", red: true }] : []),
   ];
 
   return (
