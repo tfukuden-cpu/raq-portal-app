@@ -5,12 +5,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
-export default async function LinkLinePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const sp = await searchParams;
+export default async function LinkLinePage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -26,8 +21,6 @@ export default async function LinkLinePage({
 
   // すでに連携済みならダッシュボードへ
   if (staff?.line_user_id) redirect("/dashboard");
-
-  const isNotFriend = sp.error === "line_not_friend";
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black p-4">
@@ -49,25 +42,7 @@ export default async function LinkLinePage({
           </p>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 space-y-4 shadow-sm">
-          {isNotFriend && (
-            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-200 space-y-2.5">
-              <p>公式LINEを友達追加してからもう一度お試しください</p>
-              <a
-                href="https://line.me/ti/p/@014icizf"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
-                style={{ backgroundColor: "#06C755" }}
-              >
-                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-white flex-shrink-0">
-                  <path d="M12 2C6.477 2 2 6.036 2 11c0 2.67 1.28 5.063 3.306 6.73.145.122.203.316.151.496l-.47 1.717c-.073.266.107.538.378.538.07 0 .14-.018.202-.054L8.05 19.05c.131-.076.284-.09.427-.039C9.357 19.332 10.666 19.5 12 19.5c5.523 0 10-4.036 10-9s-4.477-9-10-9z" />
-                </svg>
-                公式LINEを友達追加する
-              </a>
-            </div>
-          )}
-
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
           <a
             href="/api/auth/line?mode=link"
             className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90"

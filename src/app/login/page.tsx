@@ -9,13 +9,10 @@ import { useSearchParams } from "next/navigation";
 import { loginAction } from "./actions";
 
 const URL_ERROR_MESSAGES: Record<string, string> = {
-  line_not_friend:    "公式LINEを友達追加してからもう一度お試しください",
   line_not_registered: "このLINEアカウントはシステムに登録されていません",
   line_cancelled:     "LINEログインをキャンセルしました",
   line_failed:        "LINEログインに失敗しました。再度お試しください",
 };
-
-const LINE_ADD_FRIEND_URL = "https://line.me/ti/p/@014icizf";
 
 export default function LoginPage() {
   return (
@@ -95,22 +92,8 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-200 space-y-2">
+            <div className="p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-200">
               <p>{error}</p>
-              {searchParams.get("error") === "line_not_friend" && (
-                <a
-                  href={LINE_ADD_FRIEND_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white"
-                  style={{ backgroundColor: "#06C755" }}
-                >
-                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-white flex-shrink-0">
-                    <path d="M12 2C6.477 2 2 6.036 2 11c0 2.67 1.28 5.063 3.306 6.73.145.122.203.316.151.496l-.47 1.717c-.073.266.107.538.378.538.07 0 .14-.018.202-.054L8.05 19.05c.131-.076.284-.09.427-.039C9.357 19.332 10.666 19.5 12 19.5c5.523 0 10-4.036 10-9s-4.477-9-10-9z"/>
-                  </svg>
-                  公式LINEを友達追加する
-                </a>
-              )}
             </div>
           )}
 
