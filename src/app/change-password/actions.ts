@@ -21,8 +21,8 @@ export async function changePasswordAction(
     return { success: false, message: "新しいパスワードを入力してください" };
   }
 
-  if (newPassword.length < 8) {
-    return { success: false, message: "パスワードは8文字以上にしてください" };
+  if (newPassword.length < 4) {
+    return { success: false, message: "パスワードは4文字以上にしてください" };
   }
 
   if (newPassword !== confirmPassword) {
