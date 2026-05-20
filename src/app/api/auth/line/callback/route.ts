@@ -45,6 +45,11 @@ export async function GET(req: NextRequest) {
     return errRedirect(req, "line_state_invalid");
   }
 
+  const clearState = (res: NextResponse) => {
+    res.cookies.delete("line_oauth_state");
+    return res;
+  };
+
   // LINEプロフィール取得
   const profile = await fetchLineProfile(code);
   if (!profile) return errRedirect(req, "line_failed");
@@ -57,11 +62,6 @@ export async function GET(req: NextRequest) {
     }
     return errRedirect(req, "line_not_friend");
   }
-
-  const clearState = (res: NextResponse) => {
-    res.cookies.delete("line_oauth_state");
-    return res;
-  };
 
   // ── 連携モード（ログイン済みユーザーが LINE を紐付け）────
   if (parsedState.mode === "link") {
