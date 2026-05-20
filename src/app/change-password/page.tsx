@@ -42,14 +42,14 @@ export default function ChangePasswordPage() {
               htmlFor="newPassword"
               className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5"
             >
-              新しいパスワード（4文字以上）
+              新しいパスワード（6文字以上）
             </label>
             <input
               id="newPassword"
               name="newPassword"
               type="password"
               required
-              minLength={4}
+              minLength={6}
               autoComplete="new-password"
               className="w-full px-3 py-2.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -67,7 +67,7 @@ export default function ChangePasswordPage() {
               name="confirmPassword"
               type="password"
               required
-              minLength={4}
+              minLength={6}
               autoComplete="new-password"
               className="w-full px-3 py-2.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />

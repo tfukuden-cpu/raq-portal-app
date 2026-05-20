@@ -829,7 +829,7 @@ export async function createProjectAction(fd: FormData): Promise<SettingsResult 
 
       const { data: authData, error: authErr } = await adminSupa().auth.admin.createUser({
         email: managerEmail,
-        password: "1234",
+        password: INITIAL_PASSWORD,
         email_confirm: true,
       });
       if (!authErr && authData.user) {

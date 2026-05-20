@@ -51,7 +51,12 @@ export async function GET(req: NextRequest) {
 
   // 公式アカウントの友達登録チェック
   const isFriend = await checkLineFriendship(profile.accessToken);
-  if (!isFriend) return errRedirect(req, "line_not_friend");
+  if (!isFriend) {
+    if (parsedState.mode === "link") {
+      return clearState(NextResponse.redirect(new URL("/my?error=line_not_friend", req.url)));
+    }
+    return errRedirect(req, "line_not_friend");
+  }
 
   const clearState = (res: NextResponse) => {
     res.cookies.delete("line_oauth_state");

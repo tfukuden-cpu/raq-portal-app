@@ -148,12 +148,12 @@ export async function resetStaffPasswordAction(
   if (!staff?.auth_user_id) return { success: false, message: "ユーザーが見つかりません" };
 
   const { error } = await admin.auth.admin.updateUserById(staff.auth_user_id, {
-    password: "1234",
+    password: "123456",
   });
   if (error) return { success: false, message: error.message };
 
   await admin.from("staffs").update({ must_change_password: true }).eq("id", id);
 
   revalidatePath("/admin/staffs");
-  return { success: true, message: "PW を 1234 にリセットしました" };
+  return { success: true, message: "PW を 123456 にリセットしました" };
 }
