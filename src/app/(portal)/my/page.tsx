@@ -45,6 +45,20 @@ export default async function MyPage({
   const lineLinked   = !!staff?.line_user_id;
   const avatarConfig = (staff as { avatar_config?: AvatarConfig | null } | null)?.avatar_config ?? null;
 
+  // 当日欠勤かつ未報告チェック（経過報告ボタン表示用）
+  const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  let isAbsentToday = false;
+  if (projectId) {
+    const { data: absenceToday } = await supabase
+      .from("absence_reports")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("staff_id", staffId)
+      .eq("absence_date", todayStr)
+      .maybeSingle();
+    isAbsentToday = !!absenceToday;
+  }
+
   const isExecutiveOrAdmin =
     staff?.global_role === "admin" || staff?.global_role === "executive";
   const isProjectAdmin = membership?.role === "project_admin";
@@ -126,6 +140,18 @@ export default async function MyPage({
                   <span className="text-sm text-zinc-700 dark:text-zinc-300">打刻画面</span>
                   <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
                 </a>
+                {isAbsentToday && (
+                  <a
+                    href="/absence-followup"
+                    className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800 bg-red-50 dark:bg-red-900/10"
+                  >
+                    <div>
+                      <span className="text-sm font-semibold text-red-600 dark:text-red-400">経過報告</span>
+                      <p className="text-xs text-zinc-400 mt-0.5">翌日の出勤可否を報告してください</p>
+                    </div>
+                    <ChevronRightIcon className="w-4 h-4 text-red-400" />
+                  </a>
+                )}
               </>
             )}
             <a

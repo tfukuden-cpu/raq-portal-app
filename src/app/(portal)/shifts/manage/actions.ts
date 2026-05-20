@@ -5,6 +5,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { sendEventNotify } from "@/lib/notify";
 import { multicastLine, pushLine } from "@/lib/line";
+import {
+  buildDefaultNotificationSettings,
+  DEFAULT_NOTIFY_MESSAGES,
+} from "@/app/(portal)/admin/[projectId]/settings/notify-config";
+import { resolveMessage } from "@/lib/notify";
 
 export type ActionResult = { success: boolean; message?: string };
 
@@ -255,6 +260,99 @@ export async function notifyShiftChangesAction(
 
     const text = `【シフト変更のお知らせ】\n以下のシフトが変更されました。\n\n${lines.join("\n")}`;
     await pushLine(lineId, text);
+    sent++;
+  }
+
+  return { success: true, sent, noLine };
+}
+
+export type PublishShiftsResult = {
+  success: boolean;
+  message?: string;
+  sent?: number;
+  noLine?: string[];
+};
+
+/**
+ * シフト展開：対象月のシフトを全スタッフへLINE通知
+ */
+export async function publishShiftsAction(
+  projectId: string,
+  year: number,
+  month: number,
+): Promise<PublishShiftsResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const endDate   = `${year}-${String(month).padStart(2, "0")}-${new Date(year, month, 0).getDate()}`;
+  const targetMonth = `${year}/${String(month).padStart(2, "0")}`;
+
+  // 対象月の全シフトを取得
+  const { data: shifts } = await admin
+    .from("shifts")
+    .select("staff_id, shift_date, shift_name, shift_start, shift_end")
+    .eq("project_id", projectId)
+    .gte("shift_date", startDate)
+    .lte("shift_date", endDate)
+    .order("shift_date");
+
+  if (!shifts?.length) return { success: false, message: "対象月のシフトがありません" };
+
+  // スタッフ別にシフトをまとめる
+  const shiftsByStaff = new Map<string, typeof shifts>();
+  for (const s of shifts) {
+    const id = s.staff_id as string;
+    if (!shiftsByStaff.has(id)) shiftsByStaff.set(id, []);
+    shiftsByStaff.get(id)!.push(s);
+  }
+
+  // 通知設定を取得
+  const { data: ps } = await admin
+    .from("project_settings")
+    .select("notification_settings")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  const settings = buildDefaultNotificationSettings(
+    (ps?.notification_settings as Record<string, unknown>) ?? {}
+  );
+
+  // LINE IDを含むスタッフ情報を取得
+  const staffIds = [...shiftsByStaff.keys()];
+  const { data: staffRows } = await admin
+    .from("staffs")
+    .select("id, display_name, name, line_user_id")
+    .in("id", staffIds);
+
+  const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
+  let sent = 0;
+  const noLine: string[] = [];
+
+  for (const staff of staffRows ?? []) {
+    const name   = (staff.display_name ?? staff.name ?? staff.id) as string;
+    const lineId = staff.line_user_id as string | null;
+
+    if (!lineId) { noLine.push(name); continue; }
+
+    const myShifts = shiftsByStaff.get(staff.id as string) ?? [];
+
+    // シフト一覧を整形
+    const shiftLines = myShifts.map(s => {
+      const dt = new Date(`${s.shift_date}T00:00:00+09:00`);
+      const dayLabel = `${dt.getMonth() + 1}/${dt.getDate()}（${WEEKDAY_JP[dt.getDay()]}）`;
+      const time = s.shift_start && s.shift_end ? ` ${s.shift_start}〜${s.shift_end}` : "";
+      const sName = s.shift_name ? ` ${s.shift_name}` : "";
+      return `・${dayLabel}${sName}${time}`;
+    }).join("\n");
+
+    const baseMsg = settings.shift_published.message ?? DEFAULT_NOTIFY_MESSAGES.shift_published;
+    const header  = resolveMessage(baseMsg, { "名前": name, "対象月": targetMonth });
+    const message = `${header}\n\n${shiftLines}`;
+
+    await pushLine(lineId, message);
     sent++;
   }
 

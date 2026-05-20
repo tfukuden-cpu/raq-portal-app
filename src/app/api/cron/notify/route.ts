@@ -330,9 +330,147 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── holiday_reminder ──────────────────────────────────────────────────────
-    // TODO: 締切日の管理が必要なため未実装
-    // project_settings に holiday_deadline_day（毎月何日が締切か）を追加してから実装する
+    // ── absence_followup_remind：欠勤者への17時経過報告リマインド ─────────────
+    if (settings.absence_followup_remind.enabled) {
+      const cfg = settings.absence_followup_remind;
+      if (isNearTime(cfg.time ?? "17:00")) {
+        // 当日欠勤スタッフを取得
+        const { data: absences } = await admin
+          .from("absence_reports")
+          .select("staff_id")
+          .eq("project_id", projectId)
+          .eq("absence_date", today);
+
+        const absentIds = [...new Set((absences ?? []).map(a => a.staff_id as string))];
+
+        if (absentIds.length > 0) {
+          // 翌日シフトがある欠勤者を絞り込む
+          const { data: tmrwShifts } = await admin
+            .from("shifts")
+            .select("staff_id")
+            .eq("project_id", projectId)
+            .eq("shift_date", tmrw)
+            .in("staff_id", absentIds)
+            .not("shift_start", "is", null);
+
+          const toNotify = [...new Set((tmrwShifts ?? []).map(s => s.staff_id as string))];
+
+          if (toNotify.length > 0) {
+            const { data: staffRows } = await admin
+              .from("staffs")
+              .select("id, display_name, name, line_user_id")
+              .in("id", toNotify) as { data: StaffRow[] | null };
+
+            for (const staff of staffRows ?? []) {
+              if (!staff.line_user_id) continue;
+              const name    = staff.display_name ?? staff.name ?? staff.id;
+              const message = resolveMessage(
+                cfg.message ?? DEFAULT_NOTIFY_MESSAGES.absence_followup_remind,
+                { "名前": name, "翌日": tmrw }
+              );
+              await pushLine(staff.line_user_id, message);
+              sent++;
+            }
+          }
+        }
+      }
+    }
+
+    // ── holiday_open_notify：毎月1日の希望休受付開始通知 ─────────────────────
+    if (settings.holiday_open_notify.enabled) {
+      const cfg    = settings.holiday_open_notify;
+      const jstDay = parseInt(today.split("-")[2], 10);
+      if (jstDay === 1 && isNearTime(cfg.time ?? "09:00")) {
+        // 翌月（申請対象月）を計算
+        const [y, m] = today.split("-").map(Number);
+        const targetY = m === 12 ? y + 1 : y;
+        const targetM = m === 12 ? 1 : m + 1;
+        const targetMonth = `${targetY}/${String(targetM).padStart(2, "0")}`;
+
+        // 締切日を取得
+        const { data: rules } = await admin
+          .from("holiday_rules")
+          .select("rule_type, value")
+          .eq("project_id", projectId);
+        const deadlineDay = (rules ?? []).find(r => r.rule_type === "deadline_day")?.value as number | null;
+        const deadlineStr = deadlineDay
+          ? `${y}-${String(m).padStart(2, "0")}-${String(deadlineDay).padStart(2, "0")}`
+          : "（設定なし）";
+
+        // 全プロジェクトメンバーのLINE IDを取得
+        const { data: members } = await admin
+          .from("project_members")
+          .select("staff_id")
+          .eq("project_id", projectId);
+        const memberIds = (members ?? []).map(m => m.staff_id as string);
+
+        if (memberIds.length > 0) {
+          const { data: staffRows } = await admin
+            .from("staffs")
+            .select("id, display_name, name, line_user_id")
+            .in("id", memberIds) as { data: StaffRow[] | null };
+
+          for (const staff of staffRows ?? []) {
+            if (!staff.line_user_id) continue;
+            const name    = staff.display_name ?? staff.name ?? staff.id;
+            const message = resolveMessage(
+              cfg.message ?? DEFAULT_NOTIFY_MESSAGES.holiday_open_notify,
+              { "名前": name, "対象月": targetMonth, "締切日": deadlineStr }
+            );
+            await pushLine(staff.line_user_id, message);
+            sent++;
+          }
+        }
+      }
+    }
+
+    // ── holiday_reminder：希望休締切3日前リマインド ───────────────────────────
+    if (settings.holiday_reminder.enabled) {
+      const cfg = settings.holiday_reminder;
+      if (isNearTime(cfg.time ?? "09:00")) {
+        const { data: rules } = await admin
+          .from("holiday_rules")
+          .select("rule_type, value")
+          .eq("project_id", projectId);
+        const deadlineDay = (rules ?? []).find(r => r.rule_type === "deadline_day")?.value as number | null;
+
+        if (deadlineDay) {
+          const [y, m] = today.split("-").map(Number);
+          const deadlineDate = `${y}-${String(m).padStart(2, "0")}-${String(deadlineDay).padStart(2, "0")}`;
+          const todayMs     = new Date(today).getTime();
+          const deadlineMs  = new Date(deadlineDate).getTime();
+          const daysUntil   = Math.round((deadlineMs - todayMs) / (1000 * 60 * 60 * 24));
+          const daysBefore  = cfg.days_before ?? 3;
+
+          if (daysUntil === daysBefore) {
+            const { data: members } = await admin
+              .from("project_members")
+              .select("staff_id")
+              .eq("project_id", projectId);
+            const memberIds = (members ?? []).map(m => m.staff_id as string);
+
+            if (memberIds.length > 0) {
+              const { data: staffRows } = await admin
+                .from("staffs")
+                .select("id, display_name, name, line_user_id")
+                .in("id", memberIds) as { data: StaffRow[] | null };
+              const lineIds = (staffRows ?? [])
+                .map(s => s.line_user_id)
+                .filter(Boolean) as string[];
+
+              if (lineIds.length > 0) {
+                const message = resolveMessage(
+                  cfg.message ?? DEFAULT_NOTIFY_MESSAGES.holiday_reminder,
+                  { "残日数": String(daysUntil), "締切日": deadlineDate }
+                );
+                await multicastLine(lineIds, message);
+                sent++;
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   return NextResponse.json({ ok: true, sent });

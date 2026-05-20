@@ -55,6 +55,14 @@ export type NotificationSettings = {
   daily_summary:       NotifyItemConfig;
   /** 希望休締切前リマインド → スタッフへ */
   holiday_reminder:    NotifyItemConfig;
+  /** 希望休申請受付開始通知（毎月1日） → スタッフへ */
+  holiday_open_notify: NotifyItemConfig;
+  /** 欠勤者への経過報告リマインド（17時） → 当日欠勤かつ翌日出勤のスタッフへ */
+  absence_followup_remind: NotifyItemConfig;
+  /** 経過報告が提出されたとき → 管理者グループへ */
+  absence_followup_notify: NotifyItemConfig;
+  /** シフト展開通知（管理者が展開ボタンを押したとき） → 全スタッフへ */
+  shift_published:     NotifyItemConfig;
 };
 
 // ── デフォルトメッセージ ──────────────────────────────────
@@ -153,6 +161,27 @@ export const DEFAULT_NOTIFY_MESSAGES: Record<keyof NotificationSettings, string>
   holiday_reminder:
 `⏰ 希望休の提出期限が{残日数}日後（{締切日}）に迫っています。
 お忘れなく提出してください。`,
+
+  holiday_open_notify:
+`{名前}さん、お疲れ様です。
+{対象月}の希望休申請の受付を開始しました。
+締切日：{締切日}
+ポータルから申請をお願いします。`,
+
+  absence_followup_remind:
+`{名前}さん、お疲れ様です。
+本日はご欠勤されておりますが、明日（{翌日}）の出勤について経過報告をお願いします。
+ポータルの「経過報告」から翌日の出勤可否と状況をご報告ください。`,
+
+  absence_followup_notify:
+`【経過報告】{名前}さんから報告がありました。
+【報告日】{日付}
+【翌日出勤】{翌日出勤可否}
+{症状}`,
+
+  shift_published:
+`{名前}さん、{対象月}のシフトが確定しました。
+ポータルのシフトページからご確認ください。`,
 };
 
 // ── 変数定義（取得元の整理用） ────────────────────────────
@@ -259,6 +288,25 @@ export const NOTIFY_VARS: Record<keyof NotificationSettings, { label: string; no
     { label: "{残日数}" },
     { label: "{締切日}" },
   ],
+  holiday_open_notify: [
+    { label: "{名前}" },
+    { label: "{対象月}", note: "希望休申請の対象月（例：2026/06）" },
+    { label: "{締切日}", note: "今月の締切日" },
+  ],
+  absence_followup_remind: [
+    { label: "{名前}" },
+    { label: "{翌日}", note: "翌日の日付" },
+  ],
+  absence_followup_notify: [
+    { label: "{名前}" },
+    { label: "{日付}" },
+    { label: "{翌日出勤可否}", note: "出勤可 / 出勤不可" },
+    { label: "{症状}", note: "不可の場合の症状詳細" },
+  ],
+  shift_published: [
+    { label: "{名前}" },
+    { label: "{対象月}", note: "展開した月（例：2026/06）" },
+  ],
 };
 
 // ── デフォルト値の構築 ───────────────────────────────────
@@ -291,6 +339,10 @@ export function buildDefaultNotificationSettings(
     shift_end_remind:    get("shift_end_remind",    { enabled: false, recipient: "staff", minutes_after: 15,  message: DEFAULT_NOTIFY_MESSAGES.shift_end_remind }),
     rest_day_remind:     get("rest_day_remind",     { enabled: false, recipient: "staff", time: "20:00",      message: DEFAULT_NOTIFY_MESSAGES.rest_day_remind }),
     daily_summary:       get("daily_summary",       { enabled: false, recipient: "admin", time: "08:00",      message: DEFAULT_NOTIFY_MESSAGES.daily_summary }),
-    holiday_reminder:    get("holiday_reminder",    { enabled: false, recipient: "staff", time: "09:00", days_before: 3, message: DEFAULT_NOTIFY_MESSAGES.holiday_reminder }),
+    holiday_reminder:        get("holiday_reminder",        { enabled: false, recipient: "staff", time: "09:00", days_before: 3, message: DEFAULT_NOTIFY_MESSAGES.holiday_reminder }),
+    holiday_open_notify:     get("holiday_open_notify",     { enabled: false, recipient: "staff", time: "09:00", message: DEFAULT_NOTIFY_MESSAGES.holiday_open_notify }),
+    absence_followup_remind: get("absence_followup_remind", { enabled: false, recipient: "staff", time: "17:00", message: DEFAULT_NOTIFY_MESSAGES.absence_followup_remind }),
+    absence_followup_notify: get("absence_followup_notify", { enabled: false, recipient: "admin", message: DEFAULT_NOTIFY_MESSAGES.absence_followup_notify }),
+    shift_published:         get("shift_published",         { enabled: false, recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.shift_published }),
   };
 }
