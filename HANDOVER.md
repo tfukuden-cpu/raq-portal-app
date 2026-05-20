@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-19（v26：ページ整理・Myページ統合・ダッシュボードリンク・操作説明書作成）
+最終更新：2026-05-20（v27：LINE連携必須化・なりすまし防止・欠勤機能拡充・LINEブロック検知）
 
 ---
 
@@ -96,6 +96,8 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | **当日状況UI改善（サマリーカード・シフト時刻表示・出発報告OFF対応）** | ✅ 完成（v24） |
 | **希望休タブUI刷新（申請一覧→取り下げ・申請月制限）** | ✅ 完成（v25） |
 | **ページ整理・Myページ統合・ダッシュボードシフトリンク** | ✅ 完成（v26） |
+| **LINE連携必須化・なりすまし防止・LINEブロック検知** | ✅ 完成（v27） |
+| **欠勤経過報告・シフト展開通知・変更ログ表示** | ✅ 完成（v27） |
 | スタッフ向け勤怠実績PDF出力 | ➖ 不要（決定） |
 | アバターシステム | 🔄 設計済み・パーツ未実装（低優先） |
 
@@ -156,7 +158,8 @@ staffs（社員マスタ）
   default_project_id, line_user_id,
   hire_date, is_active, must_change_password,
   avatar_color text,       ← 廃止予定（avatar_config に移行中）
-  avatar_config jsonb      ← ★v9新設（要SQL実行：セクション9参照）
+  avatar_config jsonb,     ← ★v9新設（要SQL実行：セクション9参照）
+  line_blocked boolean     ← ★v27新設（LINEブロック検知用。unfollowイベントでtrue）
 
 project_members（兼務対応）
   staff_id, project_id, role (staff/project_admin),
@@ -202,6 +205,8 @@ departure_reports（出発報告）
 absence_reports（欠勤報告）
   project_id, staff_id, absence_date (text), reason,
   next_day_available, day_after_available, status
+  ※ next_day_available は経過報告で更新（/absence-followup から送信）
+  ※ next_day_available=false の場合、翌日の absence_report を自動作成
 
 late_reports（遅刻報告）
   project_id, staff_id, late_date (text), reason,
@@ -367,7 +372,11 @@ src/
 | `shift_end_remind` | 定時 | 退勤打刻忘れ確認 | スタッフ本人 |
 | `rest_day_remind` | 定時 | 翌日出勤アナウンス | スタッフ本人 |
 | `daily_summary` | 定時 | 当日出勤状況サマリー | 管理者グループ |
-| `holiday_reminder` | 定時 | 希望休締切リマインド | 未実装 |
+| `holiday_reminder` | 定時 | 希望休締切リマインド | スタッフ全員 |
+| `holiday_open_notify` | 定時 | 毎月1日 希望休申請開始通知 ★v27新設 | スタッフ全員 |
+| `absence_followup_remind` | 定時 | 欠勤者への翌日出勤可否確認（17時） ★v27新設 | スタッフ本人 |
+| `absence_followup_notify` | イベント | 経過報告受信通知 ★v27新設 | 管理者グループ |
+| `shift_published` | イベント | シフト展開（個人シフト送信） ★v27新設 | スタッフ本人 |
 
 ### 設定
 案件設定 → LINE通知タブ でON/OFF・宛先・タイミング・メッセージ文を変更できる。
@@ -921,3 +930,4 @@ export default async function Page({
 | 2026-05-19 | v23 | P3-1完了。project_membersにpreferred_shift・preferred_section・max_consecutive_daysカラム追加。メンバー設定UIを折りたたみ式「シフト設定（仮組用）」セクションに整理・SVメモ廃止・優先セクション追加。仮組アルゴリズム強化：月/週稼働日数上限・連勤上限・優先スコアリング（パターン+セクション）・前月末連勤引き継ぎ（7日分）・勤務間インターバル11時間チェック。 |
 | 2026-05-19 | v24 | ナビ再構成：ロール別メニューを統合（スタッフ/管理者/運営者が各自の上位メニューを全て表示）・DevBanner（モード切替バナー）廃止・補正審査を勤怠修正ページにタブ統合・周知管理→お知らせ管理リネーム。当日状況UI改善：サマリーカードを出勤/遅刻/欠勤の3種に変更・シフト時刻をshift_patternsから補完して表示・開始時間順ソート・出発報告OFF時に出発済カード非表示。 |
 | 2026-05-19 | v25 | 希望休タブUI刷新：デフォルト表示を申請済み一覧（タップで取り下げ確認）＋「希望休を申請する」ボタン→カレンダー申請画面の2ステップ構成に変更（HolidayTab.tsx新設）。申請月制限：締切日前は今月のみ・締切日後は翌月のみ申請可能、未来月への次月ナビゲーションを無効化。 |
+| 2026-05-20 | v27 | **LINE連携必須化・なりすまし防止・LINEブロック検知・欠勤機能拡充** ① LINE連携フロー刷新：初回ログイン後 `/link-line` へ誘導→「LINEで連携する」ボタン押下でOAuth開始（`bot_prompt=aggressive`で友達追加も同時完了）。友達チェック廃止（認証と登録を同時完了）。② LINE連携完了時にPWをcrypto.randomUUID×2に自動変更（なりすましログイン防止）。以降はLINEログインのみ有効。③ ポータルレイアウトでline_user_id未設定のユーザーを`/link-line`へ強制リダイレクト。④ LINEブロック検知：`staffs.line_blocked`カラム追加、LINE webhook（/api/line/webhook）でunfollowイベント→true・followイベント→false。スタッフ管理画面にブロック中バッジ（赤）・LINE未連携バッジ（黄）・統計チップを追加。⑤ 欠勤経過報告ページ（/absence-followup）新設：翌日出勤可否を報告→不可の場合は翌日の欠勤報告を自動作成。⑥ シフト展開ボタン（PublishButton）：シフト管理から全スタッフに個人シフトをLINEで一斉送信。⑦ シフト管理グリッドの欠勤セル赤色表示（absence_reportsと連動）。⑧ スタッフ向けシフトカレンダーで変更ログを公休・未登録日にも表示。⑨ 通知追加：holiday_open_notify・absence_followup_remind・absence_followup_notify・shift_published。⑩ ログイン後LINE OAuth直接起動→/link-lineへのリダイレクトに変更（stateクッキーループ修正）。|
