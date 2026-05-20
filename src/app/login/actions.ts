@@ -63,7 +63,7 @@ export async function loginAction(formData: FormData): Promise<LoginResult> {
     .maybeSingle();
 
   if (!staffDetail?.line_user_id) {
-    redirect("/api/auth/line?mode=link");
+    redirect("/link-line");
   }
 
   redirect("/dashboard");
