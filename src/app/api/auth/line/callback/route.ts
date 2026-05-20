@@ -80,6 +80,11 @@ export async function GET(req: NextRequest) {
       .update({ line_user_id: profile.userId })
       .eq("id", staffId);
 
+    // LINE連携完了後はパスワードをランダム値に変更（なりすまし防止）
+    await admin.auth.admin.updateUserById(user.id, {
+      password: crypto.randomUUID() + crypto.randomUUID(),
+    });
+
     return clearState(NextResponse.redirect(new URL("/dashboard", req.url)));
   }
 
