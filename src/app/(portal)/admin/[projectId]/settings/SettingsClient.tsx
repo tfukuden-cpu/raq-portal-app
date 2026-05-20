@@ -1961,6 +1961,74 @@ export function LineNotifySettings({
             </div>
           }
         />
+
+        {/* 希望休申請受付通知（毎月1日） */}
+        <NotifyCard
+          notifyKey="holiday_open_notify"
+          label="希望休申請受付開始通知"
+          desc="毎月1日に希望休申請の受付開始をスタッフへ通知"
+          config={settings.holiday_open_notify}
+          vars={NOTIFY_VARS.holiday_open_notify}
+          onToggle={() => updateItem("holiday_open_notify", { enabled: !settings.holiday_open_notify.enabled })}
+          onRecipient={v => updateItem("holiday_open_notify", { recipient: v })}
+          onMessage={v => updateItem("holiday_open_notify", { message: v })}
+          extra={
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">送信時刻</span>
+              <TimeInput
+                value={settings.holiday_open_notify.time ?? "09:00"}
+                onChange={v => updateItem("holiday_open_notify", { time: v })}
+              />
+              <span className="text-[11px] text-zinc-400">に送信（毎月1日）</span>
+            </div>
+          }
+        />
+
+        {/* 欠勤者経過報告リマインド */}
+        <NotifyCard
+          notifyKey="absence_followup_remind"
+          label="欠勤者経過報告リマインド"
+          desc="当日欠勤かつ翌日出勤予定のスタッフへ経過報告を促す通知"
+          config={settings.absence_followup_remind}
+          vars={NOTIFY_VARS.absence_followup_remind}
+          onToggle={() => updateItem("absence_followup_remind", { enabled: !settings.absence_followup_remind.enabled })}
+          onRecipient={v => updateItem("absence_followup_remind", { recipient: v })}
+          onMessage={v => updateItem("absence_followup_remind", { message: v })}
+          extra={
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">送信時刻</span>
+              <TimeInput
+                value={settings.absence_followup_remind.time ?? "17:00"}
+                onChange={v => updateItem("absence_followup_remind", { time: v })}
+              />
+              <span className="text-[11px] text-zinc-400">に送信</span>
+            </div>
+          }
+        />
+
+        {/* 経過報告提出通知 */}
+        <NotifyCard
+          notifyKey="absence_followup_notify"
+          label="欠勤者経過報告受信通知"
+          desc="欠勤スタッフが経過報告を提出したとき管理者グループへ通知"
+          config={settings.absence_followup_notify}
+          vars={NOTIFY_VARS.absence_followup_notify}
+          onToggle={() => updateItem("absence_followup_notify", { enabled: !settings.absence_followup_notify.enabled })}
+          onRecipient={v => updateItem("absence_followup_notify", { recipient: v })}
+          onMessage={v => updateItem("absence_followup_notify", { message: v })}
+        />
+
+        {/* シフト展開通知 */}
+        <NotifyCard
+          notifyKey="shift_published"
+          label="シフト展開通知"
+          desc="管理者がシフト展開ボタンを押したとき、各スタッフへ個別シフトをLINE送信"
+          config={settings.shift_published}
+          vars={NOTIFY_VARS.shift_published}
+          onToggle={() => updateItem("shift_published", { enabled: !settings.shift_published.enabled })}
+          onRecipient={v => updateItem("shift_published", { recipient: v })}
+          onMessage={v => updateItem("shift_published", { message: v })}
+        />
       </div>
 
       <div className="flex justify-end pt-2">
