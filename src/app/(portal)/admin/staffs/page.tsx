@@ -21,7 +21,7 @@ export default async function AllStaffsPage() {
   // 全スタッフ取得（executive含む）
   const { data: staffs } = await admin
     .from("staffs")
-    .select("id, name, display_name, company_name, global_role, is_active, must_change_password, account_number")
+    .select("id, name, display_name, company_name, global_role, is_active, must_change_password, account_number, line_user_id, line_blocked")
     .order("global_role")   // executive → admin → staff の順
     .order("id");
 
@@ -51,6 +51,8 @@ export default async function AllStaffsPage() {
     is_active:            (s as { is_active?: boolean }).is_active ?? true,
     must_change_password: (s as { must_change_password?: boolean }).must_change_password ?? false,
     account_number:       (s as { account_number?: string | null }).account_number ?? null,
+    line_linked:          !!(s as { line_user_id?: string | null }).line_user_id,
+    line_blocked:         (s as { line_blocked?: boolean }).line_blocked ?? false,
     projects:             projectsByStaff.get(s.id) ?? [],
   }));
 

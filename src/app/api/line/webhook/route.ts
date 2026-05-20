@@ -20,6 +20,7 @@ type LineEvent = {
   type: string;
   source?: {
     type: string;
+    userId?: string;
     groupId?: string;
   };
 };
@@ -36,17 +37,33 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient();
 
   for (const event of body.events ?? []) {
+    const userId  = event.source?.userId;
     const groupId = event.source?.groupId;
+
+    // ── ブロック/フォロー解除 → line_blocked フラグ管理 ──
+    if (event.type === "unfollow" && userId) {
+      await admin
+        .from("staffs")
+        .update({ line_blocked: true })
+        .eq("line_user_id", userId);
+    }
+
+    if (event.type === "follow" && userId) {
+      await admin
+        .from("staffs")
+        .update({ line_blocked: false })
+        .eq("line_user_id", userId);
+    }
+
+    // ── グループ参加/退出 ──
     if (!groupId || event.source?.type !== "group") continue;
 
     if (event.type === "join") {
-      // グループに追加された → 記録
       await admin.from("line_groups").upsert(
         { group_id: groupId, joined_at: new Date().toISOString() },
         { onConflict: "group_id" }
       );
     } else if (event.type === "leave") {
-      // グループから退出された → 削除
       await admin.from("line_groups").delete().eq("group_id", groupId);
     }
   }

@@ -13,6 +13,8 @@ type StaffEntry = {
   id: string; name: string; company_name: string | null;
   global_role: string; is_active: boolean; must_change_password: boolean;
   account_number: string | null;
+  line_linked: boolean;
+  line_blocked: boolean;
   projects: StaffProject[];
 };
 
@@ -141,11 +143,13 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
       {/* 統計チップ */}
       <div className="flex flex-wrap gap-2">
         {([
-          ["稼働中",   staffs.filter(s => s.is_active).length,             "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"],
-          ["運用者",   staffs.filter(s => s.global_role === "executive").length, "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"],
-          ["管理者",   staffs.filter(s => s.global_role === "admin").length,     "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"],
-          ["スタッフ", staffs.filter(s => s.global_role === "staff").length,     "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"],
-          ["社",       companies.length,                                          "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"],
+          ["稼働中",        staffs.filter(s => s.is_active).length,                  "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"],
+          ["運用者",        staffs.filter(s => s.global_role === "executive").length, "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"],
+          ["管理者",        staffs.filter(s => s.global_role === "admin").length,     "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"],
+          ["スタッフ",      staffs.filter(s => s.global_role === "staff").length,     "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"],
+          ["社",            companies.length,                                          "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"],
+          ["LINE未連携",    staffs.filter(s => s.is_active && !s.line_linked).length, "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"],
+          ["LINEブロック中", staffs.filter(s => s.line_blocked).length,               "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"],
         ] as [string, number, string][]).map(([label, count, cls]) => (
           <span key={label} className={`px-3 py-1 rounded-full text-xs font-semibold tabular-nums ${cls}`}>
             {count}{label}
@@ -297,6 +301,16 @@ export default function StaffsClient({ staffs }: { staffs: StaffEntry[] }) {
                     {s.must_change_password && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-medium">
                         初回PW未変更
+                      </span>
+                    )}
+                    {s.line_blocked && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-semibold">
+                        LINEブロック中
+                      </span>
+                    )}
+                    {!s.line_linked && s.is_active && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-500 dark:text-amber-400">
+                        LINE未連携
                       </span>
                     )}
                     {!s.is_active && (
