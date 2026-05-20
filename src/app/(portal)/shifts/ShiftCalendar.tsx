@@ -234,27 +234,27 @@ export default function ShiftCalendar({
             {selShift.note && (
               <p className="text-xs text-zinc-400">{selShift.note}</p>
             )}
-            {/* 変更履歴 */}
-            {selected && (logMap.get(selected) ?? []).length > 0 && (
-              <div className="pt-1 border-t border-zinc-200 dark:border-zinc-700">
-                <p className="text-[10px] text-zinc-400 mb-1 flex items-center gap-1">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
-                  変更履歴
+          </div>
+        )}
+        {/* 変更履歴：出勤・公休・未登録すべてで表示 */}
+        {selected && (logMap.get(selected) ?? []).length > 0 && (
+          <div className={`pt-1 border-t border-zinc-200 dark:border-zinc-700 ${selHasWork ? "mt-1" : "mt-0"}`}>
+            <p className="text-[10px] text-zinc-400 mb-1 flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
+              変更履歴
+            </p>
+            <div className="space-y-0.5 max-h-24 overflow-y-auto">
+              {(logMap.get(selected) ?? []).map((l, i) => (
+                <p key={i} className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-snug">
+                  <span className="font-semibold text-zinc-600 dark:text-zinc-300">{l.changed_by_name}</span>
+                  {" が "}
+                  {l.action === "delete" ? "削除"
+                    : l.action === "create" ? "追加"
+                    : `${l.before_shift_name ?? "（なし）"} → ${l.after_shift_name ?? "（なし）"}`}
+                  <span className="ml-1 text-zinc-400">{fmtLogAt(l.changed_at)}</span>
                 </p>
-                <div className="space-y-0.5 max-h-24 overflow-y-auto">
-                  {(logMap.get(selected) ?? []).map((l, i) => (
-                    <p key={i} className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-snug">
-                      <span className="font-semibold text-zinc-600 dark:text-zinc-300">{l.changed_by_name}</span>
-                      {" が "}
-                      {l.action === "delete" ? "削除"
-                        : l.action === "create" ? "追加"
-                        : `${l.before_shift_name ?? "（なし）"} → ${l.after_shift_name ?? "（なし）"}`}
-                      <span className="ml-1 text-zinc-400">{fmtLogAt(l.changed_at)}</span>
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         )}
       </div>
