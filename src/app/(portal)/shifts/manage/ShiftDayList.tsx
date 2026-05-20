@@ -58,14 +58,27 @@ type TabKey = "shukkin" | "kyukyu" | "kiboshu";
 
 type SlotReq = { section: string; pattern_name: string; shift_date: string; required_count: number };
 
+type ChangeLog = {
+  staff_id: string;
+  shift_date: string;
+  action: string;
+  before_shift_name: string | null;
+  after_shift_name: string | null;
+  changed_by_name: string;
+  changed_at: string;
+};
+
 export default function ShiftDayList({
-  allDates, shifts, activeMembers, shiftPatterns, slotRequirements, selectedDate, onDateChange, projectId,
+  allDates, shifts, activeMembers, shiftPatterns, slotRequirements,
+  changeLogs, absenceSet, selectedDate, onDateChange, projectId,
 }: {
   allDates: string[];
   shifts: Shift[];
   activeMembers: Member[];
   shiftPatterns: Pattern[];
   slotRequirements?: SlotReq[];
+  changeLogs?: ChangeLog[];
+  absenceSet?: Set<string>;
   selectedDate: string;
   onDateChange: (date: string) => void;
   projectId: string;
@@ -126,6 +139,17 @@ export default function ShiftDayList({
   // シフトルックアップ
   const shiftMap = new Map<string, Shift>(shifts.map((s) => [`${s.staff_id}__${s.shift_date}`, s]));
   const getShift = (sid: string, d: string) => shiftMap.get(`${sid}__${d}`);
+
+  // 変更ログ：日付ごとにまとめる
+  const logsByDate = new Map<string, ChangeLog[]>();
+  for (const log of changeLogs ?? []) {
+    if (!logsByDate.has(log.shift_date)) logsByDate.set(log.shift_date, []);
+    logsByDate.get(log.shift_date)!.push(log);
+  }
+
+  // 欠勤チェック
+  const isAbsent = (staffId: string, date: string) =>
+    absenceSet?.has(`${staffId}__${date}`) ?? false;
 
   // 日別スロット必要数（shift_slot_requirements から） section + pattern + date をキーにする
   const slotReqMap = new Map<string, number>();
@@ -263,6 +287,7 @@ export default function ShiftDayList({
                       const isToday   = d === todayStr;
                       const isSun     = dayOfWeek === 0;
                       const isSat     = dayOfWeek === 6;
+                      const hasLog    = (logsByDate.get(d)?.length ?? 0) > 0;
                       return (
                         <button
                           key={d}
@@ -279,6 +304,9 @@ export default function ShiftDayList({
                         >
                           {isToday && !isSel && (
                             <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-500" />
+                          )}
+                          {hasLog && !isSel && (
+                            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-400" />
                           )}
                           <span className={cx(
                             "text-[9px] font-medium leading-none",
@@ -403,12 +431,14 @@ export default function ShiftDayList({
                               {/* スタッフ行 (h-8 each) */}
                               {!isCollapsed && Array.from({ length: maxSlots }).map((_, slotIdx) => {
                                 const member = staffOnDay[slotIdx];
+                                const absent = member ? isAbsent(member.id, d) : false;
                                 return (
                                   <div
                                     key={slotIdx}
                                     className={cx(
                                       "h-8 flex items-center justify-center w-full",
                                       slotIdx < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
+                                      absent ? "bg-red-50 dark:bg-red-950/30" : "",
                                     )}
                                   >
                                     {member ? (
@@ -417,7 +447,9 @@ export default function ShiftDayList({
                                         onClick={() => setStaffMenu({ staffId: member.id, staffName: member.name })}
                                         className={cx(
                                           "text-[10px] font-semibold leading-none truncate px-0.5 hover:underline",
-                                          isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
+                                          absent
+                                            ? "text-red-600 dark:text-red-400"
+                                            : isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
                                         )}
                                       >
                                         {shortName(member.name)}
@@ -590,6 +622,43 @@ export default function ShiftDayList({
           );
         })()}
       </div>
+
+      {/* ── 選択日の変更ログ ── */}
+      {(() => {
+        const logs = logsByDate.get(selectedDate) ?? [];
+        if (logs.length === 0) return null;
+        const staffById = new Map(activeMembers.map(m => [m.id, m.name]));
+        return (
+          <div className="mx-4 mt-3 mb-2 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/20 overflow-hidden">
+            <div className="px-3 py-2 flex items-center gap-1.5 border-b border-orange-200 dark:border-orange-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />
+              <p className="text-[11px] font-bold text-orange-700 dark:text-orange-300">
+                {selectedDate} の変更ログ（{logs.length}件）
+              </p>
+            </div>
+            <div className="divide-y divide-orange-100 dark:divide-orange-900/40">
+              {logs.map((log, i) => {
+                const name = staffById.get(log.staff_id) ?? log.staff_id;
+                const from = log.before_shift_name ?? "（なし）";
+                const to   = log.after_shift_name  ?? "（削除）";
+                const at   = new Date(log.changed_at).toLocaleString("ja-JP", {
+                  timeZone: "Asia/Tokyo", month: "numeric", day: "numeric",
+                  hour: "2-digit", minute: "2-digit",
+                });
+                return (
+                  <div key={i} className="px-3 py-1.5 flex items-baseline gap-2 text-[11px]">
+                    <span className="font-semibold text-zinc-700 dark:text-zinc-300 flex-shrink-0">{name}</span>
+                    <span className="text-zinc-500">
+                      {from} → {to}
+                    </span>
+                    <span className="ml-auto text-zinc-400 flex-shrink-0 tabular-nums">{log.changed_by_name} {at}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {staffMenu && (
         <StaffPopupMenu

@@ -97,6 +97,7 @@ export default async function ManageShiftsPage(props: {
     { data: changeLogsRaw },
     { data: staffsForLogs },
     { data: draftRow },
+    { data: absenceRows },
     shiftBatch0,
     shiftBatch1,
     shiftBatch2,
@@ -131,6 +132,12 @@ export default async function ManageShiftsPage(props: {
       .limit(300),
     // 変更者名解決用
     admin.from("staffs").select("id, display_name, name"),
+    // 当月の欠勤データ（セル赤色表示用）
+    admin.from("absence_reports")
+      .select("staff_id, absence_date")
+      .eq("project_id", selectedProjectId)
+      .gte("absence_date", startDate)
+      .lte("absence_date", endDate),
     // 仮保存データ
     admin.from("shift_grid_drafts")
       .select("draft_data, saved_by, saved_at")
@@ -151,6 +158,11 @@ export default async function ManageShiftsPage(props: {
     ...(shiftBatch3.data ?? []),
     ...(shiftBatch4.data ?? []),
   ];
+
+  // 欠勤セット：staffId__date をキーに持つ Set
+  const absenceSet = new Set(
+    (absenceRows ?? []).map(a => `${a.staff_id}__${a.absence_date}`)
+  );
 
   const activeMembers = (members ?? [])
     .map((m) => {
@@ -321,6 +333,7 @@ export default async function ManageShiftsPage(props: {
           targetYear={targetYear}
           targetMonth={targetMonth}
           changeLogs={changeLogs}
+          absenceSet={absenceSet}
           initialDraft={initialDraft}
           draftSavedBy={draftSavedBy}
           draftSavedAt={draftSavedAt}

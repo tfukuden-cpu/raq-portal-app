@@ -45,6 +45,7 @@ type Props = {
   shiftRequests: ShiftRequest[];
   slotRequirements: SlotReq[];
   changeLogs: ChangeLog[];
+  absenceSet: Set<string>;
   initialDraft: GridDraftEntry[] | null;
   draftSavedBy: string | null;
   draftSavedAt: string | null;
@@ -53,7 +54,7 @@ type Props = {
 export default function ShiftManageClient({
   projectId, targetYear, targetMonth, allDates, defaultDate,
   shifts, activeMembers, shiftPatterns, shiftRequests, slotRequirements,
-  changeLogs, initialDraft, draftSavedBy, draftSavedAt,
+  changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [mode, setMode] = useState<"list" | "edit">(
@@ -126,6 +127,8 @@ export default function ShiftManageClient({
         activeMembers={activeMembers}
         shiftPatterns={shiftPatterns}
         slotRequirements={slotRequirements}
+        changeLogs={changeLogs}
+        absenceSet={absenceSet}
         selectedDate={selectedDate}
         onDateChange={setSelectedDate}
         projectId={projectId}
