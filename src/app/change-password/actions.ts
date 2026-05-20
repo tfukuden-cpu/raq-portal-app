@@ -65,5 +65,5 @@ export async function changePasswordAction(
     };
   }
 
-  redirect("/dashboard");
+  redirect("/link-line");
 }

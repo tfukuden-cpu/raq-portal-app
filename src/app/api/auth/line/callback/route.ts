@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
   const isFriend = await checkLineFriendship(profile.accessToken);
   if (!isFriend) {
     if (parsedState.mode === "link") {
-      return clearState(NextResponse.redirect(new URL("/my?error=line_not_friend", req.url)));
+      return clearState(NextResponse.redirect(new URL("/link-line?error=line_not_friend", req.url)));
     }
     return errRedirect(req, "line_not_friend");
   }
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
       .update({ line_user_id: profile.userId })
       .eq("id", staffId);
 
-    return clearState(NextResponse.redirect(new URL("/my?success=line_linked", req.url)));
+    return clearState(NextResponse.redirect(new URL("/dashboard", req.url)));
   }
 
   // ── ログインモード（LINE ID でスタッフ検索 → magic link）──

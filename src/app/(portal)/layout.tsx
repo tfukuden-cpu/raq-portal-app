@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import AppNav from "@/components/AppNav";
 import { logoutAction } from "@/app/login/actions";
 import type { IconKey } from "@/components/icons";
@@ -53,9 +54,14 @@ export default async function PortalLayout({
 
   const { data: staff } = await supabase
     .from("staffs")
-    .select("name, display_name, global_role")
+    .select("name, display_name, global_role, line_user_id")
     .eq("id", staffId)
     .maybeSingle();
+
+  // LINE未連携の場合は連携ページへ強制リダイレクト
+  if (!staff?.line_user_id) {
+    redirect("/link-line");
+  }
 
   const isExecutive   = staff?.global_role === "executive";
   const isGlobalAdmin = staff?.global_role === "admin" || staff?.global_role === "executive";
