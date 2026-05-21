@@ -98,6 +98,7 @@ export default async function ManageShiftsPage(props: {
     { data: staffsForLogs },
     { data: absenceRows },
     { data: draftRow },
+    { data: offRequestsRaw },
     shiftBatch0,
     shiftBatch1,
     shiftBatch2,
@@ -144,6 +145,12 @@ export default async function ManageShiftsPage(props: {
       .eq("project_id", selectedProjectId)
       .eq("target_month", `${targetYear}-${String(targetMonth).padStart(2, "0")}`)
       .maybeSingle(),
+    // 希望休申請（優先度表示用）
+    admin.from("shift_off_requests")
+      .select("staff_id, request_date, priority")
+      .eq("project_id", selectedProjectId)
+      .gte("request_date", startDate)
+      .lte("request_date", endDate),
     shiftSelect().range(0,    999),
     shiftSelect().range(1000, 1999),
     shiftSelect().range(2000, 2999),
@@ -337,6 +344,11 @@ export default async function ManageShiftsPage(props: {
           initialDraft={initialDraft}
           draftSavedBy={draftSavedBy}
           draftSavedAt={draftSavedAt}
+          offRequests={(offRequestsRaw ?? []).map(r => ({
+            staff_id: r.staff_id as string,
+            request_date: r.request_date as string,
+            priority: r.priority as string,
+          }))}
         />
       </div>
     </main>

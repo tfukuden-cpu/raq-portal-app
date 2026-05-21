@@ -68,9 +68,20 @@ type ChangeLog = {
   changed_at: string;
 };
 
+const PRIORITY_LABEL: Record<string, string> = {
+  "第一希望休": "①", "第二希望休": "②", "第三希望休": "③", "第四希望休": "④", "冠婚葬祭": "婚",
+};
+const PRIORITY_COLOR: Record<string, string> = {
+  "第一希望休": "text-blue-600 dark:text-blue-400",
+  "第二希望休": "text-indigo-500 dark:text-indigo-400",
+  "第三希望休": "text-purple-500 dark:text-purple-400",
+  "第四希望休": "text-zinc-400 dark:text-zinc-500",
+  "冠婚葬祭":   "text-red-500 dark:text-red-400",
+};
+
 export default function ShiftDayList({
   allDates, shifts, activeMembers, shiftPatterns, slotRequirements,
-  changeLogs, absenceSet, selectedDate, onDateChange, projectId,
+  changeLogs, absenceSet, selectedDate, onDateChange, projectId, offRequests,
 }: {
   allDates: string[];
   shifts: Shift[];
@@ -84,7 +95,12 @@ export default function ShiftDayList({
   projectId: string;
   targetYear: number;
   targetMonth: number;
+  offRequests?: { staff_id: string; request_date: string; priority: string }[];
 }) {
+  // staff_id__date → priority のマップ
+  const offRequestMap = new Map(
+    (offRequests ?? []).map(r => [`${r.staff_id}__${r.request_date}`, r.priority])
+  );
   const [tabKey, setTabKey]               = useState<TabKey>("shukkin");
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
   const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string } | null>(null);
@@ -596,18 +612,28 @@ export default function ShiftDayList({
                                 slotIdx < maxActual - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
                               )}
                             >
-                              {member && (
-                                <button
-                                  type="button"
-                                  onClick={() => setStaffMenu({ staffId: member.id, staffName: member.name })}
-                                  className={cx(
-                                    "text-[10px] font-semibold leading-none truncate px-0.5 hover:underline",
-                                    isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
-                                  )}
-                                >
-                                  {shortName(member.name)}
-                                </button>
-                              )}
+                              {member && (() => {
+                                const priority = tabKey === "kiboshu"
+                                  ? offRequestMap.get(`${member.id}__${d}`)
+                                  : undefined;
+                                const label = priority ? PRIORITY_LABEL[priority] : undefined;
+                                const color = priority ? PRIORITY_COLOR[priority] : undefined;
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => setStaffMenu({ staffId: member.id, staffName: member.name })}
+                                    className={cx(
+                                      "text-[10px] font-semibold leading-none truncate px-0.5 hover:underline flex items-center gap-px",
+                                      isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
+                                    )}
+                                  >
+                                    {label && (
+                                      <span className={cx("text-[9px] font-bold flex-shrink-0", color ?? "")}>{label}</span>
+                                    )}
+                                    {shortName(member.name)}
+                                  </button>
+                                );
+                              })()}
                             </div>
                           );
                         })}

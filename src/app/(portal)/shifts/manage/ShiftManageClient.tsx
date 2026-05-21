@@ -33,6 +33,8 @@ type ShiftRequest = {
 };
 type SlotReq = { section: string; pattern_name: string; shift_date: string; required_count: number };
 
+type OffRequest = { staff_id: string; request_date: string; priority: string };
+
 type Props = {
   projectId: string;
   targetYear: number;
@@ -49,12 +51,14 @@ type Props = {
   initialDraft: GridDraftEntry[] | null;
   draftSavedBy: string | null;
   draftSavedAt: string | null;
+  offRequests: OffRequest[];
 };
 
 export default function ShiftManageClient({
   projectId, targetYear, targetMonth, allDates, defaultDate,
   shifts, activeMembers, shiftPatterns, shiftRequests, slotRequirements,
   changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
+  offRequests,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [mode, setMode] = useState<"list" | "edit">(
@@ -134,6 +138,7 @@ export default function ShiftManageClient({
         projectId={projectId}
         targetYear={targetYear}
         targetMonth={targetMonth}
+        offRequests={offRequests}
       />
     </>
   );
