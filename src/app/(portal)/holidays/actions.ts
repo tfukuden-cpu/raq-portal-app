@@ -148,6 +148,7 @@ export async function submitHolidayAction(
     }
   }
 
+  const now = new Date().toISOString();
   const rows = dates.map((d) => ({
     project_id: projectId,
     staff_id: staffId,
@@ -157,8 +158,22 @@ export async function submitHolidayAction(
   }));
 
   // RLS が status='approved' の直接挿入を弾くため admin client を使用
-  const { error } = await createAdminClient().from("holiday_requests").insert(rows);
+  const admin = createAdminClient();
+  const { error } = await admin.from("holiday_requests").insert(rows);
   if (error) return { success: false, message: "申請失敗：" + error.message };
+
+  // shift_off_requests にも同期（シフト仮組用・管理者一覧用）
+  const offRows = dates.map((d) => ({
+    project_id:   projectId,
+    staff_id:     staffId,
+    request_date: d,
+    priority:     "第一希望休",  // アプリ申請は第一希望として扱う
+    submitted_at: now,
+    source:       "app",
+  }));
+  await admin
+    .from("shift_off_requests")
+    .upsert(offRows, { onConflict: "project_id,staff_id,request_date" });
 
   revalidatePath("/holidays");
   return { success: true };
@@ -172,8 +187,30 @@ export async function withdrawHolidayAction(
   if (!id) return { success: false, message: "IDが必要です" };
 
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  // 削除前に request_date と project_id を取得（shift_off_requests の同期削除に使う）
+  const { data: target } = await supabase
+    .from("holiday_requests")
+    .select("request_date, project_id")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error } = await supabase.from("holiday_requests").delete().eq("id", id);
   if (error) return { success: false, message: "取り下げ失敗：" + error.message };
+
+  // shift_off_requests からもアプリ申請分を削除（Excelインポート分は残す）
+  if (target) {
+    const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+    await createAdminClient()
+      .from("shift_off_requests")
+      .delete()
+      .eq("project_id", target.project_id)
+      .eq("staff_id", staffId)
+      .eq("request_date", target.request_date)
+      .eq("source", "app");
+  }
 
   revalidatePath("/holidays");
   return { success: true };

@@ -10,6 +10,7 @@ export type OffRequestRow = {
   request_date: string;
   priority: string;
   submitted_at: string | null;
+  source: string;
 };
 
 /** 指定案件・月の希望休申請を全件取得（管理者用） */
@@ -30,7 +31,7 @@ export async function fetchOffRequestsAction(
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("shift_off_requests")
-    .select("id, staff_id, request_date, priority, submitted_at")
+    .select("id, staff_id, request_date, priority, submitted_at, source")
     .eq("project_id", projectId)
     .gte("request_date", from)
     .lte("request_date", to)
@@ -60,6 +61,7 @@ export async function fetchOffRequestsAction(
     request_date: r.request_date as string,
     priority:     r.priority as string,
     submitted_at: r.submitted_at as string | null,
+    source:       (r.source as string | null) ?? "excel",
   }));
 
   return { success: true, rows };

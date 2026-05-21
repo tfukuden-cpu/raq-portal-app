@@ -85,12 +85,15 @@ export default function ShiftOffRequestSection({ projectId }: { projectId: strin
   // スタッフ別にまとめる
   const grouped = (() => {
     if (!rows) return null;
-    const map = new Map<string, { staffId: string; staffName: string; submittedAt: string | null; dates: { date: string; priority: string }[] }>();
+    const map = new Map<string, { staffId: string; staffName: string; submittedAt: string | null; source: string; dates: { date: string; priority: string; source: string }[] }>();
     for (const r of rows) {
       if (!map.has(r.staff_id)) {
-        map.set(r.staff_id, { staffId: r.staff_id, staffName: r.staff_name, submittedAt: r.submitted_at, dates: [] });
+        map.set(r.staff_id, { staffId: r.staff_id, staffName: r.staff_name, submittedAt: r.submitted_at, source: r.source, dates: [] });
       }
-      map.get(r.staff_id)!.dates.push({ date: r.request_date, priority: r.priority });
+      const entry = map.get(r.staff_id)!;
+      // 複数ソースが混在する場合
+      if (entry.source !== r.source) entry.source = "mixed";
+      entry.dates.push({ date: r.request_date, priority: r.priority, source: r.source });
     }
     return [...map.values()].filter(g =>
       !filterStaff || g.staffName.includes(filterStaff) || g.staffId.includes(filterStaff)
@@ -177,7 +180,18 @@ export default function ShiftOffRequestSection({ projectId }: { projectId: strin
                 <div key={g.staffId} className="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 space-y-2">
                   {/* スタッフヘッダー */}
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{g.staffName}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{g.staffName}</span>
+                      {g.source === "app" && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-semibold flex-shrink-0">アプリ</span>
+                      )}
+                      {g.source === "excel" && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-semibold flex-shrink-0">Excel</span>
+                      )}
+                      {g.source === "mixed" && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-semibold flex-shrink-0">混在</span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-zinc-400 tabular-nums">
                         申請: {fmtTs(g.submittedAt)}
