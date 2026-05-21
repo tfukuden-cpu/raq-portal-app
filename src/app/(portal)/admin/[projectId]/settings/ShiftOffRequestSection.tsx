@@ -182,14 +182,10 @@ export default function ShiftOffRequestSection({ projectId }: { projectId: strin
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{g.staffName}</span>
-                      {g.source === "app" && (
+                      {(g.source === "app" || g.source === "mixed") ? (
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-semibold flex-shrink-0">アプリ</span>
-                      )}
-                      {g.source === "excel" && (
+                      ) : (
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-semibold flex-shrink-0">Excel</span>
-                      )}
-                      {g.source === "mixed" && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-semibold flex-shrink-0">混在</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
