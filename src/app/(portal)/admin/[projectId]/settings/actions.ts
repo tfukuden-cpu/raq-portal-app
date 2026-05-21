@@ -261,6 +261,14 @@ export async function createAndAddStaffAction(fd: FormData): Promise<SettingsRes
 
   await assertAdmin();
 
+  // 同名スタッフが既に存在する場合はエラー
+  const { data: existing } = await adminSupa()
+    .from("staffs")
+    .select("id, name")
+    .or(`name.eq.${name},display_name.eq.${name}`)
+    .maybeSingle();
+  if (existing) return { success: false, message: `「${name}」は既に登録済みです（${existing.id}）` };
+
   // IDを自動採番
   const id = await getNextStaffId();
   const admin = adminSupa();
