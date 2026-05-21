@@ -142,10 +142,13 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // 同バッチ内の重複キー（staff_id+request_date）を除去（後勝ち）
+  const deduped = [...new Map(rows.map(r => [`${r.staff_id}:${r.request_date}`, r])).values()];
+
   // upsert（同一project_id+staff_id+request_dateは上書き）
   const { error } = await admin
     .from("shift_off_requests")
-    .upsert(rows, { onConflict: "project_id,staff_id,request_date" });
+    .upsert(deduped, { onConflict: "project_id,staff_id,request_date" });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -153,7 +156,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    imported: rows.length,
+    imported: deduped.length,
     skipped,
     month: `${year}年${month}月`,
   });
