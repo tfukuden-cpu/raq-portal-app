@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { ChevronLeftIcon } from "@/components/icons";
 import { withdrawHolidayAction } from "@/app/(portal)/holidays/actions";
 import HolidayCalendar from "@/app/(portal)/holidays/HolidayCalendar";
+import MyOffRequestsCard from "./MyOffRequestsCard";
 
 const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -24,6 +25,7 @@ type HolidayRequest = {
 };
 
 type Props = {
+  projectId: string;
   holidayRequests: HolidayRequest[];
   initialYear: number;
   initialMonth: number;
@@ -32,6 +34,7 @@ type Props = {
 };
 
 export default function HolidayTab({
+  projectId,
   holidayRequests,
   initialYear,
   initialMonth,
@@ -93,7 +96,14 @@ export default function HolidayTab({
 
   return (
     <div className="h-full overflow-y-auto space-y-3">
-      {/* 申請ボタン */}
+      {/* 提出済み希望休（Googleフォーム経由インポートデータ） */}
+      <MyOffRequestsCard
+        projectId={projectId}
+        initialYear={initialYear}
+        initialMonth={initialMonth}
+      />
+
+      {/* 欠勤申請ボタン */}
       <button
         type="button"
         onClick={() => setView("apply")}

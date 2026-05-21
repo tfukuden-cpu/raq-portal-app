@@ -43,6 +43,7 @@ type ShiftOpening = {
 };
 
 type Props = {
+  projectId: string;
   shifts: ShiftData[];
   changeLogs?: ShiftChangeLog[];
   todayStr: string;
@@ -66,6 +67,7 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 export default function ShiftsTabs({
+  projectId,
   shifts, changeLogs = [], todayStr, initialYear, initialMonth, minMonth, maxMonth,
   holidayRequests, shiftRequests, shiftOpenings,
   holidayDeadlineDay = null, holidayMaxDaysPerMonth = null,
@@ -111,6 +113,7 @@ export default function ShiftsTabs({
 
         {tab === "holiday" && (
           <HolidayTab
+            projectId={projectId}
             holidayRequests={holidayRequests}
             initialYear={initialYear}
             initialMonth={initialMonth}

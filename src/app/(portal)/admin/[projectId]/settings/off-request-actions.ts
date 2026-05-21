@@ -1,0 +1,101 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export type OffRequestRow = {
+  id: string;
+  staff_id: string;
+  staff_name: string;
+  request_date: string;
+  priority: string;
+  submitted_at: string | null;
+};
+
+/** 指定案件・月の希望休申請を全件取得（管理者用） */
+export async function fetchOffRequestsAction(
+  projectId: string,
+  year: number,
+  month: number,
+): Promise<{ success: boolean; message?: string; rows?: OffRequestRow[] }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const from = `${year}-${pad(month)}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${pad(month)}-${pad(lastDay)}`;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("shift_off_requests")
+    .select("id, staff_id, request_date, priority, submitted_at")
+    .eq("project_id", projectId)
+    .gte("request_date", from)
+    .lte("request_date", to)
+    .order("submitted_at", { ascending: true })
+    .order("staff_id")
+    .order("request_date");
+
+  if (error) return { success: false, message: error.message };
+
+  // スタッフ名を取得
+  const staffIds = [...new Set((data ?? []).map(r => r.staff_id))];
+  const nameMap = new Map<string, string>();
+  if (staffIds.length > 0) {
+    const { data: staffsRaw } = await admin
+      .from("staffs")
+      .select("id, name, display_name")
+      .in("id", staffIds);
+    for (const s of staffsRaw ?? []) {
+      nameMap.set(s.id, (s.display_name ?? s.name ?? s.id) as string);
+    }
+  }
+
+  const rows: OffRequestRow[] = (data ?? []).map(r => ({
+    id:           r.id,
+    staff_id:     r.staff_id,
+    staff_name:   nameMap.get(r.staff_id) ?? r.staff_id,
+    request_date: r.request_date as string,
+    priority:     r.priority as string,
+    submitted_at: r.submitted_at as string | null,
+  }));
+
+  return { success: true, rows };
+}
+
+/** スタッフ自身の希望休申請を取得 */
+export async function fetchMyOffRequestsAction(
+  projectId: string,
+  year: number,
+  month: number,
+): Promise<{ success: boolean; message?: string; rows?: { request_date: string; priority: string; submitted_at: string | null }[] }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const from = `${year}-${pad(month)}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${pad(month)}-${pad(lastDay)}`;
+
+  const { data, error } = await supabase
+    .from("shift_off_requests")
+    .select("request_date, priority, submitted_at")
+    .eq("project_id", projectId)
+    .gte("request_date", from)
+    .lte("request_date", to)
+    .order("request_date");
+
+  if (error) return { success: false, message: error.message };
+
+  return {
+    success: true,
+    rows: (data ?? []).map(r => ({
+      request_date: r.request_date as string,
+      priority:     r.priority as string,
+      submitted_at: r.submitted_at as string | null,
+    })),
+  };
+}

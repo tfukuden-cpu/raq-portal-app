@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import ShiftDraftSection from "./ShiftDraftSection";
+import ShiftOffRequestSection from "./ShiftOffRequestSection";
 import {
   updateProjectNameAction,
   saveSheetUrlAction,
@@ -202,6 +203,14 @@ export function SettingsContainer({
       {/* ── 希望休タブ ── */}
       {tab === "holiday" && (
         <div className="space-y-8">
+          <section className="space-y-3">
+            <SectionHeading
+              title="希望休申請一覧 / インポート"
+              sub="GoogleフォームのExcelを取り込み、スタッフの申請内容を確認できます"
+            />
+            <ShiftOffRequestSection projectId={projectId} />
+          </section>
+          <Divider />
           <section className="space-y-3">
             <SectionHeading
               title="希望休ルール"

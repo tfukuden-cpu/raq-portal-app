@@ -122,6 +122,7 @@ export default async function ShiftsPage() {
         {/* タブ全体（残りスペースを埋める） */}
         <div className="flex-1 min-h-0 flex flex-col">
           <ShiftsTabs
+            projectId={projectId}
             shifts={shiftsRes.data ?? []}
             changeLogs={changeLogs}
             todayStr={todayStr}
