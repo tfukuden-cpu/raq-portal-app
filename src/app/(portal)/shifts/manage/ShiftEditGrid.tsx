@@ -458,15 +458,6 @@ function NotifyModal({
     return true;
   }
 
-  // 「通知しない」で保存だけ
-  async function handleSaveOnly() {
-    setBusy(true);
-    setSaveError(null);
-    const ok = await doSave();
-    setBusy(false);
-    if (ok) onSaved();
-  }
-
   // 「LINEで送信」で保存＋通知
   async function handleSend() {
     setBusy(true);
@@ -570,18 +561,13 @@ function NotifyModal({
             <>
               {/* キャンセル：保存せず編集に戻る */}
               <button onClick={onCancel} disabled={busy}
-                className="px-3 py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 transition-colors">
-                キャンセル
-              </button>
-              {/* 通知しない：保存のみ */}
-              <button onClick={handleSaveOnly} disabled={busy}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors">
-                {busy ? "保存中…" : "通知しない"}
+                キャンセル
               </button>
               {/* LINE送信：保存＋通知 */}
               <button onClick={handleSend} disabled={busy || selected.size === 0}
                 className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 transition-colors">
-                {busy ? "送信中…" : `LINEで送信（${selected.size}名）`}
+                {busy ? "保存中…" : `LINEで送信（${selected.size}名）`}
               </button>
             </>
           )}
