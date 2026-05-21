@@ -42,11 +42,12 @@ export default function ShiftDraftPlanner({
 
   function setCount(patternName: string, date: string, val: string) {
     setSaved(false);
+    const cleaned = val.replace(/[^0-9]/g, "");
     setCounts(prev => {
       const next = new Map(prev);
       const k = `${patternName}__${date}`;
-      if (val === "" || val === "0") next.delete(k);
-      else next.set(k, val);
+      if (!cleaned || cleaned === "0") next.delete(k);
+      else next.set(k, cleaned);
       return next;
     });
   }
@@ -169,18 +170,20 @@ export default function ShiftDraftPlanner({
                       isWkend ? "bg-blue-50/30 dark:bg-blue-950/10" : "",
                     ].join(" ")}>
                       <input
-                        type="number"
-                        min={0}
-                        max={99}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={2}
                         value={val}
                         onChange={e => setCount(pattern.name, date, e.target.value)}
-                        placeholder="—"
+                        onFocus={e => e.target.select()}
+                        placeholder="0"
                         className={[
                           "w-10 h-8 text-center text-xs rounded-lg border transition-colors tabular-nums",
-                          "bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100",
+                          "bg-white dark:bg-zinc-900",
                           val
-                            ? "border-blue-300 dark:border-blue-700"
-                            : "border-zinc-200 dark:border-zinc-700 text-zinc-300 dark:text-zinc-600",
+                            ? "border-blue-300 dark:border-blue-700 text-zinc-800 dark:text-zinc-100"
+                            : "border-zinc-200 dark:border-zinc-700 text-zinc-400 dark:text-zinc-500",
                         ].join(" ")}
                       />
                     </td>
