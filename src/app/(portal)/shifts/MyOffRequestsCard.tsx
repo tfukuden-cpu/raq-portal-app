@@ -1,11 +1,10 @@
 "use client";
 
-/**
- * MyOffRequestsCard
- * スタッフが自分の希望休申請（インポート済みデータ）を月別に確認するカード
- */
 import { useState, useTransition, useEffect } from "react";
-import { fetchMyOffRequestsAction } from "@/app/(portal)/admin/[projectId]/settings/off-request-actions";
+import {
+  fetchMyOffRequestsAction,
+  withdrawOffRequestAction,
+} from "@/app/(portal)/admin/[projectId]/settings/off-request-actions";
 
 const PRIORITY_COLOR: Record<string, string> = {
   "第一希望休": "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300",
@@ -46,13 +45,15 @@ export default function MyOffRequestsCard({
   const [rows, setRows]   = useState<{ request_date: string; priority: string; submitted_at: string | null }[] | null>(null);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [confirmDate, setConfirmDate] = useState<string | null>(null);
+  const [isWithdrawing, startWithdraw] = useTransition();
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
   function load(y: number, m: number) {
     startTransition(async () => {
       const r = await fetchMyOffRequestsAction(projectId, y, m);
       if (r.success) {
         setRows(r.rows ?? []);
-        // 申請日時は全行同じはずなので最初の行から取得
         setSubmittedAt(r.rows?.[0]?.submitted_at ?? null);
       } else {
         setRows([]);
@@ -62,6 +63,19 @@ export default function MyOffRequestsCard({
   }
 
   useEffect(() => { load(year, month); }, []); // 初期ロード
+
+  function handleWithdraw(requestDate: string) {
+    setWithdrawError(null);
+    startWithdraw(async () => {
+      const r = await withdrawOffRequestAction(projectId, requestDate);
+      if (r.success) {
+        setConfirmDate(null);
+        load(year, month);
+      } else {
+        setWithdrawError(r.message ?? "取り下げに失敗しました");
+      }
+    });
+  }
 
   const now = new Date();
   const yearOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
@@ -110,12 +124,50 @@ export default function MyOffRequestsCard({
       {!isPending && rows !== null && rows.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {rows.map((r, i) => (
-            <span key={i} className={`inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full ${PRIORITY_COLOR[r.priority] ?? "bg-zinc-100 text-zinc-500"}`}>
+            <button
+              key={i}
+              type="button"
+              onClick={() => { setConfirmDate(r.request_date); setWithdrawError(null); }}
+              className={`inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full active:opacity-70 transition-opacity ${PRIORITY_COLOR[r.priority] ?? "bg-zinc-100 text-zinc-500"}`}
+            >
               {fmtDate(r.request_date)}
               <span className="opacity-70 text-[9px]">{r.priority.replace("希望休", "希望").replace("冠婚葬祭", "冠婚")}</span>
-            </span>
+            </button>
           ))}
         </div>
+      )}
+
+      {/* 取り下げ確認 */}
+      {confirmDate && (
+        <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-3 space-y-2">
+          <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+            {fmtDate(confirmDate)} の希望休を取り下げますか？
+          </p>
+          {withdrawError && (
+            <p className="text-[11px] text-red-500">{withdrawError}</p>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => handleWithdraw(confirmDate)}
+              disabled={isWithdrawing}
+              className="px-3 py-1 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-40 transition-colors"
+            >
+              {isWithdrawing ? "取り下げ中…" : "取り下げる"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDate(null)}
+              className="px-3 py-1 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
+      {rows !== null && rows.length > 0 && (
+        <p className="text-[10px] text-zinc-400">日付をタップして取り下げ</p>
       )}
     </div>
   );
