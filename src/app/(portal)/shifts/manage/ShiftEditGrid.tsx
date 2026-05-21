@@ -83,6 +83,11 @@ type ErrorAnnotation = {
 };
 type PendingNotify = {
   changes: { staffId: string; staffName: string; date: string; from: string | null; to: string | null }[];
+  // まだ DB に書いていない保存データ
+  upserts: BulkUpsertItem[];
+  dels: BulkDeleteItem[];
+  slotChanges: { patternName: string; date: string; section: string | null; requiredCount: number }[];
+  targetMonth: string;
 };
 
 interface Props {
@@ -408,11 +413,17 @@ function SummaryModal({
 // ── NotifyModal ─────────────────────────────────────────────────
 
 function NotifyModal({
-  projectId, changes, onClose,
+  projectId, changes, upserts, dels, slotChanges, targetMonth,
+  onCancel, onSaved,
 }: {
   projectId: string;
   changes: PendingNotify["changes"];
-  onClose: () => void;
+  upserts: PendingNotify["upserts"];
+  dels: PendingNotify["dels"];
+  slotChanges: PendingNotify["slotChanges"];
+  targetMonth: string;
+  onCancel: () => void;  // 保存キャンセル（編集に戻る）
+  onSaved: () => void;   // 保存完了
 }) {
   // スタッフ別にグループ化
   const groups = useMemo(() => {
@@ -425,20 +436,48 @@ function NotifyModal({
   }, [changes]);
 
   const [selected, setSelected] = useState<Set<string>>(() => new Set(groups.map(g => g.staffId)));
-  const [sending, setSending] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [result, setResult] = useState<{ sent: number; noLine: string[] } | null>(null);
 
   function toggleAll() {
     setSelected(prev => prev.size === groups.length ? new Set() : new Set(groups.map(g => g.staffId)));
   }
 
+  // DB 保存（スロット必要数＋シフト）
+  async function doSave(): Promise<boolean> {
+    if (slotChanges.length > 0) {
+      const rc = await upsertSlotRequirementsAction(projectId, slotChanges);
+      if (!rc.success) { setSaveError(rc.message ?? "必要人数の保存に失敗しました"); return false; }
+    }
+    if (upserts.length > 0 || dels.length > 0) {
+      const r = await bulkUpsertShiftsAction(projectId, upserts, dels);
+      if (!r.success) { setSaveError(r.message ?? "保存に失敗しました"); return false; }
+    }
+    await clearGridDraftAction(projectId, targetMonth);
+    return true;
+  }
+
+  // 「通知しない」で保存だけ
+  async function handleSaveOnly() {
+    setBusy(true);
+    setSaveError(null);
+    const ok = await doSave();
+    setBusy(false);
+    if (ok) onSaved();
+  }
+
+  // 「LINEで送信」で保存＋通知
   async function handleSend() {
-    setSending(true);
+    setBusy(true);
+    setSaveError(null);
+    const ok = await doSave();
+    if (!ok) { setBusy(false); return; }
     const targets = groups
       .filter(g => selected.has(g.staffId))
       .map(g => ({ staffId: g.staffId, staffName: g.staffName, changes: g.rows }));
     const r = await notifyShiftChangesAction(projectId, targets);
-    setSending(false);
+    setBusy(false);
     setResult({ sent: r.sent ?? 0, noLine: r.noLine ?? [] });
   }
 
@@ -449,7 +488,7 @@ function NotifyModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={result ? onClose : undefined}>
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={result ? onSaved : undefined}>
       <div
         className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85dvh] flex flex-col"
         onClick={e => e.stopPropagation()}
@@ -462,6 +501,13 @@ function NotifyModal({
             <p className="text-xs text-zinc-400 mt-0.5">LINE未連携のスタッフには送信されません</p>
           )}
         </div>
+
+        {/* 保存エラー */}
+        {saveError && (
+          <div className="px-4 py-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-800 shrink-0">
+            {saveError}
+          </div>
+        )}
 
         {result ? (
           <div className="px-4 py-6 flex-1 space-y-3">
@@ -477,12 +523,14 @@ function NotifyModal({
         ) : (
           <div className="overflow-y-auto flex-1 px-4 py-3 space-y-3">
             {/* 全選択 */}
-            <button
-              onClick={toggleAll}
-              className="text-xs text-blue-600 dark:text-blue-400 font-semibold"
-            >
-              {selected.size === groups.length ? "全て解除" : "全て選択"}
-            </button>
+            {changes.length > 0 && (
+              <button
+                onClick={toggleAll}
+                className="text-xs text-blue-600 dark:text-blue-400 font-semibold"
+              >
+                {selected.size === groups.length ? "全て解除" : "全て選択"}
+              </button>
+            )}
 
             {groups.map(g => (
               <div key={g.staffId} className="flex items-start gap-3">
@@ -514,19 +562,26 @@ function NotifyModal({
 
         <div className="px-4 pb-4 pt-2 flex gap-2 shrink-0">
           {result ? (
-            <button onClick={onClose}
+            <button onClick={onSaved}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors">
               閉じる
             </button>
           ) : (
             <>
-              <button onClick={onClose} disabled={sending}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors">
-                通知しない
+              {/* キャンセル：保存せず編集に戻る */}
+              <button onClick={onCancel} disabled={busy}
+                className="px-3 py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 transition-colors">
+                キャンセル
               </button>
-              <button onClick={handleSend} disabled={sending || selected.size === 0}
+              {/* 通知しない：保存のみ */}
+              <button onClick={handleSaveOnly} disabled={busy}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors">
+                {busy ? "保存中…" : "通知しない"}
+              </button>
+              {/* LINE送信：保存＋通知 */}
+              <button onClick={handleSend} disabled={busy || selected.size === 0}
                 className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 transition-colors">
-                {sending ? "送信中…" : `LINEで送信（${selected.size}名）`}
+                {busy ? "送信中…" : `LINEで送信（${selected.size}名）`}
               </button>
             </>
           )}
@@ -1130,26 +1185,8 @@ export default function ShiftEditGrid({
     }
 
     if (upserts.length === 0 && dels.length === 0 && slotChanges.length === 0) { onCancel(); return; }
-    setSaveError(null);
-    startTransition(async () => {
-      if (slotChanges.length > 0) {
-        const rc = await upsertSlotRequirementsAction(projectId, slotChanges);
-        if (!rc.success) { setSaveError(rc.message ?? "必要人数の保存に失敗しました"); return; }
-      }
-      if (upserts.length > 0 || dels.length > 0) {
-        const r = await bulkUpsertShiftsAction(projectId, upserts, dels);
-        if (!r.success) { setSaveError(r.message ?? "保存に失敗しました"); return; }
-      }
-      await clearGridDraftAction(projectId, targetMonth);
-      setDrafts(new Map());
-      setSaveError(null);
-      // スタッフへの変更がある場合は通知モーダルを表示
-      if (snapshot.length > 0) {
-        setPendingNotify({ changes: snapshot });
-      } else {
-        onSaved();
-      }
-    });
+    // DB 書き込みはモーダル側で行う（キャンセル可能にするため）
+    setPendingNotify({ changes: snapshot, upserts, dels, slotChanges, targetMonth });
   }
 
   // ── Available staff for "empty" modal ─────────────────────────
@@ -1528,7 +1565,12 @@ export default function ShiftEditGrid({
         <NotifyModal
           projectId={projectId}
           changes={pendingNotify.changes}
-          onClose={() => { setPendingNotify(null); onSaved(); }}
+          upserts={pendingNotify.upserts}
+          dels={pendingNotify.dels}
+          slotChanges={pendingNotify.slotChanges}
+          targetMonth={pendingNotify.targetMonth}
+          onCancel={() => setPendingNotify(null)}
+          onSaved={() => { setPendingNotify(null); setDrafts(new Map()); setSaveError(null); onSaved(); }}
         />
       )}
     </div>
