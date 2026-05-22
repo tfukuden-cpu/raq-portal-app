@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import {
   fetchOffRequestsAction,
   type OffRequestRow,
@@ -74,6 +74,19 @@ export default function ShiftOffRequestSection({ projectId }: { projectId: strin
     });
   }
 
+  // マウント時・月変更時に自動取得
+  useEffect(() => {
+    setListMsg(null);
+    setRows(null);
+    setFilterStaff("");
+    startFetch(async () => {
+      const r = await fetchOffRequestsAction(projectId, year, month);
+      if (r.success) setRows(r.rows ?? []);
+      else setListMsg(r.message ?? "取得失敗");
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, year, month]);
+
   const yearOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
   const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
 
@@ -103,7 +116,7 @@ export default function ShiftOffRequestSection({ projectId }: { projectId: strin
         </select>
         <button onClick={handleFetch} disabled={isFetching}
           className="px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-200 disabled:opacity-40 transition-colors">
-          {isFetching ? "読み込み中…" : "一覧を表示"}
+          {isFetching ? "読み込み中…" : "更新"}
         </button>
       </div>
 
