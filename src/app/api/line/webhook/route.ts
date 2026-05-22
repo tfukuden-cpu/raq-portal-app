@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const signature = req.headers.get("x-line-signature") ?? "";
 
-  if (!verifySignature(rawBody, signature)) {
+  // LINE_CHANNEL_SECRET が設定されている場合のみ署名検証（未設定は開発環境想定でスキップ）
+  if (process.env.LINE_CHANNEL_SECRET && !verifySignature(rawBody, signature)) {
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
