@@ -47,7 +47,7 @@ type Shift = {
   shift_start: string | null;
   shift_end: string | null;
 };
-type Member = { id: string; name: string; section: string | null; sections: string[] };
+type Member = { id: string; name: string; section: string | null; sections: string[]; endDate?: string | null };
 type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
   name: string;
@@ -1032,6 +1032,19 @@ export default function ShiftEditGrid({
       setTimeout(() => setErrorAnnotation(null), 3500);
       return;
     }
+    // 離脱日チェック
+    if (member?.endDate && targetDate > member.endDate) {
+      setErrorAnnotation({
+        patternName: targetPattern,
+        date: targetDate,
+        message: `${member.name} は ${member.endDate} 付けで離脱のため ${fmtDate(targetDate)} には配置できません`,
+        srcPatternName: sourcePattern,
+        srcDate: sourceDate,
+        srcStaffId: staffId,
+      });
+      setTimeout(() => setErrorAnnotation(null), 4000);
+      return;
+    }
     // 別日ドロップ時：対象日に既に勤務シフトがある場合はエラー
     if (sourceDate !== targetDate) {
       const existingOnTarget = resolveCell(staffId, targetDate);
@@ -1183,6 +1196,8 @@ export default function ShiftEditGrid({
     const pat = patternByName.get(patternName);
     return activeMembers
       .filter(m => {
+        // 離脱日チェック
+        if (m.endDate && date > m.endDate) return false;
         const cell = resolveCell(m.id, date);
         // 勤務パターンに配置済みなら除外
         if (cell !== null && cell.shiftName && patternNameSet.has(cell.shiftName)) return false;

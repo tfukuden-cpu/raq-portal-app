@@ -296,6 +296,10 @@ export async function generateShiftDraftAction(
       if (needMore <= 0) continue;
 
       const candidates = activeMemberRows.filter(m => {
+        // 離脱日チェック（end_date より後の日付には配置しない）
+        const endDate = (m as { end_date?: string | null }).end_date ?? null;
+        if (endDate && date > endDate) return false;
+
         // 希望休・同日割当済み
         if (holidaySet.has(`${m.staff_id}__${date}`)) return false;
         if (assignedOnDate.has(m.staff_id)) return false;

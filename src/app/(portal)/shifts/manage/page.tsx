@@ -271,7 +271,7 @@ export default async function ManageShiftsPage(props: {
       };
     })
     .filter((m) => !!m.id)
-    .filter((m) => !m.endDate || m.endDate >= startDate) as { id: string; name: string; role: string; section: string | null; sections: string[] }[];
+    .filter((m) => !m.endDate || m.endDate >= startDate) as { id: string; name: string; role: string; section: string | null; sections: string[]; endDate: string | null }[];
 
   const staffNameMap = new Map(activeMembers.map(m => [m.id, m.name]));
 
