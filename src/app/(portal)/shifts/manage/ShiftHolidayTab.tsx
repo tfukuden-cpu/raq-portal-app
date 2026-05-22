@@ -1,8 +1,49 @@
 "use client";
 
+import { useState } from "react";
 import ShiftOffRequestSection from "@/app/(portal)/admin/[projectId]/settings/ShiftOffRequestSection";
+import ShiftImportSection from "@/app/(portal)/admin/[projectId]/settings/ShiftImportSection";
 import { HolidayRulesList } from "@/app/(portal)/admin/[projectId]/settings/SettingsClient";
 import type { HolidayRuleInput } from "@/app/(portal)/admin/holiday-rule-config";
+
+function Collapsible({
+  title,
+  sub,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  sub?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-left"
+      >
+        <div>
+          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{title}</p>
+          {sub && <p className="text-[11px] text-zinc-400 mt-0.5">{sub}</p>}
+        </div>
+        <svg
+          className={`w-4 h-4 text-zinc-400 flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-4 py-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ShiftHolidayTab({
   projectId,
@@ -12,24 +53,35 @@ export default function ShiftHolidayTab({
   initialRules: HolidayRuleInput[];
 }) {
   return (
-    <div className="space-y-8">
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">希望休申請一覧 / インポート</h2>
-          <p className="text-[10px] text-zinc-400 mt-0.5">GoogleフォームのExcelを取り込み、スタッフの申請内容を確認できます</p>
-        </div>
-        <ShiftOffRequestSection projectId={projectId} />
-      </section>
+    <div className="space-y-3">
 
-      <div className="border-t border-zinc-100 dark:border-zinc-800" />
-
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">希望休ルール</h2>
-          <p className="text-[10px] text-zinc-400 mt-0.5">保存するとスプシの「希望休ルール」シートにも反映されます</p>
-        </div>
+      {/* 1. 希望休ルール（折り畳み） */}
+      <Collapsible
+        title="希望休ルール"
+        sub="締切日・上限日数などを設定します"
+        defaultOpen={true}
+      >
         <HolidayRulesList projectId={projectId} initialRules={initialRules} />
-      </section>
+      </Collapsible>
+
+      {/* 2. 希望休一覧（折り畳み・月ナビ付き） */}
+      <Collapsible
+        title="希望休一覧"
+        sub="スタッフの申請状況を月別に確認"
+        defaultOpen={true}
+      >
+        <ShiftOffRequestSection projectId={projectId} />
+      </Collapsible>
+
+      {/* 3. インポート（折り畳み・デフォルト閉じ） */}
+      <Collapsible
+        title="Excelインポート"
+        sub="GoogleフォームのExcelから取り込み"
+        defaultOpen={false}
+      >
+        <ShiftImportSection projectId={projectId} />
+      </Collapsible>
+
     </div>
   );
 }

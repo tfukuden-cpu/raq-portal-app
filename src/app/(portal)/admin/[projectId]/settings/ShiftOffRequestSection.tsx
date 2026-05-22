@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
+import { useState, useTransition, useEffect } from "react";
 import {
   fetchOffRequestsAction,
   type OffRequestRow,
 } from "./off-request-actions";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
 const PRIORITY_COLOR: Record<string, string> = {
   "第一希望休": "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300",
@@ -31,37 +32,10 @@ export default function ShiftOffRequestSection({ projectId }: { projectId: strin
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
 
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [importMsg, setImportMsg]   = useState<{ ok: boolean; msg: string } | null>(null);
-  const [isImporting, startImport]  = useTransition();
-
   const [rows, setRows]          = useState<OffRequestRow[] | null>(null);
   const [listMsg, setListMsg]    = useState<string | null>(null);
   const [isFetching, startFetch] = useTransition();
   const [filterStaff, setFilterStaff] = useState("");
-
-  function handleImport() {
-    const file = fileRef.current?.files?.[0];
-    if (!file) { setImportMsg({ ok: false, msg: "ファイルを選択してください" }); return; }
-    setImportMsg(null);
-    startImport(async () => {
-      const fd = new FormData();
-      fd.set("file", file);
-      fd.set("projectId", projectId);
-      const res = await fetch("/api/admin/import-shift-off-requests", { method: "POST", body: fd });
-      const json = await res.json();
-      if (json.ok) {
-        setImportMsg({ ok: true, msg: `${json.month} — ${json.imported}件 取り込み完了${json.skipped?.length ? `（未マッチ: ${json.skipped.join(", ")}）` : ""}` });
-        startFetch(async () => {
-          const r = await fetchOffRequestsAction(projectId, year, month);
-          if (r.success) setRows(r.rows ?? []);
-        });
-      } else {
-        setImportMsg({ ok: false, msg: json.error ?? json.message ?? "エラー" });
-      }
-      if (fileRef.current) fileRef.current.value = "";
-    });
-  }
 
   function handleFetch() {
     setListMsg(null);
@@ -87,8 +61,14 @@ export default function ShiftOffRequestSection({ projectId }: { projectId: strin
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, year, month]);
 
-  const yearOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
-  const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
+  function prevMonth() {
+    if (month === 1) { setYear(y => y - 1); setMonth(12); }
+    else setMonth(m => m - 1);
+  }
+  function nextMonth() {
+    if (month === 12) { setYear(y => y + 1); setMonth(1); }
+    else setMonth(m => m + 1);
+  }
 
   // スタッフ別グループ
   const grouped = (() => {
@@ -102,53 +82,51 @@ export default function ShiftOffRequestSection({ projectId }: { projectId: strin
   })();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
 
-      {/* 月選択 */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <select value={year} onChange={e => setYear(Number(e.target.value))}
-          className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-800 dark:text-zinc-100">
-          {yearOptions.map(y => <option key={y} value={y}>{y}年</option>)}
-        </select>
-        <select value={month} onChange={e => setMonth(Number(e.target.value))}
-          className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900 text-sm text-zinc-800 dark:text-zinc-100">
-          {monthOptions.map(m => <option key={m} value={m}>{m}月</option>)}
-        </select>
-        <button onClick={handleFetch} disabled={isFetching}
-          className="px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-200 disabled:opacity-40 transition-colors">
+      {/* 月ナビ */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={prevMonth}
+          className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+        >
+          <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
+        </button>
+        <span className="text-sm font-semibold tabular-nums w-20 text-center text-zinc-900 dark:text-zinc-100">
+          {year}/{String(month).padStart(2, "0")}
+        </span>
+        <button
+          onClick={nextMonth}
+          className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+        >
+          <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
+        </button>
+        <button
+          onClick={handleFetch}
+          disabled={isFetching}
+          className="ml-1 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+        >
           {isFetching ? "読み込み中…" : "更新"}
         </button>
-      </div>
-
-      {/* Excelインポート */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 p-4 space-y-3">
-        <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Googleフォーム集計Excelをインポート</p>
-        <p className="text-[11px] text-zinc-400">「希望休」という名称を含むシートを自動認識します。同月同スタッフのデータは上書きされます。</p>
-        <div className="flex items-center gap-2 flex-wrap">
-          <input ref={fileRef} type="file" accept=".xlsx,.xls"
-            className="text-xs text-zinc-600 dark:text-zinc-300 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-200 dark:file:bg-zinc-700 file:text-zinc-700 dark:file:text-zinc-300 hover:file:bg-zinc-300"
-          />
-          <button onClick={handleImport} disabled={isImporting}
-            className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-40 transition-colors">
-            {isImporting ? "インポート中…" : "インポート"}
-          </button>
-        </div>
-        {importMsg && (
-          <p className={`text-xs px-3 py-2 rounded-xl ${importMsg.ok ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300" : "bg-red-50 dark:bg-red-950/20 text-red-500"}`}>
-            {importMsg.ok ? "✓ " : "✗ "}{importMsg.msg}
-          </p>
-        )}
       </div>
 
       {listMsg && <p className="text-xs text-red-500">{listMsg}</p>}
 
       {/* 一覧 */}
+      {isFetching && rows === null && (
+        <p className="text-xs text-zinc-400 py-3 text-center">読み込み中…</p>
+      )}
       {grouped !== null && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{year}年{month}月 — {grouped.length}名 / {rows?.length ?? 0}日分</span>
+            <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+              {year}年{month}月 — {grouped.length}名 / {rows?.length ?? 0}日分
+            </span>
             {grouped.length > 5 && (
-              <input type="text" placeholder="名前・IDで絞り込み" value={filterStaff}
+              <input
+                type="text"
+                placeholder="名前・IDで絞り込み"
+                value={filterStaff}
                 onChange={e => setFilterStaff(e.target.value)}
                 className="flex-1 max-w-xs px-2.5 py-1 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs placeholder:text-zinc-300 dark:placeholder:text-zinc-600"
               />
