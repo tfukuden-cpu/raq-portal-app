@@ -1,5 +1,6 @@
 /**
- * 勤怠修正ページ（管理者用）
+ * 勤怠管理ページ（管理者用）
+ * タブ: 勤怠異常 | 補正申請 | 実績出力
  */
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -7,6 +8,7 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceEditClient from "./AttendanceEditClient";
 import type { AttendanceRow, CorrectionRow } from "./AttendanceEditClient";
+import type { StaffEntry } from "@/app/(portal)/admin/work-records/WorkRecordsClient";
 
 const OFF_SHIFT_NAMES = ["公休","有休","休暇","振替休日","特別休暇","代休","欠勤"];
 
@@ -15,7 +17,12 @@ function tokyoToday(): string {
 }
 
 
-export default async function AttendanceEditPage() {
+export default async function AttendanceEditPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab: initialTab } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -50,6 +57,7 @@ export default async function AttendanceEditPage() {
     { data: lates },
     { data: patterns },
     { data: rawCorrections },
+    { data: staffMembers },
   ] = await Promise.all([
     admin.from("project_members")
       .select("staff_id, section, staffs(id, name, display_name, account_number)")
@@ -79,6 +87,10 @@ export default async function AttendanceEditPage() {
       .select("id, target_date, corrected_in, corrected_out, reason, status, review_note, created_at, staff_id, staffs(name, display_name)")
       .eq("project_id", projectId)
       .order("target_date", { ascending: false }),
+    admin.from("project_members")
+      .select("staff_id, section, staffs(id, name, display_name, account_number, company_name)")
+      .eq("project_id", projectId)
+      .order("staff_id"),
   ]);
 
   const corrections: CorrectionRow[] = (rawCorrections ?? []).map((c) => {
@@ -185,15 +197,30 @@ export default async function AttendanceEditPage() {
     });
   }
 
+  // 実績出力タブ用スタッフリスト
+  const staffs: StaffEntry[] = (staffMembers ?? []).map(m => {
+    const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as {
+      display_name?: string | null; name?: string | null;
+      account_number?: string | null; company_name?: string | null;
+    } | null;
+    return {
+      staffId:       m.staff_id,
+      name:          s?.display_name ?? s?.name ?? m.staff_id,
+      accountNumber: s?.account_number ?? null,
+      company:       s?.company_name  ?? null,
+      section:       m.section        ?? null,
+    };
+  });
+
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
       <div className="max-w-2xl mx-auto px-4 pt-6 pb-24">
         <div className="mb-6">
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            勤怠修正
+            勤怠管理
           </h1>
           <p className="text-sm text-zinc-400 mt-0.5">
-            打刻漏れ・遅刻・欠勤の確認と修正
+            勤怠異常の確認・修正、補正申請の審査、実績出力
           </p>
         </div>
         <AttendanceEditClient
@@ -202,6 +229,8 @@ export default async function AttendanceEditPage() {
           corrections={corrections}
           startDate={startDate}
           endDate={endDate}
+          staffs={staffs}
+          initialTab={initialTab === "records" || initialTab === "corrections" ? initialTab : "anomaly"}
         />
       </div>
     </main>

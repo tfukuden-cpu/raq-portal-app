@@ -3,6 +3,8 @@
 import { useState, useMemo, useTransition } from "react";
 import { savePunchCorrectionAction } from "./actions";
 import { reviewCorrectionAction } from "../../corrections/actions";
+import WorkRecordsClient from "@/app/(portal)/admin/work-records/WorkRecordsClient";
+import type { StaffEntry } from "@/app/(portal)/admin/work-records/WorkRecordsClient";
 
 export type AttendanceRow = {
   date: string;
@@ -79,16 +81,20 @@ export default function AttendanceEditClient({
   corrections,
   startDate: initStart,
   endDate: initEnd,
+  staffs,
+  initialTab = "anomaly",
 }: {
   projectId: string;
   rows: AttendanceRow[];
   corrections: CorrectionRow[];
   startDate: string;
   endDate: string;
+  staffs: StaffEntry[];
+  initialTab?: "anomaly" | "corrections" | "records";
 }) {
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
-  const [activeTab, setActiveTab] = useState<"anomaly" | "corrections">("anomaly");
+  const [activeTab, setActiveTab] = useState<"anomaly" | "corrections" | "records">(initialTab);
   const [startDate, setStartDate] = useState(initStart);
   const [endDate,   setEndDate]   = useState(initEnd);
   const [search, setSearch] = useState("");
@@ -190,7 +196,7 @@ export default function AttendanceEditClient({
   return (
     <div className="space-y-4">
       {/* タブ */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setActiveTab("anomaly")}
           className={`text-sm px-4 py-1.5 rounded-full border font-medium transition-colors ${
@@ -216,6 +222,16 @@ export default function AttendanceEditClient({
           {pendingCorrCount > 0 && (
             <span className="ml-1.5 bg-red-500 text-white rounded-full px-1.5 text-[10px]">{pendingCorrCount}</span>
           )}
+        </button>
+        <button
+          onClick={() => setActiveTab("records")}
+          className={`text-sm px-4 py-1.5 rounded-full border font-medium transition-colors ${
+            activeTab === "records"
+              ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 border-transparent"
+              : "border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+          }`}
+        >
+          実績出力
         </button>
       </div>
 
@@ -497,6 +513,11 @@ export default function AttendanceEditClient({
         </div>
       )}
       </>}
+
+      {/* 実績出力タブ */}
+      {activeTab === "records" && (
+        <WorkRecordsClient projectId={projectId} staffs={staffs} />
+      )}
     </div>
   );
 }
