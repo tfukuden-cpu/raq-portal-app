@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback } from "react";
+import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { unlinkLineAction, sendLineTestAction, fetchLineTestConfirmationsAction, clearLineTestConfirmationsAction } from "./actions";
 
 type Member = {
@@ -10,16 +10,17 @@ type Member = {
   lineLinked: boolean;
 };
 
-type Confirmation = { staffId: string; confirmedAt: string };
-
 function shortId(id: string) {
   if (id.length <= 12) return id;
   return id.slice(0, 8) + "…" + id.slice(-4);
 }
 
 function fmtTime(iso: string) {
-  const d = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000);
-  return d.toISOString().slice(11, 16); // HH:MM JST
+  // confirmed_at は UTC ISO → JST に変換して HH:MM
+  const utcMs = new Date(iso).getTime();
+  const jstMs = utcMs + 9 * 60 * 60 * 1000;
+  const jst   = new Date(jstMs);
+  return `${String(jst.getUTCHours()).padStart(2, "0")}:${String(jst.getUTCMinutes()).padStart(2, "0")}`;
 }
 
 export default function LineConnectionSection({
@@ -31,43 +32,59 @@ export default function LineConnectionSection({
 }) {
   const [filterUnlinked, setFilterUnlinked] = useState(false);
   const [confirmUnlink, setConfirmUnlink]   = useState<string | null>(null);
-  const [flash, setFlash] = useState<{ ok: boolean; msg: string } | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [confirmations, setConfirmations] = useState<Map<string, string>>(new Map());
-  // pollUntil: テスト送信後60秒間ポーリング
-  const [pollUntil, setPollUntil] = useState<number | null>(null);
+  const [flash, setFlash]                   = useState<{ ok: boolean; msg: string } | null>(null);
+  const [isPending, startTransition]        = useTransition();
+  // staffId → confirmed_at(ISO)
+  const [confirmMap, setConfirmMap]         = useState<Record<string, string>>({});
+  const [isFetching, setIsFetching]         = useState(false);
+  const pollTimerRef                        = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollEndRef                          = useRef<number>(0);
 
-  const linkedCount   = members.filter(m => m.lineLinked).length;
-  const unlinkedCount = members.length - linkedCount;
-  const confirmedCount = [...confirmations.keys()].filter(id =>
+  const linkedCount    = members.filter(m => m.lineLinked).length;
+  const unlinkedCount  = members.length - linkedCount;
+  const confirmedCount = Object.keys(confirmMap).filter(id =>
     members.some(m => m.staffId === id && m.lineLinked)
   ).length;
 
-  const filtered = filterUnlinked
-    ? members.filter(m => !m.lineLinked)
-    : members;
+  const filtered = filterUnlinked ? members.filter(m => !m.lineLinked) : members;
 
-  // 確認状況を取得
+  // --- 確認状況をDBから取得 ---
   const fetchConfirmations = useCallback(async () => {
-    const results = await fetchLineTestConfirmationsAction(projectId);
-    setConfirmations(new Map(results.map(r => [r.staffId, r.confirmedAt])));
+    setIsFetching(true);
+    try {
+      const results = await fetchLineTestConfirmationsAction(projectId);
+      const map: Record<string, string> = {};
+      for (const r of results) map[r.staffId] = r.confirmedAt;
+      setConfirmMap(map);
+    } catch (e) {
+      console.error("fetchLineTestConfirmationsAction failed", e);
+    } finally {
+      setIsFetching(false);
+    }
   }, [projectId]);
 
   // 初回取得
   useEffect(() => { fetchConfirmations(); }, [fetchConfirmations]);
 
-  // テスト送信後ポーリング（3秒ごと、最大60秒）
-  useEffect(() => {
-    if (!pollUntil) return;
-    const id = setInterval(() => {
-      if (Date.now() >= pollUntil) {
-        setPollUntil(null);
+  // ポーリング開始
+  function startPolling() {
+    pollEndRef.current = Date.now() + 60_000;
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    pollTimerRef.current = setInterval(async () => {
+      if (Date.now() >= pollEndRef.current) {
+        clearInterval(pollTimerRef.current!);
+        pollTimerRef.current = null;
         return;
       }
-      fetchConfirmations();
+      await fetchConfirmations();
     }, 3000);
-    return () => clearInterval(id);
-  }, [pollUntil, fetchConfirmations]);
+  }
+
+  useEffect(() => () => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+  }, []);
+
+  const isPolling = pollTimerRef.current !== null;
 
   function showFlash(ok: boolean, msg: string) {
     setFlash({ ok, msg });
@@ -92,27 +109,25 @@ export default function LineConnectionSection({
       if (staffId) fd.set("staffId", staffId);
       const r = await sendLineTestAction(fd);
       showFlash(r.success, r.message ?? (r.success ? "送信しました" : "送信失敗"));
-      if (r.success) {
-        // 60秒間ポーリング開始
-        setPollUntil(Date.now() + 60_000);
-      }
+      if (r.success) startPolling();
     });
   }
 
   function handleClear() {
     startTransition(async () => {
       await clearLineTestConfirmationsAction(projectId);
-      setConfirmations(new Map());
-      setPollUntil(null);
+      setConfirmMap({});
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
     });
   }
-
-  const isPolling = !!pollUntil && Date.now() < pollUntil;
 
   return (
     <div className="space-y-4">
 
-      {/* サマリー + 全員テスト */}
+      {/* ── サマリー + 全員テスト ── */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
@@ -121,7 +136,6 @@ export default function LineConnectionSection({
           <span className="text-xs text-zinc-400">
             未連携 <span className="tabular-nums">{unlinkedCount}</span>名
           </span>
-          {/* 未連携フィルター */}
           <button
             type="button"
             onClick={() => setFilterUnlinked(f => !f)}
@@ -147,40 +161,49 @@ export default function LineConnectionSection({
         )}
       </div>
 
-      {/* 確認状況バー */}
-      {confirmations.size > 0 && (
-        <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900">
-          <div className="flex items-center gap-2">
-            {isPolling && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
-            )}
-            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-              受信確認済み <span className="tabular-nums">{confirmedCount}</span> / {linkedCount}名
+      {/* ── 受信確認バー（常に表示） ── */}
+      <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
+        <div className="flex items-center gap-2">
+          {isPolling && (
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+          )}
+          <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+            受信確認済み{" "}
+            <span className={`tabular-nums ${confirmedCount > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>
+              {confirmedCount}
             </span>
-            {isPolling && (
-              <span className="text-[10px] text-emerald-500">自動更新中…</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={fetchConfirmations}
-              className="text-[11px] px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-semibold hover:bg-emerald-200 transition-colors"
-            >
-              更新
-            </button>
+            {" "}/{" "}{linkedCount}名
+          </span>
+          {isPolling && (
+            <span className="text-[10px] text-emerald-500 dark:text-emerald-400">自動更新中…</span>
+          )}
+          {isFetching && !isPolling && (
+            <span className="text-[10px] text-zinc-400">更新中…</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={fetchConfirmations}
+            disabled={isFetching}
+            className="text-[11px] px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+          >
+            更新
+          </button>
+          {confirmedCount > 0 && (
             <button
               type="button"
               onClick={handleClear}
-              className="text-[11px] px-2 py-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-600 font-semibold transition-colors"
+              disabled={isPending}
+              className="text-[11px] px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 font-semibold disabled:opacity-40 transition-colors"
             >
               クリア
             </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* フラッシュ */}
+      {/* ── フラッシュ ── */}
       {flash && (
         <p className={`text-xs px-3 py-2 rounded-xl ${
           flash.ok
@@ -191,7 +214,7 @@ export default function LineConnectionSection({
         </p>
       )}
 
-      {/* スタッフ一覧 */}
+      {/* ── スタッフ一覧 ── */}
       <div className="space-y-1.5">
         {filtered.length === 0 && (
           <p className="text-xs text-zinc-400 py-3 text-center">
@@ -199,11 +222,15 @@ export default function LineConnectionSection({
           </p>
         )}
         {filtered.map(m => {
-          const confirmedAt = confirmations.get(m.staffId);
+          const confirmedAt = confirmMap[m.staffId];
           return (
             <div
               key={m.staffId}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-950"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-white dark:bg-zinc-950 transition-colors ${
+                confirmedAt
+                  ? "border-emerald-100 dark:border-emerald-900"
+                  : "border-zinc-100 dark:border-zinc-800"
+              }`}
             >
               {/* 連携状態ドット */}
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -224,7 +251,7 @@ export default function LineConnectionSection({
 
               {/* 確認済みバッジ */}
               {m.lineLinked && (
-                <span className={`text-[11px] font-semibold flex-shrink-0 tabular-nums ${
+                <span className={`text-[11px] font-semibold flex-shrink-0 tabular-nums min-w-[48px] text-right ${
                   confirmedAt
                     ? "text-emerald-600 dark:text-emerald-400"
                     : "text-zinc-300 dark:text-zinc-600"
