@@ -154,7 +154,7 @@ export async function generateShiftDraftAction(
     { data: prevMonthShiftRows },
   ] = await Promise.all([
     admin.from("project_members")
-      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days")
+      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, end_date")
       .eq("project_id", projectId),
     admin.from("shift_slot_requirements")
       .select("pattern_name, shift_date, required_count")
@@ -182,6 +182,12 @@ export async function generateShiftDraftAction(
   if (!memberRows || memberRows.length === 0) {
     return { success: false, message: "メンバーが登録されていません" };
   }
+
+  // 離脱済みメンバーを除外（end_date が対象月開始日より前のメンバーは含めない）
+  const activeMemberRows = memberRows.filter(m => {
+    const endDate = (m as { end_date?: string | null }).end_date ?? null;
+    return !endDate || endDate >= dateFrom;
+  });
   if (!slotReqRows || slotReqRows.length === 0) {
     return { success: false, message: "必要人数が設定されていません。先に必要数を保存してください" };
   }
@@ -289,7 +295,7 @@ export async function generateShiftDraftAction(
       const needMore = required - alreadyAssigned;
       if (needMore <= 0) continue;
 
-      const candidates = (memberRows ?? []).filter(m => {
+      const candidates = activeMemberRows.filter(m => {
         // 希望休・同日割当済み
         if (holidaySet.has(`${m.staff_id}__${date}`)) return false;
         if (assignedOnDate.has(m.staff_id)) return false;
