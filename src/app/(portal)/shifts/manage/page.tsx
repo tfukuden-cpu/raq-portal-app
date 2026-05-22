@@ -125,11 +125,11 @@ export default async function ManageShiftsPage(props: {
       .lte("shift_date", endDate),
     // 当月の変更ログ（最新300件）
     admin.from("shift_change_logs")
-      .select("staff_id, shift_date, action, before_data, after_data, changed_by, created_at")
+      .select("staff_id, shift_date, action, before_data, after_data, changed_by, changed_at")
       .eq("project_id", selectedProjectId)
       .gte("shift_date", startDate)
       .lte("shift_date", endDate)
-      .order("created_at", { ascending: false })
+      .order("changed_at", { ascending: false })
       .limit(300),
     // 変更者名解決用
     admin.from("staffs").select("id, display_name, name"),
@@ -235,7 +235,7 @@ export default async function ManageShiftsPage(props: {
       before_shift_name: before?.shift_name ?? null,
       after_shift_name:  after?.shift_name  ?? null,
       changed_by_name:   staffNameMap2.get(l.changed_by as string) ?? (l.changed_by as string),
-      changed_at:        l.created_at as string,
+      changed_at:        l.changed_at as string,
     };
   });
 
