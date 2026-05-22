@@ -196,43 +196,29 @@ export default function AttendanceEditClient({
   return (
     <div className="space-y-4">
       {/* タブ */}
-      <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={() => setActiveTab("anomaly")}
-          className={`text-sm px-4 py-1.5 rounded-full border font-medium transition-colors ${
-            activeTab === "anomaly"
-              ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 border-transparent"
-              : "border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-          }`}
-        >
-          勤怠異常
-          {issueCount > 0 && (
-            <span className="ml-1.5 bg-red-500 text-white rounded-full px-1.5 text-[10px]">{issueCount}</span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("corrections")}
-          className={`text-sm px-4 py-1.5 rounded-full border font-medium transition-colors ${
-            activeTab === "corrections"
-              ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 border-transparent"
-              : "border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-          }`}
-        >
-          補正申請
-          {pendingCorrCount > 0 && (
-            <span className="ml-1.5 bg-red-500 text-white rounded-full px-1.5 text-[10px]">{pendingCorrCount}</span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("records")}
-          className={`text-sm px-4 py-1.5 rounded-full border font-medium transition-colors ${
-            activeTab === "records"
-              ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900 border-transparent"
-              : "border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-          }`}
-        >
-          実績出力
-        </button>
+      <div className="flex border-b border-zinc-100 dark:border-zinc-800">
+        {([
+          { id: "anomaly",     label: "勤怠修正",  badge: issueCount > 0 ? issueCount : null },
+          { id: "corrections", label: "補正申請",  badge: pendingCorrCount > 0 ? pendingCorrCount : null },
+          { id: "records",     label: "実績確認",  badge: null },
+        ] as { id: "anomaly" | "corrections" | "records"; label: string; badge: number | null }[]).map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setActiveTab(t.id)}
+            className={[
+              "flex-shrink-0 px-5 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5",
+              activeTab === t.id
+                ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
+                : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
+            ].join(" ")}
+          >
+            {t.label}
+            {t.badge !== null && (
+              <span className="bg-red-500 text-white rounded-full px-1.5 text-[10px] tabular-nums">{t.badge}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* 補正申請タブ */}
