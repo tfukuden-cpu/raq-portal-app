@@ -882,10 +882,7 @@ export async function departStaffAction(
   staffId: string,
   departDate: string,
 ): Promise<SettingsResult> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, message: "ログインしてください" };
-
+  await assertAdmin(projectId);
   const admin = adminSupa();
 
   const { error: memberErr } = await admin

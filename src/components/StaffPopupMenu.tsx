@@ -53,7 +53,7 @@ export default function StaffPopupMenu({ staffId, staffName, projectId, onClose 
             {/* メニュー */}
             <div className="p-2">
               <Link
-                href={`/admin/${projectId}/settings?tab=members`}
+                href={`/admin/${projectId}/settings?tab=members&edit=${staffId}`}
                 onClick={onClose}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
               >
@@ -94,11 +94,24 @@ export default function StaffPopupMenu({ staffId, staffName, projectId, onClose 
           <>
             <div className="px-4 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800">
               <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">{staffName} の離脱処理</p>
-              <p className="text-xs text-zinc-400 mt-0.5">指定日より後のシフトが削除されます</p>
+              <p className="text-xs text-zinc-400 mt-0.5">最終出勤日の翌日以降のシフトが削除されます</p>
             </div>
 
             <div className="px-4 pt-4 pb-2">
-              <label className="text-xs font-semibold text-zinc-500 block mb-1.5">離脱日</label>
+              <label className="text-xs font-semibold text-zinc-500 block mb-1.5">最終出勤日（この日までシフトを保持）</label>
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - 1);
+                    setDepartDate(d.toISOString().slice(0, 10));
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800"
+                >
+                  即時（今すぐ）
+                </button>
+              </div>
               <input
                 type="date"
                 value={departDate}

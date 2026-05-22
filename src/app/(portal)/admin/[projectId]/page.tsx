@@ -5,6 +5,7 @@ import { isGSheetsConfigured } from "@/lib/gsheets";
 import { archiveProjectAction } from "./settings/actions";
 import { SettingsContainer } from "./settings/SettingsClient";
 import { ChevronLeftIcon } from "@/components/icons";
+import { Suspense } from "react";
 
 export default async function ProjectDetailPage(props: {
   params: Promise<{ projectId: string }>;
@@ -51,7 +52,7 @@ export default async function ProjectDetailPage(props: {
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
-      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, staffs(name, display_name, company_name, line_user_id, account_number)")
+      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, end_date, staffs(name, display_name, company_name, line_user_id, account_number)")
       .eq("project_id", projectId),
     createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id, enable_departure_report").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
@@ -130,6 +131,7 @@ export default async function ProjectDetailPage(props: {
       preferred_shift:      (m as { preferred_shift?: string | null }).preferred_shift ?? null,
       preferred_section:    (m as { preferred_section?: string | null }).preferred_section ?? null,
       max_consecutive_days: (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? null,
+      end_date:             (m as { end_date?: string | null }).end_date ?? null,
       compliance:           complianceMap.get(m.staff_id) ?? null,
     };
   });
@@ -157,25 +159,27 @@ export default async function ProjectDetailPage(props: {
           <p className="text-sm text-zinc-400 mt-0.5 font-mono">{projectId}</p>
         </div>
 
-        <SettingsContainer
-          projectId={projectId}
-          projectName={project.name}
-          currentUrl={settings?.sheet_url ?? null}
-          isGSheetsConfigured={isGSheetsConfigured()}
-          members={memberList}
-          shiftPatterns={patternList}
-          holidayRules={(holidayRules ?? []).map((r) => ({
-            rule_type: r.rule_type,
-            value:     String(r.value),
-          }))}
-          notificationSettings={
-            (settings?.notification_settings as Record<string, boolean> | null) ?? {}
-          }
-          lineGroupId={settings?.line_group_id ?? null}
-          enableDeparture={(settings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true}
-          archiveAction={archiveAction}
-          canArchive={isExecutive || isAdmin}
-        />
+        <Suspense>
+          <SettingsContainer
+            projectId={projectId}
+            projectName={project.name}
+            currentUrl={settings?.sheet_url ?? null}
+            isGSheetsConfigured={isGSheetsConfigured()}
+            members={memberList}
+            shiftPatterns={patternList}
+            holidayRules={(holidayRules ?? []).map((r) => ({
+              rule_type: r.rule_type,
+              value:     String(r.value),
+            }))}
+            notificationSettings={
+              (settings?.notification_settings as Record<string, boolean> | null) ?? {}
+            }
+            lineGroupId={settings?.line_group_id ?? null}
+            enableDeparture={(settings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true}
+            archiveAction={archiveAction}
+            canArchive={isExecutive || isAdmin}
+          />
+        </Suspense>
       </div>
     </main>
   );
