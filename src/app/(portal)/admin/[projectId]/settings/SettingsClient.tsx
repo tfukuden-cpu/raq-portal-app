@@ -477,7 +477,10 @@ export function MemberList({
   const [editMaxConsecDays, setEditMaxConsecDays] = useState("");
   const [shiftSettingsOpen, setShiftSettingsOpen] = useState(false);
   const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
-  const [departDate, setDepartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [departType, setDepartType] = useState<"immediate" | "dated">("immediate");
+  const [departDate, setDepartDate] = useState(() =>
+    new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }),
+  );
 
   const membersRef = useRef(members);
   useEffect(() => {
@@ -1204,24 +1207,64 @@ export function MemberList({
                 {departStep === "hidden" ? (
                   <button
                     type="button"
-                    onClick={() => setDepartStep("input")}
+                    onClick={() => {
+                      setDepartType("immediate");
+                      setDepartDate(new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }));
+                      setDepartStep("input");
+                    }}
                     className="w-full text-left text-xs text-red-500 hover:text-red-600 dark:text-red-400 font-semibold py-1"
                   >
                     離脱処理…
                   </button>
                 ) : (
-                  <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50/40 dark:bg-red-950/20 p-3 space-y-2">
+                  <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50/40 dark:bg-red-950/20 p-3 space-y-3">
                     <p className="text-xs font-semibold text-red-600 dark:text-red-400">離脱処理</p>
-                    <p className="text-[10px] text-zinc-500">最終出勤日の翌日以降のシフトが削除されます</p>
-                    <div>
-                      <label className="text-[10px] text-zinc-500 font-semibold">最終出勤日（この日までシフトを保持）</label>
-                      <input
-                        type="date"
-                        value={departDate}
-                        onChange={e => setDepartDate(e.target.value)}
-                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                      />
+
+                    {/* 即日 / 期日を指定 */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="departType"
+                          checked={departType === "immediate"}
+                          onChange={() => setDepartType("immediate")}
+                          className="w-4 h-4 accent-red-500"
+                        />
+                        <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                          即日（本日 {new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "long", day: "numeric" })} 付けで離脱）
+                        </span>
+                      </label>
+
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="departType"
+                          checked={departType === "dated"}
+                          onChange={() => setDepartType("dated")}
+                          className="w-4 h-4 accent-red-500"
+                        />
+                        <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">期日を指定</span>
+                      </label>
+
+                      {departType === "dated" && (
+                        <div className="ml-6 space-y-1">
+                          <label className="text-[10px] text-zinc-500 font-semibold">最終出勤日（この日までシフトを保持）</label>
+                          <input
+                            type="date"
+                            value={departDate}
+                            onChange={e => setDepartDate(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                          />
+                        </div>
+                      )}
                     </div>
+
+                    <p className="text-[10px] text-zinc-400">
+                      {departType === "immediate"
+                        ? "本日以降のシフトが削除されます"
+                        : "指定日の翌日以降のシフトが削除されます"}
+                    </p>
+
                     <div className="flex gap-2">
                       <button type="button" onClick={() => setDepartStep("hidden")}
                         className="flex-1 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
@@ -1229,11 +1272,14 @@ export function MemberList({
                       </button>
                       <button
                         type="button"
-                        disabled={isPending || !departDate}
+                        disabled={isPending || (departType === "dated" && !departDate)}
                         onClick={() => {
                           if (!editId) return;
+                          const finalDate = departType === "immediate"
+                            ? new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" })
+                            : departDate;
                           start(async () => {
-                            const r = await departStaffAction(projectId, editId, departDate);
+                            const r = await departStaffAction(projectId, editId, finalDate);
                             if (r.success) {
                               setEditId(null);
                               setDepartStep("hidden");
