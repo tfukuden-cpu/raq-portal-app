@@ -120,6 +120,7 @@ export default async function ProjectDetailPage(props: {
       company_name:    s?.company_name ?? null,
       role:            m.role ?? "staff",
       lineLinked:      !!s?.line_user_id,
+      line_user_id:    s?.line_user_id ?? null,
       section:         m.section ?? null,
       sections:        ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean),
       account_number:  s?.account_number ?? null,

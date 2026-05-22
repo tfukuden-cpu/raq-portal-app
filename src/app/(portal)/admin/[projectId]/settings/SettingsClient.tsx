@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from "react";
 import ShiftDraftSection from "./ShiftDraftSection";
 import ShiftOffRequestSection from "./ShiftOffRequestSection";
+import LineConnectionSection from "./LineConnectionSection";
 import {
   updateProjectNameAction,
   saveSheetUrlAction,
@@ -34,7 +35,7 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; compliance: number | null };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; compliance: number | null };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -44,7 +45,7 @@ type ShiftPattern = {
   section: string;
   target_role: string; // "all" | "admin" | "staff"
 };
-type TabId = "basic" | "members" | "shift" | "holiday" | "notify" | "danger";
+type TabId = "basic" | "members" | "shift" | "holiday" | "line" | "notify" | "danger";
 
 // ── 共通フィードバック ──────────────────────────────────
 
@@ -108,6 +109,7 @@ export function SettingsContainer({
     { id: "members", label: "メンバー", count: members.length },
     { id: "shift",   label: "シフト" },
     { id: "holiday", label: "希望休" },
+    { id: "line",    label: "LINE連携", count: members.filter(m => !m.lineLinked).length || undefined },
     { id: "notify",  label: "LINE通知" },
     ...(canArchive ? [{ id: "danger" as TabId, label: "危険操作", red: true }] : []),
   ];
@@ -229,6 +231,11 @@ export function SettingsContainer({
           availableSections={[...new Set(shiftPatterns.map(p => p.section).filter(Boolean))].sort()}
           shiftPatternNames={shiftPatterns.map(p => p.name).filter(Boolean)}
         />
+      )}
+
+      {/* ── LINE連携タブ ── */}
+      {tab === "line" && (
+        <LineConnectionSection projectId={projectId} members={members} />
       )}
 
       {/* ── LINE通知タブ ── */}

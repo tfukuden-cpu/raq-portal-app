@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import { pushLine } from "@/lib/line";
 import { redirect } from "next/navigation";
 import {
   createSpreadsheet,
@@ -899,4 +900,64 @@ export async function departStaffAction(
   revalidatePath(`/admin/${projectId}`);
   revalidatePath(`/shifts/manage`);
   return { success: true };
+}
+
+// ── LINE連携解除 ───────────────────────────────────────────
+
+export async function unlinkLineAction(fd: FormData): Promise<SettingsResult> {
+  const staffId = String(fd.get("staffId") ?? "").trim().toUpperCase();
+  if (!staffId) return { success: false, message: "staffIdが必要です" };
+
+  await assertAdmin();
+  const { error } = await adminSupa()
+    .from("staffs")
+    .update({ line_user_id: null })
+    .eq("id", staffId);
+
+  if (error) return { success: false, message: error.message };
+  revalidatePath(`/admin/[projectId]`, "page");
+  return { success: true };
+}
+
+// ── LINEテスト通知 ─────────────────────────────────────────
+
+export async function sendLineTestAction(fd: FormData): Promise<SettingsResult> {
+  const staffId   = String(fd.get("staffId")   ?? "").trim() || null;
+  const projectId = String(fd.get("projectId") ?? "").trim();
+
+  await assertAdmin();
+  const admin = adminSupa();
+
+  if (staffId) {
+    // 個別送信
+    const { data: staff } = await admin
+      .from("staffs")
+      .select("line_user_id, display_name, name")
+      .eq("id", staffId)
+      .maybeSingle();
+    if (!staff?.line_user_id) return { success: false, message: "LINE未連携のスタッフです" };
+    const name = staff.display_name ?? staff.name ?? staffId;
+    await pushLine(staff.line_user_id, `【通知テスト】${name}さん、LINE通知の受信確認です ✓`);
+    return { success: true, message: `${name} に送信しました` };
+  } else {
+    // 全員一括送信
+    const { data: members } = await admin
+      .from("project_members")
+      .select("staffs(line_user_id, display_name, name)")
+      .eq("project_id", projectId);
+
+    const lineIds = (members ?? [])
+      .map(m => (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as { line_user_id: string | null } | null)
+      .map(s => s?.line_user_id)
+      .filter((id): id is string => !!id);
+
+    if (lineIds.length === 0) return { success: false, message: "LINE連携済みスタッフがいません" };
+
+    // 25件ずつ分割して送信
+    for (let i = 0; i < lineIds.length; i += 25) {
+      const chunk = lineIds.slice(i, i + 25);
+      await Promise.all(chunk.map(id => pushLine(id, "【通知テスト】LINE通知の受信確認です ✓")));
+    }
+    return { success: true, message: `${lineIds.length}名に送信しました` };
+  }
 }
