@@ -90,11 +90,11 @@ export default function AttendanceEditClient({
   startDate: string;
   endDate: string;
   staffs: StaffEntry[];
-  initialTab?: "anomaly" | "corrections" | "records";
+  initialTab?: "anomaly" | "corrections" | "records" | "export";
 }) {
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
-  const [activeTab, setActiveTab] = useState<"anomaly" | "corrections" | "records">(initialTab);
+  const [activeTab, setActiveTab] = useState<"anomaly" | "corrections" | "records" | "export">(initialTab);
   const [startDate, setStartDate] = useState(initStart);
   const [endDate,   setEndDate]   = useState(initEnd);
   const [search, setSearch] = useState("");
@@ -196,12 +196,13 @@ export default function AttendanceEditClient({
   return (
     <div className="space-y-4">
       {/* タブ */}
-      <div className="flex border-b border-zinc-100 dark:border-zinc-800">
+      <div className="flex border-b border-zinc-100 dark:border-zinc-800 overflow-x-auto">
         {([
           { id: "anomaly",     label: "勤怠修正",  badge: issueCount > 0 ? issueCount : null },
           { id: "corrections", label: "補正申請",  badge: pendingCorrCount > 0 ? pendingCorrCount : null },
           { id: "records",     label: "実績確認",  badge: null },
-        ] as { id: "anomaly" | "corrections" | "records"; label: string; badge: number | null }[]).map(t => (
+          { id: "export",      label: "実績出力",  badge: null },
+        ] as { id: "anomaly" | "corrections" | "records" | "export"; label: string; badge: number | null }[]).map(t => (
           <button
             key={t.id}
             type="button"
@@ -500,9 +501,14 @@ export default function AttendanceEditClient({
       )}
       </>}
 
-      {/* 実績出力タブ */}
+      {/* 実績確認タブ（順守率） */}
       {activeTab === "records" && (
-        <WorkRecordsClient projectId={projectId} staffs={staffs} />
+        <WorkRecordsClient projectId={projectId} staffs={staffs} fixedTab="compliance" />
+      )}
+
+      {/* 実績出力タブ（エクスポート） */}
+      {activeTab === "export" && (
+        <WorkRecordsClient projectId={projectId} staffs={staffs} fixedTab="export" />
       )}
     </div>
   );

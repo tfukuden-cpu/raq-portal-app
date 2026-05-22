@@ -18,14 +18,16 @@ type SortKey    = "rate" | "name" | "late" | "early" | "absent";
 export default function WorkRecordsClient({
   projectId,
   staffs,
+  fixedTab,
 }: {
   projectId: string;
   staffs: StaffEntry[];
+  fixedTab?: PageTab;
 }) {
   const today         = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
   const thisMonthStart = today.slice(0, 7) + "-01";
 
-  const [pageTab,      setPageTab]      = useState<PageTab>("export");
+  const [pageTab,      setPageTab]      = useState<PageTab>(fixedTab ?? "export");
   const [startDate,    setStartDate]    = useState(thisMonthStart);
   const [endDate,      setEndDate]      = useState(today);
 
@@ -168,19 +170,21 @@ export default function WorkRecordsClient({
         </div>
       </div>
 
-      {/* ページタブ */}
-      <div className="flex gap-1 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl">
-        {([["export","エクスポート"], ["compliance","順守率"]] as [PageTab, string][]).map(([t, label]) => (
-          <button key={t} onClick={() => setPageTab(t)}
-            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
-              pageTab === t
-                ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm"
-                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
-            }`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* ページタブ（単独表示のときは非表示） */}
+      {!fixedTab && (
+        <div className="flex gap-1 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl">
+          {([["export","エクスポート"], ["compliance","順守率"]] as [PageTab, string][]).map(([t, label]) => (
+            <button key={t} onClick={() => setPageTab(t)}
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                pageTab === t
+                  ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm"
+                  : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── エクスポートタブ ── */}
       {pageTab === "export" && (

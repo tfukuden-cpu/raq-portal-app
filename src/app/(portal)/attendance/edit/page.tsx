@@ -230,7 +230,7 @@ export default async function AttendanceEditPage({
           startDate={startDate}
           endDate={endDate}
           staffs={staffs}
-          initialTab={initialTab === "records" || initialTab === "corrections" ? initialTab : "anomaly"}
+          initialTab={initialTab === "records" || initialTab === "corrections" || initialTab === "export" ? initialTab : "anomaly"}
         />
       </div>
     </main>
