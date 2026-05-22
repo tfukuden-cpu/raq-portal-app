@@ -23,6 +23,9 @@ type LineEvent = {
     userId?: string;
     groupId?: string;
   };
+  postback?: {
+    data: string;
+  };
 };
 
 export async function POST(req: NextRequest) {
@@ -39,6 +42,27 @@ export async function POST(req: NextRequest) {
   for (const event of body.events ?? []) {
     const userId  = event.source?.userId;
     const groupId = event.source?.groupId;
+
+    // ── 通知テスト受信確認ボタン（postback） ──
+    if (event.type === "postback" && userId && event.postback?.data?.startsWith("line_test_confirm:")) {
+      const projectId = event.postback.data.slice("line_test_confirm:".length);
+      if (projectId) {
+        // line_user_id → staff_id を検索
+        const { data: staff } = await admin
+          .from("staffs")
+          .select("id")
+          .eq("line_user_id", userId)
+          .maybeSingle();
+        if (staff?.id) {
+          await admin
+            .from("line_test_confirmations")
+            .upsert(
+              { project_id: projectId, staff_id: staff.id, confirmed_at: new Date().toISOString() },
+              { onConflict: "project_id,staff_id" },
+            );
+        }
+      }
+    }
 
     // ── ブロック/フォロー解除 → line_blocked フラグ管理 ──
     if (event.type === "unfollow" && userId) {

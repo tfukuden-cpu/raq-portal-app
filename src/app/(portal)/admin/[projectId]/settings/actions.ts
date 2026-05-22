@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
-import { pushLine } from "@/lib/line";
+import { pushLine, pushLineTestButton } from "@/lib/line";
 import { redirect } from "next/navigation";
 import {
   createSpreadsheet,
@@ -938,7 +938,7 @@ export async function sendLineTestAction(fd: FormData): Promise<SettingsResult> 
   const admin = adminSupa();
 
   if (staffId) {
-    // 個別送信
+    // 個別送信（ボタン付きFlexメッセージ）
     const { data: staff } = await admin
       .from("staffs")
       .select("line_user_id, display_name, name")
@@ -946,27 +946,51 @@ export async function sendLineTestAction(fd: FormData): Promise<SettingsResult> 
       .maybeSingle();
     if (!staff?.line_user_id) return { success: false, message: "LINE未連携のスタッフです" };
     const name = staff.display_name ?? staff.name ?? staffId;
-    await pushLine(staff.line_user_id, `【通知テスト】${name}さん、LINE通知の受信確認です ✓`);
+    await pushLineTestButton(staff.line_user_id, name, projectId);
     return { success: true, message: `${name} に送信しました` };
   } else {
-    // 全員一括送信
+    // 全員一括送信（ボタン付きFlexメッセージ）
     const { data: members } = await admin
       .from("project_members")
-      .select("staffs(line_user_id, display_name, name)")
+      .select("staff_id, staffs(line_user_id, display_name, name)")
       .eq("project_id", projectId);
 
-    const lineIds = (members ?? [])
-      .map(m => (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as { line_user_id: string | null } | null)
-      .map(s => s?.line_user_id)
-      .filter((id): id is string => !!id);
+    const targets = (members ?? [])
+      .map(m => {
+        const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+          { line_user_id: string | null; display_name: string | null; name: string | null } | null;
+        return { lineId: s?.line_user_id, name: s?.display_name ?? s?.name ?? m.staff_id };
+      })
+      .filter((t): t is { lineId: string; name: string } => !!t.lineId);
 
-    if (lineIds.length === 0) return { success: false, message: "LINE連携済みスタッフがいません" };
+    if (targets.length === 0) return { success: false, message: "LINE連携済みスタッフがいません" };
 
-    // 25件ずつ分割して送信
-    for (let i = 0; i < lineIds.length; i += 25) {
-      const chunk = lineIds.slice(i, i + 25);
-      await Promise.all(chunk.map(id => pushLine(id, "【通知テスト】LINE通知の受信確認です ✓")));
-    }
-    return { success: true, message: `${lineIds.length}名に送信しました` };
+    await Promise.all(targets.map(t => pushLineTestButton(t.lineId, t.name, projectId)));
+    return { success: true, message: `${targets.length}名に送信しました` };
   }
+}
+
+// ── LINE確認状況取得 ──────────────────────────────────────────
+
+export async function fetchLineTestConfirmationsAction(
+  projectId: string,
+): Promise<{ staffId: string; confirmedAt: string }[]> {
+  await assertAdmin(projectId);
+  const { data } = await adminSupa()
+    .from("line_test_confirmations")
+    .select("staff_id, confirmed_at")
+    .eq("project_id", projectId);
+  return (data ?? []).map(r => ({ staffId: r.staff_id, confirmedAt: r.confirmed_at as string }));
+}
+
+// ── LINE確認記録クリア ────────────────────────────────────────
+
+export async function clearLineTestConfirmationsAction(projectId: string): Promise<SettingsResult> {
+  await assertAdmin(projectId);
+  const { error } = await adminSupa()
+    .from("line_test_confirmations")
+    .delete()
+    .eq("project_id", projectId);
+  if (error) return { success: false, message: error.message };
+  return { success: true };
 }

@@ -90,6 +90,59 @@ export async function pushLine(lineUserId: string, text: string): Promise<void> 
   }).catch(() => {/* best-effort */});
 }
 
+/**
+ * ボタン付きFlexメッセージを1人に送る（通知テスト用）
+ * スタッフがボタンを押すと postback data="line_test_confirm:<projectId>" が届く
+ */
+export async function pushLineTestButton(
+  lineUserId: string,
+  staffName: string,
+  projectId: string,
+): Promise<void> {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!token || !lineUserId) return;
+
+  await fetch(`${LINE_API}/v2/bot/message/push`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      to: lineUserId,
+      messages: [{
+        type: "flex",
+        altText: "【通知テスト】受信確認",
+        contents: {
+          type: "bubble",
+          body: {
+            type: "box",
+            layout: "vertical",
+            spacing: "md",
+            contents: [
+              { type: "text", text: "通知テスト", weight: "bold", size: "lg", color: "#111827" },
+              { type: "text", text: `${staffName}さん、LINE通知の受信確認です。受信できていれば下のボタンを押してください。`, wrap: true, size: "sm", color: "#6b7280", margin: "sm" },
+            ],
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [{
+              type: "button",
+              action: {
+                type: "postback",
+                label: "✓ 受信確認",
+                data: `line_test_confirm:${projectId}`,
+                displayText: "受信確認しました ✓",
+              },
+              style: "primary",
+              color: "#10b981",
+              height: "sm",
+            }],
+          },
+        },
+      }],
+    }),
+  }).catch(() => {/* best-effort */});
+}
+
 /** 複数人に同じメッセージをマルチキャスト（最大500人） */
 export async function multicastLine(lineUserIds: string[], text: string): Promise<void> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
