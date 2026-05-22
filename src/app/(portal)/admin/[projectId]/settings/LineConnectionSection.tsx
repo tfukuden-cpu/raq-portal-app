@@ -44,6 +44,7 @@ export default function LineConnectionSection({
     startTransition(async () => {
       const fd = new FormData();
       fd.set("staffId", staffId);
+      fd.set("projectId", projectId);
       const r = await unlinkLineAction(fd);
       setConfirmUnlink(null);
       showFlash(r.success, r.message ?? (r.success ? "連携解除しました" : "失敗しました"));

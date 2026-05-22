@@ -26,13 +26,21 @@ function adminSupa() {
   );
 }
 
-async function assertAdmin() {
+async function assertAdmin(projectId?: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const { data: s } = await supabase.from("staffs").select("global_role").eq("id", staffId).maybeSingle();
-  if (s?.global_role !== "executive" && s?.global_role !== "admin") redirect("/dashboard");
+  const isGlobalAdmin = s?.global_role === "executive" || s?.global_role === "admin";
+  if (!isGlobalAdmin) {
+    // project_admin は自分の担当案件のみ許可
+    if (!projectId) redirect("/dashboard");
+    const { data: membership } = await supabase
+      .from("project_members").select("role")
+      .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle();
+    if (membership?.role !== "project_admin") redirect("/dashboard");
+  }
   return { supabase, staffId };
 }
 
@@ -150,7 +158,7 @@ export async function updateProjectNameAction(fd: FormData): Promise<SettingsRes
   const name      = String(fd.get("name")      ?? "").trim();
   if (!name) return { success: false, message: "案件名を入力してください" };
 
-  await assertAdmin();
+  await assertAdmin(projectId);
   const { error } = await adminSupa().from("projects").update({ name }).eq("id", projectId);
   if (error) return { success: false, message: error.message };
 
@@ -165,7 +173,7 @@ export async function saveSheetUrlAction(fd: FormData): Promise<SettingsResult> 
   const projectId = String(fd.get("projectId") ?? "").trim();
   const sheetUrl  = String(fd.get("sheetUrl")  ?? "").trim();
 
-  await assertAdmin();
+  await assertAdmin(projectId);
   const { error } = await adminSupa()
     .from("project_settings")
     .upsert({ project_id: projectId, sheet_url: sheetUrl, updated_at: new Date().toISOString() },
@@ -189,7 +197,7 @@ export async function createSpreadsheetAction(fd: FormData): Promise<SettingsRes
   const projectId   = String(fd.get("projectId")   ?? "").trim();
   const projectName = String(fd.get("projectName") ?? "").trim();
 
-  await assertAdmin();
+  await assertAdmin(projectId);
 
   let url: string;
   try {
@@ -219,7 +227,7 @@ export async function addMemberAction(fd: FormData): Promise<SettingsResult> {
   const role      = String(fd.get("role")       ?? "staff");
 
   if (!staffId) return { success: false, message: "社員を選択してください" };
-  await assertAdmin();
+  await assertAdmin(projectId);
 
   const { error } = await adminSupa().from("project_members").upsert(
     { project_id: projectId, staff_id: staffId, role, is_main: false },
@@ -260,7 +268,7 @@ export async function createAndAddStaffAction(fd: FormData): Promise<SettingsRes
 
   if (!name) return { success: false, message: "氏名は必須です" };
 
-  await assertAdmin();
+  await assertAdmin(projectId);
 
   // 同名スタッフが既に存在する場合はエラー
   const { data: existing } = await adminSupa()
@@ -332,7 +340,7 @@ export async function bulkCreateAndAddStaffsAction(fd: FormData): Promise<{
     return { success: false, message: "データ形式が不正です", results: [] };
   }
 
-  await assertAdmin();
+  await assertAdmin(projectId);
   const admin = adminSupa();
   const results: { id: string; name: string; ok: boolean; message: string; noCompany?: boolean }[] = [];
 
@@ -404,7 +412,7 @@ export async function generateShiftTableAction(fd: FormData): Promise<SettingsRe
   const draftAssign = fd.get("draftAssign") === "true";
 
   if (!year || !month) return { success: false, message: "年月を指定してください" };
-  await assertAdmin();
+  await assertAdmin(projectId);
 
   if (!isGSheetsConfigured()) return { success: false, message: "Google Sheetsが未設定です" };
 
@@ -501,7 +509,7 @@ export async function saveHolidayRulesAction(fd: FormData): Promise<SettingsResu
   const projectId = String(fd.get("projectId") ?? "").trim();
   const rulesJson = String(fd.get("rules")     ?? "[]");
 
-  await assertAdmin();
+  await assertAdmin(projectId);
 
   type RuleInput = { rule_type: string; value: string };
   let rules: RuleInput[];
@@ -566,7 +574,7 @@ export async function saveShiftPatternsAction(fd: FormData): Promise<SettingsRes
   const projectId    = String(fd.get("projectId")  ?? "").trim();
   const patternsJson = String(fd.get("patterns")   ?? "[]");
 
-  await assertAdmin();
+  await assertAdmin(projectId);
 
   type PatternInput = {
     name: string;
@@ -623,7 +631,7 @@ export async function removeMemberAction(fd: FormData): Promise<SettingsResult> 
   const projectId = String(fd.get("projectId") ?? "").trim();
   const staffId   = String(fd.get("staffId")   ?? "").trim().toUpperCase();
 
-  await assertAdmin();
+  await assertAdmin(projectId);
   const { error } = await adminSupa()
     .from("project_members")
     .delete()
@@ -645,7 +653,7 @@ export async function updateMemberRoleAction(fd: FormData): Promise<SettingsResu
   const staffId   = String(fd.get("staffId")   ?? "").trim().toUpperCase();
   const role      = String(fd.get("role")       ?? "staff");
 
-  await assertAdmin();
+  await assertAdmin(projectId);
   const { error } = await adminSupa()
     .from("project_members")
     .update({ role })
@@ -684,7 +692,7 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
 
   if (!name) return { success: false, message: "氏名を入力してください" };
 
-  await assertAdmin();
+  await assertAdmin(projectId);
   const admin = adminSupa();
 
   // staffs テーブル更新（氏名・会社名・アカウント番号）
@@ -719,7 +727,7 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
 
 export async function archiveProjectAction(fd: FormData): Promise<void> {
   const projectId = String(fd.get("projectId") ?? "").trim();
-  await assertAdmin();
+  await assertAdmin(projectId);
   await adminSupa().from("projects").update({ is_active: false }).eq("id", projectId);
   revalidatePath("/admin");
   redirect("/admin");
@@ -734,7 +742,7 @@ export async function saveLineSettingsAction(fd: FormData): Promise<SettingsResu
   const projectId    = String(fd.get("projectId")  ?? "").trim();
   const settingsJson = String(fd.get("settings")   ?? "{}");
 
-  await assertAdmin();
+  await assertAdmin(projectId);
 
   let settings: NotificationSettings;
   try {
@@ -768,7 +776,7 @@ export async function saveDepartureSettingAction(fd: FormData): Promise<Settings
   const enabled   = fd.get("enabled") === "true";
   if (!projectId) return { success: false, message: "パラメータ不足" };
 
-  await assertAdmin();
+  await assertAdmin(projectId);
 
   const { error } = await adminSupa()
     .from("project_settings")
@@ -788,7 +796,7 @@ export async function saveLineGroupAction(fd: FormData): Promise<SettingsResult>
   const groupId   = String(fd.get("groupId")   ?? "").trim();
   if (!projectId) return { success: false, message: "パラメータ不足" };
 
-  await assertAdmin();
+  await assertAdmin(projectId);
 
   const { error } = await adminSupa()
     .from("project_settings")
@@ -905,10 +913,11 @@ export async function departStaffAction(
 // ── LINE連携解除 ───────────────────────────────────────────
 
 export async function unlinkLineAction(fd: FormData): Promise<SettingsResult> {
-  const staffId = String(fd.get("staffId") ?? "").trim().toUpperCase();
+  const staffId   = String(fd.get("staffId")   ?? "").trim().toUpperCase();
+  const projectId = String(fd.get("projectId") ?? "").trim();
   if (!staffId) return { success: false, message: "staffIdが必要です" };
 
-  await assertAdmin();
+  await assertAdmin(projectId);
   const { error } = await adminSupa()
     .from("staffs")
     .update({ line_user_id: null })
@@ -925,7 +934,7 @@ export async function sendLineTestAction(fd: FormData): Promise<SettingsResult> 
   const staffId   = String(fd.get("staffId")   ?? "").trim() || null;
   const projectId = String(fd.get("projectId") ?? "").trim();
 
-  await assertAdmin();
+  await assertAdmin(projectId);
   const admin = adminSupa();
 
   if (staffId) {
