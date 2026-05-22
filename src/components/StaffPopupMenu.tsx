@@ -53,7 +53,7 @@ export default function StaffPopupMenu({ staffId, staffName, projectId, onClose 
             {/* メニュー */}
             <div className="p-2">
               <Link
-                href={`/admin/${projectId}/settings?tab=members&edit=${staffId}`}
+                href={`/members?edit=${staffId}`}
                 onClick={onClose}
                 className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
               >

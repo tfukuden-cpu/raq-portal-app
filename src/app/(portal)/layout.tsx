@@ -22,11 +22,12 @@ const STAFF_ITEMS: NavItem[] = [
 const PROJECT_ADMIN_ITEMS: NavItem[] = [
   { href: "/attendance", icon: "Users", label: "当日状況" },
   { href: "/shifts/manage", icon: "CalendarSettings", label: "シフト管理" },
-  { href: "/notices/manage", icon: "Megaphone", label: "お知らせ管理" },
+  { href: "/members", icon: "IdCard", label: "メンバー管理" },
+  { href: "/notices/manage", icon: "Megaphone", label: "周知管理" },
   { href: "/inquiries/manage", icon: "MessageSquare", label: "問合せ管理" },
   { href: "/attendance/edit", icon: "ClipboardCheck", label: "勤怠修正" },
   { href: "/admin/work-records", icon: "Download", label: "実績出力" },
-  { href: "/admin/project-settings", icon: "Settings", label: "案件設定" },
+  { href: "/line-settings", icon: "Smartphone", label: "LINE設定" },
 ];
 
 const EXECUTIVE_ITEMS: NavItem[] = [

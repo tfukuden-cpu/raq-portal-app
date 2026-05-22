@@ -342,6 +342,15 @@ export function HelpCircleIcon({ className }: IconProps) {
   );
 }
 
+export function SmartphoneIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+      <line x1="12" y1="18" x2="12.01" y2="18" />
+    </svg>
+  );
+}
+
 export const ICON_MAP = {
   Home: HomeIcon,
   Clock: ClockIcon,
@@ -365,6 +374,7 @@ export const ICON_MAP = {
   Briefcase: BriefcaseIcon,
   Download: DownloadIcon,
   HelpCircle: HelpCircleIcon,
+  Smartphone: SmartphoneIcon,
 } as const;
 
 export type IconKey = keyof typeof ICON_MAP;

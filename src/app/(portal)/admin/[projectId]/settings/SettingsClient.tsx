@@ -1547,7 +1547,7 @@ export function ShiftPatternList({
 
 // ── LINEグループ連携 ──────────────────────────────────────
 
-function LineGroupSection({
+export function LineGroupSection({
   projectId,
   currentGroupId,
 }: {
