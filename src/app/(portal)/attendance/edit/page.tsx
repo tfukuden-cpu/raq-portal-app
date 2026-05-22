@@ -61,25 +61,30 @@ export default async function AttendanceEditPage({
   ] = await Promise.all([
     admin.from("project_members")
       .select("staff_id, section, staffs(id, name, display_name, account_number)")
-      .eq("project_id", projectId),
+      .eq("project_id", projectId)
+      .limit(5000),
     admin.from("shifts")
       .select("staff_id, shift_date, shift_name, shift_start, shift_end")
       .eq("project_id", projectId)
       .gte("shift_date", startDate).lte("shift_date", endDate)
-      .order("shift_date").order("staff_id"),
+      .order("shift_date").order("staff_id")
+      .limit(20000),
     admin.from("punch_logs")
       .select("staff_id, punch_type, recorded_at")
       .eq("project_id", projectId)
       .gte("recorded_at", startISO).lte("recorded_at", endISO)
-      .order("recorded_at"),
+      .order("recorded_at")
+      .limit(50000),
     admin.from("absence_reports")
       .select("staff_id, absence_date, reason")
       .eq("project_id", projectId)
-      .gte("absence_date", startDate).lte("absence_date", endDate),
+      .gte("absence_date", startDate).lte("absence_date", endDate)
+      .limit(5000),
     admin.from("late_reports")
       .select("staff_id, late_date, reason")
       .eq("project_id", projectId)
-      .gte("late_date", startDate).lte("late_date", endDate),
+      .gte("late_date", startDate).lte("late_date", endDate)
+      .limit(5000),
     admin.from("shift_patterns")
       .select("name, start_time, end_time")
       .eq("project_id", projectId),
