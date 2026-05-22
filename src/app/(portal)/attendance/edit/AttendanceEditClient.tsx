@@ -6,6 +6,7 @@ import { reviewCorrectionAction } from "../../corrections/actions";
 import WorkRecordsClient from "@/app/(portal)/admin/work-records/WorkRecordsClient";
 import type { StaffEntry } from "@/app/(portal)/admin/work-records/WorkRecordsClient";
 import ExportModal from "./ExportModal";
+import AttendanceSummarySection from "./AttendanceSummarySection";
 
 export type AttendanceRow = {
   date: string;
@@ -91,11 +92,11 @@ export default function AttendanceEditClient({
   startDate: string;
   endDate: string;
   staffs: StaffEntry[];
-  initialTab?: "anomaly" | "corrections" | "records";
+  initialTab?: "anomaly" | "corrections" | "records" | "compliance";
 }) {
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
-  const [activeTab, setActiveTab] = useState<"anomaly" | "corrections" | "records">(initialTab);
+  const [activeTab, setActiveTab] = useState<"anomaly" | "corrections" | "records" | "compliance">(initialTab);
   const [showExport, setShowExport] = useState(false);
   const [startDate, setStartDate] = useState(initStart);
   const [endDate,   setEndDate]   = useState(initEnd);
@@ -203,7 +204,8 @@ export default function AttendanceEditClient({
           { id: "anomaly",     label: "勤怠修正",  badge: issueCount > 0 ? issueCount : null },
           { id: "corrections", label: "補正申請",  badge: pendingCorrCount > 0 ? pendingCorrCount : null },
           { id: "records",     label: "勤怠実績",  badge: null },
-        ] as { id: "anomaly" | "corrections" | "records"; label: string; badge: number | null }[]).map(t => (
+          { id: "compliance",  label: "遵守率",    badge: null },
+        ] as { id: "anomaly" | "corrections" | "records" | "compliance"; label: string; badge: number | null }[]).map(t => (
           <button
             key={t.id}
             type="button"
@@ -502,22 +504,17 @@ export default function AttendanceEditClient({
       )}
       </>}
 
-      {/* 勤怠実績タブ（順守率 + 実績出力ボタン） */}
+      {/* 勤怠実績タブ */}
       {activeTab === "records" && (
-        <div className="space-y-4">
-          <div className="flex justify-end">
-            <button
-              onClick={() => setShowExport(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-              </svg>
-              実績出力
-            </button>
-          </div>
-          <WorkRecordsClient projectId={projectId} staffs={staffs} fixedTab="compliance" />
-        </div>
+        <AttendanceSummarySection
+          projectId={projectId}
+          onExport={() => setShowExport(true)}
+        />
+      )}
+
+      {/* 遵守率タブ */}
+      {activeTab === "compliance" && (
+        <WorkRecordsClient projectId={projectId} staffs={staffs} fixedTab="compliance" />
       )}
 
       {/* 実績出力モーダル */}
