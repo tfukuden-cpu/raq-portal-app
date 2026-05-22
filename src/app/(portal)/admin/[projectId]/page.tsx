@@ -46,7 +46,6 @@ export default async function ProjectDetailPage(props: {
     { data: members },
     { data: settings },
     { data: shiftPatterns },
-    { data: holidayRules },
     { data: recentShifts },
     { data: recentPunches },
   ] = await Promise.all([
@@ -57,9 +56,6 @@ export default async function ProjectDetailPage(props: {
     createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id, enable_departure_report").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
       .select("id, name, short_name, start_time, end_time, required_count, required_weekday, required_weekend, section, target_role")
-      .eq("project_id", projectId).order("sort_order"),
-    createAdminClient().from("holiday_rules")
-      .select("rule_type, value")
       .eq("project_id", projectId).order("sort_order"),
     // 勤怠順守率計算用：過去30日のシフト
     admin30.from("shifts")
@@ -167,10 +163,6 @@ export default async function ProjectDetailPage(props: {
             isGSheetsConfigured={isGSheetsConfigured()}
             members={memberList}
             shiftPatterns={patternList}
-            holidayRules={(holidayRules ?? []).map((r) => ({
-              rule_type: r.rule_type,
-              value:     String(r.value),
-            }))}
             notificationSettings={
               (settings?.notification_settings as Record<string, boolean> | null) ?? {}
             }

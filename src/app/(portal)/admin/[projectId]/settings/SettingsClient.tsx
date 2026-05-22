@@ -2,8 +2,6 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import ShiftDraftSection from "./ShiftDraftSection";
-import ShiftOffRequestSection from "./ShiftOffRequestSection";
 import LineConnectionSection from "./LineConnectionSection";
 import {
   updateProjectNameAction,
@@ -46,7 +44,7 @@ type ShiftPattern = {
   section: string;
   target_role: string; // "all" | "admin" | "staff"
 };
-type TabId = "basic" | "members" | "shift" | "holiday" | "line" | "notify" | "danger";
+type TabId = "basic" | "members" | "line" | "notify" | "danger";
 
 // ── 共通フィードバック ──────────────────────────────────
 
@@ -83,7 +81,6 @@ export function SettingsContainer({
   isGSheetsConfigured: gsheetsOk,
   members,
   shiftPatterns,
-  holidayRules,
   notificationSettings,
   lineGroupId,
   enableDeparture,
@@ -96,7 +93,6 @@ export function SettingsContainer({
   isGSheetsConfigured: boolean;
   members: Member[];
   shiftPatterns: ShiftPattern[];
-  holidayRules: HolidayRuleInput[];
   notificationSettings: Partial<NotificationSettings>;
   lineGroupId: string | null;
   enableDeparture: boolean;
@@ -111,8 +107,6 @@ export function SettingsContainer({
   const TABS: { id: TabId; label: string; count?: number; red?: boolean }[] = [
     { id: "basic",   label: "基本設定" },
     { id: "members", label: "メンバー", count: members.length },
-    { id: "shift",   label: "シフト" },
-    { id: "holiday", label: "希望休" },
     { id: "line",    label: "LINE連携", count: members.filter(m => !m.lineLinked).length || undefined },
     { id: "notify",  label: "LINE通知" },
     ...(canArchive ? [{ id: "danger" as TabId, label: "危険操作", red: true }] : []),
@@ -176,57 +170,6 @@ export function SettingsContainer({
       )}
 
       {/* ── シフトタブ ── */}
-      {tab === "shift" && (
-        <div className="space-y-8">
-          <section className="space-y-3">
-            <SectionHeading
-              title="シフトパターン"
-              sub="保存するとスプシの「シフトパターン」シートにも反映されます"
-            />
-            <ShiftPatternList projectId={projectId} initialPatterns={shiftPatterns} />
-          </section>
-          <Divider />
-          <section className="space-y-3">
-            <SectionHeading
-              title="シフト仮組"
-              sub="月と必要人数を設定して自動でシフトを生成します"
-            />
-            <ShiftDraftSection
-              projectId={projectId}
-              patterns={shiftPatterns.map(p => ({
-                name:        p.name,
-                section:     p.section || null,
-                start_time:  p.start_time || null,
-                end_time:    p.end_time   || null,
-                target_role: p.target_role,
-              }))}
-            />
-          </section>
-          {/* シフト表生成（スプシ）は一時非表示 */}
-        </div>
-      )}
-
-      {/* ── 希望休タブ ── */}
-      {tab === "holiday" && (
-        <div className="space-y-8">
-          <section className="space-y-3">
-            <SectionHeading
-              title="希望休申請一覧 / インポート"
-              sub="GoogleフォームのExcelを取り込み、スタッフの申請内容を確認できます"
-            />
-            <ShiftOffRequestSection projectId={projectId} />
-          </section>
-          <Divider />
-          <section className="space-y-3">
-            <SectionHeading
-              title="希望休ルール"
-              sub="保存するとスプシの「希望休ルール」シートにも反映されます"
-            />
-            <HolidayRulesList projectId={projectId} initialRules={holidayRules} />
-          </section>
-        </div>
-      )}
-
       {/* ── メンバータブ ── */}
       {tab === "members" && (
         <MemberList
