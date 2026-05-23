@@ -1392,50 +1392,34 @@ export default function ShiftEditGrid({
             <span className="text-[10px] text-green-600 dark:text-green-400">{draftMsg}</span>
           )}
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {/* 充足サマリー 表示/非表示 */}
+        <div className="flex items-center gap-1 shrink-0">
+          {/* ── 表示系コントロール ── */}
+          {/* 充足サマリー ON/OFF */}
           <button
             onClick={() => setShowSummaryRows(v => !v)}
+            title="充足サマリーを表示/非表示"
             className={[
               "px-2 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors",
               showSummaryRows
-                ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900 border-zinc-700 dark:border-zinc-200"
-                : "bg-white dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700",
+                ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900 border-zinc-700"
+                : "bg-white dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50",
             ].join(" ")}
           >
             充足
           </button>
-          {/* パターン軸 / スタッフ軸 切り替え */}
+          {/* パターン軸 / スタッフ軸 */}
           <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden text-[11px] font-semibold">
-            <button
-              onClick={() => setViewMode("pattern")}
-              className={[
-                "px-2 py-1.5 transition-colors",
-                viewMode === "pattern"
-                  ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900"
-                  : "bg-white dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-700",
-              ].join(" ")}
-            >
-              パターン
-            </button>
-            <button
-              onClick={() => setViewMode("staff")}
-              className={[
-                "px-2 py-1.5 transition-colors",
-                viewMode === "staff"
-                  ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900"
-                  : "bg-white dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-700",
-              ].join(" ")}
-            >
-              スタッフ
-            </button>
+            <button onClick={() => setViewMode("pattern")} className={["px-2 py-1.5 transition-colors", viewMode === "pattern" ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900" : "bg-white dark:bg-zinc-800 text-zinc-400 hover:bg-zinc-50"].join(" ")}>パターン</button>
+            <button onClick={() => setViewMode("staff")}   className={["px-2 py-1.5 transition-colors", viewMode === "staff"   ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900" : "bg-white dark:bg-zinc-800 text-zinc-400 hover:bg-zinc-50"].join(" ")}>スタッフ</button>
           </div>
-          <button
-            onClick={() => setShowSummary(true)}
-            disabled={isPending || isSavingDraft}
-            className="relative px-2.5 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
-          >
-            変更履歴
+
+          {/* セパレーター */}
+          <span className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
+
+          {/* ── 操作系ボタン ── */}
+          <button onClick={() => setShowSummary(true)} disabled={isPending || isSavingDraft}
+            className="relative px-2.5 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
+            履歴
             {draftChanges.length > 0 && (
               <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center tabular-nums">
                 {draftChanges.length}
@@ -1444,12 +1428,12 @@ export default function ShiftEditGrid({
           </button>
           {hasChanges && (
             <button onClick={resetDrafts} disabled={isPending || isSavingDraft}
-              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
-              リセット
+              className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
+              戻す
             </button>
           )}
           <button onClick={onCancel} disabled={isPending || isSavingDraft}
-            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
+            className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
             閉じる
           </button>
           <button onClick={handleSaveDraft} disabled={isPending || isSavingDraft}
@@ -1529,7 +1513,7 @@ export default function ShiftEditGrid({
                       style={{ position: "sticky", left: 0, top: topOffset, zIndex: 20 }}
                     >
                       <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-1.5">
-                        <span className="text-[8px] font-bold text-zinc-600 dark:text-zinc-300 leading-none truncate block">
+                        <span className="text-[9px] font-bold text-zinc-600 dark:text-zinc-300 leading-none truncate block">
                           {pattern.name}
                         </span>
                       </div>
@@ -1572,7 +1556,7 @@ export default function ShiftEditGrid({
                           style={{ position: "sticky", top: topOffset, zIndex: 18 }}
                         >
                           <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
-                            <span className={`text-[8px] leading-none ${textCls}`}>{display}</span>
+                            <span className={`text-[9px] leading-none ${textCls}`}>{display}</span>
                           </div>
                         </td>
                       );

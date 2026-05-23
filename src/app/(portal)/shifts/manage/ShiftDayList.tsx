@@ -255,7 +255,7 @@ export default function ShiftDayList({
               {/* 日付ボタン群（overflow:hidden → translateX で同期） */}
               <div className="overflow-hidden flex-1">
                 <div ref={headerInnerRef} className="flex">
-                  <div className="flex pr-4">
+                  <div className="flex pr-2">
                     {allDates.map(d => {
                       const dt        = new Date(d);
                       const dateNum   = dt.getUTCDate();
@@ -304,6 +304,10 @@ export default function ShiftDayList({
                     })}
                   </div>
                 </div>
+              </div>
+              {/* 合計列ヘッダー（右固定） */}
+              <div className="sticky right-0 z-30 w-16 flex-shrink-0 h-12 flex items-end pb-2 justify-center bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
+                <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">合計</span>
               </div>
             </div>
 
@@ -441,6 +445,57 @@ export default function ShiftDayList({
                             </div>
                           );
                         })}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ── 合計列（右固定） ── */}
+                <div className="sticky right-0 z-20 w-16 flex-shrink-0 bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
+                  {visibleShiftPatterns.map((pattern, gi, arr) => {
+                    const isCollapsed = collapsedPatterns.has(pattern.name);
+                    const maxSlots    = patternMaxSlots.get(pattern.name) ?? 0;
+                    const isLastGrp   = gi === arr.length - 1;
+                    const isSV        = pattern.section === "SV";
+
+                    const totalActual   = allDates.reduce((s, d) =>
+                      s + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length, 0);
+                    const totalRequired = isSV ? 0 : allDates.reduce((s, d) => s + getReqForDate(pattern, d), 0);
+                    const net           = totalRequired - totalActual; // 正=不足、負=余剰
+
+                    return (
+                      <div key={pattern.name} className={cx("flex flex-col", isLastGrp ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
+                        {/* 合計充足行 */}
+                        <div className="h-9 flex flex-col items-center justify-center border-b border-zinc-100 dark:border-zinc-700/60 bg-zinc-100/60 dark:bg-zinc-800/50">
+                          {isSV ? (
+                            <span className="tabular-nums text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+                              {totalActual > 0 ? totalActual : "—"}
+                            </span>
+                          ) : totalRequired > 0 ? (
+                            <>
+                              <span className={cx(
+                                "tabular-nums text-[11px] font-bold leading-none",
+                                net > 0 ? "text-red-500 dark:text-red-400"
+                                : net < 0 ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-emerald-600 dark:text-emerald-400",
+                              )}>{totalActual}/{totalRequired}</span>
+                              <span className={cx(
+                                "tabular-nums text-[9px] font-bold leading-none mt-0.5",
+                                net > 0 ? "text-red-400 dark:text-red-500"
+                                : net < 0 ? "text-emerald-500 dark:text-emerald-400"
+                                : "text-zinc-300 dark:text-zinc-600",
+                              )}>
+                                {net > 0 ? `-${net}人` : net < 0 ? `+${-net}人` : "✓"}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                          )}
+                        </div>
+                        {/* スタッフ行の高さスペーサー */}
+                        {!isCollapsed && Array.from({ length: maxSlots }).map((_, i) => (
+                          <div key={i} className={cx("h-8", i < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "")} />
+                        ))}
                       </div>
                     );
                   })}
