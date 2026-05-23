@@ -11,10 +11,8 @@ import ShiftSettingsTab from "./ShiftSettingsTab";
 import ShiftHolidayTab from "./ShiftHolidayTab";
 import type { ChangeLog } from "./ShiftEditGrid";
 import type { GridDraftEntry } from "../actions";
-import SheetMenuButton from "./SheetMenuButton";
 import PublishButton from "./PublishButton";
 import HeaderHeightSetter from "./HeaderHeightSetter";
-import { isGSheetsConfigured } from "@/lib/gsheets";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
 type Tab = "shift" | "settings" | "holiday";
@@ -364,9 +362,6 @@ export default async function ManageShiftsPage(props: {
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
               <PublishButton projectId={selectedProjectId} year={targetYear} month={targetMonth} />
-              {isGSheetsConfigured() && (
-                <SheetMenuButton projectId={selectedProjectId} year={targetYear} month={targetMonth} />
-              )}
             </div>
             <div className="flex items-center gap-1">
               <a href={`${monthNavBase}${prevMonth.year}&month=${prevMonth.month}`}

@@ -1375,16 +1375,8 @@ export default function ShiftEditGrid({
               ))}
             </div>
           )}
-          {hasDraftFromDB && draftCount === 0 && (
-            <span className="text-[10px] text-amber-600 dark:text-amber-400">下書きなし</span>
-          )}
           {draftMsg && (
             <span className="text-[10px] text-green-600 dark:text-green-400">{draftMsg}</span>
-          )}
-          {draftSavedBy && initialDraft && initialDraft.length > 0 && draftCount > 0 && !draftMsg && (
-            <span className="text-[10px] text-amber-600 dark:text-amber-500 truncate">
-              下書き: {draftSavedBy} {draftSavedAt ? fmtAt(draftSavedAt) : ""}
-            </span>
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
