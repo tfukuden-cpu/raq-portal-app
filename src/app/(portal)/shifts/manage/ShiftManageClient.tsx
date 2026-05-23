@@ -148,7 +148,7 @@ export default function ShiftManageClient({
             onClick={e => e.stopPropagation()}
           >
             <div className="mb-1">
-              <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">グリッド編集を開始</h2>
+              <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">シフト編集を開始</h2>
               <p className="text-xs text-zinc-400 mt-0.5">
                 保存済みの下書きがあります
                 {draftSavedBy && (
@@ -197,7 +197,7 @@ export default function ShiftManageClient({
             onClick={handleClickEdit}
             className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors border border-blue-200 dark:border-blue-800"
           >
-            グリッド編集
+            シフト編集
           </button>
         </div>
       </div>
