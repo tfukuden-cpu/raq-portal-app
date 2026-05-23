@@ -77,7 +77,8 @@
       "Bash(findstr /i \"deploy\\\\|vercel\\\\|build\")",
       "mcp__Claude_in_Chrome__select_browser",
       "Skill(anthropic-skills:xlsx)",
-      "Skill(anthropic-skills:xlsx:*)"
+      "Skill(anthropic-skills:xlsx:*)",
+      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__get_logs"
     ]
   }
 }
