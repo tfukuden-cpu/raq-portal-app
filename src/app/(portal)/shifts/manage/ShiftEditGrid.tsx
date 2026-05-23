@@ -838,6 +838,8 @@ export default function ShiftEditGrid({
   const [pendingNotify, setPendingNotify] = useState<PendingNotify | null>(null);
   // グリッド表示モード
   const [viewMode, setViewMode] = useState<"pattern" | "staff">("pattern");
+  // 充足サマリー行の表示/非表示
+  const [showSummaryRows, setShowSummaryRows] = useState(true);
 
   // ── センサー ───────────────────────────────────────────────────
   const sensors = useSensors(
@@ -1391,6 +1393,18 @@ export default function ShiftEditGrid({
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* 充足サマリー 表示/非表示 */}
+          <button
+            onClick={() => setShowSummaryRows(v => !v)}
+            className={[
+              "px-2 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors",
+              showSummaryRows
+                ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900 border-zinc-700 dark:border-zinc-200"
+                : "bg-white dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700",
+            ].join(" ")}
+          >
+            充足
+          </button>
           {/* パターン軸 / スタッフ軸 切り替え */}
           <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden text-[11px] font-semibold">
             <button
@@ -1499,11 +1513,11 @@ export default function ShiftEditGrid({
 
             <tbody>
               {/* ── 充足サマリー行（常に上部に固定・sticky）── */}
-              {summaryPatterns.map((pattern, patIdx) => {
+              {showSummaryRows && summaryPatterns.map((pattern, patIdx) => {
                 const topOffset = HEADER_H + SUM_ROW_H * patIdx;
                 const isLast = patIdx === summaryPatterns.length - 1;
                 return (
-                  <tr key={`sum-${pattern.name}`} style={{ height: `${SUM_ROW_H}px` }}>
+                  <tr key={`sum-${pattern.name}`} style={{ height: `${SUM_ROW_H}px` }} className="bg-white dark:bg-zinc-950">
                     {/* パターン名セル（left sticky + top sticky） */}
                     <td
                       className={[
@@ -1555,7 +1569,7 @@ export default function ShiftEditGrid({
                               ? "border-b-2 border-r border-zinc-300 dark:border-zinc-600"
                               : "border-b border-r border-zinc-100 dark:border-zinc-800",
                           ].join(" ")}
-                          style={{ position: "sticky", top: topOffset, zIndex: 12 }}
+                          style={{ position: "sticky", top: topOffset, zIndex: 18 }}
                         >
                           <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
                             <span className={`text-[8px] leading-none ${textCls}`}>{display}</span>
