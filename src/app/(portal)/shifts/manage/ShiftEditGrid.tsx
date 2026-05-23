@@ -1503,20 +1503,22 @@ export default function ShiftEditGrid({
                 const topOffset = HEADER_H + SUM_ROW_H * patIdx;
                 const isLast = patIdx === summaryPatterns.length - 1;
                 return (
-                  <tr key={`sum-${pattern.name}`}>
+                  <tr key={`sum-${pattern.name}`} style={{ height: `${SUM_ROW_H}px` }}>
                     {/* パターン名セル（left sticky + top sticky） */}
                     <td
                       className={[
-                        "border-r-2 bg-zinc-50 dark:bg-zinc-900 align-middle px-1.5 overflow-hidden",
+                        "border-r-2 bg-zinc-50 dark:bg-zinc-900 p-0 overflow-hidden",
                         isLast
                           ? "border-b-2 border-zinc-300 dark:border-zinc-600"
                           : "border-b border-zinc-200 dark:border-zinc-700",
                       ].join(" ")}
-                      style={{ position: "sticky", left: 0, top: topOffset, zIndex: 20, height: `${SUM_ROW_H}px`, maxHeight: `${SUM_ROW_H}px` }}
+                      style={{ position: "sticky", left: 0, top: topOffset, zIndex: 20 }}
                     >
-                      <span className="text-[8px] font-bold text-zinc-600 dark:text-zinc-300 leading-none truncate block">
-                        {pattern.name}
-                      </span>
+                      <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-1.5">
+                        <span className="text-[8px] font-bold text-zinc-600 dark:text-zinc-300 leading-none truncate block">
+                          {pattern.name}
+                        </span>
+                      </div>
                     </td>
                     {/* 日付ごとの過不足 */}
                     {allDates.map((date) => {
@@ -1547,15 +1549,17 @@ export default function ShiftEditGrid({
                       return (
                         <td key={date}
                           className={[
-                            "text-center tabular-nums overflow-hidden",
+                            "tabular-nums p-0 overflow-hidden",
                             bgCls,
                             isLast
                               ? "border-b-2 border-r border-zinc-300 dark:border-zinc-600"
                               : "border-b border-r border-zinc-100 dark:border-zinc-800",
                           ].join(" ")}
-                          style={{ position: "sticky", top: topOffset, zIndex: 12, height: `${SUM_ROW_H}px`, maxHeight: `${SUM_ROW_H}px` }}
+                          style={{ position: "sticky", top: topOffset, zIndex: 12 }}
                         >
-                          <span className={`text-[8px] leading-none ${textCls}`}>{display}</span>
+                          <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
+                            <span className={`text-[8px] leading-none ${textCls}`}>{display}</span>
+                          </div>
                         </td>
                       );
                     })}
