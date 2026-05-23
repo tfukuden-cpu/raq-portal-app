@@ -1368,7 +1368,7 @@ export default function ShiftEditGrid({
   const COL_W = 50;
   const NAME_W = 100;
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
-  const SUM_ROW_H = 16; // 16px (充足サマリー行の高さ)
+  const SUM_ROW_H = 20; // 20px (充足サマリー行の高さ)
   const totalW = NAME_W + COL_W * allDates.length;
 
   return (
@@ -1504,21 +1504,22 @@ export default function ShiftEditGrid({
               {/* ── 充足サマリー行（常に上部に固定・sticky）── */}
               {showSummaryRows && summaryPatterns.map((pattern, patIdx) => {
                 const topOffset = HEADER_H + SUM_ROW_H * patIdx;
-                const isLast = patIdx === summaryPatterns.length - 1;
+                const isFirst = patIdx === 0;
+                const isLast  = patIdx === summaryPatterns.length - 1;
                 return (
-                  <tr key={`sum-${pattern.name}`} style={{ height: `${SUM_ROW_H}px` }} className="bg-white dark:bg-zinc-950">
-                    {/* パターン名セル（left sticky + top sticky） */}
+                  <tr key={`sum-${pattern.name}`} style={{ height: `${SUM_ROW_H}px` }} className="bg-zinc-50 dark:bg-zinc-900">
+                    {/* パターン名セル（行ヘッダー風・left+top sticky） */}
                     <td
                       className={[
-                        "border-r-2 bg-zinc-50 dark:bg-zinc-900 p-0 overflow-hidden",
-                        isLast
-                          ? "border-b-2 border-zinc-300 dark:border-zinc-600"
-                          : "border-b border-zinc-200 dark:border-zinc-700",
+                        "p-0 overflow-hidden",
+                        "bg-zinc-200 dark:bg-zinc-700 border-r-2 border-zinc-400 dark:border-zinc-500",
+                        isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                        isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
                       ].join(" ")}
                       style={{ position: "sticky", left: 0, top: topOffset, zIndex: 20 }}
                     >
-                      <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-1.5">
-                        <span className="text-[9px] font-bold text-zinc-600 dark:text-zinc-300 leading-none truncate block">
+                      <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-2">
+                        <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200 leading-none truncate block">
                           {pattern.name}
                         </span>
                       </div>
@@ -1535,33 +1536,33 @@ export default function ShiftEditGrid({
                       if (required === 0) {
                         display = assigned > 0 ? String(assigned) : "";
                         textCls = "text-zinc-400 dark:text-zinc-500";
-                        bgCls = isToday ? "bg-blue-50 dark:bg-blue-950" : "bg-zinc-50 dark:bg-zinc-900";
+                        bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
                       } else if (net > 0) {
                         display = `-${net}`;
-                        textCls = "text-red-500 dark:text-red-400 font-bold";
-                        bgCls = isToday ? "bg-red-100 dark:bg-red-950" : "bg-red-50 dark:bg-red-950";
+                        textCls = "text-red-600 dark:text-red-400 font-bold";
+                        bgCls = isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950";
                       } else if (net < 0) {
                         display = `+${-net}`;
-                        textCls = "text-emerald-600 dark:text-emerald-400 font-bold";
-                        bgCls = isToday ? "bg-emerald-100 dark:bg-emerald-950" : "bg-emerald-50 dark:bg-emerald-950";
+                        textCls = "text-emerald-700 dark:text-emerald-400 font-bold";
+                        bgCls = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950";
                       } else {
-                        display = "─";
-                        textCls = "text-zinc-300 dark:text-zinc-600";
-                        bgCls = isToday ? "bg-blue-50 dark:bg-blue-950" : "bg-zinc-50 dark:bg-zinc-900";
+                        display = "✓";
+                        textCls = "text-emerald-500 dark:text-emerald-600";
+                        bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
                       }
                       return (
                         <td key={date}
                           className={[
                             "tabular-nums p-0 overflow-hidden",
                             bgCls,
-                            isLast
-                              ? "border-b-2 border-r border-zinc-300 dark:border-zinc-600"
-                              : "border-b border-r border-zinc-100 dark:border-zinc-800",
+                            isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                            isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500 border-r border-r-zinc-200 dark:border-r-zinc-700"
+                                    : "border-b border-b-zinc-300 dark:border-b-zinc-600 border-r border-r-zinc-200 dark:border-r-zinc-700",
                           ].join(" ")}
                           style={{ position: "sticky", top: topOffset, zIndex: 18 }}
                         >
                           <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
-                            <span className={`text-[9px] leading-none ${textCls}`}>{display}</span>
+                            <span className={`text-[10px] leading-none ${textCls}`}>{display}</span>
                           </div>
                         </td>
                       );
