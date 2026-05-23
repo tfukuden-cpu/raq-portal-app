@@ -1361,7 +1361,7 @@ export default function ShiftEditGrid({
   const COL_W = 34;
   const NAME_W = 90;
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
-  const SUM_ROW_H = 20; // h-5  = 20px (充足サマリー行の高さ)
+  const SUM_ROW_H = 16; // h-4  = 16px (充足サマリー行の高さ)
   const totalW = NAME_W + COL_W * allDates.length;
 
   return (
@@ -1547,7 +1547,7 @@ export default function ShiftEditGrid({
                       return (
                         <td key={date}
                           className={[
-                            "h-5 text-center tabular-nums",
+                            "h-4 text-center tabular-nums",
                             bgCls,
                             isLast
                               ? "border-b-2 border-r border-zinc-300 dark:border-zinc-600"
@@ -1634,16 +1634,16 @@ export default function ShiftEditGrid({
                               ].filter(Boolean).join(" ")}
                             >
                               {shiftName && (
-                                <div className="px-0.5 h-full flex items-center overflow-hidden">
+                                <div className="h-full flex items-center justify-center overflow-hidden px-px">
                                   <span className={[
-                                    "text-[11px] leading-tight px-0.5 rounded truncate w-full block",
+                                    "text-[9px] leading-none font-medium text-center truncate w-full block",
                                     isDraftCell
                                       ? "text-blue-700 dark:text-blue-400 font-bold"
                                       : "text-zinc-700 dark:text-zinc-300",
                                   ].join(" ")}>
                                     {shiftName}
                                     {hasLog && !isDraftCell && (
-                                      <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5 mt-0.5" />
+                                      <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5" />
                                     )}
                                   </span>
                                 </div>
