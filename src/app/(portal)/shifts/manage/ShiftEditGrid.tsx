@@ -164,7 +164,7 @@ function DraggableChip({
           : "text-zinc-800 dark:text-zinc-200",
       ].filter(Boolean).join(" ")}
     >
-      {name}
+      {name.slice(0, 4)}
       {isDuplicate && (
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 align-top ml-0.5 mt-0.5" />
       )}
@@ -1358,10 +1358,10 @@ export default function ShiftEditGrid({
   // ドラッグ中のスタッフID（同一スタッフセルをハイライトするため）
   const draggingStaffId = activeId ? activeId.split("__")[0] : null;
   const activeName = activeId ? (memberById.get(draggingStaffId ?? "")?.name ?? "") : null;
-  const COL_W = 34;
-  const NAME_W = 90;
+  const COL_W = 50;
+  const NAME_W = 100;
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
-  const SUM_ROW_H = 16; // h-4  = 16px (充足サマリー行の高さ)
+  const SUM_ROW_H = 16; // 16px (充足サマリー行の高さ)
   const totalW = NAME_W + COL_W * allDates.length;
 
   return (
@@ -1507,14 +1507,14 @@ export default function ShiftEditGrid({
                     {/* パターン名セル（left sticky + top sticky） */}
                     <td
                       className={[
-                        "border-r-2 bg-zinc-50 dark:bg-zinc-900 align-middle px-2",
+                        "border-r-2 bg-zinc-50 dark:bg-zinc-900 align-middle px-1.5 overflow-hidden",
                         isLast
                           ? "border-b-2 border-zinc-300 dark:border-zinc-600"
                           : "border-b border-zinc-200 dark:border-zinc-700",
                       ].join(" ")}
-                      style={{ position: "sticky", left: 0, top: topOffset, zIndex: 20 }}
+                      style={{ position: "sticky", left: 0, top: topOffset, zIndex: 20, height: `${SUM_ROW_H}px`, maxHeight: `${SUM_ROW_H}px` }}
                     >
-                      <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 leading-tight truncate">
+                      <span className="text-[8px] font-bold text-zinc-600 dark:text-zinc-300 leading-none truncate block">
                         {pattern.name}
                       </span>
                     </td>
@@ -1547,15 +1547,15 @@ export default function ShiftEditGrid({
                       return (
                         <td key={date}
                           className={[
-                            "h-4 text-center tabular-nums",
+                            "text-center tabular-nums overflow-hidden",
                             bgCls,
                             isLast
                               ? "border-b-2 border-r border-zinc-300 dark:border-zinc-600"
                               : "border-b border-r border-zinc-100 dark:border-zinc-800",
                           ].join(" ")}
-                          style={{ position: "sticky", top: topOffset, zIndex: 12 }}
+                          style={{ position: "sticky", top: topOffset, zIndex: 12, height: `${SUM_ROW_H}px`, maxHeight: `${SUM_ROW_H}px` }}
                         >
-                          <span className={`text-[10px] leading-none ${textCls}`}>{display}</span>
+                          <span className={`text-[8px] leading-none ${textCls}`}>{display}</span>
                         </td>
                       );
                     })}
@@ -1634,14 +1634,14 @@ export default function ShiftEditGrid({
                               ].filter(Boolean).join(" ")}
                             >
                               {shiftName && (
-                                <div className="h-full flex items-center justify-center overflow-hidden px-px">
+                                <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
                                   <span className={[
-                                    "text-[9px] leading-none font-medium text-center truncate w-full block",
+                                    "text-[11px] leading-none font-medium text-center truncate w-full block",
                                     isDraftCell
                                       ? "text-blue-700 dark:text-blue-400 font-bold"
                                       : "text-zinc-700 dark:text-zinc-300",
                                   ].join(" ")}>
-                                    {shiftName}
+                                    {shiftName.slice(0, 4)}
                                     {hasLog && !isDraftCell && (
                                       <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5" />
                                     )}
