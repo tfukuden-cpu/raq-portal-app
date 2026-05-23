@@ -1367,9 +1367,10 @@ export default function ShiftEditGrid({
   const activeName = activeId ? (memberById.get(draggingStaffId ?? "")?.name ?? "") : null;
   const COL_W = 50;
   const NAME_W = 100;
+  const TOT_W = 52;     // 合計列幅
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
   const SUM_ROW_H = 20; // 20px (充足サマリー行の高さ)
-  const totalW = NAME_W + COL_W * allDates.length;
+  const totalW = NAME_W + COL_W * allDates.length + TOT_W;
 
   return (
     <div className="flex flex-col h-full">
@@ -1379,20 +1380,6 @@ export default function ShiftEditGrid({
           <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 leading-tight">
             {draftCount > 0 ? `${draftCount}件 変更中` : slotReqChanged ? "必要人数 変更中" : "グリッド編集"}
           </span>
-          {sectionShortages.some(([, net]) => net !== 0) && (
-            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-              {sectionShortages.map(([sec, net]) => net === 0 ? null : (
-                <span key={sec} className={[
-                  "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md leading-none",
-                  net > 0
-                    ? "bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400"
-                    : "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400",
-                ].join(" ")}>
-                  {sec || "全体"}{net > 0 ? ` 不足${net}人` : ` 余剰${-net}人`}
-                </span>
-              ))}
-            </div>
-          )}
           {draftMsg && (
             <span className="text-[10px] text-green-600 dark:text-green-400">{draftMsg}</span>
           )}
@@ -1470,6 +1457,7 @@ export default function ShiftEditGrid({
             <colgroup>
               <col style={{ width: `${NAME_W}px` }} />
               {allDates.map((d) => <col key={d} style={{ width: `${COL_W}px` }} />)}
+              <col style={{ width: `${TOT_W}px` }} />
             </colgroup>
 
             {/* ── 日付ヘッダー ── */}
@@ -1497,6 +1485,10 @@ export default function ShiftEditGrid({
                     </th>
                   );
                 })}
+                {/* 合計列ヘッダー */}
+                <th className="sticky top-0 right-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-l-2 border-zinc-300 dark:border-zinc-600">
+                  <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">合計</span>
+                </th>
               </tr>
             </thead>
 
@@ -1567,6 +1559,52 @@ export default function ShiftEditGrid({
                         </td>
                       );
                     })}
+                    {/* 合計セル */}
+                    {(() => {
+                      const totalAssigned   = allDates.reduce((s, d) => s + (resolvedGrid.get(`${pattern.name}__${d}`) ?? []).length, 0);
+                      const totalRequired   = allDates.reduce((s, d) => s + getRequired(pattern.name, d), 0);
+                      const totalNet        = totalRequired - totalAssigned;
+                      let totDisplay: string;
+                      let totText: string;
+                      let totBg: string;
+                      if (totalRequired === 0) {
+                        totDisplay = totalAssigned > 0 ? String(totalAssigned) : "—";
+                        totText = "text-zinc-400 dark:text-zinc-500";
+                        totBg   = "bg-zinc-100 dark:bg-zinc-800";
+                      } else if (totalNet > 0) {
+                        totDisplay = `-${totalNet}`;
+                        totText = "text-red-600 dark:text-red-400 font-bold";
+                        totBg   = "bg-red-100 dark:bg-red-950";
+                      } else if (totalNet < 0) {
+                        totDisplay = `+${-totalNet}`;
+                        totText = "text-emerald-700 dark:text-emerald-400 font-bold";
+                        totBg   = "bg-emerald-100 dark:bg-emerald-950";
+                      } else {
+                        totDisplay = "✓";
+                        totText = "text-emerald-500 dark:text-emerald-600";
+                        totBg   = "bg-zinc-100 dark:bg-zinc-800";
+                      }
+                      return (
+                        <td
+                          className={[
+                            "tabular-nums p-0 overflow-hidden border-l-2 border-zinc-300 dark:border-zinc-600",
+                            totBg,
+                            isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                            isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
+                          ].join(" ")}
+                          style={{ position: "sticky", right: 0, top: topOffset, zIndex: 22 }}
+                        >
+                          <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center">
+                            <span className={`text-[10px] leading-none ${totText}`}>{totDisplay}</span>
+                            {totalRequired > 0 && (
+                              <span className="text-[8px] leading-none text-zinc-400 dark:text-zinc-500 mt-0.5 tabular-nums">
+                                {totalAssigned}/{totalRequired}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      );
+                    })()}
                   </tr>
                 );
               })}
