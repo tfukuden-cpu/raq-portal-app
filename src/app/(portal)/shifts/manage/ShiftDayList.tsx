@@ -101,8 +101,7 @@ export default function ShiftDayList({
   const offRequestMap = new Map(
     (offRequests ?? []).map(r => [`${r.staff_id}__${r.request_date}`, r.priority])
   );
-  const [tabKey, setTabKey]               = useState<TabKey>("shukkin");
-  const [sectionFilter, setSectionFilter] = useState<string | null>(null);
+  const [tabKey, setTabKey]   = useState<TabKey>("shukkin");
   const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string } | null>(null);
   // パターンごとの折りたたみ状態（初期値: 全折りたたみ）
   const [collapsedPatterns, setCollapsedPatterns] = useState<Set<string>>(
@@ -139,18 +138,7 @@ export default function ShiftDayList({
     return next;
   });
 
-  // セクション一覧（sections配列 + section単体 からユニーク・ソート）
-  const sections = [...new Set(
-    activeMembers.flatMap(m => m.sections.length > 0 ? m.sections : (m.section ? [m.section] : []))
-  )].sort();
-  const hasSection = sections.length > 0;
-  // フィルター適用済みメンバー
-  const visibleMembers = sectionFilter
-    ? activeMembers.filter(m => {
-        const ms = m.sections.length > 0 ? m.sections : (m.section ? [m.section] : []);
-        return ms.includes(sectionFilter);
-      })
-    : activeMembers;
+  const visibleMembers = activeMembers;
 
   // シフトルックアップ
   const shiftMap = new Map<string, Shift>(shifts.map((s) => [`${s.staff_id}__${s.shift_date}`, s]));
@@ -246,32 +234,6 @@ export default function ShiftDayList({
             </button>
           )}
         </div>
-
-        {/* ② セクションフィルター行（セクションがある案件のみ） */}
-        {hasSection && (
-          <div className="px-4 pb-2 flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
-            <button type="button" onClick={() => setSectionFilter(null)}
-              className={cx(
-                "px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all flex-shrink-0",
-                sectionFilter === null
-                  ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
-              )}>
-              全班
-            </button>
-            {sections.map((sec) => (
-              <button key={sec} type="button" onClick={() => setSectionFilter(sec)}
-                className={cx(
-                  "px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all flex-shrink-0",
-                  sectionFilter === sec
-                    ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
-                )}>
-                {sec}
-              </button>
-            ))}
-          </div>
-        )}
 
       </div>
 

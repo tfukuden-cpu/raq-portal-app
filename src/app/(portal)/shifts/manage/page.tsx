@@ -120,9 +120,6 @@ export default async function ManageShiftsPage(props: {
             </div>
           </div>
           <TabBar tab={tab} tabUrl={tabUrl} />
-          {isGlobalAdmin && allProjects.length > 1 && (
-            <ProjectTabs allProjects={allProjects} selectedProjectId={selectedProjectId} projectTabUrl={projectTabUrl} />
-          )}
         </HeaderHeightSetter>
         <div className="px-4 pt-6 pb-8">
           <ShiftSettingsTab projectId={selectedProjectId} initialPatterns={patternList} />
@@ -154,9 +151,6 @@ export default async function ManageShiftsPage(props: {
             </div>
           </div>
           <TabBar tab={tab} tabUrl={tabUrl} />
-          {isGlobalAdmin && allProjects.length > 1 && (
-            <ProjectTabs allProjects={allProjects} selectedProjectId={selectedProjectId} projectTabUrl={projectTabUrl} />
-          )}
         </HeaderHeightSetter>
         <div className="px-4 pt-6 pb-8">
           <ShiftHolidayTab projectId={selectedProjectId} initialRules={holidayRules} />
@@ -381,9 +375,6 @@ export default async function ManageShiftsPage(props: {
 
         <TabBar tab={tab} tabUrl={tabUrl} />
 
-        {isGlobalAdmin && allProjects.length > 1 && (
-          <ProjectTabs allProjects={allProjects} selectedProjectId={selectedProjectId} projectTabUrl={projectTabUrl} />
-        )}
       </HeaderHeightSetter>
 
       <div className="pt-3">
@@ -448,31 +439,3 @@ function TabBar({
   );
 }
 
-function ProjectTabs({
-  allProjects,
-  selectedProjectId,
-  projectTabUrl,
-}: {
-  allProjects: { id: string; name: string }[];
-  selectedProjectId: string;
-  projectTabUrl: (pid: string) => string;
-}) {
-  return (
-    <div className="flex overflow-x-auto -mx-4 px-4" style={{ scrollbarWidth: "none" }}>
-      {allProjects.map((p) => (
-        <a
-          key={p.id}
-          href={projectTabUrl(p.id)}
-          className={[
-            "px-4 py-2 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex-shrink-0",
-            p.id === selectedProjectId
-              ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
-              : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
-          ].join(" ")}
-        >
-          {p.name}
-        </a>
-      ))}
-    </div>
-  );
-}
