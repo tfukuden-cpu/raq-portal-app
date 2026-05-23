@@ -235,7 +235,7 @@ function SlotCellFull({
         </div>
       )}
       {/* セル本体 */}
-      <div className="px-0.5 h-full flex items-center overflow-hidden">
+      <div className="h-full flex items-center overflow-hidden">
         {staffId && staffName && (
           <DraggableChip
             staffId={staffId} shiftDate={date} name={staffName}
