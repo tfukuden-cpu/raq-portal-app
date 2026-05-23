@@ -1315,12 +1315,17 @@ export default function ShiftEditGrid({
     return false;
   }, [editTarget, duplicateStaffDates]);
 
-  // スタッフ軸ビュー用: セクション順ソート
+  // スタッフ軸ビュー用: セクション指定順ソート
+  const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "リメイク", "ローン"];
+  const sectionRank = (s: string | null) => {
+    const idx = SECTION_ORDER.indexOf(s ?? "");
+    return idx === -1 ? SECTION_ORDER.length : idx;
+  };
   const sortedMembersBySection = useMemo(() =>
     [...activeMembers].sort((a, b) => {
-      const sa = a.section ?? "￿";
-      const sb = b.section ?? "￿";
-      if (sa !== sb) return sa.localeCompare(sb, "ja");
+      const ra = sectionRank(a.section);
+      const rb = sectionRank(b.section);
+      if (ra !== rb) return ra - rb;
       return a.name.localeCompare(b.name, "ja");
     }),
   [activeMembers]);
