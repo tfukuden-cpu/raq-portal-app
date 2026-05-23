@@ -1486,7 +1486,7 @@ export default function ShiftEditGrid({
                   );
                 })}
                 {/* 合計列ヘッダー */}
-                <th className="sticky top-0 right-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-l-2 border-zinc-300 dark:border-zinc-600">
+                <th className="sticky top-0 z-20 h-11 bg-white dark:bg-zinc-950 border-b border-l-2 border-zinc-300 dark:border-zinc-600">
                   <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">合計</span>
                 </th>
               </tr>
@@ -1592,7 +1592,7 @@ export default function ShiftEditGrid({
                             isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
                             isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
                           ].join(" ")}
-                          style={{ position: "sticky", right: 0, top: topOffset, zIndex: 22 }}
+                          style={{ top: topOffset }}
                         >
                           <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center">
                             <span className={`text-[10px] leading-none ${totText}`}>{totDisplay}</span>
