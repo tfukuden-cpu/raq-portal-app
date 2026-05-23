@@ -1323,6 +1323,17 @@ export default function ShiftEditGrid({
     }),
   [activeMembers]);
 
+  // 充足サマリーに表示するパターン（必要人数が設定されているもののみ・SV除外）
+  const summaryPatterns = useMemo(() =>
+    shiftPatterns.filter(p => {
+      if (p.section === "SV") return false;
+      if ((p.required_count ?? 0) > 0) return true;
+      if ((p.required_weekday ?? 0) > 0) return true;
+      if ((p.required_weekend ?? 0) > 0) return true;
+      return slotRequirements.some(r => r.pattern_name === p.name);
+    }),
+  [shiftPatterns, slotRequirements]);
+
   // ── セクション別 不足/余剰（SVパターン除外） ──────────────────────
   const sectionShortages = useMemo(() => {
     const map = new Map<string, number>();
@@ -1347,10 +1358,10 @@ export default function ShiftEditGrid({
   // ドラッグ中のスタッフID（同一スタッフセルをハイライトするため）
   const draggingStaffId = activeId ? activeId.split("__")[0] : null;
   const activeName = activeId ? (memberById.get(draggingStaffId ?? "")?.name ?? "") : null;
-  const COL_W = 42;
-  const NAME_W = 100;
+  const COL_W = 34;
+  const NAME_W = 90;
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
-  const SUM_ROW_H = 28; // h-7  = 28px (充足サマリー行の高さ)
+  const SUM_ROW_H = 20; // h-5  = 20px (充足サマリー行の高さ)
   const totalW = NAME_W + COL_W * allDates.length;
 
   return (
@@ -1488,10 +1499,9 @@ export default function ShiftEditGrid({
 
             <tbody>
               {/* ── 充足サマリー行（常に上部に固定・sticky）── */}
-              {shiftPatterns.map((pattern, patIdx) => {
+              {summaryPatterns.map((pattern, patIdx) => {
                 const topOffset = HEADER_H + SUM_ROW_H * patIdx;
-                const isLast = patIdx === shiftPatterns.length - 1;
-                const isSVPat = pattern.section === "SV";
+                const isLast = patIdx === summaryPatterns.length - 1;
                 return (
                   <tr key={`sum-${pattern.name}`}>
                     {/* パターン名セル（left sticky + top sticky） */}
@@ -1504,14 +1514,9 @@ export default function ShiftEditGrid({
                       ].join(" ")}
                       style={{ position: "sticky", left: 0, top: topOffset, zIndex: 20 }}
                     >
-                      <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 block leading-tight truncate">
+                      <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 leading-tight truncate">
                         {pattern.name}
                       </span>
-                      {pattern.start_time && pattern.end_time && (
-                        <span className="text-[9px] text-zinc-400 tabular-nums block leading-none">
-                          {pattern.start_time.slice(0, 5)}～{pattern.end_time.slice(0, 5)}
-                        </span>
-                      )}
                     </td>
                     {/* 日付ごとの過不足 */}
                     {allDates.map((date) => {
@@ -1522,27 +1527,27 @@ export default function ShiftEditGrid({
                       let display: string;
                       let textCls: string;
                       let bgCls: string;
-                      if (isSVPat || required === 0) {
+                      if (required === 0) {
                         display = assigned > 0 ? String(assigned) : "";
                         textCls = "text-zinc-400 dark:text-zinc-500";
-                        bgCls = isToday ? "bg-blue-50/30 dark:bg-blue-950/10" : "bg-zinc-50/80 dark:bg-zinc-900/60";
+                        bgCls = isToday ? "bg-blue-50 dark:bg-blue-950" : "bg-zinc-50 dark:bg-zinc-900";
                       } else if (net > 0) {
                         display = `-${net}`;
                         textCls = "text-red-500 dark:text-red-400 font-bold";
-                        bgCls = isToday ? "bg-red-100/60 dark:bg-red-950/30" : "bg-red-50/60 dark:bg-red-950/20";
+                        bgCls = isToday ? "bg-red-100 dark:bg-red-950" : "bg-red-50 dark:bg-red-950";
                       } else if (net < 0) {
                         display = `+${-net}`;
                         textCls = "text-emerald-600 dark:text-emerald-400 font-bold";
-                        bgCls = isToday ? "bg-emerald-50/60 dark:bg-emerald-950/20" : "bg-emerald-50/40 dark:bg-emerald-950/15";
+                        bgCls = isToday ? "bg-emerald-100 dark:bg-emerald-950" : "bg-emerald-50 dark:bg-emerald-950";
                       } else {
                         display = "─";
                         textCls = "text-zinc-300 dark:text-zinc-600";
-                        bgCls = isToday ? "bg-blue-50/30 dark:bg-blue-950/10" : "bg-zinc-50/80 dark:bg-zinc-900/60";
+                        bgCls = isToday ? "bg-blue-50 dark:bg-blue-950" : "bg-zinc-50 dark:bg-zinc-900";
                       }
                       return (
                         <td key={date}
                           className={[
-                            "h-7 text-center tabular-nums",
+                            "h-5 text-center tabular-nums",
                             bgCls,
                             isLast
                               ? "border-b-2 border-r border-zinc-300 dark:border-zinc-600"
