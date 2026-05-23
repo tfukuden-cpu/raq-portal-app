@@ -1452,8 +1452,8 @@ export default function ShiftEditGrid({
         <DndContext sensors={sensors}
           onDragStart={handleDragStart} onDragOver={handleDragOver}
           onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
-          <table className="border-collapse"
-            style={{ tableLayout: "fixed", width: `${totalW}px`, minWidth: `${totalW}px` }}>
+          <table className="border-separate"
+            style={{ tableLayout: "fixed", width: `${totalW}px`, minWidth: `${totalW}px`, borderSpacing: 0 }}>
             <colgroup>
               <col style={{ width: `${NAME_W}px` }} />
               {allDates.map((d) => <col key={d} style={{ width: `${COL_W}px` }} />)}
