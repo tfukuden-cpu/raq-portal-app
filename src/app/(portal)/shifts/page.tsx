@@ -112,32 +112,22 @@ export default async function ShiftsPage() {
 
   return (
     <main className="h-dvh flex flex-col bg-white dark:bg-zinc-950 overflow-hidden">
-      <div className="max-w-5xl w-full mx-auto px-4 pt-5 pb-20 flex flex-col gap-3 h-full">
-
-        {/* ヘッダー */}
-        <div className="flex-shrink-0">
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">シフト</h1>
-        </div>
-
-        {/* タブ全体（残りスペースを埋める） */}
-        <div className="flex-1 min-h-0 flex flex-col">
-          <ShiftsTabs
-            projectId={projectId}
-            shifts={shiftsRes.data ?? []}
-            changeLogs={changeLogs}
-            todayStr={todayStr}
-            initialYear={today.getFullYear()}
-            initialMonth={today.getMonth() + 1}
-            minMonth={minMonth}
-            maxMonth={maxMonth}
-            holidayRequests={holidaysRes.data ?? []}
-            shiftRequests={requestsRes.data ?? []}
-            shiftOpenings={openingsRes.data ?? []}
-            holidayDeadlineDay={holidayDeadlineDay}
-            holidayMaxDaysPerMonth={holidayMaxDaysPerMonth}
-          />
-        </div>
-      </div>
+      {/* ShiftsTabs がヘッダー（タイトル・タブ・月ナビ）を内包 */}
+      <ShiftsTabs
+        projectId={projectId}
+        shifts={shiftsRes.data ?? []}
+        changeLogs={changeLogs}
+        todayStr={todayStr}
+        initialYear={today.getFullYear()}
+        initialMonth={today.getMonth() + 1}
+        minMonth={minMonth}
+        maxMonth={maxMonth}
+        holidayRequests={holidaysRes.data ?? []}
+        shiftRequests={requestsRes.data ?? []}
+        shiftOpenings={openingsRes.data ?? []}
+        holidayDeadlineDay={holidayDeadlineDay}
+        holidayMaxDaysPerMonth={holidayMaxDaysPerMonth}
+      />
     </main>
   );
 }

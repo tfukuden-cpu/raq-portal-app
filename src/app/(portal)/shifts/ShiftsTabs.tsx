@@ -4,6 +4,7 @@ import { useState } from "react";
 import ShiftCalendar, { type ShiftChangeLog } from "./ShiftCalendar";
 import HolidayTab from "./HolidayTab";
 import RequestClient from "./request/RequestClient";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
 // ── 型定義 ──────────────────────────────────────────────
 type ShiftData = {
@@ -73,31 +74,67 @@ export default function ShiftsTabs({
   holidayDeadlineDay = null, holidayMaxDaysPerMonth = null,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("shift");
+  // シフトタブの月ナビ状態（ShiftCalendar に渡す制御値）
+  const [year, setYear]   = useState(initialYear);
+  const [month, setMonth] = useState(initialMonth);
+
+  const monthStr = `${year}-${String(month).padStart(2, "0")}`;
+  const canPrev  = monthStr > minMonth;
+  const canNext  = monthStr < maxMonth;
+
+  const goMonth = (delta: number) => {
+    const d = new Date(year, month - 1 + delta, 1);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth() + 1);
+  };
 
   return (
     <div className="flex flex-col h-full">
 
-      {/* タブバー */}
-      <div className="flex gap-0 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0 mb-4">
-        {TABS.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={[
-              "flex-1 py-2.5 text-sm font-semibold transition-all border-b-2 -mb-px",
-              tab === key
-                ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-50"
-                : "border-transparent text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300",
-            ].join(" ")}
-          >
-            {label}
-          </button>
-        ))}
+      {/* ── 固定ヘッダー（タイトル・タブ・月ナビ） ── */}
+      <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800">
+        {/* タイトル行 */}
+        <div className="px-4 pt-5 pb-0">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">シフト</h1>
+        </div>
+        {/* タブバー */}
+        <div className="flex overflow-x-auto px-4 -mx-0 mt-2" style={{ scrollbarWidth: "none" }}>
+          {TABS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={[
+                "px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex-shrink-0",
+                tab === key
+                  ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
+                  : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* シフトタブ：月ナビ固定エリア */}
+        {tab === "shift" && (
+          <div className="flex items-center justify-center gap-3 px-4 py-2 border-t border-zinc-100 dark:border-zinc-800">
+            <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
+              <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
+            </button>
+            <span className="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-50 w-24 text-center">
+              {year}年 {month}月
+            </span>
+            <button type="button" onClick={() => goMonth(1)} disabled={!canNext}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
+              <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* タブコンテンツ */}
-      <div className="flex-1 min-h-0">
+      {/* ── タブコンテンツ ── */}
+      <div className="flex-1 min-h-0 px-4 pt-2">
 
         {tab === "shift" && (
           <ShiftCalendar
@@ -108,6 +145,9 @@ export default function ShiftsTabs({
             initialMonth={initialMonth}
             minMonth={minMonth}
             maxMonth={maxMonth}
+            controlledYear={year}
+            controlledMonth={month}
+            onGoMonth={goMonth}
           />
         )}
 

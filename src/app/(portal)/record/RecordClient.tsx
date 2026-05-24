@@ -183,61 +183,63 @@ export default function RecordClient({
       `}</style>
 
       <main className="h-dvh flex flex-col bg-white dark:bg-zinc-950 overflow-hidden">
-        <div className="max-w-5xl w-full mx-auto px-4 pt-5 pb-20 flex flex-col gap-3 h-full overflow-hidden">
+
+        {/* ── 固定ヘッダー（タイトル・月ナビ・サマリー） ── */}
+        <div className="print-hide shrink-0 border-b border-zinc-100 dark:border-zinc-800">
+          <div className="max-w-5xl w-full mx-auto px-4 pt-5">
+            {/* タイト���行 + 月ナビ */}
+            <div className="flex items-center justify-between mb-3">
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">勤怠実績</h1>
+              <div className="flex items-center gap-1">
+                <a href={`/record?month=${prevMonth}`}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                  <ChevronLeftIcon className="w-4 h-4" />
+                </a>
+                <span className="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-50 w-20 text-center">
+                  {year}/{String(month).padStart(2, "0")}
+                </span>
+                <a href={`/record?month=${nextMonth}`}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
+                  <ChevronRightIcon className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+            {/* サマリー（3カード） */}
+            <div className="grid grid-cols-3 gap-2 pb-3">
+              <div className="bg-zinc-50 dark:bg-zinc-900 rounded-xl p-3 text-center">
+                <p className="text-xs text-zinc-500 mb-1">出勤日数</p>
+                <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{workDays}日</p>
+              </div>
+              <div className="bg-zinc-50 dark:bg-zinc-900 rounded-xl p-3 text-center">
+                <p className="text-xs text-zinc-500 mb-1">総勤務時間</p>
+                <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{totalStr}</p>
+              </div>
+              <div className="bg-zinc-50 dark:bg-zinc-900 rounded-xl p-3 text-center">
+                <p className="text-xs text-zinc-500 mb-1">勤怠順守率</p>
+                <p className={`text-xl font-bold tabular-nums ${complianceRate === null ? "text-zinc-900 dark:text-zinc-50" : complianceRate >= 90 ? "text-green-600 dark:text-green-400" : complianceRate >= 70 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
+                  {complianceRate ?? "--"}%
+                </p>
+                {complianceRate !== null && (absentDays > 0 || lateDays > 0 || earlyDays > 0) && (
+                  <p className="text-[10px] text-zinc-400 mt-0.5 tabular-nums">
+                    {[
+                      absentDays > 0 ? `欠勤${absentDays}` : null,
+                      lateDays > 0 ? `遅刻${lateDays}` : null,
+                      earlyDays > 0 ? `早退${earlyDays}` : null,
+                    ].filter(Boolean).join("・")}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── スクロール可能なテーブルエリア ── */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="max-w-5xl w-full mx-auto px-4 pt-3 pb-20 flex flex-col gap-3 h-full overflow-hidden">
 
           {/* 印刷用ヘッダー */}
           <div className="print-show mb-3">
             <p className="text-lg font-bold">{projectName}　勤怠実績　{year}年{month}月</p>
-          </div>
-
-          {/* ヘッダー */}
-          <div className="print-hide">
-            <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">勤怠実績</h1>
-          </div>
-
-          {/* 月ナビ */}
-          <div className="print-hide flex items-center justify-between">
-            <a href={`/record?month=${prevMonth}`}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500">
-              <ChevronLeftIcon className="w-4 h-4" />
-            </a>
-            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50">
-              {year}年 {month}月
-            </h2>
-            <a href={`/record?month=${nextMonth}`}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500">
-              <ChevronRightIcon className="w-4 h-4" />
-            </a>
-          </div>
-
-          {/* サマリー（3カード） */}
-          <div className="print-hide grid grid-cols-3 gap-2">
-            {/* 出勤日数 */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-xl p-3 text-center shadow-sm">
-              <p className="text-xs text-zinc-500 mb-1">出勤日数</p>
-              <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{workDays}日</p>
-            </div>
-            {/* 総勤務時間 */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-xl p-3 text-center shadow-sm">
-              <p className="text-xs text-zinc-500 mb-1">総勤務時間</p>
-              <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{totalStr}</p>
-            </div>
-            {/* 勤怠順守率 */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-xl p-3 text-center shadow-sm">
-              <p className="text-xs text-zinc-500 mb-1">勤怠順守率</p>
-              <p className={`text-xl font-bold tabular-nums ${complianceRate === null ? "text-zinc-900 dark:text-zinc-50" : complianceRate >= 90 ? "text-green-600 dark:text-green-400" : complianceRate >= 70 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
-                {complianceRate ?? "--"}%
-              </p>
-              {complianceRate !== null && (absentDays > 0 || lateDays > 0 || earlyDays > 0) && (
-                <p className="text-[10px] text-zinc-400 mt-0.5 tabular-nums">
-                  {[
-                    absentDays > 0 ? `欠勤${absentDays}` : null,
-                    lateDays > 0 ? `遅刻${lateDays}` : null,
-                    earlyDays > 0 ? `早退${earlyDays}` : null,
-                  ].filter(Boolean).join("・")}
-                </p>
-              )}
-            </div>
           </div>
 
           {/* 印刷用サマリー */}
@@ -362,6 +364,7 @@ export default function RecordClient({
             </div>
           )}
         </div>
+        </div>{/* /flex-1 scrollable area */}
       </main>
 
       {/* 補正申請モーダル */}

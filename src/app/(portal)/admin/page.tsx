@@ -39,25 +39,16 @@ export default async function AdminPage() {
   }));
 
   return (
-    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-5xl mx-auto px-4 pt-8 pb-10 space-y-6">
-
-        {/* ページヘッダー */}
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-              運用管理
-            </p>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-              案件管理
-            </h1>
-          </div>
+    <main className="min-h-screen bg-white dark:bg-zinc-950">
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="max-w-5xl mx-auto px-4 pt-5 pb-4 flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">案件管理</h1>
           <NewProjectModal />
         </div>
-
-        {/* 案件リスト */}
+      </div>
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-10">
         <ProjectList projects={projectList} />
-
       </div>
     </main>
   );

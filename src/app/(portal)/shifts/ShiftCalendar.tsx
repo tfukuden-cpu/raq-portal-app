@@ -28,6 +28,10 @@ type Props = {
   initialMonth: number;
   minMonth: string;
   maxMonth: string;
+  // 制御モード（ShiftsTabs から月ナビを管理する場合）
+  controlledYear?: number;
+  controlledMonth?: number;
+  onGoMonth?: (delta: number) => void;
 };
 
 const WEEKDAY_SHORT = ["日", "月", "火", "水", "木", "金", "土"];
@@ -46,19 +50,28 @@ function fmtLogAt(iso: string): string {
 
 export default function ShiftCalendar({
   shifts, changeLogs = [], todayStr, initialYear, initialMonth, minMonth, maxMonth,
+  controlledYear, controlledMonth, onGoMonth,
 }: Props) {
-  const [year, setYear]         = useState(initialYear);
-  const [month, setMonth]       = useState(initialMonth);
-  const [selected, setSelected] = useState<string | null>(todayStr);
+  const [internalYear, setInternalYear]   = useState(initialYear);
+  const [internalMonth, setInternalMonth] = useState(initialMonth);
+  const [selected, setSelected]           = useState<string | null>(todayStr);
+
+  const isControlled = controlledYear !== undefined;
+  const year  = isControlled ? controlledYear!  : internalYear;
+  const month = isControlled ? controlledMonth! : internalMonth;
 
   const monthStr  = `${year}-${String(month).padStart(2, "0")}`;
   const canPrev   = monthStr > minMonth;
   const canNext   = monthStr < maxMonth;
 
   const goMonth = (delta: number) => {
-    const d = new Date(year, month - 1 + delta, 1);
-    setYear(d.getFullYear());
-    setMonth(d.getMonth() + 1);
+    if (isControlled && onGoMonth) {
+      onGoMonth(delta);
+    } else {
+      const d = new Date(year, month - 1 + delta, 1);
+      setInternalYear(d.getFullYear());
+      setInternalMonth(d.getMonth() + 1);
+    }
     setSelected(null);
   };
 
@@ -99,27 +112,35 @@ export default function ShiftCalendar({
   return (
     <div className="flex flex-col gap-2 h-full">
 
-      {/* 月ナビ */}
-      <div className="flex items-center justify-between flex-shrink-0">
-        <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
-          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
-          <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
-        </button>
-        <div className="text-center">
-          <p className="text-base font-bold text-zinc-900 dark:text-zinc-50">
-            {year}年 {month}月
-          </p>
-          {(workCount > 0 || holidayCount > 0) && (
-            <p className="text-[10px] text-zinc-400">
-              出勤 {workCount}日　公休 {holidayCount}日
+      {/* 月ナビ（非制御モードのみ表示：制御モード時は親 ShiftsTabs が表示） */}
+      {!isControlled && (
+        <div className="flex items-center justify-between flex-shrink-0">
+          <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
+            <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
+          </button>
+          <div className="text-center">
+            <p className="text-base font-bold text-zinc-900 dark:text-zinc-50">
+              {year}年 {month}月
             </p>
-          )}
+            {(workCount > 0 || holidayCount > 0) && (
+              <p className="text-[10px] text-zinc-400">
+                出勤 {workCount}日　公休 {holidayCount}日
+              </p>
+            )}
+          </div>
+          <button type="button" onClick={() => goMonth(1)} disabled={!canNext}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
+            <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
+          </button>
         </div>
-        <button type="button" onClick={() => goMonth(1)} disabled={!canNext}
-          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
-          <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
-        </button>
-      </div>
+      )}
+      {/* 制御モード時：出勤/公休カウントを小さく表示 */}
+      {isControlled && (workCount > 0 || holidayCount > 0) && (
+        <p className="text-[11px] text-zinc-400 text-center flex-shrink-0">
+          出勤 {workCount}日　公休 {holidayCount}日
+        </p>
+      )}
 
       {/* 曜日ヘッダー */}
       <div className="grid grid-cols-7 flex-shrink-0">

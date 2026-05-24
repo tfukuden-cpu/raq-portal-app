@@ -189,36 +189,33 @@ export default function AttendanceClient({
     : `【出勤依頼】{名前}さん、${REQUEST_MSG}`;
 
   return (
-    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-5xl mx-auto px-4 pt-6 pb-32">
-
-        {/* ヘッダー */}
-        <div className="mb-5">
-          <a href="/dashboard" className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-400 hover:text-blue-500 transition-colors mb-2">
-            <ChevronLeftIcon className="w-4 h-4" />ホーム
-          </a>
-          <div className="flex items-baseline justify-between">
+    <main className="min-h-screen bg-white dark:bg-zinc-950">
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="max-w-5xl mx-auto px-4 pt-5 pb-3">
+          <div className="flex items-end justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">当日状況</h1>
+                <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">当日状況</h1>
                 {notClocked > 0 && (
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500 text-white tabular-nums">
                     未打刻 {notClocked}名
                   </span>
                 )}
               </div>
-              <p className="text-sm text-zinc-400 mt-0.5">{projectName}</p>
+              <p className="text-sm font-semibold text-zinc-400 mt-0.5">{projectName}</p>
             </div>
-            <span className="text-sm font-semibold text-zinc-500">{dateLabel}</span>
+            <span className="text-sm font-semibold text-zinc-500 tabular-nums">{dateLabel}</span>
           </div>
         </div>
-
-        {/* 全体サマリー */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        {/* サマリー（固定） */}
+        <div className="max-w-5xl mx-auto px-4 py-3 grid grid-cols-3 gap-3">
           <SummaryCard value={clockedIn} total={total} label="出勤" color="text-green-500" />
           <SummaryCard value={late}                   label="遅刻" color="text-amber-500" />
           <SummaryCard value={absent}                 label="欠勤" color="text-red-500" />
         </div>
+      </div>
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-32">
 
         {/* セクション別アコーディオン */}
         {grouped.length === 0 ? (

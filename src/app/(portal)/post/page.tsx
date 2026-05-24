@@ -57,8 +57,13 @@ export default async function PostPage() {
 
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="max-w-5xl mx-auto px-4 pt-6 pb-10 space-y-4">
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">投稿</h1>
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="max-w-5xl mx-auto px-4 pt-5 pb-4">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">掲示板</h1>
+        </div>
+      </div>
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-10 space-y-4">
         <PostClient posts={posts} currentStaffId={staffId} isAdmin={isAdmin} />
       </div>
     </main>
