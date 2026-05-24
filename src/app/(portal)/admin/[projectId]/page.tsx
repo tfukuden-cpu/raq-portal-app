@@ -140,7 +140,7 @@ export default async function ProjectDetailPage(props: {
 
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="max-w-lg mx-auto px-4 pt-6 pb-20">
+      <div className="max-w-4xl mx-auto px-4 pt-6 pb-20">
 
         {/* ヘッダー */}
         <div className="mb-6">

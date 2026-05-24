@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 勤怠管理ページ（管理者用）
  * タブ: 勤怠異常 | 補正申請 | 実績出力
  */
@@ -219,7 +219,7 @@ export default async function AttendanceEditPage({
 
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="max-w-2xl mx-auto px-4 pt-6 pb-24">
+      <div className="max-w-5xl mx-auto px-4 pt-6 pb-24">
         <div className="mb-6">
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             勤怠管理
@@ -241,3 +241,4 @@ export default async function AttendanceEditPage({
     </main>
   );
 }
+

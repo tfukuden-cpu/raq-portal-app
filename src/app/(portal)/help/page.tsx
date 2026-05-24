@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ヘルプ・操作説明書
  */
 import { createClient } from "@/lib/supabase/server";
@@ -59,7 +59,7 @@ export default async function HelpPage() {
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-lg mx-auto px-4 pt-6 pb-28 space-y-6">
+      <div className="max-w-4xl mx-auto px-4 pt-6 pb-28 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">ヘルプ</h1>
           <p className="text-sm text-zinc-400 mt-1">操作方法・よくある質問</p>
@@ -130,3 +130,4 @@ export default async function HelpPage() {
     </main>
   );
 }
+

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import NewProjectModal from "./NewProjectModal";
@@ -40,7 +40,7 @@ export default async function AdminPage() {
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-2xl mx-auto px-4 pt-8 pb-10 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 pt-8 pb-10 space-y-6">
 
         {/* ページヘッダー */}
         <div className="flex items-center justify-between gap-4">
@@ -62,3 +62,4 @@ export default async function AdminPage() {
     </main>
   );
 }
+

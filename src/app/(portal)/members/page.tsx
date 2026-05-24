@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
@@ -80,7 +80,7 @@ export default async function MembersPage(props: {
 
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="max-w-lg mx-auto px-4 pt-6 pb-20">
+      <div className="max-w-3xl mx-auto px-4 pt-6 pb-20">
         <div className="mb-6">
           <p className="text-xs font-medium text-zinc-400 mb-1">{project.name}</p>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -101,3 +101,4 @@ export default async function MembersPage(props: {
     </main>
   );
 }
+

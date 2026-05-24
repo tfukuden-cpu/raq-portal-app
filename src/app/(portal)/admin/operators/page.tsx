@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 運用者管理ページ
  * 運用者（executive）アカウントの一覧・追加・編集
  */
@@ -27,7 +27,7 @@ export default async function OperatorsPage() {
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-2xl mx-auto px-4 pt-8 pb-10 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 pt-8 pb-10 space-y-6">
         <div>
           <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
             運用管理
@@ -48,3 +48,4 @@ export default async function OperatorsPage() {
     </main>
   );
 }
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * シフト管理画面（案件管理者・運用者用）
  * タブ: シフト（確認・編集） / シフト設定（パターン・仮組） / 希望休設定（申請・ルール）
  */
@@ -111,7 +111,7 @@ export default async function ManageShiftsPage(props: {
     }));
 
     return (
-      <main className="bg-white dark:bg-zinc-950 max-w-3xl mx-auto pb-24">
+      <main className="bg-white dark:bg-zinc-950 max-w-5xl mx-auto pb-24">
         <HeaderHeightSetter className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
           <div className="flex items-end justify-between">
             <div>
@@ -142,7 +142,7 @@ export default async function ManageShiftsPage(props: {
     }));
 
     return (
-      <main className="bg-white dark:bg-zinc-950 max-w-3xl mx-auto pb-24">
+      <main className="bg-white dark:bg-zinc-950 max-w-5xl mx-auto pb-24">
         <HeaderHeightSetter className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
           <div className="flex items-end justify-between">
             <div>
@@ -342,43 +342,43 @@ export default async function ManageShiftsPage(props: {
     : `/shifts/manage?tab=shift&year=`;
 
   return (
-    <main className="bg-white dark:bg-zinc-950 max-w-3xl mx-auto pb-24">
+    <main className="bg-white dark:bg-zinc-950">
 
-      <HeaderHeightSetter className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              シフト管理
-            </h1>
-            <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5 font-semibold">{project?.name}</p>
+      <HeaderHeightSetter id="shift-manage-header" className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="max-w-5xl mx-auto px-4 pt-5 space-y-2">
+          <div className="flex items-end justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                シフト管理
+              </h1>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5 font-semibold">{project?.name}</p>
+            </div>
+
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                <PublishButton projectId={selectedProjectId} year={targetYear} month={targetMonth} />
+              </div>
+              <div className="flex items-center gap-1">
+                <a href={`${monthNavBase}${prevMonth.year}&month=${prevMonth.month}`}
+                  className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                  <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
+                </a>
+                <span className="text-sm font-semibold tabular-nums w-20 text-center text-zinc-900 dark:text-zinc-100">
+                  {targetYear}/{String(targetMonth).padStart(2, "0")}
+                </span>
+                <a href={`${monthNavBase}${nextMonth.year}&month=${nextMonth.month}`}
+                  className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                  <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
+                </a>
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex items-center gap-2">
-              <PublishButton projectId={selectedProjectId} year={targetYear} month={targetMonth} />
-            </div>
-            <div className="flex items-center gap-1">
-              <a href={`${monthNavBase}${prevMonth.year}&month=${prevMonth.month}`}
-                className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-                <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
-              </a>
-              <span className="text-sm font-semibold tabular-nums w-20 text-center text-zinc-900 dark:text-zinc-100">
-                {targetYear}/{String(targetMonth).padStart(2, "0")}
-              </span>
-              <a href={`${monthNavBase}${nextMonth.year}&month=${nextMonth.month}`}
-                className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-                <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
-              </a>
-            </div>
-          </div>
+          <TabBar tab={tab} tabUrl={tabUrl} />
         </div>
-
-        <TabBar tab={tab} tabUrl={tabUrl} />
-
       </HeaderHeightSetter>
 
-      <div className="pt-3">
-        <ShiftManageClient
+      <ShiftManageClient
           projectId={selectedProjectId}
           allDates={allDates}
           defaultDate={defaultDate}
@@ -399,8 +399,7 @@ export default async function ManageShiftsPage(props: {
             request_date: r.request_date as string,
             priority:     r.priority as string,
           }))}
-        />
-      </div>
+      />
     </main>
   );
 }
@@ -438,4 +437,5 @@ function TabBar({
     </div>
   );
 }
+
 

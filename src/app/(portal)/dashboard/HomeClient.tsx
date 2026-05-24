@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition, useEffect } from "react";
 import {
@@ -241,7 +241,7 @@ export default function HomeClient({
   return (
     <>
       <main className="min-h-screen bg-white dark:bg-zinc-950">
-        <div className="max-w-sm mx-auto px-7 pt-10 pb-32 flex flex-col">
+        <div className="max-w-2xl mx-auto px-7 pt-10 pb-32 flex flex-col">
 
           {/* 氏名 + 通知 */}
           <div className="flex justify-between items-center mb-10">
@@ -644,3 +644,4 @@ export default function HomeClient({
     </>
   );
 }
+

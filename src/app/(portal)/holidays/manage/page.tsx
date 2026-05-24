@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 休暇申請管理画面（管理者用）
  */
 import { createClient } from "@/lib/supabase/server";
@@ -53,7 +53,7 @@ export default async function HolidayManagePage() {
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-2xl mx-auto px-4 pt-6 pb-10 space-y-5">
+      <div className="max-w-5xl mx-auto px-4 pt-6 pb-10 space-y-5">
         <div>
           <a href="/holidays" className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-400 hover:text-blue-500 transition-colors mb-2">
             <ChevronLeftIcon className="w-4 h-4" />休暇申請
@@ -66,3 +66,4 @@ export default async function HolidayManagePage() {
     </main>
   );
 }
+

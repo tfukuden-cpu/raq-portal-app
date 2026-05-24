@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 投稿（スタッフ掲示板）
  */
 import { createClient } from "@/lib/supabase/server";
@@ -57,10 +57,11 @@ export default async function PostPage() {
 
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="max-w-2xl mx-auto px-4 pt-6 pb-10 space-y-4">
+      <div className="max-w-5xl mx-auto px-4 pt-6 pb-10 space-y-4">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">投稿</h1>
         <PostClient posts={posts} currentStaffId={staffId} isAdmin={isAdmin} />
       </div>
     </main>
   );
 }
+

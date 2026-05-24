@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -183,7 +183,7 @@ export default function RecordClient({
       `}</style>
 
       <main className="h-dvh flex flex-col bg-white dark:bg-zinc-950 overflow-hidden">
-        <div className="max-w-3xl w-full mx-auto px-4 pt-5 pb-20 flex flex-col gap-3 h-full overflow-hidden">
+        <div className="max-w-5xl w-full mx-auto px-4 pt-5 pb-20 flex flex-col gap-3 h-full overflow-hidden">
 
           {/* 印刷用ヘッダー */}
           <div className="print-show mb-3">
@@ -478,3 +478,4 @@ export default function RecordClient({
     </>
   );
 }
+

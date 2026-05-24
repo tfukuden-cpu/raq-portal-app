@@ -1,4 +1,4 @@
-/**
+﻿/**
  * シフト・希望休・追加申請（タブ切り替え）
  */
 import { createClient } from "@/lib/supabase/server";
@@ -112,7 +112,7 @@ export default async function ShiftsPage() {
 
   return (
     <main className="h-dvh flex flex-col bg-white dark:bg-zinc-950 overflow-hidden">
-      <div className="max-w-2xl w-full mx-auto px-4 pt-5 pb-20 flex flex-col gap-3 h-full">
+      <div className="max-w-5xl w-full mx-auto px-4 pt-5 pb-20 flex flex-col gap-3 h-full">
 
         {/* ヘッダー */}
         <div className="flex-shrink-0">
@@ -141,3 +141,4 @@ export default async function ShiftsPage() {
     </main>
   );
 }
+

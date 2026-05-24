@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 欠勤者 経過報告ページ
  * 当日欠勤スタッフが翌日出勤可否を報告する
  */
@@ -55,7 +55,7 @@ export default function AbsenceFollowupPage() {
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-4">
-      <div className="max-w-sm mx-auto pt-8 space-y-6">
+      <div className="max-w-2xl mx-auto pt-8 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">経過報告</h1>
           <p className="text-sm text-zinc-500 mt-1">翌日の出勤状況をご報告ください</p>
@@ -132,3 +132,4 @@ export default function AbsenceFollowupPage() {
     </main>
   );
 }
+

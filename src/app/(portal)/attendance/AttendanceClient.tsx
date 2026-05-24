@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { ChevronLeftIcon } from "@/components/icons";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
@@ -190,7 +190,7 @@ export default function AttendanceClient({
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-2xl mx-auto px-4 pt-6 pb-32">
+      <div className="max-w-5xl mx-auto px-4 pt-6 pb-32">
 
         {/* ヘッダー */}
         <div className="mb-5">
@@ -576,3 +576,4 @@ function ChevronRight({ className }: { className?: string }) {
     </svg>
   );
 }
+

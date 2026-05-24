@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+﻿import { createClient } from "@/lib/supabase/server";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import { InquiryClient } from "./InquiryClient";
@@ -21,10 +21,11 @@ export default async function InquiriesPage() {
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-black">
-      <div className="max-w-lg mx-auto px-4 pt-6 pb-24">
+      <div className="max-w-3xl mx-auto px-4 pt-6 pb-24">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 mb-6">問い合わせ</h1>
         <InquiryClient inquiries={inquiries ?? []} />
       </div>
     </main>
   );
 }
+

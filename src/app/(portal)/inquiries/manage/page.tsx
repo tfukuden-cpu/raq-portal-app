@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
@@ -54,7 +54,7 @@ export default async function InquiryManagePage() {
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-black">
-      <div className="max-w-lg mx-auto px-4 pt-6 pb-24">
+      <div className="max-w-3xl mx-auto px-4 pt-6 pb-24">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 mb-6">問い合わせ管理</h1>
         {!projectId && isExecutive && (
           <p className="text-xs text-zinc-400 mb-4">全案件の問い合わせを表示しています</p>
@@ -64,3 +64,4 @@ export default async function InquiryManagePage() {
     </main>
   );
 }
+

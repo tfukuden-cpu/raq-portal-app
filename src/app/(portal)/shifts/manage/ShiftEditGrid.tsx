@@ -15,18 +15,7 @@
  * 確定:    実際の shifts テーブルへ反映（変更ログ付き）
  */
 
-import React, { useState, useMemo, useTransition } from "react";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  useDroppable,
-  useDraggable,
-} from "@dnd-kit/core";
-import type { DragEndEvent, DragStartEvent, DragOverEvent } from "@dnd-kit/core";
+import React, { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import {
   bulkUpsertShiftsAction,
   saveGridDraftAction,
@@ -78,10 +67,6 @@ type EditTarget =
   | { kind: "empty";        patternName: string; date: string }
   | { kind: "staff_assign"; staffId: string; date: string };
 
-type ErrorAnnotation = {
-  patternName: string; date: string; message: string;
-  srcPatternName: string; srcDate: string; srcStaffId: string;
-};
 type PendingNotify = {
   changes: { staffId: string; staffName: string; date: string; from: string | null; to: string | null }[];
   // まだ DB に書いていない保存データ
@@ -135,211 +120,136 @@ function fmtAt(iso: string): string {
   });
 }
 
-// ── DraggableChip ──────────────────────────────────────────────
+// ── InlinePatternPicker ─────────────────────────────────────────
 
-function DraggableChip({
-  staffId, shiftDate, name, isDraft, hasLog, isDuplicate,
+function InlinePatternPicker({
+  staffId, date, currentShift, staffMember, patterns,
+  logs, consecutiveDays, isDuplicate, projectId,
+  onAssign, onRemove, onClose,
+  anchorRect,
 }: {
-  staffId: string; shiftDate: string; name: string;
-  isDraft: boolean; hasLog: boolean; isDuplicate: boolean;
+  staffId: string; date: string; currentShift: string | null;
+  staffMember: Member | null;
+  patterns: Pattern[];
+  logs: ChangeLog[];
+  consecutiveDays: number;
+  isDuplicate: boolean;
+  projectId: string;
+  onAssign: (p: string) => void;
+  onRemove: () => void;
+  onClose: () => void;
+  anchorRect: { top: number; left: number; width: number; height: number };
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `${staffId}__${shiftDate}`,
-    data: { staffId, shiftDate },
-  });
+  const ref = useRef<HTMLDivElement>(null);
 
-  return (
-    <span
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      className={[
-        "block text-[11px] leading-tight px-0.5 rounded",
-        "cursor-grab active:cursor-grabbing select-none touch-none truncate w-full",
-        isDragging ? "opacity-20" : "",
-        isDuplicate
-          ? "text-red-600 dark:text-red-400 font-bold"
-          : isDraft
-          ? "text-blue-700 dark:text-blue-400 font-bold"
-          : "text-zinc-800 dark:text-zinc-200",
-      ].filter(Boolean).join(" ")}
-    >
-      {name.slice(0, 4)}
-      {isDuplicate && (
-        <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 align-top ml-0.5 mt-0.5" />
-      )}
-      {hasLog && !isDraft && !isDuplicate && (
-        <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5 mt-0.5" />
-      )}
-    </span>
+  useEffect(() => {
+    function onPointerDown(e: PointerEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [onClose]);
+
+  // Position: try below the cell, flip up if near bottom
+  const POPOVER_H = 280;
+  const spaceBelow = window.innerHeight - anchorRect.top - anchorRect.height;
+  const top = spaceBelow >= POPOVER_H + 8
+    ? anchorRect.top + anchorRect.height + 4
+    : anchorRect.top - POPOVER_H - 4;
+  const left = Math.min(
+    Math.max(4, anchorRect.left),
+    window.innerWidth - 220 - 4,
   );
-}
 
-// ── SlotCellFull ────────────────────────────────────────────────
-
-function SlotCellFull({
-  patternName, date, rowIdx, staffId, staffName,
-  isDraft, isToday, isOverCol, hasLog, isDuplicate,
-  isHoldHighlight, isErrorSource, bubbleMessage, onClick,
-}: {
-  patternName: string; date: string; rowIdx: number;
-  staffId: string | null; staffName: string | null;
-  isDraft: boolean; isToday: boolean; isOverCol: boolean;
-  hasLog: boolean; isDuplicate: boolean;
-  isHoldHighlight: boolean;
-  isErrorSource: boolean;
-  bubbleMessage?: string;
-  onClick: () => void;
-}) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `slot__${rowIdx}__${patternName}__${date}`,
-    data: { type: "slot", patternName, date, rowIdx },
-  });
-
-  const hasBubble = !!bubbleMessage;
+  const applicable = patterns.filter(p => !staffMember || canAssign(staffMember, p));
 
   return (
-    <td
-      ref={setNodeRef}
-      onClick={onClick}
-      className={[
-        "border-b border-r border-zinc-100 dark:border-zinc-800",
-        "h-8 align-middle p-0 cursor-pointer",
-        hasBubble ? "overflow-visible relative" : "overflow-hidden",
-        isOver
-          ? "bg-blue-100 dark:bg-blue-900/50 ring-inset ring-2 ring-blue-400"
-          : isErrorSource
-          ? "bg-red-100 dark:bg-red-950/40 ring-inset ring-1 ring-red-400"
-          : isOverCol
-          ? "bg-blue-50/60 dark:bg-blue-950/20"
-          : isHoldHighlight
-          ? "bg-amber-100 dark:bg-amber-900/30 ring-inset ring-1 ring-amber-400"
-          : isDuplicate && staffId
-          ? "bg-red-50/60 dark:bg-red-950/15"
-          : isToday
-          ? "bg-blue-50/40 dark:bg-blue-950/10"
-          : "",
-      ].filter(Boolean).join(" ")}
+    <div
+      ref={ref}
+      className="fixed z-50 w-52 bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden"
+      style={{ top, left }}
+      onPointerDown={e => e.stopPropagation()}
     >
-      {/* 吹き出しバブル（エラー or 重複） */}
-      {hasBubble && (
-        <div
-          className="absolute top-full left-0 z-50 pointer-events-none mt-0.5"
-          style={{ minWidth: "120px", maxWidth: "200px" }}
-        >
-          {/* 上向き三角（吹き出しの根元） */}
-          <div className="ml-3 w-0 h-0 border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent border-b-red-500" />
-          <div className="bg-red-500 text-white text-[9px] leading-snug px-2 py-1.5 rounded-lg shadow-lg whitespace-normal -mt-px">
-            {bubbleMessage}
-          </div>
-        </div>
-      )}
-      {/* セル本体 */}
-      <div className="h-full flex items-center overflow-hidden">
-        {staffId && staffName && (
-          <DraggableChip
-            staffId={staffId} shiftDate={date} name={staffName}
-            isDraft={isDraft} hasLog={hasLog && !isDraft} isDuplicate={isDuplicate}
-          />
+      {/* ヘッダー */}
+      <div className="px-3 pt-3 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+        <p className="text-[11px] text-zinc-400">{fmtDate(date)}</p>
+        <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100 leading-snug truncate">
+          {staffMember?.name ?? staffId}
+        </p>
+        {currentShift && (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{currentShift}</p>
         )}
       </div>
-    </td>
-  );
-}
 
-// ── CountCell ──────────────────────────────────────────────────
-
-function CountCell({
-  assigned, required, isToday, isSV, isEditing,
-  onStartEdit, onChange, onEndEdit,
-}: {
-  assigned: number; required: number; isToday: boolean;
-  isSV: boolean;
-  isEditing: boolean;
-  onStartEdit: () => void;
-  onChange: (v: number) => void;
-  onEndEdit: () => void;
-}) {
-  const shortage = !isSV && required > 0 && assigned < required;
-  const surplus  = !isSV && required > 0 && assigned > required;
-  const ok       = isSV || required === 0 || assigned >= required;
-
-  // SVパターン：配置人数のみ表示（不足管理なし）
-  if (isSV) {
-    return (
-      <td className={[
-        "text-center tabular-nums font-medium border-b-2 border-r border-zinc-200 dark:border-zinc-700 select-none",
-        isToday ? "bg-blue-50/50 dark:bg-blue-950/20" : "bg-zinc-50 dark:bg-zinc-900/60",
-      ].join(" ")}>
-        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 py-1 block">
-          {assigned > 0 ? assigned : ""}
-        </span>
-      </td>
-    );
-  }
-
-  if (isEditing) {
-    return (
-      <td className={[
-        "border-b-2 border-r border-zinc-200 dark:border-zinc-700 p-0",
-        isToday ? "bg-blue-50/50 dark:bg-blue-950/20" : "bg-zinc-50 dark:bg-zinc-900/60",
-      ].join(" ")}>
-        <input
-          type="number"
-          min={0}
-          defaultValue={required}
-          onChange={e => onChange(Math.max(0, parseInt(e.target.value) || 0))}
-          onBlur={onEndEdit}
-          onKeyDown={e => {
-            if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur();
-          }}
-          autoFocus
-          className="w-full h-6 text-center text-[10px] tabular-nums bg-blue-100 dark:bg-blue-950/60 outline-none border-2 border-blue-400 rounded"
-          onClick={e => e.stopPropagation()}
-        />
-      </td>
-    );
-  }
-
-  return (
-    <td
-      onClick={onStartEdit}
-      className={[
-        "text-center tabular-nums font-medium border-b-2 border-r border-zinc-200 dark:border-zinc-700",
-        "cursor-pointer select-none",
-        isToday
-          ? "bg-blue-50/50 dark:bg-blue-950/20"
-          : shortage
-          ? "bg-red-50/70 dark:bg-red-950/20"
-          : surplus
-          ? "bg-emerald-50/60 dark:bg-emerald-950/15"
-          : "bg-zinc-50 dark:bg-zinc-900/60",
-      ].filter(Boolean).join(" ")}
-    >
-      {required === 0 ? (
-        <span className="text-[9px] text-zinc-300 dark:text-zinc-600 py-1 block">-</span>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-0.5">
-          <span className={`text-[10px] leading-none ${
-            shortage ? "text-red-500 dark:text-red-400 font-bold"
-            : surplus ? "text-emerald-600 dark:text-emerald-400 font-bold"
-            : "text-zinc-400 dark:text-zinc-500"
-          }`}>
-            {assigned}/{required}
-          </span>
-          {shortage && (
-            <span className="text-[8px] leading-none text-red-400 dark:text-red-500 tabular-nums mt-px">
-              -{required - assigned}人
-            </span>
-          )}
-          {surplus && (
-            <span className="text-[8px] leading-none text-emerald-500 dark:text-emerald-400 tabular-nums mt-px">
-              +{assigned - required}人
-            </span>
-          )}
+      {/* 警告 */}
+      {isDuplicate && (
+        <div className="mx-2 mt-1.5 px-2 py-1 rounded-lg bg-red-50 dark:bg-red-950/40 text-[10px] font-bold text-red-600 dark:text-red-400">
+          ⚠ この日に重複配置があります
         </div>
       )}
-    </td>
+      {consecutiveDays >= 5 && (
+        <div className="mx-2 mt-1.5 px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+          ⚠ {consecutiveDays}連勤になります
+        </div>
+      )}
+
+      {/* パターンボタン */}
+      <div className="max-h-40 overflow-y-auto px-2 pt-2 space-y-0.5">
+        {applicable.map(p => (
+          <button key={p.name} onClick={() => onAssign(p.name)}
+            className={[
+              "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-left transition-colors",
+              currentShift === p.name
+                ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold"
+                : "bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200",
+            ].join(" ")}>
+            <span className="text-xs font-semibold flex-1">{p.name}</span>
+            {p.start_time && p.end_time && (
+              <span className="text-[10px] text-zinc-400 tabular-nums shrink-0">
+                {p.start_time.slice(0, 5)}～{p.end_time.slice(0, 5)}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* 公休ボタン + 閉じる */}
+      <div className="px-2 pb-2 pt-1.5 space-y-1">
+        <button onClick={onRemove}
+          className={[
+            "w-full py-1.5 rounded-xl text-xs font-semibold transition-colors",
+            currentShift === "公休"
+              ? "bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+              : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100",
+          ].join(" ")}>
+          公休に変更
+        </button>
+
+        {/* 変更履歴 */}
+        {logs.length > 0 && (
+          <div className="mt-1 space-y-0.5">
+            <p className="text-[10px] text-zinc-400 px-1">変更履歴</p>
+            <div className="max-h-24 overflow-y-auto space-y-0.5">
+              {logs.map((l, i) => (
+                <div key={i} className="text-[10px] text-zinc-500 dark:text-zinc-400 px-2 py-0.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-lg leading-snug">
+                  <span className="font-semibold text-zinc-600 dark:text-zinc-300">{l.changed_by_name}</span>
+                  {" "}
+                  {l.action === "delete" ? "削除"
+                    : l.action === "create" ? "追加"
+                    : `${l.before_shift_name ?? "（なし）"} → ${l.after_shift_name ?? "（なし）"}`}
+                  <span className="ml-1 text-zinc-400">{fmtAt(l.changed_at)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button onClick={onClose}
+          className="w-full py-1 rounded-xl text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+          キャンセル
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -815,37 +725,32 @@ export default function ShiftEditGrid({
     initialDraft !== null && initialDraft.length > 0
   );
 
-  // 必要人数のローカル編集状態（日毎）
-  const [localSlotReqs, setLocalSlotReqs] = useState<Map<string, number>>(() => {
-    const m = new Map<string, number>();
-    for (const r of slotRequirements) m.set(`${r.pattern_name}__${r.shift_date}`, r.required_count);
-    return m;
-  });
-  const [editingCountKey, setEditingCountKey] = useState<string | null>(null);
-
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [overColKey, setOverColKey] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [showSummary, setShowSummary] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [isPending] = useTransition();
   const [isSavingDraft, startDraftTransition] = useTransition();
   // 保存系エラー（上部バナー）
   const [saveError, setSaveError] = useState<string | null>(null);
-  // ドラッグ検証エラー（セル吹き出し）
-  const [errorAnnotation, setErrorAnnotation] = useState<ErrorAnnotation | null>(null);
   const [draftMsg, setDraftMsg] = useState<string | null>(null);
   // 確定後通知モーダル
   const [pendingNotify, setPendingNotify] = useState<PendingNotify | null>(null);
-  // グリッド表示モード
-  const [viewMode, setViewMode] = useState<"pattern" | "staff">("pattern");
   // 充足サマリー行の表示/非表示
   const [showSummaryRows, setShowSummaryRows] = useState(true);
+  // インラインパターンピッカー
+  type PopoverTarget = { staffId: string; date: string; rect: DOMRect };
+  const [popover, setPopover] = useState<PopoverTarget | null>(null);
+  // 不足対応：充足サマリーセルのタップで選択
+  const [selectedShortage, setSelectedShortage] = useState<{ date: string; patternName: string } | null>(null);
+  // 候補スタッフ選択（行フォーカス）
+  const [focusedCandidateId, setFocusedCandidateId] = useState<string | null>(null);
+  const staffRowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
-  // ── センサー ───────────────────────────────────────────────────
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
-  );
+  // 候補スタッフ選択時にその行へスクロール
+  useEffect(() => {
+    if (!focusedCandidateId) return;
+    const el = staffRowRefs.current.get(focusedCandidateId);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [focusedCandidateId]);
 
   // ── Lookup maps ─────────────────────────────────────────────────
   const shiftsByKey = useMemo(() => {
@@ -892,7 +797,6 @@ export default function ShiftEditGrid({
 
   function getRequired(patternName: string, date: string): number {
     const k = `${patternName}__${date}`;
-    if (localSlotReqs.has(k)) return localSlotReqs.get(k)!;
     if (slotReqMap.has(k)) return slotReqMap.get(k)!;
     // 日別オーバーライドがなければパターンの平日/土日デフォルトを使う
     const pattern = shiftPatterns.find(p => p.name === patternName);
@@ -939,20 +843,6 @@ export default function ShiftEditGrid({
     return grid;
   }, [shifts, drafts, shiftsByKey]);
 
-  // ── 各パターンの行数 ───────────────────────────────────────────
-  const rowCountByPattern = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of shiftPatterns) {
-      let maxOnDate = 0;
-      for (const date of allDates) {
-        const c = (resolvedGrid.get(`${p.name}__${date}`) ?? []).length;
-        if (c > maxOnDate) maxOnDate = c;
-      }
-      m.set(p.name, Math.max(maxOnDate + 1, 2));
-    }
-    return m;
-  }, [shiftPatterns, allDates, resolvedGrid]);
-
   // ── 重複検出: staffId__date → 配置パターン[] ─────────────────
   const duplicateStaffDates = useMemo(() => {
     const countMap = new Map<string, string[]>();
@@ -987,8 +877,7 @@ export default function ShiftEditGrid({
       }
     }
     return list.sort((a, b) => a.date.localeCompare(b.date));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedGrid, allDates, shiftPatterns, slotReqMap, localSlotReqs]);
+  }, [resolvedGrid, allDates, shiftPatterns, slotReqMap]);
 
   // ── 変更一覧（サマリー用） ─────────────────────────────────────
   const draftChanges = useMemo(() => {
@@ -1003,25 +892,6 @@ export default function ShiftEditGrid({
     return changes.sort((a, b) => a.date.localeCompare(b.date) || a.staffName.localeCompare(b.staffName));
   }, [drafts, memberById, shiftsByKey]);
 
-  // ── 重複サマリー用リスト ───────────────────────────────────────
-  const duplicateList = useMemo(() => {
-    const list: { staffName: string; date: string; patterns: string[] }[] = [];
-    for (const [key, patterns] of duplicateStaffDates.map) {
-      if (patterns.length > 1) {
-        const [staffId, date] = key.split("__");
-        list.push({ staffName: memberById.get(staffId)?.name ?? staffId, date, patterns });
-      }
-    }
-    return list.sort((a, b) => a.date.localeCompare(b.date));
-  }, [duplicateStaffDates, memberById]);
-
-  // ── 必要人数変更フラグ ─────────────────────────────────────────
-  const slotReqChanged = useMemo(() => {
-    for (const [k, v] of localSlotReqs) {
-      if (v !== (slotReqMap.get(k) ?? 0)) return true;
-    }
-    return false;
-  }, [localSlotReqs, slotReqMap]);
 
   // ── 連続勤務日数計算 ───────────────────────────────────────────
   function isStaffWorkingOn(staffId: string, date: string): boolean {
@@ -1045,139 +915,32 @@ export default function ShiftEditGrid({
     return before + 1 + after;
   }
 
-  // ── DnD ───────────────────────────────────────────────────────
-  function handleDragStart(event: DragStartEvent) {
-    setActiveId(event.active.id as string);
-    setErrorAnnotation(null);
-  }
-  function handleDragOver(event: DragOverEvent) {
-    const d = event.over?.data.current as { type?: string; patternName?: string; date?: string } | undefined;
-    setOverColKey(d?.type === "slot" && d.patternName && d.date ? `${d.patternName}__${d.date}` : null);
-  }
-  function handleDragEnd(event: DragEndEvent) {
-    setActiveId(null); setOverColKey(null);
-    const { active, over } = event;
-    if (!over) return;
-    const [staffId, sourceDate] = (active.id as string).split("__");
-    const td = over.data.current as { type?: string; patternName?: string; date?: string } | undefined;
-    if (td?.type !== "slot" || !td.patternName || !td.date) return;
-    const targetPattern = td.patternName;
-    const targetDate = td.date;
-    const sourceVal = resolveCell(staffId, sourceDate);
-    const sourcePattern = sourceVal?.shiftName ?? null;
-    if (!sourcePattern) return;
-    if (sourcePattern === targetPattern && sourceDate === targetDate) return;
-    // セクション互換チェック
-    const tPat = patternByName.get(targetPattern);
-    const member = memberById.get(staffId);
-    if (tPat && member && !canAssign(member, tPat)) {
-      const sectionLabel = tPat.section ? `「${tPat.section}」` : "";
-      setErrorAnnotation({
-        patternName: targetPattern,
-        date: targetDate,
-        message: `${member.name} は${sectionLabel}セクション外のため配置できません`,
-        srcPatternName: sourcePattern,
-        srcDate: sourceDate,
-        srcStaffId: staffId,
-      });
-      setTimeout(() => setErrorAnnotation(null), 3500);
-      return;
-    }
-    // 離脱日チェック
-    if (member?.endDate && targetDate > member.endDate) {
-      setErrorAnnotation({
-        patternName: targetPattern,
-        date: targetDate,
-        message: `${member.name} は ${member.endDate} 付けで離脱のため ${fmtDate(targetDate)} には配置できません`,
-        srcPatternName: sourcePattern,
-        srcDate: sourceDate,
-        srcStaffId: staffId,
-      });
-      setTimeout(() => setErrorAnnotation(null), 4000);
-      return;
-    }
-    // 別日ドロップ時：対象日に既に勤務シフトがある場合はエラー
-    if (sourceDate !== targetDate) {
-      const existingOnTarget = resolveCell(staffId, targetDate);
-      if (existingOnTarget !== null && existingOnTarget.shiftName && patternNameSet.has(existingOnTarget.shiftName)) {
-        setErrorAnnotation({
-          patternName: targetPattern,
-          date: targetDate,
-          message: `${member?.name ?? staffId} はすでに ${fmtDate(targetDate)} に「${existingOnTarget.shiftName}」が入っています`,
-          srcPatternName: sourcePattern,
-          srcDate: sourceDate,
-          srcStaffId: staffId,
-        });
-        setTimeout(() => setErrorAnnotation(null), 4000);
-        return;
-      }
-    }
-    setDrafts((prev) => {
-      const next = new Map(prev);
-      const sourceKey = `${staffId}__${sourceDate}`;
-      if (sourceDate === targetDate) {
-        next.set(sourceKey, {
-          shiftName: targetPattern,
-          shiftStart: tPat?.start_time ?? shiftsByKey.get(sourceKey)?.shift_start ?? null,
-          shiftEnd: tPat?.end_time ?? shiftsByKey.get(sourceKey)?.shift_end ?? null,
-        });
-      } else {
-        if (shiftsByKey.has(sourceKey)) next.set(sourceKey, null);
-        else next.delete(sourceKey);
-        next.set(`${staffId}__${targetDate}`, {
-          shiftName: targetPattern,
-          shiftStart: tPat?.start_time ?? null,
-          shiftEnd: tPat?.end_time ?? null,
-        });
-      }
-      return next;
-    });
-  }
-  function handleDragCancel() { setActiveId(null); setOverColKey(null); }
-
-  // ── Modal ─────────────────────────────────────────────────────
-  function openModal(patternName: string, date: string, staffId: string | null) {
-    if (staffId) setEditTarget({ kind: "existing", staffId, patternName, date });
-    else setEditTarget({ kind: "empty", patternName, date });
-    setErrorAnnotation(null);
-  }
-  function closeModal() { setEditTarget(null); }
-
-  function handleChangePattern(newPattern: string) {
-    if (!editTarget || editTarget.kind !== "existing") return;
-    const { staffId, date } = editTarget;
+  // ── Popover handlers ──────────────────────────────────────────
+  function handlePopoverAssign(patternName: string) {
+    if (!popover) return;
+    const { staffId, date } = popover;
     const key = `${staffId}__${date}`;
-    const np = patternByName.get(newPattern);
+    const p = patternByName.get(patternName);
     const orig = shiftsByKey.get(key);
-    setDrafts((prev) => {
+    setDrafts(prev => {
       const next = new Map(prev);
-      next.set(key, { shiftName: newPattern, shiftStart: np?.start_time ?? orig?.shift_start ?? null, shiftEnd: np?.end_time ?? orig?.shift_end ?? null });
+      next.set(key, { shiftName: patternName, shiftStart: p?.start_time ?? orig?.shift_start ?? null, shiftEnd: p?.end_time ?? orig?.shift_end ?? null });
       return next;
     });
-    closeModal();
+    setPopover(null);
   }
-  function handleRemove() {
-    if (!editTarget || editTarget.kind !== "existing") return;
-    const key = `${editTarget.staffId}__${editTarget.date}`;
-    setDrafts((prev) => {
+  function handlePopoverRemove() {
+    if (!popover) return;
+    const key = `${popover.staffId}__${popover.date}`;
+    setDrafts(prev => {
       const next = new Map(prev);
-      // 削除ではなく公休に変更
       next.set(key, { shiftName: "公休", shiftStart: null, shiftEnd: null });
       return next;
     });
-    closeModal();
+    setPopover(null);
   }
-  function handleAdd(staffId: string) {
-    if (!editTarget || editTarget.kind !== "empty") return;
-    const { patternName, date } = editTarget;
-    const p = patternByName.get(patternName);
-    setDrafts((prev) => {
-      const next = new Map(prev);
-      next.set(`${staffId}__${date}`, { shiftName: patternName, shiftStart: p?.start_time ?? null, shiftEnd: p?.end_time ?? null });
-      return next;
-    });
-    closeModal();
-  }
+
+  // ── (kept for future use / empty pattern axis cells) ──────────
   function handleAssignPattern(patternName: string) {
     if (!editTarget || editTarget.kind !== "staff_assign") return;
     const { staffId, date } = editTarget;
@@ -1191,7 +954,7 @@ export default function ShiftEditGrid({
       });
       return next;
     });
-    closeModal();
+    setEditTarget(null);
   }
 
   // ── 仮保存 ────────────────────────────────────────────────────
@@ -1236,84 +999,10 @@ export default function ShiftEditGrid({
       else upserts.push({ staffId, shiftDate, shiftName: draft.shiftName, shiftStart: draft.shiftStart, shiftEnd: draft.shiftEnd });
     }
 
-    const slotChanges: { patternName: string; date: string; section: string | null; requiredCount: number }[] = [];
-    for (const [k, v] of localSlotReqs) {
-      if (v !== (slotReqMap.get(k) ?? 0)) {
-        const [patternName, date] = k.split("__");
-        slotChanges.push({
-          patternName,
-          date,
-          section: patternByName.get(patternName)?.section ?? null,
-          requiredCount: v,
-        });
-      }
-    }
-
-    if (upserts.length === 0 && dels.length === 0 && slotChanges.length === 0) { onCancel(); return; }
+    if (upserts.length === 0 && dels.length === 0) { onCancel(); return; }
     // DB 書き込みはモーダル側で行う（キャンセル可能にするため）
-    setPendingNotify({ changes: snapshot, upserts, dels, slotChanges, targetMonth });
+    setPendingNotify({ changes: snapshot, upserts, dels, slotChanges: [], targetMonth });
   }
-
-  // ── Available staff for "empty" modal ─────────────────────────
-  // 希望休・公休スタッフも含む（勤務パターンへの配置済みのみ除外）
-  const availableStaff = useMemo((): MemberWithStatus[] => {
-    if (!editTarget || editTarget.kind !== "empty") return [];
-    const { date, patternName } = editTarget;
-    const pat = patternByName.get(patternName);
-    return activeMembers
-      .filter(m => {
-        // 離脱日チェック
-        if (m.endDate && date > m.endDate) return false;
-        const cell = resolveCell(m.id, date);
-        // 勤務パターンに配置済みなら除外
-        if (cell !== null && cell.shiftName && patternNameSet.has(cell.shiftName)) return false;
-        // セクション互換チェック
-        if (pat && !canAssign(m, pat)) return false;
-        return true;
-      })
-      .map(m => {
-        const cell = resolveCell(m.id, date);
-        return { ...m, currentShift: cell?.shiftName ?? null };
-      })
-      .sort((a, b) => {
-        // シフトなしを先に
-        if (a.currentShift === null && b.currentShift !== null) return -1;
-        if (a.currentShift !== null && b.currentShift === null) return 1;
-        return a.name.localeCompare(b.name);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editTarget, drafts, activeMembers, shiftsByKey, patternByName, patternNameSet]);
-
-  // 編集対象の変更ログ
-  const modalLogs = useMemo(() => {
-    if (!editTarget) return [];
-    if (editTarget.kind === "existing" || editTarget.kind === "staff_assign")
-      return changeLogMap.get(`${editTarget.staffId}__${editTarget.date}`) ?? [];
-    return [];
-  }, [editTarget, changeLogMap]);
-
-  // モーダル用: 移動前のパターン・連続勤務・重複
-  const modalOriginalPattern = useMemo(() => {
-    if (!editTarget || editTarget.kind !== "existing") return null;
-    const key = `${editTarget.staffId}__${editTarget.date}`;
-    if (!drafts.has(key)) return null;
-    return shiftsByKey.get(key)?.shift_name ?? null;
-  }, [editTarget, drafts, shiftsByKey]);
-
-  const modalConsecutiveDays = useMemo(() => {
-    if (!editTarget) return 1;
-    if (editTarget.kind === "existing" || editTarget.kind === "staff_assign")
-      return getConsecutiveDays(editTarget.staffId, editTarget.date);
-    return 1;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editTarget, resolvedGrid, allDates, shiftPatterns]);
-
-  const modalIsDuplicate = useMemo(() => {
-    if (!editTarget) return false;
-    if (editTarget.kind === "existing" || editTarget.kind === "staff_assign")
-      return duplicateStaffDates.set.has(`${editTarget.staffId}__${editTarget.date}`);
-    return false;
-  }, [editTarget, duplicateStaffDates]);
 
   // スタッフ軸ビュー用: セクション指定順ソート
   const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "リメイク", "ローン"];
@@ -1341,30 +1030,91 @@ export default function ShiftEditGrid({
     }),
   [shiftPatterns, slotRequirements]);
 
-  // ── セクション別 不足/余剰（SVパターン除外） ──────────────────────
-  const sectionShortages = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const p of shiftPatterns) {
-      if (p.section === "SV") continue;
-      const sec = p.section ?? "";
-      for (const date of allDates) {
-        const req = getRequired(p.name, date);
-        if (req === 0) continue;
-        const assigned = (resolvedGrid.get(`${p.name}__${date}`) ?? []).length;
-        map.set(sec, (map.get(sec) ?? 0) + (req - assigned));
-      }
+  // 選択不足セルの候補スタッフ（スコアリング付き）
+  const shortageCandidates = useMemo(() => {
+    if (!selectedShortage) return [];
+    const { date, patternName } = selectedShortage;
+    const patSection = patternByName.get(patternName)?.section ?? null;
+
+    // 不足日を含む週（月〜日）の日付セット（当日除く）
+    const dt = new Date(date + "T00:00:00+09:00");
+    const dow = dt.getDay();
+    const diffToMon = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(dt);
+    monday.setDate(dt.getDate() + diffToMon);
+    const weekDates: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const s = d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+      if (s !== date) weekDates.push(s);
     }
-    // net が 0 のセクションも保持（変化を示すため）、ソートして返す
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+    const dateIdx = allDates.indexOf(date);
+
+    return activeMembers
+      .filter(m => {
+        if (patSection && m.section !== patSection) return false;
+        const cell = resolveCell(m.id, date);
+        return cell !== null && (cell.shiftName === "公休" || cell.shiftName === "希望休");
+      })
+      .map(m => {
+        const reason = resolveCell(m.id, date)!.shiftName! as "公休" | "希望休";
+
+        // この週の他の休み日数
+        const otherRestDaysThisWeek = weekDates.filter(d => {
+          const cell = resolveCell(m.id, d);
+          return cell !== null && (cell.shiftName === "公休" || cell.shiftName === "希望休");
+        }).length;
+
+        // 移動した場合の連続勤務日数
+        let before = 0, after = 0;
+        for (let i = dateIdx - 1; i >= 0; i--) {
+          const cell = resolveCell(m.id, allDates[i]);
+          if (cell?.shiftName && patternNameSet.has(cell.shiftName)) before++;
+          else break;
+        }
+        for (let i = dateIdx + 1; i < allDates.length; i++) {
+          const cell = resolveCell(m.id, allDates[i]);
+          if (cell?.shiftName && patternNameSet.has(cell.shiftName)) after++;
+          else break;
+        }
+        const consecutiveDaysIfMoved = before + 1 + after;
+
+        // 優先度スコア
+        // 1=希望休+代替休あり  2=希望休のみ  3=公休+スワップ可  4=公休のみ(代休必要)
+        const priority: 1 | 2 | 3 | 4 =
+          reason === "希望休" && otherRestDaysThisWeek > 0 ? 1 :
+          reason === "希望休"                               ? 2 :
+          reason === "公休"  && otherRestDaysThisWeek > 0  ? 3 : 4;
+
+        return { staffId: m.id, staffName: m.name, section: m.section,
+          reason, otherRestDaysThisWeek, consecutiveDaysIfMoved, priority };
+      })
+      .sort((a, b) =>
+        a.priority !== b.priority ? a.priority - b.priority :
+        a.consecutiveDaysIfMoved !== b.consecutiveDaysIfMoved ? a.consecutiveDaysIfMoved - b.consecutiveDaysIfMoved :
+        a.staffName.localeCompare(b.staffName, "ja")
+      );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedGrid, allDates, shiftPatterns, slotReqMap, localSlotReqs]);
+  }, [selectedShortage, drafts, activeMembers, shiftsByKey, patternByName, allDates, patternNameSet]);
+
+  // 候補スタッフIDセット（グリッドハイライト用）
+  const candidateStaffIds = useMemo(
+    () => new Set(shortageCandidates.map(c => c.staffId)),
+    [shortageCandidates],
+  );
 
   // ── Render ────────────────────────────────────────────────────
   const draftCount = drafts.size;
-  const hasChanges = draftCount > 0 || slotReqChanged;
-  // ドラッグ中のスタッフID（同一スタッフセルをハイライトするため）
-  const draggingStaffId = activeId ? activeId.split("__")[0] : null;
-  const activeName = activeId ? (memberById.get(draggingStaffId ?? "")?.name ?? "") : null;
+  const hasChanges = draftCount > 0;
+
+  const PRIORITY_CFG = {
+    1: { badge: "推奨",   badgeCls: "bg-emerald-500 text-white", borderCls: "border-emerald-300 dark:border-emerald-700", desc: "希望休・代替休あり" },
+    2: { badge: "可",     badgeCls: "bg-blue-500 text-white",    borderCls: "border-blue-200 dark:border-blue-700",       desc: "希望休・代替休なし" },
+    3: { badge: "要調整", badgeCls: "bg-amber-500 text-white",   borderCls: "border-amber-200 dark:border-amber-700",     desc: "公休・週内スワップ可" },
+    4: { badge: "代休必要", badgeCls: "bg-red-400 text-white",   borderCls: "border-red-200 dark:border-red-700",         desc: "公休・代替休なし" },
+  } as const;
   const COL_W = 50;
   const NAME_W = 100;
   const TOT_W = 52;     // 合計列幅
@@ -1378,14 +1128,13 @@ export default function ShiftEditGrid({
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 shrink-0">
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 leading-tight">
-            {draftCount > 0 ? `${draftCount}件 変更中` : slotReqChanged ? "必要人数 変更中" : "シフト編集"}
+            {draftCount > 0 ? `${draftCount}件 変更中` : "シフト編集"}
           </span>
           {draftMsg && (
             <span className="text-[10px] text-green-600 dark:text-green-400">{draftMsg}</span>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {/* ── 表示系コントロール ── */}
           {/* 充足サマリー ON/OFF */}
           <button
             onClick={() => setShowSummaryRows(v => !v)}
@@ -1399,12 +1148,6 @@ export default function ShiftEditGrid({
           >
             充足
           </button>
-          {/* パターン軸 / スタッフ軸 */}
-          <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden text-[11px] font-semibold">
-            <button onClick={() => setViewMode("pattern")} className={["px-2 py-1.5 transition-colors", viewMode === "pattern" ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900" : "bg-white dark:bg-zinc-800 text-zinc-400 hover:bg-zinc-50"].join(" ")}>パターン</button>
-            <button onClick={() => setViewMode("staff")}   className={["px-2 py-1.5 transition-colors", viewMode === "staff"   ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900" : "bg-white dark:bg-zinc-800 text-zinc-400 hover:bg-zinc-50"].join(" ")}>スタッフ</button>
-          </div>
-
           {/* セパレーター */}
           <span className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
 
@@ -1447,11 +1190,14 @@ export default function ShiftEditGrid({
         </div>
       )}
 
+      {/* ── メインエリア（グリッド + PC右パネル） ── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+
+        {/* ── グリッド列 ── */}
+        <div className="flex flex-col flex-1 min-w-0">
+
       {/* ── Table ── */}
       <div className="overflow-auto flex-1" style={{ WebkitOverflowScrolling: "touch" }}>
-        <DndContext sensors={sensors}
-          onDragStart={handleDragStart} onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
           <table className="border-separate"
             style={{ tableLayout: "fixed", width: `${totalW}px`, minWidth: `${totalW}px`, borderSpacing: 0 }}>
             <colgroup>
@@ -1522,6 +1268,8 @@ export default function ShiftEditGrid({
                       const required = getRequired(pattern.name, date);
                       const net = required - assigned; // 正=不足、負=余剰
                       const isToday = date === todayJST;
+                      const isSelected = selectedShortage?.date === date && selectedShortage?.patternName === pattern.name;
+                      const isShortage = net > 0;
                       let display: string;
                       let textCls: string;
                       let bgCls: string;
@@ -1531,8 +1279,8 @@ export default function ShiftEditGrid({
                         bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
                       } else if (net > 0) {
                         display = `-${net}`;
-                        textCls = "text-red-600 dark:text-red-400 font-bold";
-                        bgCls = isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950";
+                        textCls = isSelected ? "text-white font-bold" : "text-red-600 dark:text-red-400 font-bold";
+                        bgCls = isSelected ? "bg-red-500 dark:bg-red-600" : isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950";
                       } else if (net < 0) {
                         display = `+${-net}`;
                         textCls = "text-emerald-700 dark:text-emerald-400 font-bold";
@@ -1544,8 +1292,10 @@ export default function ShiftEditGrid({
                       }
                       return (
                         <td key={date}
+                          onClick={isShortage ? () => setSelectedShortage(isSelected ? null : { date, patternName: pattern.name }) : undefined}
                           className={[
                             "tabular-nums p-0 overflow-hidden",
+                            isShortage ? "cursor-pointer" : "",
                             bgCls,
                             isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
                             isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500 border-r border-r-zinc-200 dark:border-r-zinc-700"
@@ -1592,7 +1342,7 @@ export default function ShiftEditGrid({
                             isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
                             isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
                           ].join(" ")}
-                          style={{ top: topOffset }}
+                          style={{ position: "sticky", top: topOffset, zIndex: 18 }}
                         >
                           <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center">
                             <span className={`text-[10px] leading-none ${totText}`}>{totDisplay}</span>
@@ -1609,28 +1359,50 @@ export default function ShiftEditGrid({
                 );
               })}
 
-              {/* ── コンテンツ行（スタッフ軸 or パターン軸） ── */}
-              {viewMode === "staff" ? (
-                /* ── スタッフ軸 ── */
-                sortedMembersBySection.map((member, idx) => {
-                  const prevSection = idx > 0 ? sortedMembersBySection[idx - 1].section : undefined;
-                  const showSectionHeader = member.section !== prevSection;
-                  return (
-                    <React.Fragment key={member.id}>
-                      {showSectionHeader && (
-                        <tr>
-                          <td colSpan={allDates.length + 1}
-                            className="sticky left-0 z-10 bg-zinc-100 dark:bg-zinc-800/80 px-2 py-0.5 border-b border-zinc-200 dark:border-zinc-700">
-                            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tracking-wide uppercase">
-                              {member.section ?? "セクション未設定"}
-                            </span>
-                          </td>
-                        </tr>
-                      )}
+              {/* ── スタッフ軸 ── */}
+              {sortedMembersBySection.map((member, idx) => {
+                const prevSection = idx > 0 ? sortedMembersBySection[idx - 1].section : undefined;
+                const showSectionHeader = member.section !== prevSection;
+                // 月合計
+                const monthTotal = allDates.filter(d => {
+                  const cell = resolveCell(member.id, d);
+                  return cell !== null && cell.shiftName && patternNameSet.has(cell.shiftName);
+                }).length;
+                const isFocusedRow = focusedCandidateId === member.id;
+                return (
+                  <React.Fragment key={member.id}>
+                    {showSectionHeader && (
                       <tr>
-                        <td className="sticky left-0 z-10 bg-white dark:bg-zinc-950 border-b border-r-2 border-zinc-200 dark:border-zinc-700 align-middle h-8">
-                          <div className="px-2">
-                            <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 block leading-tight truncate">
+                        <td colSpan={allDates.length + 2}
+                          className="sticky left-0 z-10 bg-zinc-100 dark:bg-zinc-800/80 px-2 py-0.5 border-b border-zinc-200 dark:border-zinc-700">
+                          <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tracking-wide uppercase">
+                            {member.section ?? "セクション未設定"}
+                          </span>
+                        </td>
+                      </tr>
+                    )}
+                    <tr
+                      ref={(el) => {
+                        if (el) staffRowRefs.current.set(member.id, el);
+                        else staffRowRefs.current.delete(member.id);
+                      }}
+                    >
+                      {/* 名前セル */}
+                      <td className={[
+                        "sticky left-0 z-10 border-b border-r-2 border-zinc-200 dark:border-zinc-700 align-middle h-8 transition-colors",
+                        isFocusedRow
+                          ? "bg-blue-100 dark:bg-blue-900/40"
+                          : "bg-white dark:bg-zinc-950",
+                      ].join(" ")}>
+                        <div className="px-2 flex items-center gap-1">
+                          {isFocusedRow && (
+                            <span className="w-1.5 h-5 rounded-full bg-blue-500 shrink-0" />
+                          )}
+                          <div className="min-w-0">
+                            <span className={[
+                              "text-[11px] font-semibold block leading-tight truncate",
+                              isFocusedRow ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-200",
+                            ].join(" ")}>
                               {member.name}
                             </span>
                             {member.endDate && (
@@ -1639,196 +1411,93 @@ export default function ShiftEditGrid({
                               </span>
                             )}
                           </div>
-                        </td>
-                        {allDates.map((date) => {
-                          const isDeparted = !!member.endDate && date > member.endDate;
-                          const cell = resolveCell(member.id, date);
-                          const shiftName = cell?.shiftName ?? null;
-                          const isDraftCell = drafts.has(`${member.id}__${date}`);
-                          const isToday = date === todayJST;
-                          const hasLog = (changeLogMap.get(`${member.id}__${date}`)?.length ?? 0) > 0;
-                          if (isDeparted) {
-                            return (
-                              <td key={date} className={[
-                                "border-b border-r border-zinc-100 dark:border-zinc-800 h-8",
-                                isToday ? "bg-blue-50/20 dark:bg-blue-950/5" : "bg-zinc-50/80 dark:bg-zinc-800/30",
-                              ].join(" ")}>
-                                <div className="h-full flex items-center justify-center">
-                                  <span className="text-[10px] text-zinc-300 dark:text-zinc-600">–</span>
-                                </div>
-                              </td>
-                            );
-                          }
+                        </div>
+                      </td>
+                      {allDates.map((date) => {
+                        const isDeparted = !!member.endDate && date > member.endDate;
+                        const cell = resolveCell(member.id, date);
+                        const shiftName = cell?.shiftName ?? null;
+                        const isDraftCell = drafts.has(`${member.id}__${date}`);
+                        const isToday = date === todayJST;
+                        const hasLog = (changeLogMap.get(`${member.id}__${date}`)?.length ?? 0) > 0;
+                        // 候補ハイライト: 選択不足セルの日付 かつ 候補スタッフ
+                        const isCandidate = selectedShortage?.date === date && candidateStaffIds.has(member.id);
+                        // フォーカス行（候補スタッフ選択時にその行全体をハイライト）
+                        if (isDeparted) {
                           return (
-                            <td key={date}
-                              onClick={() => {
-                                if (shiftName) {
-                                  setEditTarget({ kind: "existing", staffId: member.id, patternName: shiftName, date });
-                                } else {
-                                  setEditTarget({ kind: "staff_assign", staffId: member.id, date });
-                                }
-                                setErrorAnnotation(null);
-                              }}
-                              className={[
-                                "border-b border-r border-zinc-100 dark:border-zinc-800",
-                                "h-8 align-middle p-0 cursor-pointer overflow-hidden",
-                                isToday
-                                  ? "bg-blue-50/40 dark:bg-blue-950/10"
-                                  : isDraftCell && shiftName
-                                  ? "bg-blue-50/60 dark:bg-blue-950/20"
-                                  : "",
-                              ].filter(Boolean).join(" ")}
-                            >
-                              {shiftName && (
-                                <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
-                                  <span className={[
-                                    "text-[11px] leading-none font-medium text-center truncate w-full block",
-                                    isDraftCell
-                                      ? "text-blue-700 dark:text-blue-400 font-bold"
-                                      : "text-zinc-700 dark:text-zinc-300",
-                                  ].join(" ")}>
-                                    {shiftName.slice(0, 4)}
-                                    {hasLog && !isDraftCell && (
-                                      <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5" />
-                                    )}
-                                  </span>
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </React.Fragment>
-                  );
-                })
-              ) : (
-                /* ── パターン軸 ── */
-                shiftPatterns.map((pattern) => {
-                  const rowCount = rowCountByPattern.get(pattern.name) ?? 2;
-                  const isSVPat = pattern.section === "SV";
-                  const patTotalAssigned = allDates.reduce((s, d) =>
-                    s + (resolvedGrid.get(`${pattern.name}__${d}`) ?? []).length, 0);
-                  const patTotalRequired = isSVPat ? 0 : allDates.reduce((s, d) =>
-                    s + getRequired(pattern.name, d), 0);
-                  const patNet = patTotalRequired - patTotalAssigned;
-                  return (
-                    <React.Fragment key={pattern.name}>
-                      {Array.from({ length: rowCount }, (_, rowIdx) => (
-                        <tr key={rowIdx}>
-                          {rowIdx === 0 && (
-                            <td rowSpan={rowCount}
-                              className="sticky left-0 z-10 bg-white dark:bg-zinc-950 border-r-2 border-b border-zinc-200 dark:border-zinc-700 align-top p-0">
-                              <div className="px-2 pt-1.5 pb-1">
-                                <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200 block leading-snug">{pattern.name}</span>
-                                {pattern.start_time && pattern.end_time && (
-                                  <span className="text-[9px] text-zinc-400 tabular-nums block">
-                                    {pattern.start_time.slice(0, 5)}～{pattern.end_time.slice(0, 5)}
-                                  </span>
-                                )}
-                                {pattern.required_count > 0 && (
-                                  <span className="text-[9px] text-zinc-400 block mt-0.5">
-                                    標準 {pattern.required_count}人
-                                  </span>
-                                )}
+                            <td key={date} className={[
+                              "border-b border-r border-zinc-100 dark:border-zinc-800 h-8",
+                              isToday ? "bg-blue-50/20 dark:bg-blue-950/5" : "bg-zinc-50/80 dark:bg-zinc-800/30",
+                            ].join(" ")}>
+                              <div className="h-full flex items-center justify-center">
+                                <span className="text-[10px] text-zinc-300 dark:text-zinc-600">–</span>
                               </div>
                             </td>
-                          )}
-                          {allDates.map((date) => {
-                            const staffList = resolvedGrid.get(`${pattern.name}__${date}`) ?? [];
-                            const staffId = staffList[rowIdx] ?? null;
-                            const staffName = staffId ? (memberById.get(staffId)?.name ?? staffId) : null;
-                            const draftKey = staffId ? `${staffId}__${date}` : null;
-                            const isDraft = draftKey ? drafts.has(draftKey) : false;
-                            const hasLog = draftKey ? (changeLogMap.get(draftKey)?.length ?? 0) > 0 : false;
-                            const isDuplicate = draftKey ? duplicateStaffDates.set.has(draftKey) : false;
-                            const isErrorSource = !!errorAnnotation && staffId === errorAnnotation.srcStaffId && date === errorAnnotation.srcDate;
-                            const dupPatterns = isDuplicate && draftKey
-                              ? (duplicateStaffDates.map.get(draftKey) ?? []).filter(p => p !== pattern.name)
-                              : [];
-                            const bubbleMessage: string | undefined = isErrorSource
-                              ? errorAnnotation!.message
-                              : rowIdx === 0 && isDuplicate && dupPatterns.length > 0
-                              ? `重複: ${dupPatterns.join("・")}`
-                              : undefined;
-                            const isHoldHighlight = !!draggingStaffId && staffId === draggingStaffId && `${staffId}__${date}` !== activeId;
-                            return (
-                              <SlotCellFull
-                                key={date}
-                                patternName={pattern.name} date={date} rowIdx={rowIdx}
-                                staffId={staffId} staffName={staffName}
-                                isDraft={isDraft} isToday={date === todayJST}
-                                isOverCol={overColKey === `${pattern.name}__${date}`}
-                                hasLog={hasLog} isDuplicate={isDuplicate}
-                                isHoldHighlight={isHoldHighlight}
-                                isErrorSource={isErrorSource}
-                                bubbleMessage={bubbleMessage}
-                                onClick={() => openModal(pattern.name, date, staffId)}
-                              />
-                            );
-                          })}
-                        </tr>
-                      ))}
-                      {/* 充足状況行（クリックで必要人数を編集） */}
-                      <tr>
-                        <td className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-900/60 border-b-2 border-r-2 border-zinc-200 dark:border-zinc-700 px-1.5 align-middle">
-                          {isSVPat ? (
-                            <span className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums">
-                              {patTotalAssigned > 0 ? `${patTotalAssigned}人` : ""}
-                            </span>
-                          ) : patTotalRequired > 0 ? (
-                            <div className="flex flex-col items-start py-0.5">
-                              <span className={`text-[9px] font-bold tabular-nums leading-snug ${
-                                patNet > 0 ? "text-red-500 dark:text-red-400"
-                                : patNet < 0 ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-zinc-400 dark:text-zinc-500"
-                              }`}>
-                                {patTotalAssigned}/{patTotalRequired}
-                              </span>
-                              {patNet !== 0 && (
-                                <span className={`text-[8px] tabular-nums leading-none ${
-                                  patNet > 0 ? "text-red-400 dark:text-red-500" : "text-emerald-500 dark:text-emerald-400"
-                                }`}>
-                                  {patNet > 0 ? `-${patNet}人` : `+${-patNet}人`}
-                                </span>
-                              )}
-                            </div>
-                          ) : null}
-                        </td>
-                        {allDates.map((date) => {
-                          const countKey = `${pattern.name}__${date}`;
-                          return (
-                            <CountCell key={date}
-                              assigned={(resolvedGrid.get(`${pattern.name}__${date}`) ?? []).length}
-                              required={getRequired(pattern.name, date)}
-                              isToday={date === todayJST}
-                              isSV={pattern.section === "SV"}
-                              isEditing={editingCountKey === countKey}
-                              onStartEdit={() => { setEditingCountKey(countKey); setSaveError(null); }}
-                              onChange={v => setLocalSlotReqs(prev => { const n = new Map(prev); n.set(countKey, v); return n; })}
-                              onEndEdit={() => setEditingCountKey(null)}
-                            />
                           );
-                        })}
-                      </tr>
-                    </React.Fragment>
-                  );
-                })
-              )}
+                        }
+                        return (
+                          <td key={date}
+                            onClick={(e) => {
+                              setPopover({ staffId: member.id, date, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() });
+                            }}
+                            className={[
+                              "border-b border-r border-zinc-100 dark:border-zinc-800",
+                              "h-8 align-middle p-0 cursor-pointer overflow-hidden transition-colors",
+                              // フォーカス行 > 候補セル > 今日 > 下書き の順で優先
+                              isFocusedRow && isCandidate
+                                ? "bg-blue-300 dark:bg-blue-700/60 ring-inset ring-2 ring-blue-400"
+                                : isFocusedRow
+                                ? "bg-blue-50 dark:bg-blue-950/30"
+                                : isCandidate
+                                ? "bg-amber-200 dark:bg-amber-800/50 ring-inset ring-1 ring-amber-400"
+                                : isToday
+                                ? "bg-blue-50/40 dark:bg-blue-950/10"
+                                : isDraftCell && shiftName
+                                ? "bg-blue-50/60 dark:bg-blue-950/20"
+                                : "",
+                            ].filter(Boolean).join(" ")}
+                          >
+                            {shiftName && (
+                              <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
+                                <span className={[
+                                  "text-[11px] leading-none font-medium text-center truncate w-full block",
+                                  isDraftCell
+                                    ? "text-blue-700 dark:text-blue-400 font-bold"
+                                    : isFocusedRow && isCandidate
+                                    ? "text-blue-800 dark:text-blue-100 font-bold"
+                                    : isFocusedRow
+                                    ? "text-blue-600 dark:text-blue-300"
+                                    : isCandidate
+                                    ? "text-amber-800 dark:text-amber-200 font-semibold"
+                                    : "text-zinc-700 dark:text-zinc-300",
+                                ].join(" ")}>
+                                  {shiftName.slice(0, 4)}
+                                  {hasLog && !isDraftCell && (
+                                    <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5" />
+                                  )}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                      {/* 月合計セル */}
+                      <td className="border-b border-l-2 border-zinc-200 dark:border-zinc-700 h-8 align-middle text-center tabular-nums bg-white dark:bg-zinc-950">
+                        <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                          {monthTotal > 0 ? monthTotal : ""}
+                        </span>
+                      </td>
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
 
-          <DragOverlay dropAnimation={null}>
-            {activeName ? (
-              <div className="rounded-md shadow-lg bg-white dark:bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-700 dark:text-zinc-200 opacity-95 pointer-events-none whitespace-nowrap ring-1 ring-zinc-200 dark:ring-zinc-700">
-                {activeName}
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
       </div>
 
       {/* 凡例 */}
-      <div className="shrink-0 px-4 py-1.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center text-[10px] text-zinc-400 gap-3">
+      <div className="shrink-0 px-4 py-1.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center text-[10px] text-zinc-400 gap-3 flex-wrap">
         <span><span className="text-blue-700 dark:text-blue-400 font-bold">名前</span>＝変更中</span>
         <span className="flex items-center gap-0.5">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />＝変更履歴あり
@@ -1836,12 +1505,183 @@ export default function ShiftEditGrid({
         <span className="flex items-center gap-0.5">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />＝重複
         </span>
-        <span className="ml-auto text-[9px]">
-          {viewMode === "pattern"
-            ? "タップ：編集　人数行タップ：必要人数を編集　ドラッグ：移動"
-            : "タップ：シフト編集　–＝離脱後"}
-        </span>
+        {selectedShortage && (
+          <span className="flex items-center gap-0.5">
+            <span className="inline-block w-2.5 h-2.5 rounded bg-amber-200" />＝不足日候補
+          </span>
+        )}
+        <span className="ml-auto text-[9px]">タップ：シフト編集　–＝離脱後</span>
       </div>
+
+        </div>{/* /グリッド列 */}
+
+        {/* ── 右パネル（PC用・md以上で表示） ── */}
+        {selectedShortage && (
+          <div className="hidden md:flex flex-col w-72 shrink-0 border-l border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 overflow-hidden">
+            {/* ヘッダー */}
+            <div className="px-3 pt-3 pb-2 border-b border-amber-200 dark:border-amber-800 flex items-start justify-between shrink-0">
+              <div>
+                <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide">休み候補</p>
+                <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100 leading-snug mt-0.5">
+                  {fmtDate(selectedShortage.date)}
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">{selectedShortage.patternName}</p>
+              </div>
+              <button onClick={() => { setSelectedShortage(null); setFocusedCandidateId(null); }}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-lg leading-none mt-0.5 shrink-0">✕</button>
+            </div>
+            {/* 候補リスト */}
+            <div className="overflow-y-auto flex-1 px-2 py-2 space-y-1.5">
+              {shortageCandidates.length === 0 ? (
+                <p className="text-xs text-zinc-400 text-center py-6">候補スタッフなし</p>
+              ) : (
+                shortageCandidates.map(c => {
+                  const cfg = PRIORITY_CFG[c.priority];
+                  const isFocused = focusedCandidateId === c.staffId;
+                  return (
+                    <button key={c.staffId}
+                      onClick={() => setFocusedCandidateId(isFocused ? null : c.staffId)}
+                      className={[
+                        "w-full text-left px-2.5 py-2 rounded-xl border transition-all",
+                        isFocused
+                          ? "bg-blue-50 dark:bg-blue-950/40 border-blue-400 dark:border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800"
+                          : `bg-white dark:bg-zinc-800 ${cfg.borderCls} hover:brightness-95`,
+                      ].join(" ")}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold shrink-0 ${cfg.badgeCls}`}>
+                          {cfg.badge}
+                        </span>
+                        <span className={[
+                          "text-[13px] font-semibold truncate",
+                          isFocused ? "text-blue-700 dark:text-blue-300" : "text-zinc-800 dark:text-zinc-100",
+                        ].join(" ")}>{c.staffName}</span>
+                        {isFocused && (
+                          <span className="ml-auto text-[9px] text-blue-500 dark:text-blue-400 shrink-0">↓行を表示</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={[
+                          "px-1.5 py-0.5 rounded text-[10px] font-bold",
+                          c.reason === "希望休"
+                            ? "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
+                            : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400",
+                        ].join(" ")}>{c.reason}</span>
+                        {c.otherRestDaysThisWeek > 0 && (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 tabular-nums">
+                            週+{c.otherRestDaysThisWeek}休
+                          </span>
+                        )}
+                        <span className={[
+                          "text-[10px] tabular-nums ml-auto",
+                          c.consecutiveDaysIfMoved >= 6 ? "text-red-500 dark:text-red-400 font-bold"
+                          : c.consecutiveDaysIfMoved >= 5 ? "text-amber-600 dark:text-amber-400 font-semibold"
+                          : "text-zinc-400",
+                        ].join(" ")}>
+                          →{c.consecutiveDaysIfMoved}連勤
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            {/* 凡例 */}
+            <div className="shrink-0 px-3 py-2 border-t border-amber-100 dark:border-amber-900/50 space-y-1">
+              {([1, 2, 3, 4] as const).map(p => (
+                <span key={p} className="flex items-center gap-1.5 text-[9px] text-zinc-400">
+                  <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${PRIORITY_CFG[p].badgeCls}`}>{PRIORITY_CFG[p].badge}</span>
+                  {PRIORITY_CFG[p].desc}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>{/* /メインエリア */}
+
+      {/* ── 下ドロワー（モバイル用・md未満で表示） ── */}
+      {selectedShortage && (
+        <div className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-white dark:bg-zinc-900 rounded-t-2xl shadow-2xl border-t border-amber-200 dark:border-amber-800 max-h-[58dvh] flex flex-col"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+          {/* ドラッグハンドル */}
+          <div className="flex justify-center pt-2 pb-1 shrink-0">
+            <div className="w-9 h-1 rounded-full bg-zinc-200 dark:bg-zinc-700" />
+          </div>
+          {/* ヘッダー */}
+          <div className="px-4 pb-2 flex items-center justify-between shrink-0">
+            <div>
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                {fmtDate(selectedShortage.date)}　{selectedShortage.patternName}
+              </p>
+              <p className="text-[10px] text-zinc-400">
+                休み候補　{shortageCandidates.length > 0 ? `${shortageCandidates.length}名` : "なし"}
+              </p>
+            </div>
+            <button onClick={() => { setSelectedShortage(null); setFocusedCandidateId(null); }}
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-sm shrink-0">✕</button>
+          </div>
+          {/* 候補リスト */}
+          <div className="overflow-y-auto flex-1 px-3 pb-3 space-y-2">
+            {shortageCandidates.length === 0 ? (
+              <p className="text-xs text-zinc-400 text-center py-4">候補スタッフなし</p>
+            ) : (
+              shortageCandidates.map(c => {
+                const cfg = PRIORITY_CFG[c.priority];
+                const isFocused = focusedCandidateId === c.staffId;
+                return (
+                  <button key={c.staffId}
+                    onClick={() => setFocusedCandidateId(isFocused ? null : c.staffId)}
+                    className={[
+                      "w-full flex items-center gap-2 px-3 py-2 rounded-2xl border transition-all text-left",
+                      isFocused
+                        ? "bg-blue-50 dark:bg-blue-950/40 border-blue-400 dark:border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800"
+                        : `bg-zinc-50 dark:bg-zinc-800 ${cfg.borderCls}`,
+                    ].join(" ")}>
+                    <span className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold shrink-0 ${cfg.badgeCls}`}>
+                      {cfg.badge}
+                    </span>
+                    <span className={[
+                      "font-semibold text-sm flex-1 truncate",
+                      isFocused ? "text-blue-700 dark:text-blue-300" : "text-zinc-800 dark:text-zinc-100",
+                    ].join(" ")}>{c.staffName}</span>
+                    <span className={[
+                      "px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0",
+                      c.reason === "希望休"
+                        ? "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
+                        : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400",
+                    ].join(" ")}>{c.reason}</span>
+                    {c.otherRestDaysThisWeek > 0 && (
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
+                        週+{c.otherRestDaysThisWeek}休
+                      </span>
+                    )}
+                    <span className={[
+                      "text-[10px] tabular-nums shrink-0",
+                      c.consecutiveDaysIfMoved >= 6 ? "text-red-500 dark:text-red-400 font-bold"
+                      : c.consecutiveDaysIfMoved >= 5 ? "text-amber-600 dark:text-amber-400 font-semibold"
+                      : "text-zinc-400",
+                    ].join(" ")}>→{c.consecutiveDaysIfMoved}連勤</span>
+                    {isFocused && (
+                      <span className="text-[9px] text-blue-500 shrink-0">↓</span>
+                    )}
+                  </button>
+                );
+              })
+            )}
+            {/* 凡例 */}
+            {shortageCandidates.length > 0 && (
+              <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                {([1, 2, 3, 4] as const).map(p => (
+                  <span key={p} className="flex items-center gap-1 text-[9px] text-zinc-400">
+                    <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${PRIORITY_CFG[p].badgeCls}`}>{PRIORITY_CFG[p].badge}</span>
+                    {PRIORITY_CFG[p].desc}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Summary Modal */}
       {showSummary && (
@@ -1851,23 +1691,22 @@ export default function ShiftEditGrid({
         />
       )}
 
-      {/* Edit Modal */}
-      {editTarget && (
-        <EditModal
-          target={editTarget} patterns={shiftPatterns}
-          availableStaff={availableStaff} logs={modalLogs}
-          staffMember={
-            editTarget.kind === "existing" || editTarget.kind === "staff_assign"
-              ? (memberById.get(editTarget.staffId) ?? null)
-              : null
-          }
-          originalPattern={modalOriginalPattern}
-          consecutiveDays={modalConsecutiveDays}
-          isDuplicate={modalIsDuplicate}
+      {/* Inline Pattern Picker */}
+      {popover && (
+        <InlinePatternPicker
+          staffId={popover.staffId}
+          date={popover.date}
+          currentShift={resolveCell(popover.staffId, popover.date)?.shiftName ?? null}
+          staffMember={memberById.get(popover.staffId) ?? null}
+          patterns={shiftPatterns}
+          logs={changeLogMap.get(`${popover.staffId}__${popover.date}`) ?? []}
+          consecutiveDays={getConsecutiveDays(popover.staffId, popover.date)}
+          isDuplicate={duplicateStaffDates.set.has(`${popover.staffId}__${popover.date}`)}
           projectId={projectId}
-          onClose={closeModal} onChangePattern={handleChangePattern}
-          onRemove={handleRemove} onAdd={handleAdd}
-          onAssignPattern={handleAssignPattern}
+          onAssign={handlePopoverAssign}
+          onRemove={handlePopoverRemove}
+          onClose={() => setPopover(null)}
+          anchorRect={popover.rect}
         />
       )}
 

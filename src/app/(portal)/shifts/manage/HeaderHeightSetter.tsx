@@ -2,7 +2,7 @@
 import { useEffect, useRef } from "react";
 
 /** sticky ページヘッダーの高さを --page-header-h として CSS 変数に設定する */
-export default function HeaderHeightSetter({ children, className }: { children: React.ReactNode; className?: string }) {
+export default function HeaderHeightSetter({ children, className, id }: { children: React.ReactNode; className?: string; id?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ref.current) return;
@@ -14,5 +14,5 @@ export default function HeaderHeightSetter({ children, className }: { children: 
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
-  return <div ref={ref} className={className}>{children}</div>;
+  return <div ref={ref} id={id} className={className}>{children}</div>;
 }

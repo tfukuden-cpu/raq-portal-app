@@ -1,4 +1,4 @@
-/**
+﻿/**
  * スタッフ向け操作説明書
  */
 import { createClient } from "@/lib/supabase/server";
@@ -151,7 +151,7 @@ export default async function ManualStaffPage() {
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-lg mx-auto px-4 pt-6 pb-28 space-y-1">
+      <div className="max-w-4xl mx-auto px-4 pt-6 pb-28 space-y-1">
         {/* ヘッダー */}
         <div className="mb-6">
           <a href="/help" className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-400 hover:text-blue-500 transition-colors mb-3">
@@ -206,3 +206,4 @@ export default async function ManualStaffPage() {
     </main>
   );
 }
+

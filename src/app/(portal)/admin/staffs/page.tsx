@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import StaffsClient from "./StaffsClient";
@@ -58,7 +58,7 @@ export default async function AllStaffsPage() {
 
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="max-w-2xl mx-auto px-4 pt-6 pb-20">
+      <div className="max-w-5xl mx-auto px-4 pt-6 pb-20">
         <div className="mb-6">
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             スタッフ管理
@@ -72,3 +72,4 @@ export default async function AllStaffsPage() {
     </main>
   );
 }
+

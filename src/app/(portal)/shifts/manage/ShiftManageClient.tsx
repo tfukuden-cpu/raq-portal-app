@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import ShiftDayList from "./ShiftDayList";
 import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
@@ -52,6 +52,58 @@ type Props = {
   draftSavedAt: string | null;
   offRequests: OffRequest[];
 };
+
+// ── ShiftEditGridOverlay ────────────────────────────────────────
+// 編集モード専用ラッパー：ページヘッダーを非表示にして全高を使う
+function ShiftEditGridOverlay({
+  projectId, targetMonthStr, allDates, shifts, activeMembers, shiftPatterns,
+  slotRequirements, changeLogs, activeDraft, draftSavedBy, draftSavedAt,
+  onSaved, onCancel,
+}: {
+  projectId: string; targetMonthStr: string; allDates: string[];
+  shifts: Props["shifts"]; activeMembers: Props["activeMembers"];
+  shiftPatterns: Props["shiftPatterns"]; slotRequirements: Props["slotRequirements"];
+  changeLogs: Props["changeLogs"]; activeDraft: GridDraftEntry[] | null;
+  draftSavedBy: string | null; draftSavedAt: string | null;
+  onSaved: () => void; onCancel: () => void;
+}) {
+  useEffect(() => {
+    const header = document.getElementById("shift-manage-header");
+    if (header) {
+      header.style.display = "none";
+      document.documentElement.style.setProperty("--page-header-h", "0px");
+    }
+    return () => {
+      if (header) {
+        header.style.display = "";
+        document.documentElement.style.removeProperty("--page-header-h");
+      }
+    };
+  }, []);
+
+  return (
+    <div
+      className="flex flex-col"
+      style={{ height: "calc(100dvh - 60px)" }}
+    >
+      <ShiftEditGrid
+        projectId={projectId}
+        targetMonth={targetMonthStr}
+        allDates={allDates}
+        shifts={shifts}
+        activeMembers={activeMembers}
+        shiftPatterns={shiftPatterns}
+        slotRequirements={slotRequirements}
+        changeLogs={changeLogs}
+        initialDraft={activeDraft}
+        draftSavedBy={activeDraft ? draftSavedBy : null}
+        draftSavedAt={activeDraft ? draftSavedAt : null}
+        onSaved={onSaved}
+        onCancel={onCancel}
+      />
+    </div>
+  );
+}
 
 function fmtAt(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
@@ -110,32 +162,25 @@ export default function ShiftManageClient({
   }
 
   if (mode === "edit") {
-    return (
-      <div
-        className="flex flex-col"
-        style={{ height: "calc(100dvh - var(--header-height, 120px) - 60px)" }}
-      >
-        <ShiftEditGrid
-          projectId={projectId}
-          targetMonth={targetMonthStr}
-          allDates={allDates}
-          shifts={shifts}
-          activeMembers={activeMembers}
-          shiftPatterns={shiftPatterns}
-          slotRequirements={slotRequirements}
-          changeLogs={changeLogs}
-          initialDraft={activeDraft}
-          draftSavedBy={activeDraft ? draftSavedBy : null}
-          draftSavedAt={activeDraft ? draftSavedAt : null}
-          onSaved={handleSaved}
-          onCancel={() => setMode("list")}
-        />
-      </div>
-    );
+    return <ShiftEditGridOverlay
+      projectId={projectId}
+      targetMonthStr={targetMonthStr}
+      allDates={allDates}
+      shifts={shifts}
+      activeMembers={activeMembers}
+      shiftPatterns={shiftPatterns}
+      slotRequirements={slotRequirements}
+      changeLogs={changeLogs}
+      activeDraft={activeDraft}
+      draftSavedBy={draftSavedBy}
+      draftSavedAt={draftSavedAt}
+      onSaved={handleSaved}
+      onCancel={() => setMode("list")}
+    />;
   }
 
   return (
-    <>
+    <div className="max-w-5xl mx-auto pb-24 pt-3">
       {/* 下書き選択モーダル */}
       {showDraftModal && (
         <div
@@ -221,6 +266,7 @@ export default function ShiftManageClient({
         targetMonth={targetMonth}
         offRequests={offRequests}
       />
-    </>
+    </div>
   );
 }
+

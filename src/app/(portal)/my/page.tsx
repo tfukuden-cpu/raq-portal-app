@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Myページ（全ロール共通）
  */
 import { createClient } from "@/lib/supabase/server";
@@ -84,7 +84,7 @@ export default async function MyPage({
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-lg mx-auto px-4 pt-6 pb-28 space-y-5">
+      <div className="max-w-3xl mx-auto px-4 pt-6 pb-28 space-y-5">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">My</h1>
 
         {/* プロフィールカード */}
@@ -221,3 +221,4 @@ export default async function MyPage({
     </main>
   );
 }
+

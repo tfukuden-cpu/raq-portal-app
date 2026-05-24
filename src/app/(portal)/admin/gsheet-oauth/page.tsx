@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+﻿import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { isGSheetsConfigured } from "@/lib/gsheets";
@@ -17,7 +17,7 @@ export default async function GSheetOAuthPage() {
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-2xl mx-auto px-4 pt-8 pb-10 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 pt-8 pb-10 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">運用管理</p>
@@ -53,3 +53,4 @@ export default async function GSheetOAuthPage() {
     </main>
   );
 }
+

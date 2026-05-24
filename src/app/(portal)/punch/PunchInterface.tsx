@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition, useEffect } from "react";
 import { recordPunchAction } from "./actions";
@@ -193,7 +193,7 @@ export default function PunchInterface({
   return (
     <>
       <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-        <div className="max-w-lg mx-auto px-4 pt-6 pb-10 space-y-4">
+        <div className="max-w-2xl mx-auto px-4 pt-6 pb-10 space-y-4">
 
           {/* スタッフ情報 */}
           <div className="flex items-center justify-between">
@@ -336,3 +336,4 @@ export default function PunchInterface({
     </>
   );
 }
+
