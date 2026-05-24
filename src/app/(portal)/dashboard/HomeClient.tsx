@@ -295,7 +295,7 @@ export default function HomeClient({
             )}
           </div>
           <a href="/notices" className="relative mt-2">
-            <BellIcon className="w-[22px] h-[22px]" style={{ color: C.gray } as React.CSSProperties} />
+            <BellIcon className="w-[22px] h-[22px] text-[#8E8E93]" />
             {noticeCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
                 style={{ backgroundColor: C.red }}>
