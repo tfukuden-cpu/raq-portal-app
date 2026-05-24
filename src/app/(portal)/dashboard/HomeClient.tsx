@@ -108,6 +108,60 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   );
 }
 
+// ─── 欠勤・遅刻ボタンカード ───────────────────────────────────────────────
+function ReportButtons({
+  hasAbsence, absenceStatus, hasLate, lateStatus, isPending, onAbsence, onLate,
+}: {
+  hasAbsence: boolean; absenceStatus: string | null;
+  hasLate: boolean; lateStatus: string | null;
+  isPending: boolean; onAbsence: () => void; onLate: () => void;
+}) {
+  return (
+    <Card>
+      <div className="grid grid-cols-2 divide-x divide-zinc-100 dark:divide-zinc-800">
+        {/* 欠勤 */}
+        <div className="p-4">
+          {hasAbsence ? (
+            <div className="flex flex-col gap-0.5">
+              <p className="text-[10px] font-semibold tracking-widest uppercase text-zinc-400 dark:text-zinc-600">欠勤</p>
+              <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+                報告済 · {statusBadge(absenceStatus)}
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={onAbsence} disabled={isPending}
+              className="w-full py-3 rounded-2xl bg-red-50 dark:bg-red-950/40 active:scale-[0.97] disabled:opacity-40 transition-transform flex flex-col items-center gap-1"
+            >
+              <span className="text-lg">🙏</span>
+              <span className="text-[13px] font-semibold text-red-500 dark:text-red-400">欠勤報告</span>
+            </button>
+          )}
+        </div>
+        {/* 遅刻 */}
+        <div className="p-4">
+          {hasLate ? (
+            <div className="flex flex-col gap-0.5">
+              <p className="text-[10px] font-semibold tracking-widest uppercase text-zinc-400 dark:text-zinc-600">遅刻</p>
+              <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+                報告済 · {statusBadge(lateStatus)}
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={onLate} disabled={isPending}
+              className="w-full py-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 active:scale-[0.97] disabled:opacity-40 transition-transform flex flex-col items-center gap-1"
+            >
+              <span className="text-lg">⏰</span>
+              <span className="text-[13px] font-semibold text-amber-500 dark:text-amber-400">遅刻報告</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function HomeClient({
   displayName, projectName, hasMultipleProjects, todayLabel,
@@ -406,25 +460,13 @@ export default function HomeClient({
 
           {/* 欠勤・遅刻 */}
           {canReport && (
-            <div className="flex items-center justify-center gap-6 py-2">
-              {hasAbsenceReport ? (
-                <span className="text-xs text-zinc-400">欠勤報告済（{statusBadge(absenceStatus)}）</span>
-              ) : (
-                <button onClick={() => !isPending && setModal("absence")} disabled={isPending}
-                  className="text-[13px] font-medium text-zinc-400 hover:text-red-500 disabled:opacity-40 transition-colors">
-                  欠勤報告
-                </button>
-              )}
-              <span className="w-px h-3.5 bg-zinc-300 dark:bg-zinc-700 rounded-full" />
-              {hasLateReport ? (
-                <span className="text-xs text-zinc-400">遅刻報告済（{statusBadge(lateStatus)}）</span>
-              ) : (
-                <button onClick={() => !isPending && setModal("late")} disabled={isPending}
-                  className="text-[13px] font-medium text-zinc-400 hover:text-amber-500 disabled:opacity-40 transition-colors">
-                  遅刻報告
-                </button>
-              )}
-            </div>
+            <ReportButtons
+              hasAbsence={hasAbsenceReport} absenceStatus={absenceStatus}
+              hasLate={hasLateReport} lateStatus={lateStatus}
+              isPending={isPending}
+              onAbsence={() => !isPending && setModal("absence")}
+              onLate={() => !isPending && setModal("late")}
+            />
           )}
 
         </>)}
@@ -496,25 +538,13 @@ export default function HomeClient({
 
           {/* 欠勤・遅刻 */}
           {canReport && (
-            <div className="flex items-center justify-center gap-6 py-2">
-              {hasAbsenceReport ? (
-                <span className="text-xs text-zinc-400">欠勤報告済（{statusBadge(absenceStatus)}）</span>
-              ) : (
-                <button onClick={() => !isPending && setModal("absence")} disabled={isPending}
-                  className="text-[13px] font-medium text-zinc-400 hover:text-red-500 disabled:opacity-40 transition-colors">
-                  欠勤報告
-                </button>
-              )}
-              <span className="w-px h-3.5 bg-zinc-300 dark:bg-zinc-700 rounded-full" />
-              {hasLateReport ? (
-                <span className="text-xs text-zinc-400">遅刻報告済（{statusBadge(lateStatus)}）</span>
-              ) : (
-                <button onClick={() => !isPending && setModal("late")} disabled={isPending}
-                  className="text-[13px] font-medium text-zinc-400 hover:text-amber-500 disabled:opacity-40 transition-colors">
-                  遅刻報告
-                </button>
-              )}
-            </div>
+            <ReportButtons
+              hasAbsence={hasAbsenceReport} absenceStatus={absenceStatus}
+              hasLate={hasLateReport} lateStatus={lateStatus}
+              isPending={isPending}
+              onAbsence={() => !isPending && setModal("absence")}
+              onLate={() => !isPending && setModal("late")}
+            />
           )}
 
           {/* 次回出勤 */}
