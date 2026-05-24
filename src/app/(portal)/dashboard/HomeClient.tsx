@@ -108,6 +108,29 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   );
 }
 
+// ─── レポートボタン用アイコン ─────────────────────────────────────────────
+function AbsenceIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="10" cy="8" r="3.5"/>
+      <path d="M3 20c0-3.5 3.1-6 7-6"/>
+      <line x1="17" y1="14" x2="22" y2="19"/>
+      <line x1="22" y1="14" x2="17" y2="19"/>
+    </svg>
+  );
+}
+function LateIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="9.5"/>
+      <path d="M12 7v5l3 2"/>
+      <path d="M18.5 18.5l2 2"/>
+    </svg>
+  );
+}
+
 // ─── 欠勤・遅刻ボタンカード ───────────────────────────────────────────────
 function ReportButtons({
   hasAbsence, absenceStatus, hasLate, lateStatus, isPending, onAbsence, onLate,
@@ -131,9 +154,9 @@ function ReportButtons({
           ) : (
             <button
               onClick={onAbsence} disabled={isPending}
-              className="w-full py-3 rounded-2xl bg-red-50 dark:bg-red-950/40 active:scale-[0.97] disabled:opacity-40 transition-transform flex flex-col items-center gap-1"
+              className="w-full py-3 rounded-2xl bg-red-50 dark:bg-red-950/40 active:scale-[0.97] disabled:opacity-40 transition-transform flex flex-col items-center gap-1.5"
             >
-              <span className="text-lg">🙏</span>
+              <AbsenceIcon className="w-5 h-5 text-red-400 dark:text-red-500" />
               <span className="text-[13px] font-semibold text-red-500 dark:text-red-400">欠勤報告</span>
             </button>
           )}
@@ -150,9 +173,9 @@ function ReportButtons({
           ) : (
             <button
               onClick={onLate} disabled={isPending}
-              className="w-full py-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 active:scale-[0.97] disabled:opacity-40 transition-transform flex flex-col items-center gap-1"
+              className="w-full py-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 active:scale-[0.97] disabled:opacity-40 transition-transform flex flex-col items-center gap-1.5"
             >
-              <span className="text-lg">⏰</span>
+              <LateIcon className="w-5 h-5 text-amber-400 dark:text-amber-500" />
               <span className="text-[13px] font-semibold text-amber-500 dark:text-amber-400">遅刻報告</span>
             </button>
           )}
