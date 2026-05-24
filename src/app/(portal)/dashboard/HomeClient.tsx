@@ -40,20 +40,11 @@ function statusBadge(s: string | null) {
   return "審査中";
 }
 
-// ── SVG アイコン ──────────────────────────────────────────────────────────
 function DepartureIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>
-    </svg>
-  );
-}
-function ClockIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
     </svg>
   );
 }
@@ -76,17 +67,7 @@ function LateIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-function CalendarIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <rect x="3" y="4" width="18" height="18" rx="3"/>
-      <path d="M16 2v4M8 2v4M3 10h18"/>
-    </svg>
-  );
-}
 
-// ── ETA ───────────────────────────────────────────────────────────────────
 const ETA_OPTS = [
   { label: "すぐ着く", value: 5 },
   { label: "10分",     value: 10 },
@@ -96,7 +77,6 @@ const ETA_OPTS = [
   { label: "1時間以上", value: 60 },
 ];
 
-// ── モーダル ──────────────────────────────────────────────────────────────
 function ModalWrap({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center"
@@ -123,69 +103,6 @@ const WD = ["日","月","火","水","木","金","土"];
 function fmtDate(iso: string) {
   const d = new Date(iso + "T00:00:00");
   return `${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
-}
-
-// ── デザインパーツ ────────────────────────────────────────────────────────
-
-// iOS Settings スタイルのアイコンボックス
-function IconBox({ color, children }: { color: string; children: React.ReactNode }) {
-  return (
-    <div className={`w-[34px] h-[34px] rounded-[9px] flex items-center justify-center flex-shrink-0 ${color}`}>
-      {children}
-    </div>
-  );
-}
-
-// セクションヘッダー（グループ見出し）
-function GroupHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="bg-zinc-50 dark:bg-zinc-900/60 px-5 h-9 flex items-end pb-1.5">
-      <span className="text-[13px] font-medium text-zinc-500 dark:text-zinc-400">{children}</span>
-    </div>
-  );
-}
-
-// リスト行（インセット区切り線）
-function ListRow({
-  icon, label, value, sub, chevron = false, onPress, disabled, color,
-}: {
-  icon?: React.ReactNode;
-  label: string;
-  value?: React.ReactNode;
-  sub?: string;
-  chevron?: boolean;
-  onPress?: () => void;
-  disabled?: boolean;
-  color?: string;
-}) {
-  const inner = (
-    <div className="flex items-center gap-3.5 h-[54px]">
-      {icon && icon}
-      <div className="flex-1 flex items-center justify-between min-w-0"
-        style={{ borderBottom: "1px solid rgb(240 240 240)" }}
-        // 区切り線はアイコンの右から（インセット）
-      >
-        <div className="min-w-0">
-          <p className={`text-[16px] leading-tight ${color ?? "text-zinc-900 dark:text-zinc-100"}`}>{label}</p>
-          {sub && <p className="text-[12px] text-zinc-400 mt-0.5">{sub}</p>}
-        </div>
-        <div className="flex items-center gap-1.5 ml-3 flex-shrink-0">
-          {value && <span className="text-[15px] text-zinc-400 dark:text-zinc-500 tabular-nums">{value}</span>}
-          {chevron && <ChevronRightIcon className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />}
-        </div>
-      </div>
-    </div>
-  );
-
-  if (onPress) {
-    return (
-      <button onClick={onPress} disabled={disabled}
-        className="w-full px-5 active:bg-zinc-100 dark:active:bg-zinc-800/60 disabled:opacity-40 transition-colors text-left">
-        {inner}
-      </button>
-    );
-  }
-  return <div className="px-5">{inner}</div>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,293 +193,284 @@ export default function HomeClient({
 
   return (
     <>
-    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-md mx-auto pb-32">
+    <main className="min-h-screen bg-white dark:bg-zinc-950">
+      <div className="max-w-md mx-auto px-5 pt-14 pb-32">
 
-        {/* ══════════════════════════════════════════
-            ヘッダー
-        ══════════════════════════════════════════ */}
-        <div className="bg-white dark:bg-zinc-900/0 px-5 pt-14 pb-6 flex items-start justify-between">
+        {/* ヘッダー */}
+        <div className="flex items-start justify-between mb-10">
           <div>
             {greeting && (
-              <p className="text-[12px] text-zinc-400 dark:text-zinc-600 mb-0.5 tracking-wide">{greeting}</p>
+              <p className="text-[12px] text-zinc-400 dark:text-zinc-600 mb-0.5">{greeting}</p>
             )}
-            <h1 className="text-[22px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50 leading-tight">
+            <h1 className="text-[22px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
               {displayName}
             </h1>
             {hasMultipleProjects && (
-              <p className="text-[12px] text-zinc-400 dark:text-zinc-600 mt-0.5">{projectName}</p>
+              <p className="text-[12px] text-zinc-400 mt-0.5">{projectName}</p>
             )}
           </div>
           <a href="/notices" className="relative mt-1">
-            <div className="w-9 h-9 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-              <BellIcon className="w-[18px] h-[18px] text-zinc-500 dark:text-zinc-400" />
-            </div>
+            <BellIcon className="w-[22px] h-[22px] text-zinc-300 dark:text-zinc-700" />
             {noticeCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
                 {noticeCount > 99 ? "99+" : noticeCount}
               </span>
             )}
           </a>
         </div>
 
-        {/* ══════════════════════════════════════════
-            出発報告あり
-        ══════════════════════════════════════════ */}
-        {enableDeparture && (<>
+        {/* ════════════════════════════ 出発報告あり ════════════════════════════ */}
+        {enableDeparture && (
+          <div className="flex flex-col gap-10">
 
-          {/* 今日のシフト */}
-          <div className="mt-6">
-            <GroupHeader>今日</GroupHeader>
-            <div className="bg-white dark:bg-zinc-900">
-              {/* 日付 */}
-              <ListRow
-                icon={<IconBox color="bg-blue-500"><CalendarIcon className="w-4 h-4 text-white" /></IconBox>}
-                label={todayLabel}
-                value={
-                  !shift ? "シフト未登録" :
-                  isHoliday ? "公休日" :
-                  shift.start ? `${shift.start.slice(0,5)}–${shift.end?.slice(0,5) ?? "--:--"}` : undefined
-                }
-              />
-              {/* シフト名（あれば） */}
-              {shift && !isHoliday && shift.name && (
-                <ListRow
-                  icon={<IconBox color="bg-indigo-500"><DepartureIcon className="w-4 h-4 text-white" /></IconBox>}
-                  label={shift.name}
-                  value={
-                    state === "working" ? (
-                      <span className="flex items-center gap-1.5 text-emerald-500 text-[13px] font-semibold">
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"/>
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"/>
-                        </span>
-                        勤務中
+            {/* シフト＋ステータス */}
+            <div>
+              <p className="text-[11px] tracking-[0.15em] uppercase text-zinc-400 dark:text-zinc-600 mb-2">
+                {todayLabel}
+              </p>
+
+              {!shift && (
+                <p className="text-[18px] text-zinc-300 dark:text-zinc-700">シフト未登録</p>
+              )}
+              {shift && isHoliday && (
+                <p className="text-[22px] font-semibold text-zinc-400">公休日</p>
+              )}
+              {shift && !isHoliday && (
+                <div>
+                  <div className="flex items-baseline gap-3">
+                    <p className="text-[28px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                      {shift.name}
+                    </p>
+                    {shift.start && (
+                      <p className="text-[15px] tabular-nums text-zinc-400">
+                        {shift.start.slice(0,5)}–{shift.end?.slice(0,5) ?? "--:--"}
+                      </p>
+                    )}
+                  </div>
+                  {/* 勤務ステータス */}
+                  {state === "working" && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"/>
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"/>
                       </span>
-                    ) : state === "clocked_out" ? (
-                      <span className="text-[13px] text-zinc-400">退勤済み</span>
-                    ) : undefined
-                  }
-                />
+                      <span className="text-[13px] font-medium text-emerald-500">勤務中</span>
+                    </div>
+                  )}
+                  {state === "pre_clock_in" && (
+                    <p className="text-[13px] text-zinc-400 mt-2">現場端末で出勤打刻してください</p>
+                  )}
+                  {state === "clocked_out" && (
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <CheckCircleIcon className="w-3.5 h-3.5 text-zinc-400" />
+                      <span className="text-[13px] text-zinc-400">退勤済み・お疲れ様でした</span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          </div>
 
-          {/* 出発報告ボタン */}
-          {state === "pre_departure" && (
-            <div className="px-4 py-4">
+            {/* 出発報告ボタン */}
+            {state === "pre_departure" && (
               <button
                 onClick={() => !isPending && setModal("departure")}
                 disabled={isPending}
-                className="w-full h-[52px] rounded-2xl bg-blue-600 active:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2.5 shadow-sm shadow-blue-600/30"
+                className="w-full h-[54px] rounded-2xl bg-blue-600 active:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2.5"
               >
                 <DepartureIcon className="w-[18px] h-[18px] text-white" />
                 <span className="text-[16px] font-bold text-white">
                   {isPending ? "処理中..." : "出発報告する"}
                 </span>
               </button>
-            </div>
-          )}
+            )}
 
-          {/* 打刻 */}
-          <div className="mt-6">
-            <GroupHeader>打刻</GroupHeader>
-            <div className="bg-white dark:bg-zinc-900">
-              <ListRow
-                icon={<IconBox color="bg-sky-500"><DepartureIcon className="w-4 h-4 text-white" /></IconBox>}
-                label="出発"
-                value={optDeparture ?? <span className="text-zinc-200 dark:text-zinc-700">--:--</span>}
-              />
-              <ListRow
-                icon={<IconBox color="bg-emerald-500"><CheckCircleIcon className="w-4 h-4 text-white" /></IconBox>}
-                label="出勤"
-                value={optClockIn ?? <span className="text-zinc-200 dark:text-zinc-700">--:--</span>}
-              />
-              <ListRow
-                icon={<IconBox color="bg-violet-500"><ClockIcon className="w-4 h-4 text-white" /></IconBox>}
-                label="退勤"
-                value={optClockOut ?? <span className="text-zinc-200 dark:text-zinc-700">--:--</span>}
-              />
+            {/* タイムスタンプ：3列 */}
+            <div className="grid grid-cols-3">
+              {[
+                { label: "出発", time: optDeparture },
+                { label: "出勤", time: optClockIn },
+                { label: "退勤", time: optClockOut },
+              ].map(({ label, time }, i) => (
+                <div key={label} className={i === 1 ? "text-center" : i === 2 ? "text-right" : ""}>
+                  <p className="text-[10px] tracking-[0.18em] uppercase text-zinc-400 dark:text-zinc-600 mb-2">
+                    {label}
+                  </p>
+                  <p className={`text-[26px] font-semibold tabular-nums leading-none ${
+                    time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
+                  }`}>
+                    {time ?? "--:--"}
+                  </p>
+                </div>
+              ))}
             </div>
-          </div>
 
-          {/* 欠勤・遅刻報告 */}
-          {canReport && (
-            <div className="mt-6">
-              <GroupHeader>報告</GroupHeader>
-              <div className="bg-white dark:bg-zinc-900">
+            {/* 欠勤・遅刻ボタン */}
+            {canReport && (
+              <div className="flex gap-3">
                 {hasAbsenceReport ? (
-                  <ListRow
-                    icon={<IconBox color="bg-zinc-300 dark:bg-zinc-700"><AbsenceIcon className="w-4 h-4 text-white" /></IconBox>}
-                    label="欠勤"
-                    value={<span className="text-[12px] bg-zinc-100 dark:bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">報告済 · {statusBadge(absenceStatus)}</span>}
-                  />
+                  <div className="flex-1 h-11 rounded-xl border border-zinc-100 dark:border-zinc-800 flex items-center justify-center gap-1.5">
+                    <span className="text-[12px] text-zinc-400">欠勤 · {statusBadge(absenceStatus)}</span>
+                  </div>
                 ) : (
-                  <ListRow
-                    icon={<IconBox color="bg-red-500"><AbsenceIcon className="w-4 h-4 text-white" /></IconBox>}
-                    label="欠勤報告"
-                    color="text-red-500"
-                    chevron
-                    onPress={() => !isPending && setModal("absence")}
-                    disabled={isPending}
-                  />
+                  <button
+                    onClick={() => !isPending && setModal("absence")} disabled={isPending}
+                    className="flex-1 h-11 rounded-xl border border-red-200 dark:border-red-900/50 flex items-center justify-center gap-1.5 active:bg-red-50 dark:active:bg-red-950/20 disabled:opacity-40 transition-colors"
+                  >
+                    <AbsenceIcon className="w-[15px] h-[15px] text-red-400" />
+                    <span className="text-[13px] font-medium text-red-500">欠勤報告</span>
+                  </button>
                 )}
                 {hasLateReport ? (
-                  <ListRow
-                    icon={<IconBox color="bg-zinc-300 dark:bg-zinc-700"><LateIcon className="w-4 h-4 text-white" /></IconBox>}
-                    label="遅刻"
-                    value={<span className="text-[12px] bg-zinc-100 dark:bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">報告済 · {statusBadge(lateStatus)}</span>}
-                  />
+                  <div className="flex-1 h-11 rounded-xl border border-zinc-100 dark:border-zinc-800 flex items-center justify-center gap-1.5">
+                    <span className="text-[12px] text-zinc-400">遅刻 · {statusBadge(lateStatus)}</span>
+                  </div>
                 ) : (
-                  <ListRow
-                    icon={<IconBox color="bg-amber-500"><LateIcon className="w-4 h-4 text-white" /></IconBox>}
-                    label="遅刻報告"
-                    color="text-amber-500"
-                    chevron
-                    onPress={() => !isPending && setModal("late")}
-                    disabled={isPending}
-                  />
+                  <button
+                    onClick={() => !isPending && setModal("late")} disabled={isPending}
+                    className="flex-1 h-11 rounded-xl border border-amber-200 dark:border-amber-900/50 flex items-center justify-center gap-1.5 active:bg-amber-50 dark:active:bg-amber-950/20 disabled:opacity-40 transition-colors"
+                  >
+                    <LateIcon className="w-[15px] h-[15px] text-amber-400" />
+                    <span className="text-[13px] font-medium text-amber-500">遅刻報告</span>
+                  </button>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* 次回出勤 */}
-          {upcomingShifts && upcomingShifts.length > 0 && (
-            <div className="mt-6">
-              <GroupHeader>次回出勤</GroupHeader>
-              <div className="bg-white dark:bg-zinc-900">
-                {upcomingShifts.map((s) => (
-                  <ListRow
-                    key={s.date}
-                    icon={<IconBox color="bg-zinc-400 dark:bg-zinc-600"><CalendarIcon className="w-4 h-4 text-white" /></IconBox>}
-                    label={fmtDate(s.date)}
-                    value={
-                      <span className="flex items-center gap-1.5">
-                        {s.name && <span className="font-semibold text-zinc-600 dark:text-zinc-400">{s.name}</span>}
-                        {s.start && <span className="tabular-nums">{s.start.slice(0,5)}–{s.end?.slice(0,5) ?? "--:--"}</span>}
-                      </span>
-                    }
-                    chevron
-                    onPress={() => { window.location.href = "/shifts"; }}
-                  />
-                ))}
+            {/* 次回出勤 */}
+            {upcomingShifts && upcomingShifts.length > 0 && (
+              <div>
+                <p className="text-[11px] tracking-[0.15em] uppercase text-zinc-400 dark:text-zinc-600 mb-3">
+                  次回出勤
+                </p>
+                <div>
+                  {upcomingShifts.map((s, i) => (
+                    <a key={s.date} href="/shifts"
+                      className="flex items-center justify-between py-3.5 border-b border-zinc-100 dark:border-zinc-800/60 first:border-t first:border-zinc-100 dark:first:border-zinc-800/60 active:opacity-60 transition-opacity">
+                      <span className="text-[15px] text-zinc-700 dark:text-zinc-300">{fmtDate(s.date)}</span>
+                      <div className="flex items-center gap-2">
+                        {s.name && <span className="text-[13px] font-semibold text-zinc-500">{s.name}</span>}
+                        {s.start && (
+                          <span className="text-[13px] tabular-nums text-zinc-400">
+                            {s.start.slice(0,5)}–{s.end?.slice(0,5) ?? "--:--"}
+                          </span>
+                        )}
+                        <ChevronRightIcon className="w-4 h-4 text-zinc-300 dark:text-zinc-700" />
+                      </div>
+                    </a>
+                  ))}
+                </div>
               </div>
+            )}
+
+          </div>
+        )}
+
+        {/* ════════════════════════════ 出発報告なし ════════════════════════════ */}
+        {!enableDeparture && (
+          <div className="flex flex-col gap-10">
+
+            {/* ライブクロック */}
+            <div>
+              <p className="text-[11px] tracking-[0.15em] uppercase text-zinc-400 dark:text-zinc-600 mb-2">
+                {todayLabel}
+              </p>
+              <p className="text-[72px] font-thin tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white">
+                {liveTime}
+              </p>
             </div>
-          )}
 
-        </>)}
+            {/* シフト */}
+            {shift && !isHoliday && (
+              <div className="flex items-baseline gap-3">
+                <p className="text-[24px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                  {shift.name}
+                </p>
+                {shift.start && (
+                  <p className="text-[15px] tabular-nums text-zinc-400">
+                    {shift.start.slice(0,5)}–{shift.end?.slice(0,5) ?? "--:--"}
+                  </p>
+                )}
+              </div>
+            )}
+            {shift && isHoliday && <p className="text-[22px] font-semibold text-zinc-400">公休日</p>}
+            {!shift && <p className="text-[16px] text-zinc-300 dark:text-zinc-700">シフト未登録</p>}
 
-        {/* ══════════════════════════════════════════
-            出発報告なし
-        ══════════════════════════════════════════ */}
-        {!enableDeparture && (<>
-
-          {/* ライブクロック */}
-          <div className="bg-white dark:bg-zinc-900 px-5 pt-2 pb-6 mb-6">
-            <p className="text-[12px] text-zinc-400 tabular-nums mb-2">{todayLabel}</p>
-            <p className="text-[72px] font-thin tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white">
-              {liveTime}
-            </p>
-          </div>
-
-          {/* 今日のシフト */}
-          <GroupHeader>今日</GroupHeader>
-          <div className="bg-white dark:bg-zinc-900">
-            <ListRow
-              icon={<IconBox color="bg-indigo-500"><DepartureIcon className="w-4 h-4 text-white" /></IconBox>}
-              label={!shift ? "シフト未登録" : isHoliday ? "公休日" : shift.name ?? "シフト未登録"}
-              value={shift && !isHoliday && shift.start
-                ? `${shift.start.slice(0,5)}–${shift.end?.slice(0,5) ?? "--:--"}`
-                : undefined}
-            />
-          </div>
-
-          {/* 打刻 */}
-          <div className="mt-6">
-            <GroupHeader>打刻</GroupHeader>
-            <div className="bg-white dark:bg-zinc-900">
-              <ListRow
-                icon={<IconBox color="bg-emerald-500"><CheckCircleIcon className="w-4 h-4 text-white" /></IconBox>}
-                label="出勤"
-                value={optClockIn ?? <span className="text-zinc-200 dark:text-zinc-700">--:--</span>}
-              />
-              <ListRow
-                icon={<IconBox color="bg-violet-500"><ClockIcon className="w-4 h-4 text-white" /></IconBox>}
-                label="退勤"
-                value={optClockOut ?? <span className="text-zinc-200 dark:text-zinc-700">--:--</span>}
-              />
+            {/* タイムスタンプ：2列 */}
+            <div className="grid grid-cols-2">
+              {[
+                { label: "出勤", time: optClockIn },
+                { label: "退勤", time: optClockOut },
+              ].map(({ label, time }, i) => (
+                <div key={label} className={i === 1 ? "text-right" : ""}>
+                  <p className="text-[10px] tracking-[0.18em] uppercase text-zinc-400 dark:text-zinc-600 mb-2">
+                    {label}
+                  </p>
+                  <p className={`text-[32px] font-semibold tabular-nums leading-none ${
+                    time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
+                  }`}>
+                    {time ?? "--:--"}
+                  </p>
+                </div>
+              ))}
             </div>
-          </div>
 
-          {/* 欠勤・遅刻 */}
-          {canReport && (
-            <div className="mt-6">
-              <GroupHeader>報告</GroupHeader>
-              <div className="bg-white dark:bg-zinc-900">
+            {/* 欠勤・遅刻 */}
+            {canReport && (
+              <div className="flex gap-3">
                 {hasAbsenceReport ? (
-                  <ListRow
-                    icon={<IconBox color="bg-zinc-300 dark:bg-zinc-700"><AbsenceIcon className="w-4 h-4 text-white" /></IconBox>}
-                    label="欠勤"
-                    value={<span className="text-[12px] bg-zinc-100 dark:bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">報告済 · {statusBadge(absenceStatus)}</span>}
-                  />
+                  <div className="flex-1 h-11 rounded-xl border border-zinc-100 dark:border-zinc-800 flex items-center justify-center">
+                    <span className="text-[12px] text-zinc-400">欠勤 · {statusBadge(absenceStatus)}</span>
+                  </div>
                 ) : (
-                  <ListRow
-                    icon={<IconBox color="bg-red-500"><AbsenceIcon className="w-4 h-4 text-white" /></IconBox>}
-                    label="欠勤報告"
-                    color="text-red-500"
-                    chevron
-                    onPress={() => !isPending && setModal("absence")}
-                    disabled={isPending}
-                  />
+                  <button onClick={() => !isPending && setModal("absence")} disabled={isPending}
+                    className="flex-1 h-11 rounded-xl border border-red-200 dark:border-red-900/50 flex items-center justify-center gap-1.5 active:bg-red-50 dark:active:bg-red-950/20 disabled:opacity-40 transition-colors">
+                    <AbsenceIcon className="w-[15px] h-[15px] text-red-400" />
+                    <span className="text-[13px] font-medium text-red-500">欠勤報告</span>
+                  </button>
                 )}
                 {hasLateReport ? (
-                  <ListRow
-                    icon={<IconBox color="bg-zinc-300 dark:bg-zinc-700"><LateIcon className="w-4 h-4 text-white" /></IconBox>}
-                    label="遅刻"
-                    value={<span className="text-[12px] bg-zinc-100 dark:bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">報告済 · {statusBadge(lateStatus)}</span>}
-                  />
+                  <div className="flex-1 h-11 rounded-xl border border-zinc-100 dark:border-zinc-800 flex items-center justify-center">
+                    <span className="text-[12px] text-zinc-400">遅刻 · {statusBadge(lateStatus)}</span>
+                  </div>
                 ) : (
-                  <ListRow
-                    icon={<IconBox color="bg-amber-500"><LateIcon className="w-4 h-4 text-white" /></IconBox>}
-                    label="遅刻報告"
-                    color="text-amber-500"
-                    chevron
-                    onPress={() => !isPending && setModal("late")}
-                    disabled={isPending}
-                  />
+                  <button onClick={() => !isPending && setModal("late")} disabled={isPending}
+                    className="flex-1 h-11 rounded-xl border border-amber-200 dark:border-amber-900/50 flex items-center justify-center gap-1.5 active:bg-amber-50 dark:active:bg-amber-950/20 disabled:opacity-40 transition-colors">
+                    <LateIcon className="w-[15px] h-[15px] text-amber-400" />
+                    <span className="text-[13px] font-medium text-amber-500">遅刻報告</span>
+                  </button>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* 次回出勤 */}
-          {upcomingShifts && upcomingShifts.length > 0 && (
-            <div className="mt-6">
-              <GroupHeader>次回出勤</GroupHeader>
-              <div className="bg-white dark:bg-zinc-900">
-                {upcomingShifts.map((s) => (
-                  <ListRow
-                    key={s.date}
-                    icon={<IconBox color="bg-zinc-400 dark:bg-zinc-600"><CalendarIcon className="w-4 h-4 text-white" /></IconBox>}
-                    label={fmtDate(s.date)}
-                    value={
-                      <span className="flex items-center gap-1.5">
-                        {s.name && <span className="font-semibold text-zinc-600 dark:text-zinc-400">{s.name}</span>}
-                        {s.start && <span className="tabular-nums">{s.start.slice(0,5)}–{s.end?.slice(0,5) ?? "--:--"}</span>}
-                      </span>
-                    }
-                    chevron
-                    onPress={() => { window.location.href = "/shifts"; }}
-                  />
-                ))}
+            {/* 次回出勤 */}
+            {upcomingShifts && upcomingShifts.length > 0 && (
+              <div>
+                <p className="text-[11px] tracking-[0.15em] uppercase text-zinc-400 dark:text-zinc-600 mb-3">
+                  次回出勤
+                </p>
+                <div>
+                  {upcomingShifts.map((s) => (
+                    <a key={s.date} href="/shifts"
+                      className="flex items-center justify-between py-3.5 border-b border-zinc-100 dark:border-zinc-800/60 first:border-t first:border-zinc-100 dark:first:border-zinc-800/60 active:opacity-60 transition-opacity">
+                      <span className="text-[15px] text-zinc-700 dark:text-zinc-300">{fmtDate(s.date)}</span>
+                      <div className="flex items-center gap-2">
+                        {s.name && <span className="text-[13px] font-semibold text-zinc-500">{s.name}</span>}
+                        {s.start && (
+                          <span className="text-[13px] tabular-nums text-zinc-400">
+                            {s.start.slice(0,5)}–{s.end?.slice(0,5) ?? "--:--"}
+                          </span>
+                        )}
+                        <ChevronRightIcon className="w-4 h-4 text-zinc-300 dark:text-zinc-700" />
+                      </div>
+                    </a>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-        </>)}
+          </div>
+        )}
 
-        <div className="h-6" />
       </div>
     </main>
 
@@ -571,7 +479,7 @@ export default function HomeClient({
       <div className={[
         "fixed bottom-24 left-1/2 -translate-x-1/2 z-40 whitespace-nowrap",
         "px-5 py-3 rounded-2xl text-sm font-semibold shadow-xl",
-        feedback.ok ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" : "bg-red-500 text-white",
+        feedback.ok ? "bg-zinc-900 text-white" : "bg-red-500 text-white",
       ].join(" ")}>
         {feedback.msg}
       </div>
@@ -587,9 +495,7 @@ export default function HomeClient({
             <button key={value} onClick={() => setEtaDep(value)}
               className={`py-2.5 rounded-xl text-sm font-semibold active:opacity-70 ${
                 etaDep === value ? "bg-blue-600 text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-              }`}>
-              {label}
-            </button>
+              }`}>{label}</button>
           ))}
         </div>
         <div className="flex gap-3">
@@ -648,9 +554,7 @@ export default function HomeClient({
               <button key={value} onClick={() => setLateEta(value)}
                 className={`py-2.5 rounded-xl text-sm font-semibold active:opacity-70 ${
                   lateEta === value ? "bg-amber-500 text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-                }`}>
-                {label}
-              </button>
+                }`}>{label}</button>
             ))}
           </div>
           <div className="flex gap-3">
