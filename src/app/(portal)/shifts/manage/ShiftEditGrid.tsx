@@ -716,12 +716,19 @@ const OFF_PRIORITY_BG: Record<string, string> = {
   "第四希望休": "bg-zinc-100 dark:bg-zinc-800/60",
   "冠婚葬祭":   "bg-red-100 dark:bg-red-950/60",
 };
-const OFF_PRIORITY_DOT: Record<string, string> = {
-  "第一希望休": "bg-blue-400",
-  "第二希望休": "bg-indigo-400",
-  "第三希望休": "bg-purple-400",
-  "第四希望休": "bg-zinc-400",
-  "冠婚葬祭":   "bg-red-400",
+const OFF_PRIORITY_TEXT: Record<string, string> = {
+  "第一希望休": "text-blue-600 dark:text-blue-400",
+  "第二希望休": "text-indigo-500 dark:text-indigo-400",
+  "第三希望休": "text-purple-500 dark:text-purple-400",
+  "第四希望休": "text-zinc-400 dark:text-zinc-500",
+  "冠婚葬祭":   "text-red-500 dark:text-red-400",
+};
+const OFF_PRIORITY_LABEL: Record<string, string> = {
+  "第一希望休": "希望①",
+  "第二希望休": "希望②",
+  "第三希望休": "希望③",
+  "第四希望休": "希望④",
+  "冠婚葬祭":   "冠婚",
 };
 
 export default function ShiftEditGrid({
@@ -1498,10 +1505,12 @@ export default function ShiftEditGrid({
                                 : "",
                             ].filter(Boolean).join(" ")}
                           >
-                            {/* 希望休ドット（シフト未配置の場合） */}
+                            {/* 希望休ラベル（シフト未配置の場合） */}
                             {offPriority && !shiftName && (
-                              <div className="h-full flex items-center justify-center">
-                                <span className={`w-1.5 h-1.5 rounded-full ${OFF_PRIORITY_DOT[offPriority] ?? "bg-zinc-400"}`} />
+                              <div className="h-full flex items-center justify-center px-0.5">
+                                <span className={`text-[10px] font-bold leading-none ${OFF_PRIORITY_TEXT[offPriority] ?? "text-zinc-400"}`}>
+                                  {OFF_PRIORITY_LABEL[offPriority] ?? "休"}
+                                </span>
                               </div>
                             )}
                             {shiftName && (
