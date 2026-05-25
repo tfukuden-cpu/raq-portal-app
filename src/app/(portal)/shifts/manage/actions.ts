@@ -378,7 +378,7 @@ export async function regenerateShiftDraftAction(
   projectId: string,
   year: number,
   month: number,
-): Promise<{ success: boolean; message?: string; assignedCount?: number }> {
+): Promise<{ success: boolean; message?: string; assignedCount?: number; draftEntries?: import("../actions").GridDraftEntry[] }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: "ログインしてください" };
@@ -408,5 +408,20 @@ export async function regenerateShiftDraftAction(
   const { generateShiftDraftAction } = await import(
     "@/app/(portal)/admin/[projectId]/settings/draft-actions"
   );
-  return generateShiftDraftAction(projectId, year, month, patterns);
+  const result = await generateShiftDraftAction(projectId, year, month, patterns);
+  if (!result.success) return result;
+
+  // 生成後、DB から最新の下書きエントリを取得して返す
+  const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
+  const { data: draftRow } = await admin
+    .from("shift_grid_drafts")
+    .select("draft_data")
+    .eq("project_id", projectId)
+    .eq("target_month", yearMonth)
+    .maybeSingle();
+
+  return {
+    ...result,
+    draftEntries: (draftRow?.draft_data as import("../actions").GridDraftEntry[] | null) ?? [],
+  };
 }

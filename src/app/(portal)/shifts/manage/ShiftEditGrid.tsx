@@ -24,7 +24,7 @@ import {
   type BulkDeleteItem,
   type GridDraftEntry,
 } from "../actions";
-import { upsertSlotRequirementsAction, notifyShiftChangesAction } from "./actions";
+import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction } from "./actions";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -91,6 +91,7 @@ interface Props {
   draftSavedBy: string | null;
   draftSavedAt: string | null;
   offRequests?: OffRequest[];
+  isPublished?: boolean;
   onSaved: () => void;
   onCancel: () => void;
 }
@@ -735,7 +736,7 @@ export default function ShiftEditGrid({
   projectId, targetMonth, allDates, shifts, activeMembers,
   shiftPatterns, slotRequirements, changeLogs,
   initialDraft, draftSavedBy, draftSavedAt,
-  offRequests,
+  offRequests, isPublished,
   onSaved, onCancel,
 }: Props) {
   // offRequests マップ: staffId__date → priority
@@ -774,6 +775,10 @@ export default function ShiftEditGrid({
   const [showSummary, setShowSummary] = useState(false);
   const [isPending] = useTransition();
   const [isSavingDraft, startDraftTransition] = useTransition();
+  const [isRegenerating, startRegenTransition] = useTransition();
+  const [showRegenConfirm, setShowRegenConfirm] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
+  const [regenDone, setRegenDone] = useState<number | null>(null); // 完了後の割当数
   // 保存系エラー（上部バナー）
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draftMsg, setDraftMsg] = useState<string | null>(null);
@@ -1031,6 +1036,36 @@ export default function ShiftEditGrid({
     });
   }
 
+  // ── 再仮組み ──────────────────────────────────────────────────
+  function handleRegen() {
+    setRegenError(null);
+    setRegenDone(null);
+    startRegenTransition(async () => {
+      const [y, m] = targetMonth.split("-").map(Number);
+      const r = await regenerateShiftDraftAction(projectId, y, m);
+      if (!r.success) {
+        setRegenError(r.message ?? "再仮組みに失敗しました");
+        return;
+      }
+      // 新しい下書きをグリッド状態に反映
+      const newDrafts = new Map<string, DraftCell>();
+      for (const e of r.draftEntries ?? []) {
+        const raw = e as unknown as Record<string, unknown>;
+        const key = (typeof e.k === "string" && e.k)
+          ? e.k
+          : (typeof raw.staffId === "string" && typeof raw.date === "string")
+          ? `${raw.staffId}__${raw.date}` : null;
+        if (!key) continue;
+        const shiftName  = typeof e.n === "string" ? e.n : null;
+        const shiftStart = typeof e.s === "string" ? e.s : null;
+        const shiftEnd   = typeof e.e === "string" ? e.e : null;
+        newDrafts.set(key, e.d ? null : { shiftName, shiftStart, shiftEnd });
+      }
+      setDrafts(newDrafts);
+      setRegenDone(r.assignedCount ?? newDrafts.size);
+    });
+  }
+
   // ── 確定保存 ─────────────────────────────────────────────────
   function resetDrafts() { setDrafts(new Map()); setSaveError(null); }
 
@@ -1212,6 +1247,15 @@ export default function ShiftEditGrid({
               戻す
             </button>
           )}
+          {!isPublished && (
+            <button
+              onClick={() => { setRegenError(null); setRegenDone(null); setShowRegenConfirm(true); }}
+              disabled={isPending || isSavingDraft || isRegenerating}
+              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-700 hover:bg-orange-100 disabled:opacity-40 transition-colors"
+            >
+              再仮組み
+            </button>
+          )}
           <button onClick={onCancel} disabled={isPending || isSavingDraft}
             className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
             閉じる
@@ -1226,6 +1270,50 @@ export default function ShiftEditGrid({
           </button>
         </div>
       </div>
+
+      {/* 再仮組み確認モーダル */}
+      {showRegenConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center"
+          onClick={() => { if (!isRegenerating) setShowRegenConfirm(false); }}>
+          <div className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm px-4 pt-4 space-y-2"
+            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 0px))" }}
+            onClick={e => e.stopPropagation()}>
+            <div className="mb-1">
+              <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">再仮組みを実行</h2>
+              {regenDone === null ? (
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  希望休・シフトパターンをもとに自動で再配置します。<br />
+                  現在の編集内容は上書きされます。
+                </p>
+              ) : (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
+                  完了しました（{regenDone} 件割当）
+                </p>
+              )}
+            </div>
+            {regenError && (
+              <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">{regenError}</p>
+            )}
+            {regenDone === null ? (
+              <>
+                <button onClick={handleRegen} disabled={isRegenerating}
+                  className="w-full py-3 rounded-xl text-sm font-bold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">
+                  {isRegenerating ? "生成中…" : "再仮組みを実行"}
+                </button>
+                <button onClick={() => setShowRegenConfirm(false)} disabled={isRegenerating}
+                  className="w-full py-2 rounded-xl text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 disabled:opacity-50 transition-colors">
+                  キャンセル
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setShowRegenConfirm(false)}
+                className="w-full py-3 rounded-xl text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 transition-colors">
+                閉じる
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 保存エラーバナー（保存失敗時のみ） */}
       {saveError && (
