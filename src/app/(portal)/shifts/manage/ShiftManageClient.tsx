@@ -6,6 +6,7 @@ import ShiftDayList from "./ShiftDayList";
 import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
 import ShiftEditGrid, { type ChangeLog } from "./ShiftEditGrid";
 import { clearGridDraftAction, type GridDraftEntry } from "../actions";
+import { regenerateShiftDraftAction } from "./actions";
 
 type Shift = {
   id: string;
@@ -50,6 +51,7 @@ type Props = {
   initialDraft: GridDraftEntry[] | null;
   draftSavedBy: string | null;
   draftSavedAt: string | null;
+  isPublished: boolean;
   offRequests: OffRequest[];
 };
 
@@ -119,14 +121,17 @@ export default function ShiftManageClient({
   projectId, targetYear, targetMonth, allDates, defaultDate,
   shifts, activeMembers, shiftPatterns, shiftRequests, slotRequirements,
   changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
-  offRequests,
+  isPublished, offRequests,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [showDraftModal, setShowDraftModal] = useState(false);
+  const [showRegenModal, setShowRegenModal] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
   // 実際にグリッドへ渡すドラフト（新規 = null、続きから = initialDraft）
   const [activeDraft, setActiveDraft] = useState<GridDraftEntry[] | null>(null);
   const [isClearing, startClear] = useTransition();
+  const [isRegenerating, startRegen] = useTransition();
   const router = useRouter();
 
   const targetMonthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
@@ -164,6 +169,20 @@ export default function ShiftManageClient({
     });
   }
 
+  // 「再仮組」= 仮組みを再生成してグリッド編集に移行
+  function handleRegen() {
+    setRegenError(null);
+    startRegen(async () => {
+      const r = await regenerateShiftDraftAction(projectId, targetYear, targetMonth);
+      if (!r.success) {
+        setRegenError(r.message ?? "仮組み生成に失敗しました");
+        return;
+      }
+      setShowRegenModal(false);
+      router.refresh();
+    });
+  }
+
   if (mode === "edit") {
     return <ShiftEditGridOverlay
       projectId={projectId}
@@ -185,6 +204,50 @@ export default function ShiftManageClient({
 
   return (
     <div className="max-w-5xl mx-auto pb-24 pt-3">
+      {/* 再仮組確認モーダル */}
+      {showRegenModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
+          onClick={() => { if (!isRegenerating) setShowRegenModal(false); }}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm px-4 pt-4 space-y-2"
+            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 0px))" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mb-1">
+              <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">再仮組みを実行</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                希望休・シフトパターンをもとに自動でシフト仮組みを生成します。<br />
+                既存の下書きは上書きされます。
+              </p>
+            </div>
+
+            {regenError && (
+              <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">
+                {regenError}
+              </p>
+            )}
+
+            <button
+              onClick={handleRegen}
+              disabled={isRegenerating}
+              className="w-full py-3 rounded-xl text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-50 transition-colors"
+            >
+              {isRegenerating ? "生成中…" : "再仮組みを実行"}
+            </button>
+
+            <button
+              onClick={() => setShowRegenModal(false)}
+              disabled={isRegenerating}
+              className="w-full py-2 rounded-xl text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 disabled:opacity-50 transition-colors"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 下書き選択モーダル */}
       {showDraftModal && (
         <div
@@ -242,6 +305,14 @@ export default function ShiftManageClient({
           </span>
         )}
         <div className="flex items-center gap-2 ml-auto">
+          {!isPublished && (
+            <button
+              onClick={() => { setRegenError(null); setShowRegenModal(true); }}
+              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors border border-zinc-200 dark:border-zinc-700"
+            >
+              再仮組み
+            </button>
+          )}
           <button
             onClick={handleClickEdit}
             className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors border border-blue-200 dark:border-blue-800"

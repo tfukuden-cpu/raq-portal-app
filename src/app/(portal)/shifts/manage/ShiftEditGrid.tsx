@@ -710,18 +710,18 @@ function EditModal({
 // ── Main ────────────────────────────────────────────────────────
 
 const OFF_PRIORITY_BG: Record<string, string> = {
-  "第一希望休": "bg-blue-100 dark:bg-blue-950/60",
-  "第二希望休": "bg-indigo-100 dark:bg-indigo-950/60",
-  "第三希望休": "bg-purple-100 dark:bg-purple-950/60",
-  "第四希望休": "bg-zinc-100 dark:bg-zinc-800/60",
-  "冠婚葬祭":   "bg-red-100 dark:bg-red-950/60",
+  "第一希望休": "bg-red-100 dark:bg-red-950/60",
+  "第二希望休": "bg-rose-100 dark:bg-rose-950/60",
+  "第三希望休": "bg-orange-100 dark:bg-orange-950/60",
+  "第四希望休": "bg-amber-100 dark:bg-amber-950/60",
+  "冠婚葬祭":   "bg-pink-100 dark:bg-pink-950/60",
 };
 const OFF_PRIORITY_TEXT: Record<string, string> = {
-  "第一希望休": "text-blue-600 dark:text-blue-400",
-  "第二希望休": "text-indigo-500 dark:text-indigo-400",
-  "第三希望休": "text-purple-500 dark:text-purple-400",
-  "第四希望休": "text-zinc-400 dark:text-zinc-500",
-  "冠婚葬祭":   "text-red-500 dark:text-red-400",
+  "第一希望休": "text-red-600 dark:text-red-400",
+  "第二希望休": "text-rose-500 dark:text-rose-400",
+  "第三希望休": "text-orange-500 dark:text-orange-400",
+  "第四希望休": "text-amber-500 dark:text-amber-400",
+  "冠婚葬祭":   "text-pink-600 dark:text-pink-400",
 };
 const OFF_PRIORITY_LABEL: Record<string, string> = {
   "第一希望休": "希望①",

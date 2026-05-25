@@ -78,7 +78,14 @@
       "mcp__Claude_in_Chrome__select_browser",
       "Skill(anthropic-skills:xlsx)",
       "Skill(anthropic-skills:xlsx:*)",
-      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__get_logs"
+      "mcp__2aff666e-f695-49bd-901b-085478bb71fe__get_logs",
+      "Bash(vercel --prod)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d['deployments'][0]['url']\\)\")",
+      "Read(//c/Users/fukud/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/f18e188d-cd44-4895-95a8-cbfdc4232ab5/74300458-c93a-4890-8673-72cfc343995a/skills/xlsx/**)",
+      "Bash(python -c ' *)",
+      "Bash(python make_diff.py)",
+      "Bash(python make_diff2.py)",
+      "Bash(python make_detail.py)"
     ]
   }
 }

@@ -356,5 +356,57 @@ export async function publishShiftsAction(
     sent++;
   }
 
+  // 展開済みとして記録
+  const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
+  await admin.from("shift_month_status").upsert(
+    {
+      project_id:   projectId,
+      year_month:   yearMonth,
+      published_by: user.email?.split("@")[0]?.toUpperCase() ?? "",
+    },
+    { onConflict: "project_id,year_month" }
+  );
+
   return { success: true, sent, noLine };
+}
+
+/**
+ * 再仮組：シフトパターンを自動取得して仮組みを生成する
+ * （展開前の管理画面から「再仮組」ボタン用）
+ */
+export async function regenerateShiftDraftAction(
+  projectId: string,
+  year: number,
+  month: number,
+): Promise<{ success: boolean; message?: string; assignedCount?: number }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+
+  // パターン一覧を取得
+  const { data: patternRows, error: patternErr } = await admin
+    .from("shift_patterns")
+    .select("name, section, start_time, end_time, target_role")
+    .eq("project_id", projectId)
+    .order("sort_order");
+
+  if (patternErr || !patternRows) {
+    return { success: false, message: "パターン取得失敗: " + (patternErr?.message ?? "") };
+  }
+
+  const patterns = patternRows.map(p => ({
+    name:        p.name as string,
+    section:     (p.section ?? null) as string | null,
+    start_time:  (p.start_time ?? null) as string | null,
+    end_time:    (p.end_time ?? null) as string | null,
+    target_role: (p.target_role ?? "all") as string,
+  }));
+
+  // generateShiftDraftAction に委譲
+  const { generateShiftDraftAction } = await import(
+    "@/app/(portal)/admin/[projectId]/settings/draft-actions"
+  );
+  return generateShiftDraftAction(projectId, year, month, patterns);
 }

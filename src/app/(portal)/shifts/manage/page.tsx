@@ -182,6 +182,7 @@ export default async function ManageShiftsPage(props: {
     { data: absenceRows },
     { data: draftRow },
     { data: offRequestsRaw },
+    { data: monthStatusRow },
     shiftBatch0,
     shiftBatch1,
     shiftBatch2,
@@ -228,6 +229,11 @@ export default async function ManageShiftsPage(props: {
       .eq("project_id", selectedProjectId)
       .gte("request_date", startDate)
       .lte("request_date", endDate),
+    admin.from("shift_month_status")
+      .select("published_at")
+      .eq("project_id", selectedProjectId)
+      .eq("year_month", `${targetYear}-${String(targetMonth).padStart(2, "0")}`)
+      .maybeSingle(),
     shiftSelect().range(0,    999),
     shiftSelect().range(1000, 1999),
     shiftSelect().range(2000, 2999),
@@ -315,6 +321,7 @@ export default async function ManageShiftsPage(props: {
     };
   });
 
+  const isPublished = !!monthStatusRow;
   const initialDraft = draftRow ? (draftRow.draft_data as GridDraftEntry[]) : null;
   const draftSavedBy = draftRow?.saved_by
     ? (staffNameMap2.get(draftRow.saved_by as string) ?? draftRow.saved_by as string)
@@ -394,6 +401,7 @@ export default async function ManageShiftsPage(props: {
           initialDraft={initialDraft}
           draftSavedBy={draftSavedBy}
           draftSavedAt={draftSavedAt}
+          isPublished={isPublished}
           offRequests={(offRequestsRaw ?? []).map(r => ({
             staff_id:     r.staff_id as string,
             request_date: r.request_date as string,
