@@ -379,10 +379,14 @@ export async function generateShiftDraftAction(
     return { success: false, message: "割当可能なスタッフがいませんでした" };
   }
 
-  const draftEntries = [...draft.entries()].map(([key, val]) => {
-    const [staffId, date] = key.split("__");
-    return { staffId, date, shiftName: val.shiftName, shiftStart: val.shiftStart, shiftEnd: val.shiftEnd };
-  });
+  // GridDraftEntry 形式 { k, n, s, e, d } で保存（ShiftEditGrid と同じフォーマット）
+  const draftEntries = [...draft.entries()].map(([key, val]) => ({
+    k: key,
+    n: val.shiftName,
+    s: val.shiftStart,
+    e: val.shiftEnd,
+    d: false,
+  }));
 
   const savedBy = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const { error } = await admin.from("shift_grid_drafts").upsert({
