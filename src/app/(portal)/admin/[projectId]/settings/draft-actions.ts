@@ -316,16 +316,16 @@ export async function generateShiftDraftAction(
         if (pattern.target_role === "admin" && m.role !== "project_admin") return false;
         if (pattern.target_role === "staff" && m.role !== "staff") return false;
 
-        // 月稼働日数上限
-        const wdType  = (m as { work_days_type?: string | null }).work_days_type;
-        const wdCount = (m as { work_days_count?: number | null }).work_days_count;
-        if (wdType === "monthly" && wdCount != null) {
+        // 月稼働日数上限（未設定時は月21日をデフォルトとして適用）
+        const wdType  = (m as { work_days_type?: string | null }).work_days_type  || "monthly";
+        const wdCount = (m as { work_days_count?: number | null }).work_days_count ?? 21;
+        if (wdType === "monthly") {
           const current = (draftMonthCount.get(m.staff_id) ?? 0) + (existingMonthCount.get(m.staff_id) ?? 0);
           if (current >= wdCount) return false;
         }
 
         // 週稼働日数上限
-        if (wdType === "weekly" && wdCount != null) {
+        if (wdType === "weekly") {
           const draftWeekCount = [...(draftDates.get(m.staff_id) ?? new Set<string>())]
             .filter(d => isoWeekKey(d) === weekKey).length;
           const existWeekCount = [...(existingDateSet.get(m.staff_id) ?? new Set<string>())]

@@ -1017,14 +1017,14 @@ export function MemberList({
                     <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex-shrink-0">
                       {m.role === "project_admin" ? "管理者" : "スタッフ"}
                     </span>
-                    {/* 稼働日数（未設定なら週5日をデフォルト表示） */}
+                    {/* 稼働日数（未設定なら月21日をデフォルト表示） */}
                     {m.work_days_count != null && m.work_days_type ? (
                       <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex-shrink-0 tabular-nums">
                         {m.work_days_type === "monthly" ? "月" : "週"}{m.work_days_count}日
                       </span>
                     ) : (
                       <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex-shrink-0 tabular-nums">
-                        週5日
+                        月21日
                       </span>
                     )}
                     {/* 勤怠順守率（過去30日） */}
