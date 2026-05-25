@@ -314,27 +314,25 @@ export default function HomeClient({
         {/* ══════════ 出発報告なし ══════════ */}
         {!enableDeparture && (<>
 
-          {/* ライブクロック */}
-          <div>
-            <p className="text-[13px] text-zinc-400 mb-1 tabular-nums">{todayLabel}</p>
-            <p className="text-[72px] font-thin tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white">
+          {/* ライブクロック + シフト */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[13px] text-zinc-400 tabular-nums">{todayLabel}</p>
+            <p className="text-[56px] font-extralight tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white">
               {liveTime}
             </p>
+            {shift && !isHoliday && (
+              <div className="flex items-baseline gap-2">
+                <p className="text-[17px] font-semibold text-zinc-700 dark:text-zinc-300">{shift.name}</p>
+                {shift.start && (
+                  <p className="text-[15px] tabular-nums text-zinc-400">
+                    {shift.start.slice(0,5)}–{shift.end?.slice(0,5) ?? "--:--"}
+                  </p>
+                )}
+              </div>
+            )}
+            {shift && isHoliday && <p className="text-[17px] font-medium text-zinc-400">公休日</p>}
+            {!shift && <p className="text-[15px] text-zinc-300">シフト未登録</p>}
           </div>
-
-          {/* シフト */}
-          {shift && !isHoliday && (
-            <div className="flex items-baseline gap-2.5 -mt-2">
-              <p className="text-[22px] font-bold text-zinc-900 dark:text-zinc-50">{shift.name}</p>
-              {shift.start && (
-                <p className="text-[15px] tabular-nums text-zinc-400">
-                  {shift.start.slice(0,5)}–{shift.end?.slice(0,5) ?? "--:--"}
-                </p>
-              )}
-            </div>
-          )}
-          {shift && isHoliday && <p className="text-[20px] font-semibold text-zinc-400 -mt-2">公休日</p>}
-          {!shift && <p className="text-[16px] text-zinc-300 -mt-2">シフト未登録</p>}
 
           <Divider />
 
@@ -345,8 +343,8 @@ export default function HomeClient({
               { label: "退勤", time: optClockOut },
             ].map(({ label, time }, i) => (
               <div key={label} className={i === 1 ? "text-right" : ""}>
-                <p className="text-[11px] text-zinc-400 mb-2 tracking-wider uppercase">{label}</p>
-                <p className={`text-[28px] font-light tabular-nums leading-none ${
+                <p className="text-[12px] text-zinc-400 mb-2 tracking-wide">{label}</p>
+                <p className={`text-[36px] font-light tabular-nums leading-none ${
                   time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
                 }`}>
                   {time ?? "--:--"}
