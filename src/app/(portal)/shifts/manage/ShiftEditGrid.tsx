@@ -76,6 +76,8 @@ type PendingNotify = {
   targetMonth: string;
 };
 
+type OffRequest = { staff_id: string; request_date: string; priority: string };
+
 interface Props {
   projectId: string;
   targetMonth: string;
@@ -88,6 +90,7 @@ interface Props {
   initialDraft: GridDraftEntry[] | null;
   draftSavedBy: string | null;
   draftSavedAt: string | null;
+  offRequests?: OffRequest[];
   onSaved: () => void;
   onCancel: () => void;
 }
@@ -706,12 +709,34 @@ function EditModal({
 
 // ── Main ────────────────────────────────────────────────────────
 
+const OFF_PRIORITY_BG: Record<string, string> = {
+  "第一希望休": "bg-blue-100 dark:bg-blue-950/60",
+  "第二希望休": "bg-indigo-100 dark:bg-indigo-950/60",
+  "第三希望休": "bg-purple-100 dark:bg-purple-950/60",
+  "第四希望休": "bg-zinc-100 dark:bg-zinc-800/60",
+  "冠婚葬祭":   "bg-red-100 dark:bg-red-950/60",
+};
+const OFF_PRIORITY_DOT: Record<string, string> = {
+  "第一希望休": "bg-blue-400",
+  "第二希望休": "bg-indigo-400",
+  "第三希望休": "bg-purple-400",
+  "第四希望休": "bg-zinc-400",
+  "冠婚葬祭":   "bg-red-400",
+};
+
 export default function ShiftEditGrid({
   projectId, targetMonth, allDates, shifts, activeMembers,
   shiftPatterns, slotRequirements, changeLogs,
   initialDraft, draftSavedBy, draftSavedAt,
+  offRequests,
   onSaved, onCancel,
 }: Props) {
+  // offRequests マップ: staffId__date → priority
+  const offRequestMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of offRequests ?? []) m.set(`${r.staff_id}__${r.request_date}`, r.priority);
+    return m;
+  }, [offRequests]);
   // ── Draft 状態 ─────────────────────────────────────────────────
   const [drafts, setDrafts] = useState<Map<string, DraftCell>>(() => {
     if (!initialDraft || initialDraft.length === 0) return new Map();
@@ -1435,7 +1460,8 @@ export default function ShiftEditGrid({
                         const hasLog = (changeLogMap.get(`${member.id}__${date}`)?.length ?? 0) > 0;
                         // 候補ハイライト: 選択不足セルの日付 かつ 候補スタッフ
                         const isCandidate = selectedShortage?.date === date && candidateStaffIds.has(member.id);
-                        // フォーカス行（候補スタッフ選択時にその行全体をハイライト）
+                        // 希望休
+                        const offPriority = offRequestMap.get(`${member.id}__${date}`);
                         if (isDeparted) {
                           return (
                             <td key={date} className={[
@@ -1456,7 +1482,7 @@ export default function ShiftEditGrid({
                             className={[
                               "border-b border-r border-zinc-100 dark:border-zinc-800",
                               "h-8 align-middle p-0 cursor-pointer overflow-hidden transition-colors",
-                              // フォーカス行 > 候補セル > 今日 > 下書き の順で優先
+                              // フォーカス行 > 候補セル > 今日 > 希望休 > 下書き の順で優先
                               isFocusedRow && isCandidate
                                 ? "bg-blue-300 dark:bg-blue-700/60 ring-inset ring-2 ring-blue-400"
                                 : isFocusedRow
@@ -1467,9 +1493,17 @@ export default function ShiftEditGrid({
                                 ? "bg-blue-50/40 dark:bg-blue-950/10"
                                 : isDraftCell && shiftName
                                 ? "bg-blue-50/60 dark:bg-blue-950/20"
+                                : offPriority && !shiftName
+                                ? (OFF_PRIORITY_BG[offPriority] ?? "bg-zinc-100")
                                 : "",
                             ].filter(Boolean).join(" ")}
                           >
+                            {/* 希望休ドット（シフト未配置の場合） */}
+                            {offPriority && !shiftName && (
+                              <div className="h-full flex items-center justify-center">
+                                <span className={`w-1.5 h-1.5 rounded-full ${OFF_PRIORITY_DOT[offPriority] ?? "bg-zinc-400"}`} />
+                              </div>
+                            )}
                             {shiftName && (
                               <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
                                 <span className={[

@@ -58,6 +58,7 @@ type Props = {
 function ShiftEditGridOverlay({
   projectId, targetMonthStr, allDates, shifts, activeMembers, shiftPatterns,
   slotRequirements, changeLogs, activeDraft, draftSavedBy, draftSavedAt,
+  offRequests,
   onSaved, onCancel,
 }: {
   projectId: string; targetMonthStr: string; allDates: string[];
@@ -65,6 +66,7 @@ function ShiftEditGridOverlay({
   shiftPatterns: Props["shiftPatterns"]; slotRequirements: Props["slotRequirements"];
   changeLogs: Props["changeLogs"]; activeDraft: GridDraftEntry[] | null;
   draftSavedBy: string | null; draftSavedAt: string | null;
+  offRequests: Props["offRequests"];
   onSaved: () => void; onCancel: () => void;
 }) {
   useEffect(() => {
@@ -98,6 +100,7 @@ function ShiftEditGridOverlay({
         initialDraft={activeDraft}
         draftSavedBy={activeDraft ? draftSavedBy : null}
         draftSavedAt={activeDraft ? draftSavedAt : null}
+        offRequests={offRequests}
         onSaved={onSaved}
         onCancel={onCancel}
       />
@@ -174,6 +177,7 @@ export default function ShiftManageClient({
       activeDraft={activeDraft}
       draftSavedBy={draftSavedBy}
       draftSavedAt={draftSavedAt}
+      offRequests={offRequests}
       onSaved={handleSaved}
       onCancel={() => setMode("list")}
     />;
