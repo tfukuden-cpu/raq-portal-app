@@ -134,6 +134,15 @@ export function ClipboardCheckIcon({ className }: IconProps) {
   );
 }
 
+export function CheckSquareIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <polyline points="9 11 12 14 22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
+
 export function MegaphoneIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>
@@ -375,6 +384,7 @@ export const ICON_MAP = {
   Download: DownloadIcon,
   HelpCircle: HelpCircleIcon,
   Smartphone: SmartphoneIcon,
+  CheckSquare: CheckSquareIcon,
 } as const;
 
 export type IconKey = keyof typeof ICON_MAP;

@@ -26,6 +26,11 @@ type LineEvent = {
   postback?: {
     data: string;
   };
+  message?: {
+    type: string;
+    text?: string;
+  };
+  timestamp?: number;
 };
 
 export async function POST(req: NextRequest) {
@@ -95,6 +100,37 @@ export async function POST(req: NextRequest) {
             .from("staffs")
             .update({ line_blocked: false })
             .eq("line_user_id", userId);
+        }
+
+        // ── グループテキストメッセージ → タスク抽出用に保存 ──
+        if (
+          event.type === "message" &&
+          event.message?.type === "text" &&
+          event.message.text &&
+          groupId &&
+          event.source?.type === "group" &&
+          userId
+        ) {
+          // task_extraction_groups に登録されたグループのみ保存
+          const { data: teg } = await admin
+            .from("task_extraction_groups")
+            .select("id")
+            .eq("group_id", groupId)
+            .eq("enabled", true)
+            .limit(1)
+            .maybeSingle();
+
+          if (teg) {
+            await admin.from("line_group_messages").insert({
+              group_id:     groupId,
+              user_id:      userId,
+              message_text: event.message.text,
+              sent_at:      event.timestamp
+                ? new Date(event.timestamp).toISOString()
+                : new Date().toISOString(),
+              processed:    false,
+            });
+          }
         }
 
         // ── グループ参加/退出 ──
