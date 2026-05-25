@@ -717,7 +717,20 @@ export default function ShiftEditGrid({
     if (!initialDraft || initialDraft.length === 0) return new Map();
     const m = new Map<string, DraftCell>();
     for (const e of initialDraft) {
-      m.set(e.k, e.d ? null : { shiftName: e.n ?? null, shiftStart: e.s ?? null, shiftEnd: e.e ?? null });
+      // 旧フォーマット互換: { staffId, date, shiftName, shiftStart, shiftEnd }
+      // 新フォーマット:     { k, n, s, e, d }
+      const raw = e as unknown as Record<string, unknown>;
+      const key = (typeof e.k === "string" && e.k)
+        ? e.k
+        : (typeof raw.staffId === "string" && typeof raw.date === "string")
+        ? `${raw.staffId}__${raw.date}`
+        : null;
+      if (!key) continue;
+      const shiftName = (typeof e.n === "string" ? e.n : typeof raw.shiftName === "string" ? raw.shiftName : null);
+      const shiftStart = (typeof e.s === "string" ? e.s : typeof raw.shiftStart === "string" ? raw.shiftStart : null);
+      const shiftEnd  = (typeof e.e === "string" ? e.e : typeof raw.shiftEnd  === "string" ? raw.shiftEnd  : null);
+      const isDelete  = e.d === true;
+      m.set(key, isDelete ? null : { shiftName, shiftStart, shiftEnd });
     }
     return m;
   });
