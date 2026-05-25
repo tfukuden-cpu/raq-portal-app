@@ -26,9 +26,11 @@ function fmtTime(iso: string) {
 export default function LineConnectionSection({
   projectId,
   members,
+  stickyTopOffset,
 }: {
   projectId: string;
   members: Member[];
+  stickyTopOffset?: number;
 }) {
   const [filterUnlinked, setFilterUnlinked] = useState(false);
   const [confirmUnlink, setConfirmUnlink]   = useState<string | null>(null);
@@ -127,7 +129,14 @@ export default function LineConnectionSection({
   return (
     <div className="space-y-4">
 
-      {/* ── サマリー + 全員テスト ── */}
+      {/* ── サマリー + 全員テスト + 受信確認バー（sticky対応） ── */}
+      <div
+        className={stickyTopOffset !== undefined
+          ? "sticky z-20 -mx-4 px-4 bg-white dark:bg-zinc-950 pb-3 pt-1 space-y-3 border-b border-zinc-100 dark:border-zinc-800"
+          : "space-y-3"
+        }
+        style={stickyTopOffset !== undefined ? { top: stickyTopOffset } : undefined}
+      >
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
@@ -202,6 +211,7 @@ export default function LineConnectionSection({
           )}
         </div>
       </div>
+      </div>{/* end sticky stats+confirmation wrapper */}
 
       {/* ── フラッシュ ── */}
       {flash && (

@@ -437,12 +437,14 @@ export function MemberList({
   availableSections = [],
   shiftPatternNames = [],
   initialEditStaffId,
+  projectName,
 }: {
   projectId: string;
   members: Member[];
   availableSections?: string[];
   shiftPatternNames?: string[];
   initialEditStaffId?: string;
+  projectName?: string;
 }) {
   const [addMode, setAddMode]       = useState<AddMode>("none");
   const [newLast, setNewLast]         = useState("");
@@ -644,7 +646,19 @@ export function MemberList({
   };
 
   return (
-    <div className="space-y-4">
+    <div className={projectName !== undefined ? "" : "space-y-4"}>
+      {/* ── Controls（スタンドアロンページはスティッキー） ── */}
+      <div className={projectName !== undefined
+        ? "sticky top-0 z-30 -mx-4 px-4 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800"
+        : "contents"
+      }>
+        {projectName !== undefined && (
+          <div className="pt-5 pb-0">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">メンバー管理</h1>
+            <p className="text-sm font-semibold text-zinc-400 mt-0.5">{projectName}</p>
+          </div>
+        )}
+        <div className={projectName !== undefined ? "space-y-3 py-3" : "contents"}>
 
       {/* ヘッダー：統計 + 追加ボタン */}
       <div className="flex items-center justify-between gap-2">
@@ -827,6 +841,12 @@ export function MemberList({
           )}
         </div>
       )}
+
+        </div>{/* end space-y-3/contents inner wrapper */}
+      </div>{/* end sticky/contents controls wrapper */}
+
+      {/* ── Scrollable content (form, list, modal) ── */}
+      <div className={projectName !== undefined ? "space-y-4 pt-4" : "contents"}>
 
       {/* 追加パネル群 */}
       {addMode === "new" && (
@@ -1314,6 +1334,8 @@ export function MemberList({
       })()}
 
       {result && <Flash ok={result.ok} msg={result.msg} />}
+
+      </div>{/* end scrollable content */}
     </div>
   );
 }

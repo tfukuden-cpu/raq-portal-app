@@ -197,33 +197,64 @@ export default function AttendanceEditClient({
   const issueCount = filtered.length;
 
   return (
-    <div className="space-y-4">
-      {/* タブ */}
-      <div className="flex border-b border-zinc-100 dark:border-zinc-800 overflow-x-auto">
-        {([
-          { id: "anomaly",     label: "勤怠修正",  badge: issueCount > 0 ? issueCount : null },
-          { id: "corrections", label: "補正申請",  badge: pendingCorrCount > 0 ? pendingCorrCount : null },
-          { id: "records",     label: "勤怠実績",  badge: null },
-          { id: "compliance",  label: "遵守率",    badge: null },
-        ] as { id: "anomaly" | "corrections" | "records" | "compliance"; label: string; badge: number | null }[]).map(t => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setActiveTab(t.id)}
-            className={[
-              "flex-shrink-0 px-5 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5",
-              activeTab === t.id
-                ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
-                : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
-            ].join(" ")}
-          >
-            {t.label}
-            {t.badge !== null && (
-              <span className="bg-red-500 text-white rounded-full px-1.5 text-[10px] tabular-nums">{t.badge}</span>
+    <div>
+      {/* ── Sticky header（タイトル・タブ・フィルター） ── */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+        {/* タイトル */}
+        <div className="pt-5 pb-0">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">勤怠管理</h1>
+          <p className="text-sm font-semibold text-zinc-400 mt-0.5">勤怠異常の確認・修正、補正申請の審査、実績出力</p>
+        </div>
+        {/* タブ */}
+        <div className="flex overflow-x-auto mt-2" style={{ scrollbarWidth: "none" }}>
+          {([
+            { id: "anomaly",     label: "勤怠修正",  badge: issueCount > 0 ? issueCount : null },
+            { id: "corrections", label: "補正申請",  badge: pendingCorrCount > 0 ? pendingCorrCount : null },
+            { id: "records",     label: "勤怠実績",  badge: null },
+            { id: "compliance",  label: "遵守率",    badge: null },
+          ] as { id: "anomaly" | "corrections" | "records" | "compliance"; label: string; badge: number | null }[]).map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+              className={[
+                "flex-shrink-0 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap",
+                activeTab === t.id
+                  ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
+                  : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
+              ].join(" ")}
+            >
+              {t.label}
+              {t.badge !== null && (
+                <span className="bg-red-500 text-white rounded-full px-1.5 text-[10px] tabular-nums">{t.badge}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        {/* 勤怠修正タブ：フィルター */}
+        {activeTab === "anomaly" && (
+          <div className="py-3 space-y-2 border-t border-zinc-100 dark:border-zinc-800">
+            <div className="flex gap-2 flex-wrap items-end">
+              <div className="flex items-center gap-1">
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                  className="px-2 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <span className="text-zinc-400 text-sm">〜</span>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                  className="px-2 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <input type="search" placeholder="氏名・ID・アカウント番号" value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="flex-1 min-w-40 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            {issueCount > 0 && (
+              <p className="text-xs text-red-500 font-medium">問題あり {issueCount}件</p>
             )}
-          </button>
-        ))}
+          </div>
+        )}
       </div>
+
+      {/* ── スクロールコンテンツ ── */}
+      <div className="space-y-4 pt-4">
 
       {/* 補正申請タブ */}
       {activeTab === "corrections" && (
@@ -327,25 +358,6 @@ export default function AttendanceEditClient({
       )}
 
       {activeTab === "anomaly" && <>
-      {/* フィルター */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 space-y-3">
-        <div className="flex gap-2 flex-wrap items-end">
-          <div className="flex items-center gap-1">
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-              className="px-2 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <span className="text-zinc-400 text-sm">〜</span>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-              className="px-2 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <input type="search" placeholder="氏名・ID・アカウント番号" value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="flex-1 min-w-40 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        {issueCount > 0 && (
-          <p className="text-xs text-red-500 font-medium">問題あり {issueCount}件</p>
-        )}
-      </div>
-
       {/* 一覧 */}
       {filtered.length === 0 ? (
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-12 text-center text-sm text-zinc-400">
@@ -525,6 +537,7 @@ export default function AttendanceEditClient({
           onClose={() => setShowExport(false)}
         />
       )}
+      </div>{/* end scrollable content */}
     </div>
   );
 }
