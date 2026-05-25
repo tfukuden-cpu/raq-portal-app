@@ -185,11 +185,11 @@ export default function RecordClient({
       <main className="h-dvh flex flex-col bg-white dark:bg-zinc-950 overflow-hidden">
 
         {/* ── 固定ヘッダー（タイトル・月ナビ・サマリー） ── */}
-        <div className="print-hide shrink-0 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="print-hide shrink-0 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
           <div className="max-w-5xl w-full mx-auto px-4 pt-5">
             {/* タイト���行 + 月ナビ */}
             <div className="flex items-center justify-between mb-3">
-              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">勤怠実績</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">勤怠実績</h1>
               <div className="flex items-center gap-1">
                 <a href={`/record?month=${prevMonth}`}
                   className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">

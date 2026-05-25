@@ -92,13 +92,13 @@ export default function ShiftsTabs({
     <div className="flex flex-col h-full">
 
       {/* ── 固定ヘッダー（タイトル・タブ・月ナビ） ── */}
-      <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="sticky top-0 z-30 shrink-0 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
         {/* タイトル行 */}
-        <div className="px-4 pt-5 pb-0">
+        <div className="max-w-5xl mx-auto px-4 pt-5 pb-0">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">シフト</h1>
         </div>
         {/* タブバー */}
-        <div className="flex overflow-x-auto px-4 -mx-0 mt-2" style={{ scrollbarWidth: "none" }}>
+        <div className="max-w-5xl mx-auto flex overflow-x-auto px-4 -mx-0 mt-2" style={{ scrollbarWidth: "none" }}>
           {TABS.map(({ key, label }) => (
             <button
               key={key}
@@ -117,7 +117,7 @@ export default function ShiftsTabs({
         </div>
         {/* シフトタブ：月ナビ固定エリア */}
         {tab === "shift" && (
-          <div className="flex items-center justify-center gap-3 px-4 py-2 border-t border-zinc-100 dark:border-zinc-800">
+          <div className="max-w-5xl mx-auto flex items-center justify-center gap-3 px-4 py-2 border-t border-zinc-100 dark:border-zinc-800">
             <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
               <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />

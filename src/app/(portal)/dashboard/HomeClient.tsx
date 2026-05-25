@@ -199,13 +199,13 @@ export default function HomeClient({
   return (
     <>
     <main className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="max-w-sm mx-auto px-5 pt-12 pb-32 flex flex-col gap-0">
+      <div className="max-w-lg mx-auto px-5 pt-8 pb-32 flex flex-col gap-0">
 
         {/* ── ヘッダー ── */}
         <div className="flex items-start justify-between mb-6">
           <div>
             {greeting && <p className="text-[12px] text-zinc-400 mb-0.5">{greeting}</p>}
-            <h1 className="text-[24px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
               {displayName}
             </h1>
           </div>

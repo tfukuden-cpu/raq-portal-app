@@ -58,15 +58,14 @@ export default async function AllStaffsPage() {
 
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="max-w-5xl mx-auto px-4 pt-6 pb-20">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            スタッフ管理
-          </h1>
-          <p className="text-sm text-zinc-400 mt-0.5">
-            全案件のスタッフ・管理者アカウント一覧
-          </p>
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="max-w-5xl mx-auto px-4 pt-5 pb-4">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">スタッフ管理</h1>
+          <p className="text-sm font-semibold text-zinc-400 mt-0.5">全案件のスタッフ・管理者アカウント一覧</p>
         </div>
+      </div>
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-20">
         <StaffsClient staffs={staffList} />
       </div>
     </main>

@@ -26,20 +26,15 @@ export default async function OperatorsPage() {
     .order("id");
 
   return (
-    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="max-w-5xl mx-auto px-4 pt-8 pb-10 space-y-6">
-        <div>
-          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-            運用管理
-          </p>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            運用者管理
-          </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            代表・役員アカウントの管理
-          </p>
+    <main className="min-h-screen bg-white dark:bg-zinc-950">
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="max-w-5xl mx-auto px-4 pt-5 pb-4">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">運用者管理</h1>
+          <p className="text-sm font-semibold text-zinc-400 mt-0.5">代表・役員アカウントの管理</p>
         </div>
-
+      </div>
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-10">
         <OperatorsClient
           operators={operators ?? []}
           currentStaffId={staffId}

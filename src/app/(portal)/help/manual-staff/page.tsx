@@ -150,16 +150,16 @@ export default async function ManualStaffPage() {
   if (!user) redirect("/login");
 
   return (
-    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <main className="min-h-screen bg-white dark:bg-zinc-950">
       <div className="max-w-4xl mx-auto px-4 pt-6 pb-28 space-y-1">
         {/* ヘッダー */}
         <div className="mb-6">
-          <a href="/help" className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-400 hover:text-blue-500 transition-colors mb-3">
+          <a href="/help" className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 hover:text-zinc-600 transition-colors mb-1.5">
             <ChevronLeftIcon className="w-3.5 h-3.5" />
             ヘルプに戻る
           </a>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">スタッフ向け操作説明書</h1>
-          <p className="text-sm text-zinc-400 mt-1">各メニューの操作方法をご確認ください</p>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">スタッフ向け操作説明書</h1>
+          <p className="text-sm font-semibold text-zinc-400 mt-0.5">各メニューの操作方法をご確認ください</p>
         </div>
 
         {/* 目次 */}

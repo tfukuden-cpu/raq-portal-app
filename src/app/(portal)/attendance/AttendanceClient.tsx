@@ -192,7 +192,7 @@ export default function AttendanceClient({
     <main className="min-h-screen bg-white dark:bg-zinc-950">
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 pt-5 pb-3">
+        <div className="max-w-5xl mx-auto px-4 pt-5 pb-4">
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">

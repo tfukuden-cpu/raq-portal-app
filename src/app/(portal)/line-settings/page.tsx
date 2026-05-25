@@ -54,15 +54,14 @@ export default async function LineSettingsPage() {
 
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="max-w-4xl mx-auto px-4 pt-6 pb-20">
-
-        <div className="mb-6">
-          <p className="text-xs font-medium text-zinc-400 mb-1">{project.name}</p>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            LINE設定
-          </h1>
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="max-w-5xl mx-auto px-4 pt-5 pb-4">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">LINE設定</h1>
+          <p className="text-sm font-semibold text-zinc-400 mt-0.5">{project.name}</p>
         </div>
-
+      </div>
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-20">
         <LineSettingsClient
           projectId={projectId}
           members={memberList}
@@ -71,7 +70,6 @@ export default async function LineSettingsPage() {
             (settings?.notification_settings as Record<string, boolean> | null) ?? {}
           }
         />
-
       </div>
     </main>
   );

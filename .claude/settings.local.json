@@ -85,7 +85,8 @@
       "Bash(python -c ' *)",
       "Bash(python make_diff.py)",
       "Bash(python make_diff2.py)",
-      "Bash(python make_detail.py)"
+      "Bash(python make_detail.py)",
+      "Bash(findstr /i \"SUPABASE\")"
     ]
   }
 }
