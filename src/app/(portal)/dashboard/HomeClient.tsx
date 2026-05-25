@@ -31,7 +31,7 @@ export interface HomeClientProps {
 
 function nowJST(): string {
   return new Date().toLocaleTimeString("ja-JP", {
-    timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false,
+    timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
   });
 }
 function statusBadge(s: string | null) {
@@ -153,7 +153,7 @@ export default function HomeClient({
   const [liveTime, setLiveTime] = useState(nowJST);
   useEffect(() => {
     if (enableDeparture) return;
-    const id = setInterval(() => setLiveTime(nowJST()), 10000);
+    const id = setInterval(() => setLiveTime(nowJST()), 1000);
     return () => clearInterval(id);
   }, [enableDeparture]);
 
@@ -247,15 +247,15 @@ export default function HomeClient({
           <Divider />
 
           {/* タイムスタンプ 3列 */}
-          <div className="grid grid-cols-3">
+          <div className="flex gap-8">
             {[
               { label: "出発", time: optDeparture },
               { label: "出勤", time: optClockIn },
               { label: "退勤", time: optClockOut },
-            ].map(({ label, time }, i) => (
-              <div key={label} className={i === 1 ? "text-center" : i === 2 ? "text-right" : ""}>
-                <p className="text-[11px] text-zinc-400 mb-2 tracking-wider uppercase">{label}</p>
-                <p className={`text-[22px] font-light tabular-nums leading-none ${
+            ].map(({ label, time }) => (
+              <div key={label}>
+                <p className="text-[11px] text-zinc-400 mb-1.5 tracking-wide">{label}</p>
+                <p className={`text-[26px] font-light tabular-nums leading-none ${
                   time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
                 }`}>
                   {time ?? "--:--"}
@@ -337,14 +337,14 @@ export default function HomeClient({
           <Divider />
 
           {/* 打刻 2列 */}
-          <div className="grid grid-cols-2">
+          <div className="flex gap-10">
             {[
               { label: "出勤", time: optClockIn },
               { label: "退勤", time: optClockOut },
-            ].map(({ label, time }, i) => (
-              <div key={label} className={i === 1 ? "text-right" : ""}>
-                <p className="text-[12px] text-zinc-400 mb-2 tracking-wide">{label}</p>
-                <p className={`text-[36px] font-light tabular-nums leading-none ${
+            ].map(({ label, time }) => (
+              <div key={label}>
+                <p className="text-[12px] text-zinc-400 mb-1.5 tracking-wide">{label}</p>
+                <p className={`text-[34px] font-light tabular-nums leading-none ${
                   time ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-200 dark:text-zinc-800"
                 }`}>
                   {time ?? "--:--"}
