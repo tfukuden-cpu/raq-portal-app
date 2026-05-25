@@ -39,7 +39,7 @@ export default async function TasksPage() {
   ] = await Promise.all([
     supabase
       .from("group_tasks")
-      .select("id, title, description, assignee_staff_id, assignee_raw, due_text, due_date, status, group_id, created_at, completed_at, task_extraction_groups(group_label)")
+      .select("id, title, description, assignee_staff_id, assignee_raw, due_text, due_date, status, group_id, created_at, completed_at")
       .eq("project_id", projectId)
       .in("status", ["pending", "done"])
       .order("created_at", { ascending: false })
@@ -70,24 +70,21 @@ export default async function TasksPage() {
     groupLabelMap.set(g.group_id, g.group_label ?? null);
   }
 
-  const tasks: GroupTask[] = (rawTasks ?? []).map(t => {
-    const teg = Array.isArray(t.task_extraction_groups) ? t.task_extraction_groups[0] : t.task_extraction_groups;
-    return {
-      id:                t.id,
-      title:             t.title,
-      description:       t.description,
-      assignee_staff_id: t.assignee_staff_id,
-      assignee_raw:      t.assignee_raw,
-      due_text:          t.due_text,
-      due_date:          t.due_date,
-      status:            t.status,
-      group_id:          t.group_id,
-      group_label:       (teg as { group_label?: string | null } | null)?.group_label ?? groupLabelMap.get(t.group_id) ?? null,
-      created_at:        t.created_at,
-      completed_at:      t.completed_at,
-      assignee_name:     t.assignee_staff_id ? (staffNameMap.get(t.assignee_staff_id) ?? null) : null,
-    };
-  });
+  const tasks: GroupTask[] = (rawTasks ?? []).map(t => ({
+    id:                t.id,
+    title:             t.title,
+    description:       t.description,
+    assignee_staff_id: t.assignee_staff_id,
+    assignee_raw:      t.assignee_raw,
+    due_text:          t.due_text,
+    due_date:          t.due_date,
+    status:            t.status,
+    group_id:          t.group_id,
+    group_label:       groupLabelMap.get(t.group_id) ?? null,
+    created_at:        t.created_at,
+    completed_at:      t.completed_at,
+    assignee_name:     t.assignee_staff_id ? (staffNameMap.get(t.assignee_staff_id) ?? null) : null,
+  }));
 
   const taskGroups: TaskGroup[] = (rawGroups ?? []).map(g => ({
     id:          g.id,
