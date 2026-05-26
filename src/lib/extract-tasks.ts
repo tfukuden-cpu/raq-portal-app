@@ -4,6 +4,39 @@
  */
 import { createAdminClient } from "@/lib/supabase/admin";
 
+/** 東京時刻で n 日後の YYYY-MM-DD を返す */
+function dateJST(offsetDays = 0): string {
+  const d = new Date();
+  if (offsetDays) d.setDate(d.getDate() + offsetDays);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+}
+
+/** due_text から実際の due_date（YYYY-MM-DD）を算出。不明なら翌日 */
+function dueDateFromText(dueText: string | null): string {
+  if (!dueText)       return dateJST(1); // 未設定 → 翌日
+  if (dueText === "今日")   return dateJST(0);
+  if (dueText === "明日")   return dateJST(1);
+  if (dueText === "明後日") return dateJST(2);
+  if (dueText === "今週中") return dateJST(5);
+  if (dueText === "来週中") return dateJST(12);
+  // "M月D日" 形式
+  const m = dueText.match(/^(\d{1,2})月(\d{1,2})日$/);
+  if (m) {
+    const now  = new Date();
+    const year = now.getFullYear();
+    const target = new Date(year, parseInt(m[1]) - 1, parseInt(m[2]));
+    if (target.getTime() < now.getTime()) target.setFullYear(year + 1);
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(target);
+  }
+  return dateJST(1); // その他 → 翌日
+}
+
 const TASK_KEYWORDS = [
   "お願い", "おねがい",
   "してください", "して下さい",
@@ -109,8 +142,9 @@ export async function runExtractTasks(): Promise<{ ok: boolean; extracted: numbe
       for (const msg of messages) {
         if (!isTaskMessage(msg.message_text)) continue;
 
-        const assigneeRaw   = extractAssigneeRaw(msg.message_text);
-        const dueText       = extractDueText(msg.message_text);
+        const assigneeRaw = extractAssigneeRaw(msg.message_text);
+        const dueText     = extractDueText(msg.message_text);
+        const dueDate     = dueDateFromText(dueText); // 期日未指定なら翌日
 
         let assigneeStaffId: string | null = null;
         if (assigneeRaw) {
@@ -132,7 +166,8 @@ export async function runExtractTasks(): Promise<{ ok: boolean; extracted: numbe
           description:       sender ? `${sender} より` : null,
           assignee_staff_id: assigneeStaffId,
           assignee_raw:      assigneeRaw,
-          due_text:          dueText,
+          due_text:          dueText ?? "翌日",
+          due_date:          dueDate,
           status:            "pending",
           source_messages:   [{
             sent_at: msg.sent_at,

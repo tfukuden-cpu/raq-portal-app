@@ -25,6 +25,7 @@ export type GroupTask = {
   created_at: string;
   completed_at: string | null;
   assignee_name: string | null;
+  source_messages: { sent_at: string; user_id: string; text: string }[] | null;
 };
 
 export type TaskGroup = {
@@ -39,7 +40,14 @@ export type StaffOption = {
   name: string;
 };
 
-type Tab = "pending" | "done" | "settings";
+type Tab = "my" | "pending" | "done" | "settings";
+
+/** due_date (YYYY-MM-DD) を "M月D日" 形式に */
+function formatDueDate(dateStr: string): string {
+  const m = dateStr.match(/^\d{4}-(\d{2})-(\d{2})$/);
+  if (!m) return dateStr;
+  return `${parseInt(m[1])}月${parseInt(m[2])}日`;
+}
 
 export default function TasksClient({
   tasks,
@@ -47,14 +55,18 @@ export default function TasksClient({
   staffOptions,
   projectId,
   discoveredGroups,
+  isAdmin,
+  myStaffId,
 }: {
   tasks: GroupTask[];
   taskGroups: TaskGroup[];
   staffOptions: StaffOption[];
   projectId: string;
   discoveredGroups: { group_id: string }[];
+  isAdmin: boolean;
+  myStaffId: string;
 }) {
-  const [tab, setTab]                   = useState<Tab>("pending");
+  const [tab, setTab]                   = useState<Tab>("my");
   const [isPending, startTransition]    = useTransition();
   const [flash, setFlash]               = useState<{ ok: boolean; msg: string } | null>(null);
   const [expandedId, setExpandedId]     = useState<string | null>(null);
@@ -75,8 +87,10 @@ export default function TasksClient({
     setTimeout(() => setFlash(null), 4000);
   }
 
-  const pendingTasks = tasks.filter(t => t.status === "pending");
-  const doneTasks    = tasks.filter(t => t.status === "done");
+  const pendingTasks  = tasks.filter(t => t.status === "pending");
+  const doneTasks     = tasks.filter(t => t.status === "done");
+  const myTasks       = pendingTasks.filter(t => t.assignee_staff_id === myStaffId);
+  const otherTasks    = pendingTasks.filter(t => t.assignee_staff_id !== myStaffId);
 
   function handleStatusChange(taskId: string, status: "pending" | "done" | "dismissed") {
     startTransition(async () => {
@@ -191,8 +205,8 @@ export default function TasksClient({
                 </span>
               )}
               {(task.due_date || task.due_text) && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 font-semibold">
-                  {task.due_date ?? task.due_text}
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 font-semibold tabular-nums">
+                  {task.due_date ? formatDueDate(task.due_date) : task.due_text}
                 </span>
               )}
               {task.group_id !== "manual" && (
@@ -219,7 +233,19 @@ export default function TasksClient({
         {/* 展開エリア */}
         {expanded && (
           <div className="border-t border-zinc-100 dark:border-zinc-800 px-3 pb-3 pt-2 space-y-2">
-            {task.description && (
+            {/* 元のLINEメッセージ */}
+            {task.source_messages && task.source_messages.length > 0 && (
+              <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-2">
+                {task.description && (
+                  <p className="text-[10px] text-zinc-400 font-semibold mb-1">{task.description}</p>
+                )}
+                <p className="text-xs text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                  {task.source_messages[0].text}
+                </p>
+              </div>
+            )}
+            {/* source_messages がない（手動追加）場合は description を表示 */}
+            {(!task.source_messages || task.source_messages.length === 0) && task.description && (
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">{task.description}</p>
             )}
 
@@ -282,36 +308,18 @@ export default function TasksClient({
     <div>
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-30 -mx-4 px-4 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="pt-5 pb-0 flex items-start justify-between gap-2">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">タスク</h1>
-            <p className="text-sm font-semibold text-zinc-400 mt-0.5">LINEグループから自動抽出</p>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={handleTriggerExtract}
-              disabled={isPending || taskGroups.filter(g => g.enabled).length === 0}
-              className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors"
-            >
-              {isPending ? "抽出中…" : "今すぐ抽出"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAddTask(true)}
-              className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors"
-            >
-              ＋ 追加
-            </button>
-          </div>
+        <div className="pt-5 pb-0">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">タスク</h1>
+          <p className="text-sm font-semibold text-zinc-400 mt-0.5">LINEグループから自動抽出</p>
         </div>
 
         {/* タブ */}
         <div className="flex mt-2">
           {([
-            { id: "pending" as Tab, label: `未完了 ${pendingTasks.length}` },
-            { id: "done"    as Tab, label: `完了済 ${doneTasks.length}` },
-            { id: "settings" as Tab, label: "設定" },
+            { id: "my"       as Tab, label: `自分 ${myTasks.length}` },
+            { id: "pending"  as Tab, label: `全体 ${pendingTasks.length}` },
+            { id: "done"     as Tab, label: `完了済 ${doneTasks.length}` },
+            ...(isAdmin ? [{ id: "settings" as Tab, label: "設定" }] : []),
           ]).map(t => (
             <button key={t.id} type="button" onClick={() => setTab(t.id)}
               className={[
@@ -338,8 +346,8 @@ export default function TasksClient({
 
       <div className="space-y-3 pt-4">
 
-        {/* ── 手動タスク追加フォーム ── */}
-        {showAddTask && (
+        {/* ── 手動追加フォーム（自分・全体タブ共通） ── */}
+        {(tab === "my" || tab === "pending") && showAddTask && (
           <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20 p-3 space-y-2">
             <p className="text-xs font-semibold text-zinc-500">タスクを手動追加</p>
             <div>
@@ -384,18 +392,99 @@ export default function TasksClient({
           </div>
         )}
 
-        {/* ── 未完了タブ ── */}
+        {/* ── 自分のタスクタブ ── */}
+        {tab === "my" && (
+          <>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">自分のタスク</p>
+              <div className="flex gap-2">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleTriggerExtract}
+                    disabled={isPending || taskGroups.filter(g => g.enabled).length === 0}
+                    className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors"
+                  >
+                    {isPending ? "抽出中…" : "今すぐ抽出"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowAddTask(v => !v)}
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors"
+                >
+                  ＋ 追加
+                </button>
+              </div>
+            </div>
+
+            {myTasks.length === 0 ? (
+              <div className="text-center py-10 text-zinc-400">
+                <p className="text-sm font-semibold">自分に割り当てられたタスクはありません</p>
+                <p className="text-xs mt-1">LINEメッセージの @{myStaffId.toLowerCase()} 宛てが自動登録されます</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {myTasks.map(task => <TaskCard key={task.id} task={task} />)}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── 全体タブ ── */}
         {tab === "pending" && (
           <>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">未完了タスク一覧</p>
+              <div className="flex gap-2">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleTriggerExtract}
+                    disabled={isPending || taskGroups.filter(g => g.enabled).length === 0}
+                    className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors"
+                  >
+                    {isPending ? "抽出中…" : "今すぐ抽出"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowAddTask(v => !v)}
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors"
+                >
+                  ＋ 追加
+                </button>
+              </div>
+            </div>
+
             {pendingTasks.length === 0 ? (
               <div className="text-center py-12 text-zinc-400">
                 <p className="text-sm font-semibold">未完了タスクはありません</p>
                 <p className="text-xs mt-1">LINEグループのやり取りから自動抽出されます</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {pendingTasks.map(task => <TaskCard key={task.id} task={task} />)}
-              </div>
+              <>
+                {/* 自分のタスク */}
+                {myTasks.length > 0 && (
+                  <>
+                    <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mt-1">自分のタスク</p>
+                    <div className="space-y-2">
+                      {myTasks.map(task => <TaskCard key={task.id} task={task} />)}
+                    </div>
+                  </>
+                )}
+                {/* その他のタスク */}
+                {otherTasks.length > 0 && (
+                  <>
+                    {myTasks.length > 0 && (
+                      <p className="text-xs font-semibold text-zinc-400 mt-3">その他のタスク</p>
+                    )}
+                    <div className="space-y-2">
+                      {otherTasks.map(task => <TaskCard key={task.id} task={task} />)}
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </>
         )}

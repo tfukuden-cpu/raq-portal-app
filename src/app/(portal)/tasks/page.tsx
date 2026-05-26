@@ -8,6 +8,7 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import TasksClient from "./TasksClient";
 import type { GroupTask, TaskGroup, StaffOption } from "./TasksClient";
+import { cookies } from "next/headers";
 
 export default async function TasksPage() {
   const supabase = await createClient();
@@ -18,17 +19,23 @@ export default async function TasksPage() {
   const projectId = await getCurrentProjectId();
   if (!projectId) redirect("/select-project");
 
-  // アクセス制御
+  // アクセス制御 — プロジェクトメンバーなら全員OK
   const [{ data: membership }, { data: myStaff }] = await Promise.all([
     supabase.from("project_members").select("role")
       .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle(),
     supabase.from("staffs").select("global_role").eq("id", staffId).maybeSingle(),
   ]);
-  const isAuthorized =
+  if (!membership) redirect("/dashboard"); // 非メンバーは弾く
+
+  const isAdmin =
     membership?.role === "project_admin" ||
     myStaff?.global_role === "admin" ||
     myStaff?.global_role === "executive";
-  if (!isAuthorized) redirect("/dashboard");
+
+  // 視点モード対応（DevBanner）
+  const cookieStore = await cookies();
+  const viewMode = cookieStore.get("rqp-view-mode")?.value ?? "staff";
+  const effectiveAdmin = viewMode !== "staff" && isAdmin;
 
   const admin = createAdminClient();
 
@@ -40,7 +47,7 @@ export default async function TasksPage() {
   ] = await Promise.all([
     supabase
       .from("group_tasks")
-      .select("id, title, description, assignee_staff_id, assignee_raw, due_text, due_date, status, group_id, created_at, completed_at")
+      .select("id, title, description, assignee_staff_id, assignee_raw, due_text, due_date, status, group_id, created_at, completed_at, source_messages")
       .eq("project_id", projectId)
       .in("status", ["pending", "done"])
       .order("created_at", { ascending: false })
@@ -89,6 +96,7 @@ export default async function TasksPage() {
     created_at:        t.created_at,
     completed_at:      t.completed_at,
     assignee_name:     t.assignee_staff_id ? (staffNameMap.get(t.assignee_staff_id) ?? null) : null,
+    source_messages:   (t.source_messages as { sent_at: string; user_id: string; text: string }[] | null) ?? null,
   }));
 
   const taskGroups: TaskGroup[] = (rawGroups ?? []).map(g => ({
@@ -124,6 +132,8 @@ export default async function TasksPage() {
           staffOptions={staffOptions}
           projectId={projectId}
           discoveredGroups={discoveredGroups}
+          isAdmin={effectiveAdmin}
+          myStaffId={staffId}
         />
       </div>
     </main>

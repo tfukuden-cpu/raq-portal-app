@@ -11,23 +11,23 @@ export type NavItem = { href: string; icon: IconKey; label: string };
 export type NavSection = { title?: string; mobileLabel?: string; icon?: IconKey; items: NavItem[] };
 
 const STAFF_ITEMS: NavItem[] = [
-  { href: "/dashboard", icon: "Home", label: "ホーム" },
-  { href: "/shifts", icon: "Calendar", label: "シフト" },
-  { href: "/record", icon: "BarChart2", label: "勤怠実績" },
-  { href: "/post", icon: "PenSquare", label: "投稿" },
-  { href: "/inquiries", icon: "MessageSquare", label: "問い合わせ" },
-  { href: "/help", icon: "HelpCircle", label: "ヘルプ" },
+  { href: "/dashboard",  icon: "Home",        label: "ホーム" },
+  { href: "/shifts",     icon: "Calendar",    label: "シフト" },
+  { href: "/record",     icon: "BarChart2",   label: "勤怠実績" },
+  { href: "/tasks",      icon: "CheckSquare", label: "タスク" },
+  { href: "/post",       icon: "PenSquare",   label: "投稿" },
+  { href: "/inquiries",  icon: "MessageSquare", label: "問い合わせ" },
+  { href: "/help",       icon: "HelpCircle",  label: "ヘルプ" },
 ];
 
 const PROJECT_ADMIN_ITEMS: NavItem[] = [
-  { href: "/attendance", icon: "Users", label: "当日状況" },
+  { href: "/attendance",    icon: "Users",           label: "当日状況" },
   { href: "/shifts/manage", icon: "CalendarSettings", label: "シフト管理" },
-  { href: "/members", icon: "IdCard", label: "メンバー管理" },
-  { href: "/notices/manage", icon: "Megaphone", label: "周知管理" },
+  { href: "/members",       icon: "IdCard",          label: "メンバー管理" },
+  { href: "/notices/manage", icon: "Megaphone",      label: "周知管理" },
   { href: "/inquiries/manage", icon: "MessageSquare", label: "問合せ管理" },
   { href: "/attendance/edit", icon: "ClipboardCheck", label: "勤怠管理" },
-  { href: "/tasks", icon: "CheckSquare", label: "タスク" },
-  { href: "/line-settings", icon: "Smartphone", label: "LINE設定" },
+  { href: "/line-settings", icon: "Smartphone",      label: "LINE設定" },
 ];
 
 const EXECUTIVE_ITEMS: NavItem[] = [
