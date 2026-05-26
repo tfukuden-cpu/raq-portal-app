@@ -364,7 +364,8 @@ export async function generateShiftDraftAction(
       }
       if (required === 0) continue;
 
-      const alreadyAssigned = (existingShiftRows ?? []).filter(
+      // 再仮組み対象パターンは「ゼロから再生成」するので既存確定数は無視
+      const alreadyAssigned = regenPatternNames?.has(pattern.name) ? 0 : (existingShiftRows ?? []).filter(
         s => s.shift_date === date && s.shift_name === pattern.name
       ).length;
       const needMore = required - alreadyAssigned;
