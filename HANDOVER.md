@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-26（v30：シフトグリッドUI改善・スタッフ情報パネル・色分け刷新）
+最終更新：2026-05-26（v31：当日状況に確定後変更タブ追加）
 
 ---
 
@@ -933,4 +933,5 @@ export default async function Page({
 | 2026-05-20 | v27 | **LINE連携必須化・なりすまし防止・LINEブロック検知・欠勤機能拡充** ① LINE連携フロー刷新：初回ログイン後 `/link-line` へ誘導→「LINEで連携する」ボタン押下でOAuth開始（`bot_prompt=aggressive`で友達追加も同時完了）。友達チェック廃止（認証と登録を同時完了）。② LINE連携完了時にPWをcrypto.randomUUID×2に自動変更（なりすましログイン防止）。以降はLINEログインのみ有効。③ ポータルレイアウトでline_user_id未設定のユーザーを`/link-line`へ強制リダイレクト。④ LINEブロック検知：`staffs.line_blocked`カラム追加、LINE webhook（/api/line/webhook）でunfollowイベント→true・followイベント→false。スタッフ管理画面にブロック中バッジ（赤）・LINE未連携バッジ（黄）・統計チップを追加。⑤ 欠勤経過報告ページ（/absence-followup）新設：翌日出勤可否を報告→不可の場合は翌日の欠勤報告を自動作成。⑥ シフト展開ボタン（PublishButton）：シフト管理から全スタッフに個人シフトをLINEで一斉送信。⑦ シフト管理グリッドの欠勤セル赤色表示（absence_reportsと連動）。⑧ スタッフ向けシフトカレンダーで変更ログを公休・未登録日にも表示。⑨ 通知追加：holiday_open_notify・absence_followup_remind・absence_followup_notify・shift_published。⑩ ログイン後LINE OAuth直接起動→/link-lineへのリダイレクトに変更（stateクッキーループ修正）。|
 | 2026-05-26 | v28 | シフト編集グリッド大改修・不足対応フロー新設・候補スコアリング（詳細は継続タスクに記録）。 |
 | 2026-05-26 | v29 | **仮組みアルゴリズム修正・グリッドUI改善** ① セクション指定再仮組みで確定済みシフトが邪魔し配置0件になる問題を3箇所修正（existingMap除外・existingMonthCount除外・alreadyAssigned除外）。② shift_slot_requirements の required_count=0 を「未設定」として扱い自動計算にフォールスルーするよう修正（仮組み時に未入力セルが0でupsertされることで全スロットがrequired=0になりスキップされていた）。③ セクション指定再仮組みでパターンのsectionが未設定の場合に分かりやすいエラーメッセージを表示。④ ShiftEditGridに「← 戻る」「進む →」ボタンを追加（undoスタック＋redoスタックで双方向ナビゲーション）。⑤ 再仮組みモーダルのセクション選択肢から「（他セクションは保持）」の説明文を削除。⑥ PublishButtonにisPublishedを渡し展開済み月はグレーの「✓ 展開済み」バッジ表示・再展開も可能。 |
-| 2026-05-26 | v30 | **シフトグリッドUI改善・スタッフ情報パネル新設・色分け刷新** ① 月合計列を右固定（sticky right-0）に変更。② 充足サマリー下にSV配置人数行を追加（violet色）。③ シフトパターンの色分けをセクション×早番/遅番の2軸で刷新（SV=青・査定=緑・販売=橙・MOTA=ティール・リメイク=ピンク・ローン=バイオレット、早番=薄色/遅番=濃色）。希望休系=黒ベース・空白=白。④ StaffInfoPanel.tsx新設：スタッフ名タップでセクション・稼働日数・連勤上限・優先シフト/セクション・備考・退職予定日・希望休申請一覧（優先度グループ別）を表示。第一希望休複数件時に警告メッセージを表示。⑤ page.tsxのSELECT拡張（work_days_type/count・preferred_shift/section・max_consecutive_days・shift_note・source）。⑥ ドラフト変更セルのインジケーターを左上青ドット→セル内枠リング（ring-2 ring-inset ring-blue-500）に変更。 |
+| 2026-05-26 | v30 | **シフトグリッドUI改善・スタッフ情報パネル新設・色分け刷新** ① 月合計列を右固定（sticky right-0）に変更。② 充足サマリー下にSV配置人数行を追加（violet色）。③ シフトパターンの色分けをセクション×早番/遅番の2軸で刷新（SV=青・査定=緑・販売=橙・MOTA=ティール・リメイク=ピンク・ローン=バイオレット、早番=薄色/遅番=濃色）。希望休系=黒ベース・空白=白。④ StaffInfoPanel.tsx新設：スタッフ名タップでセクション・稼働日数・連勤上限・優先シフト/セクション・備考・退職予定日・希望休申請一覧（優先度グループ別）を表示。第一希望休複数件時に警告メッセージを表示。⑤ page.tsxのSELECT拡張（work_days_type/count・preferred_shift/section・max_consecutive_days・shift_note・source）。⑥ ドラフト変更セルのインジケーターを青テキスト+太字のみに変更（ドット・枠線を廃止）。 |
+| 2026-05-26 | v31 | **当日状況に「確定後変更」タブ追加** ① 当日状況ページに「当日シフト」「確定後変更」の2タブを追加。② 確定後変更タブ：shift_month_status.published_at以降にshift_change_logsへ記録された当日分の変更を取得・表示。③ 表示形式はシフトパターン軸：同じパターンで外れた人・入った人をペアにして「変更 A⇒B」で表示、片方のみは「追加」「削除」で表示。変更件数バッジをタブに表示。未展開月は「シフトが未展開です」と表示。 |
