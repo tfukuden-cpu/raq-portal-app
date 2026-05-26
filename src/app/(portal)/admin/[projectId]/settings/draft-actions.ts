@@ -447,203 +447,169 @@ export async function generateShiftDraftAction(
     activeMemberRows.length * avgTargetDays / allDates.length / patternCount
   ));
 
-  // ── 日付処理順：コプライム・ストライド11 ──────────────────────────
-  // gcd(11, 28/29/30/31) = 1 → どの月長でも全日を1パスでカバーできる
-  // 1→末日の順と違い月初・中旬・月末が均等に処理されるため月末不足が発生しにくい
-  // かつ連続した日付が隣接して処理されないため連勤チェックも正確に機能する
-  {
-    // ── 日付処理順：希望休が多い日（配置が難しい日）から先に処理 ──────────────
-    // 固定ストライドだと特定の日が常に「最後」になり不足が偏る。
-    // 希望休が集中している日ほどスタッフの候補が少ない → 先に処理して空き容量を確保。
-    // 同率はカレンダー順（決定論的）。
-    const dateHolidayCount = new Map<string, number>();
-    for (const d of allDates) {
-      let cnt = 0;
-      for (const m of activeMemberRows) {
-        if (holidaySet.has(`${m.staff_id}__${d}`)) cnt++;
+  // ── ラウンドロビン方式：均等配置 ─────────────────────────────────────
+  // ラウンド1: 日1〜末日 → 各パターンに1人目を配置
+  // ラウンド2: 日1〜末日 → 各パターンに2人目を配置
+  // ラウンドN: ...
+  // → どの日も「最後」にならないため、特定日への不足集中が構造的に起きない。
+  // 稼働率ソートにより、少ない日数のスタッフが優先されるため均等に分散される。
+
+  // スロット要件も含めた最大ラウンド数を算出
+  let maxRound = 1;
+  for (const p of patterns) {
+    maxRound = Math.max(maxRound,
+      p.required_count ?? 0,
+      p.required_weekday ?? 0,
+      p.required_weekend ?? 0,
+    );
+  }
+  for (const v of slotMap.values()) maxRound = Math.max(maxRound, v);
+
+  // (パターン名__日付) → ドラフトで割り当て済みの人数（O(1)参照用）
+  const draftSlotCount = new Map<string, number>();
+
+  for (let round = 1; round <= maxRound; round++) {
+    for (const date of allDates) { // カレンダー順（1日→末日）
+      const weekKey = isoWeekKey(date);
+
+      // その日に既に割り当て済みのスタッフ（既存確定 + ドラフト + 他セクション）
+      const assignedOnDate = new Set<string>();
+      for (const [k] of existingMap) {
+        if (k.endsWith(`__${date}`)) assignedOnDate.add(k.replace(`__${date}`, ""));
       }
-      dateHolidayCount.set(d, cnt);
-    }
-    const processOrder = allDates.slice().sort((a, b) => {
-      const diff = (dateHolidayCount.get(b) ?? 0) - (dateHolidayCount.get(a) ?? 0);
-      if (diff !== 0) return diff; // 希望休が多い日を先に
-      return a < b ? -1 : 1; // 同率はカレンダー昇順
-    });
-
-  let processedCount = 0;
-  for (const date of processOrder) {
-    processedCount++;
-    const weekKey = isoWeekKey(date);
-
-    const assignedOnDate = new Set<string>();
-    for (const [k] of existingMap) {
-      if (k.endsWith(`__${date}`)) assignedOnDate.add(k.replace(`__${date}`, ""));
-    }
-    for (const [staffId, dates] of draftDates) {
-      if (dates.has(date)) assignedOnDate.add(staffId);
-    }
-    // 他セクションのドラフト割当も「その日は使用済み」として扱う
-    if (otherSectionDates) {
-      for (const [staffId, dates] of otherSectionDates) {
+      for (const [staffId, dates] of draftDates) {
         if (dates.has(date)) assignedOnDate.add(staffId);
       }
-    }
-
-    for (const pattern of patterns) {
-      const slotRequired = slotMap.get(`${pattern.name}__${date}`);
-      let required: number;
-      if (slotRequired !== undefined && slotRequired > 0) {
-        // スロット要件が 1以上 明示設定されている場合のみ使用（0は「未設定」と同じ扱い）
-        required = slotRequired;
-      } else {
-        // 未設定 or 0 → パターン自体の必要人数設定を確認
-        const dow = new Date(date + "T00:00:00Z").getUTCDay();
-        const isWeekend = dow === 0 || dow === 6;
-        const patternRequired = isWeekend
-          ? (pattern.required_weekend ?? pattern.required_count ?? 0)
-          : (pattern.required_weekday ?? pattern.required_count ?? 0);
-        // パターンも 0（未設定）ならスタッフ人数ベースの自動計算値を使用
-        required = patternRequired > 0 ? patternRequired : autoRequiredPerDay;
+      if (otherSectionDates) {
+        for (const [staffId, dates] of otherSectionDates) {
+          if (dates.has(date)) assignedOnDate.add(staffId);
+        }
       }
-      if (required === 0) continue;
 
-      // 再仮組み対象パターンは「ゼロから再生成」するので既存確定数は無視
-      const alreadyAssigned = regenPatternNames?.has(pattern.name) ? 0 : (existingShiftRows ?? []).filter(
-        s => s.shift_date === date && s.shift_name === pattern.name
-      ).length;
-      const needMore = required - alreadyAssigned;
-      if (needMore <= 0) continue;
-
-      const candidates = activeMemberRows.filter(m => {
-        // 離脱日チェック（end_date より後の日付には配置しない）
-        const endDate = (m as { end_date?: string | null }).end_date ?? null;
-        if (endDate && date > endDate) return false;
-
-        // 希望休・同日割当済み
-        if (holidaySet.has(`${m.staff_id}__${date}`)) return false;
-        if (assignedOnDate.has(m.staff_id)) return false;
-        if (existingMap.has(`${m.staff_id}__${date}`)) return false;
-
-        // セクション一致
-        if (pattern.section) {
-          const ms = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
-          const effectiveSections = ms.length > 0 ? ms : (m.section ? [m.section] : []);
-          // セクション未設定スタッフはセクション指定パターンに配置不可
-          if (effectiveSections.length === 0) return false;
-          if (!effectiveSections.includes(pattern.section)) return false;
+      for (const pattern of patterns) {
+        const slotRequired = slotMap.get(`${pattern.name}__${date}`);
+        let required: number;
+        if (slotRequired !== undefined && slotRequired > 0) {
+          required = slotRequired;
+        } else {
+          const dow = new Date(date + "T00:00:00Z").getUTCDay();
+          const isWeekend = dow === 0 || dow === 6;
+          const patternRequired = isWeekend
+            ? (pattern.required_weekend ?? pattern.required_count ?? 0)
+            : (pattern.required_weekday ?? pattern.required_count ?? 0);
+          required = patternRequired > 0 ? patternRequired : autoRequiredPerDay;
         }
 
-        // ロール一致
-        if (pattern.target_role === "admin" && m.role !== "project_admin") return false;
-        if (pattern.target_role === "staff" && m.role !== "staff") return false;
+        if (round > required) continue; // このラウンドは不要
 
-        // 月稼働日数上限（未設定時は月21日をデフォルトとして適用）
-        const wdType  = (m as { work_days_type?: string | null }).work_days_type  || "monthly";
-        const wdCountRaw = (m as { work_days_count?: number | null }).work_days_count;
-        const wdCount = (wdCountRaw != null && wdCountRaw > 0) ? wdCountRaw : 21;
-        if (wdType === "monthly") {
-          const current = (draftMonthCount.get(m.staff_id) ?? 0)
-            + (existingMonthCount.get(m.staff_id) ?? 0)
-            + (otherSectionMonthCount?.get(m.staff_id) ?? 0); // 他セクション分を加算
-          if (current >= wdCount) return false;
-        }
+        // このラウンドで配置が必要か確認
+        // 既存確定 + ドラフト割当済み が round 未満なら1人追加
+        const existingCount = regenPatternNames?.has(pattern.name) ? 0
+          : (existingShiftRows ?? []).filter(
+              s => s.shift_date === date && s.shift_name === pattern.name
+            ).length;
+        const slotKey = `${pattern.name}__${date}`;
+        const draftCount = draftSlotCount.get(slotKey) ?? 0;
+        if (existingCount + draftCount >= round) continue; // このラウンド分は充足
 
-        // 週稼働日数上限
-        if (wdType === "weekly") {
-          const draftWeekCount = [...(draftDates.get(m.staff_id) ?? new Set<string>())]
-            .filter(d => isoWeekKey(d) === weekKey).length;
-          const existWeekCount = [...(existingDateSet.get(m.staff_id) ?? new Set<string>())]
-            .filter(d => isoWeekKey(d) === weekKey && d >= dateFrom).length;
-          if (draftWeekCount + existWeekCount >= wdCount) return false;
-        }
+        // 候補スタッフのフィルタリング
+        const candidates = activeMemberRows.filter(m => {
+          // 離脱日チェック
+          const endDate = (m as { end_date?: string | null }).end_date ?? null;
+          if (endDate && date > endDate) return false;
+          // 希望休・同日割当済み
+          if (holidaySet.has(`${m.staff_id}__${date}`)) return false;
+          if (assignedOnDate.has(m.staff_id)) return false;
+          if (existingMap.has(`${m.staff_id}__${date}`)) return false;
+          // セクション一致
+          if (pattern.section) {
+            const ms = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
+            const effectiveSections = ms.length > 0 ? ms : (m.section ? [m.section] : []);
+            if (effectiveSections.length === 0) return false;
+            if (!effectiveSections.includes(pattern.section)) return false;
+          }
+          // ロール一致
+          if (pattern.target_role === "admin" && m.role !== "project_admin") return false;
+          if (pattern.target_role === "staff" && m.role !== "staff") return false;
+          // 月稼働日数上限
+          const wdType  = (m as { work_days_type?: string | null }).work_days_type  || "monthly";
+          const wdCountRaw = (m as { work_days_count?: number | null }).work_days_count;
+          const wdCount = (wdCountRaw != null && wdCountRaw > 0) ? wdCountRaw : 21;
+          if (wdType === "monthly") {
+            const current = (draftMonthCount.get(m.staff_id) ?? 0)
+              + (existingMonthCount.get(m.staff_id) ?? 0)
+              + (otherSectionMonthCount?.get(m.staff_id) ?? 0);
+            if (current >= wdCount) return false;
+          }
+          // 週稼働日数上限
+          if (wdType === "weekly") {
+            const draftWeekCount = [...(draftDates.get(m.staff_id) ?? new Set<string>())]
+              .filter(d => isoWeekKey(d) === weekKey).length;
+            const existWeekCount = [...(existingDateSet.get(m.staff_id) ?? new Set<string>())]
+              .filter(d => isoWeekKey(d) === weekKey && d >= dateFrom).length;
+            if (draftWeekCount + existWeekCount >= wdCount) return false;
+          }
+          // 連勤上限
+          const maxConsec = (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? 5;
+          if (consecutiveDaysBefore(m.staff_id, date) >= maxConsec) return false;
+          // 勤務間インターバル
+          const prevPattern = getPrevDayPattern(m.staff_id, date);
+          if (!hasAdequateInterval(prevPattern?.end_time, pattern.start_time)) return false;
+          return true;
+        });
 
-        // 連勤上限（前月末引き継ぎ込み）
-        const maxConsec = (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? 5;
-        if (consecutiveDaysBefore(m.staff_id, date) >= maxConsec) return false;
+        if (candidates.length === 0) continue;
 
-        // 勤務間インターバル（前日終了〜当日開始が11時間未満なら除外）
-        const prevPattern = getPrevDayPattern(m.staff_id, date);
-        if (!hasAdequateInterval(prevPattern?.end_time, pattern.start_time)) return false;
+        // ソート：優先シフト > 稼働率（低い順）> 連勤日数（少ない順）> ID
+        const conseqCache = new Map<string, number>(
+          candidates.map(m => [m.staff_id, consecutiveDaysBefore(m.staff_id, date)])
+        );
+        const scored = candidates.map(m => {
+          const ps   = (m as { preferred_shift?: string | null }).preferred_shift;
+          const pSec = (m as { preferred_section?: string | null }).preferred_section;
+          let score = 0;
+          if (ps === pattern.name) score++;
+          if (pattern.section && pSec === pattern.section) score++;
+          return { m, score };
+        });
+        scored.sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          const aAssigned = (draftMonthCount.get(a.m.staff_id) ?? 0)
+            + (existingMonthCount.get(a.m.staff_id) ?? 0)
+            + (otherSectionMonthCount?.get(a.m.staff_id) ?? 0);
+          const bAssigned = (draftMonthCount.get(b.m.staff_id) ?? 0)
+            + (existingMonthCount.get(b.m.staff_id) ?? 0)
+            + (otherSectionMonthCount?.get(b.m.staff_id) ?? 0);
+          const aTargetRaw = (a.m as { work_days_count?: number | null }).work_days_count;
+          const bTargetRaw = (b.m as { work_days_count?: number | null }).work_days_count;
+          const aTarget = (aTargetRaw != null && aTargetRaw > 0) ? aTargetRaw : 21;
+          const bTarget = (bTargetRaw != null && bTargetRaw > 0) ? bTargetRaw : 21;
+          const aRate = aAssigned / Math.max(1, aTarget);
+          const bRate = bAssigned / Math.max(1, bTarget);
+          if (Math.abs(aRate - bRate) > 0.005) return aRate - bRate;
+          const aConsec = conseqCache.get(a.m.staff_id) ?? 0;
+          const bConsec = conseqCache.get(b.m.staff_id) ?? 0;
+          if (aConsec !== bConsec) return aConsec - bConsec;
+          return a.m.staff_id < b.m.staff_id ? -1 : 1;
+        });
 
-        return true;
-      });
-
-      // ── 容量均等ペーシング（ハード制約） ──────────────────────────────
-      // 「今日実際に配置可能なスタッフ（candidates）」の残稼働容量を残り日数で均等配分し、
-      // 今日の割当上限を決める。これにより本日休みのスタッフを過大評価せず、
-      // 後日に十分な容量を残せる。
-      const remainingDateCount = processOrder.length - processedCount + 1;
-      const poolRemainingCap = candidates.reduce((sum, m2) => {
-        const wdType2 = (m2 as { work_days_type?: string | null }).work_days_type || "monthly";
-        if (wdType2 !== "monthly") return sum + lastDay;
-        const wdRaw2 = (m2 as { work_days_count?: number | null }).work_days_count;
-        const wdTarget2 = (wdRaw2 != null && wdRaw2 > 0) ? wdRaw2 : 21;
-        const cur2 = (draftMonthCount.get(m2.staff_id) ?? 0)
-          + (existingMonthCount.get(m2.staff_id) ?? 0)
-          + (otherSectionMonthCount?.get(m2.staff_id) ?? 0);
-        return sum + Math.max(0, wdTarget2 - cur2);
-      }, 0);
-      const capacityBudget = Math.max(1, Math.ceil(poolRemainingCap / remainingDateCount));
-      const sourceCandidates = candidates;
-
-      // 連勤日数を事前キャッシュ（sort 内で複数回参照するため）
-      const conseqCache = new Map<string, number>(
-        sourceCandidates.map(m => [m.staff_id, consecutiveDaysBefore(m.staff_id, date)])
-      );
-
-      // 優先度スコアでソート（同点時は稼働率が低いスタッフ優先で均等配分）
-      const scored = sourceCandidates.map(m => {
-        const ps   = (m as { preferred_shift?: string | null }).preferred_shift;
-        const pSec = (m as { preferred_section?: string | null }).preferred_section;
-        let score = 0;
-        if (ps === pattern.name) score++;
-        if (pattern.section && pSec === pattern.section) score++;
-        return { m, score };
-      });
-      scored.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        // 均等配分: 稼働率（割当済/目標）が低いスタッフを優先
-        // → 月全体を通じて各スタッフの稼働が平均的に分散される
-        const aAssigned = (draftMonthCount.get(a.m.staff_id) ?? 0)
-          + (existingMonthCount.get(a.m.staff_id) ?? 0)
-          + (otherSectionMonthCount?.get(a.m.staff_id) ?? 0);
-        const bAssigned = (draftMonthCount.get(b.m.staff_id) ?? 0)
-          + (existingMonthCount.get(b.m.staff_id) ?? 0)
-          + (otherSectionMonthCount?.get(b.m.staff_id) ?? 0);
-        const aTargetRaw = (a.m as { work_days_count?: number | null }).work_days_count;
-        const bTargetRaw = (b.m as { work_days_count?: number | null }).work_days_count;
-        const aTarget = (aTargetRaw != null && aTargetRaw > 0) ? aTargetRaw : 21;
-        const bTarget = (bTargetRaw != null && bTargetRaw > 0) ? bTargetRaw : 21;
-        const aRate = aAssigned / Math.max(1, aTarget);
-        const bRate = bAssigned / Math.max(1, bTarget);
-        if (Math.abs(aRate - bRate) > 0.005) return aRate - bRate; // 稼働率が低い方を先に使う
-        // 連勤日数が少ない（より休んでいる）スタッフを優先
-        // → 各スタッフの連勤パターンが自然にずれ、強制休日が特定日に集中しなくなる
-        const aConsec = conseqCache.get(a.m.staff_id) ?? 0;
-        const bConsec = conseqCache.get(b.m.staff_id) ?? 0;
-        if (aConsec !== bConsec) return aConsec - bConsec;
-        return a.m.staff_id < b.m.staff_id ? -1 : 1; // 決定論的タイブレーカー
-      });
-
-      const toAssign = scored.slice(0, Math.min(needMore, capacityBudget)).map(s => s.m);
-
-      for (const m of toAssign) {
+        // このラウンドで1人だけ配置
+        const m = scored[0].m;
         draft.set(`${m.staff_id}__${date}`, {
           shiftName:  pattern.name,
           shiftStart: pattern.start_time,
           shiftEnd:   pattern.end_time,
         });
         assignedOnDate.add(m.staff_id);
-
-        // カウンタ更新
         draftMonthCount.set(m.staff_id, (draftMonthCount.get(m.staff_id) ?? 0) + 1);
         if (!draftDates.has(m.staff_id)) draftDates.set(m.staff_id, new Set());
         draftDates.get(m.staff_id)!.add(date);
         if (!draftPatternByDate.has(m.staff_id)) draftPatternByDate.set(m.staff_id, new Map());
         draftPatternByDate.get(m.staff_id)!.set(date, pattern.name);
+        draftSlotCount.set(slotKey, draftCount + 1);
       }
     }
-  }} // for processOrder / processOrder block
+  } // end round-robin
 
   if (draft.size === 0) {
     const sec = targetSection ?? "";
