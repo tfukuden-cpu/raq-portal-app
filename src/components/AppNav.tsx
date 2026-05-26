@@ -1,16 +1,17 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import type { NavItem, NavSection } from "@/app/(portal)/layout";
-import { ICON_MAP, MenuIcon, LogOutIcon } from "@/components/icons";
+import { ICON_MAP, MenuIcon } from "@/components/icons";
 
 interface AppNavProps {
   sections: NavSection[];
   staffName: string;
   projectName: string | null;
   logoutAction: () => Promise<void>;
+  switchProjectAction: (projectId: string) => Promise<void>;
   initialCollapsed: boolean;
   children: React.ReactNode;
 }
@@ -19,11 +20,14 @@ export default function AppNav({
   sections,
   staffName,
   logoutAction,
+  switchProjectAction,
   initialCollapsed,
   children,
 }: AppNavProps) {
   const pathname = usePathname();
+  const router   = useRouter();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const [switching, startSwitch]  = useTransition();
 
   const toggle = () => {
     const next = !collapsed;
@@ -37,10 +41,16 @@ export default function AppNav({
     return pathname === href || pathname.startsWith(href + "/");
   };
 
+  function handleSwitchProject(projectId: string) {
+    startSwitch(async () => {
+      await switchProjectAction(projectId);
+      router.refresh();
+    });
+  }
+
   const isCol = collapsed;
   const initial = staffName.charAt(0).toUpperCase();
 
-  // モバイル: 現在のパスが属するセクションを初期表示
   const defaultSectionIdx = Math.max(
     0,
     sections.findIndex(s => s.items.some(item => isActive(item.href)))
@@ -49,6 +59,54 @@ export default function AppNav({
   const activeSection = sections[activeSectionIdx] ?? sections[0];
   const showSectionTabs = sections.length > 1;
 
+  // ── 案件タブコンポーネント（PC用） ───────────────────
+  function ProjectTabsPC({ tabs }: { tabs: NonNullable<NavSection["projectTabs"]> }) {
+    return (
+      <div className="px-2 pb-1.5">
+        <div className="flex flex-wrap gap-1">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => handleSwitchProject(tab.id)}
+              disabled={switching}
+              className={[
+                "px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors truncate max-w-[80px]",
+                tab.isActive
+                  ? "bg-blue-600 text-white"
+                  : "bg-white/[0.06] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.1]",
+              ].join(" ")}
+              title={tab.name}
+            >
+              {tab.name.length > 6 ? tab.name.slice(0, 6) + "…" : tab.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── 案件タブコンポーネント（モバイル用） ─────────────
+  function ProjectTabsMobile({ tabs }: { tabs: NonNullable<NavSection["projectTabs"]> }) {
+    return (
+      <div className="flex overflow-x-auto gap-1.5 px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800" style={{ scrollbarWidth: "none" }}>
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => handleSwitchProject(tab.id)}
+            disabled={switching}
+            className={[
+              "flex-shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-colors whitespace-nowrap",
+              tab.isActive
+                ? "bg-blue-600 text-white"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400",
+            ].join(" ")}
+          >
+            {tab.name}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -89,6 +147,10 @@ export default function AppNav({
                   {section.title}
                 </p>
               )}
+              {/* 案件切り替えタブ（運用者の管理セクション） */}
+              {!isCol && section.projectTabs && section.projectTabs.length > 0 && (
+                <ProjectTabsPC tabs={section.projectTabs} />
+              )}
               {section.items.map((item) => {
                 const active = isActive(item.href);
                 const Icon = ICON_MAP[item.icon];
@@ -100,9 +162,7 @@ export default function AppNav({
                     className={`relative flex items-center h-8 rounded-md transition-colors overflow-hidden ${
                       isCol ? "justify-center" : "gap-2.5 px-2.5"
                     } ${
-                      active
-                        ? "text-zinc-100"
-                        : "text-zinc-500 hover:text-zinc-200"
+                      active ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-200"
                     }`}
                   >
                     {active && (
@@ -159,7 +219,7 @@ export default function AppNav({
       {/* ── モバイル bottom nav ── */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
 
-        {/* セクション切り替え（セグメントコントロール） */}
+        {/* セクション切り替えタブ */}
         {showSectionTabs && (
           <div className="px-3 pt-2 pb-1">
             <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
@@ -187,6 +247,11 @@ export default function AppNav({
           </div>
         )}
 
+        {/* 案件切り替えタブ（管理セクション表示中のみ） */}
+        {activeSection.projectTabs && activeSection.projectTabs.length > 0 && (
+          <ProjectTabsMobile tabs={activeSection.projectTabs} />
+        )}
+
         {/* ナビアイテム */}
         <nav className="flex overflow-x-auto px-1 pb-1" style={{ scrollbarWidth: "none" }}>
           {activeSection.items.map((item) => {
@@ -197,9 +262,7 @@ export default function AppNav({
                 key={item.href}
                 href={item.href}
                 className={`flex-shrink-0 flex flex-col items-center justify-center py-1.5 px-2.5 gap-0.5 min-w-[58px] rounded-xl transition-colors ${
-                  active
-                    ? "text-blue-600 dark:text-blue-400"
-                    : "text-zinc-400 dark:text-zinc-500"
+                  active ? "text-blue-600 dark:text-blue-400" : "text-zinc-400 dark:text-zinc-500"
                 }`}
               >
                 <div className={`p-1.5 rounded-xl transition-colors ${active ? "bg-blue-50 dark:bg-blue-950/60" : ""}`}>

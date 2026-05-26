@@ -5,11 +5,20 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AppNav from "@/components/AppNav";
 import { logoutAction } from "@/app/login/actions";
+import { switchProjectAction } from "./switch-project-action";
 import type { IconKey } from "@/components/icons";
 
 export type NavItem = { href: string; icon: IconKey; label: string };
-export type NavSection = { title?: string; mobileLabel?: string; icon?: IconKey; items: NavItem[] };
+export type NavSection = {
+  title?: string;
+  mobileLabel?: string;
+  icon?: IconKey;
+  items: NavItem[];
+  /** 運用者アカウントの管理セクション用：案件切り替えタブ */
+  projectTabs?: { id: string; name: string; isActive: boolean }[];
+};
 
+// ── スタッフ共通メニュー ─────────────────────────────────
 const STAFF_ITEMS: NavItem[] = [
   { href: "/dashboard",  icon: "Home",          label: "ホーム" },
   { href: "/shifts",     icon: "Calendar",      label: "シフト" },
@@ -19,38 +28,31 @@ const STAFF_ITEMS: NavItem[] = [
   { href: "/help",       icon: "HelpCircle",    label: "ヘルプ" },
 ];
 
-const PROJECT_ADMIN_ITEMS: NavItem[] = [
-  { href: "/attendance",      icon: "Users",           label: "当日状況" },
-  { href: "/seating",         icon: "LayoutGrid",      label: "座席表" },
+const TASK_ITEM: NavItem = { href: "/tasks", icon: "CheckSquare", label: "タスク" };
+
+// ── 管理メニュー（管理者・運用者共通） ───────────────────
+const ADMIN_MENU_ITEMS: NavItem[] = [
+  { href: "/attendance",      icon: "Users",           label: "当日状況" },   // 座席表統合
   { href: "/shifts/manage",   icon: "CalendarSettings", label: "シフト管理" },
   { href: "/members",         icon: "IdCard",          label: "メンバー管理" },
-  { href: "/notices/manage",  icon: "Megaphone",       label: "周知管理" },
-  { href: "/inquiries/manage", icon: "MessageSquare",  label: "問合せ管理" },
+  { href: "/notices/manage",  icon: "Megaphone",       label: "周知・問合せ" }, // 周知＋問合せ統合
   { href: "/attendance/edit", icon: "ClipboardCheck",  label: "勤怠管理" },
-  { href: "/tasks",           icon: "CheckSquare",     label: "タスク" },
-  { href: "/line-settings",   icon: "Smartphone",      label: "LINE設定" },
+  { href: "/line-settings",   icon: "Smartphone",      label: "LINE連携" },
   { href: "/admin",           icon: "Settings",        label: "案件設定" },
 ];
 
-const EXECUTIVE_ITEMS: NavItem[] = [
-  { href: "/admin", icon: "Grid", label: "案件管理" },
-  { href: "/admin/staffs", icon: "IdCard", label: "スタッフ管理" },
+// ── 運用メニュー（運用者のみ） ───────────────────────────
+const OPS_MENU_ITEMS: NavItem[] = [
+  { href: "/admin",           icon: "Grid",   label: "案件管理" },
   { href: "/admin/operators", icon: "Shield", label: "運用者管理" },
+  { href: "/admin/staffs",    icon: "IdCard", label: "スタッフ一覧" },
 ];
 
-const MY_STAFF: NavItem = { href: "/my",       icon: "UserCircle", label: "My" };
-const MY_ADMIN: NavItem = { href: "/my", icon: "UserCircle", label: "My" };
+const MY_ITEM: NavItem = { href: "/my", icon: "UserCircle", label: "My" };
 
-export default async function PortalLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return <>{children}</>;
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
@@ -61,15 +63,29 @@ export default async function PortalLayout({
     .eq("id", staffId)
     .maybeSingle();
 
-  // LINE未連携の場合は連携ページへ強制リダイレクト
-  if (!staff?.line_user_id) {
-    redirect("/link-line");
-  }
+  if (!staff?.line_user_id) redirect("/link-line");
 
   const isExecutive   = staff?.global_role === "executive";
-  const isGlobalAdmin = staff?.global_role === "admin" || staff?.global_role === "executive";
+  const isGlobalAdmin = staff?.global_role === "admin";
 
-  // 運用者は全案件リストを取得
+  const cookieStore    = await cookies();
+  const initialCollapsed = cookieStore.get("rqp-nav-collapsed")?.value === "true";
+
+  const projectId = await getCurrentProjectId();
+  let isProjectAdmin = false;
+  let projectName: string | null = null;
+
+  if (projectId) {
+    const [{ data: project }, { data: membership }] = await Promise.all([
+      supabase.from("projects").select("name").eq("id", projectId).maybeSingle(),
+      supabase.from("project_members").select("role")
+        .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle(),
+    ]);
+    projectName = project?.name ?? null;
+    isProjectAdmin = membership?.role === "project_admin";
+  }
+
+  // ── 運用者：全案件リスト取得（案件切り替えタブ用） ───
   let opsProjects: { id: string; name: string }[] = [];
   if (isExecutive) {
     const admin = createAdminClient();
@@ -78,30 +94,7 @@ export default async function PortalLayout({
     opsProjects = pj ?? [];
   }
 
-  const cookieStore = await cookies();
-  const initialCollapsed =
-    cookieStore.get("rqp-nav-collapsed")?.value === "true";
-
-  // 案件メンバーシップを全アカウント共通で取得
-  const projectId = await getCurrentProjectId();
-  let isProjectAdmin = false;
-  let projectName: string | null = null;
-
-  if (projectId) {
-    const [{ data: project }, { data: membership }] = await Promise.all([
-      supabase.from("projects").select("name").eq("id", projectId).maybeSingle(),
-      supabase
-        .from("project_members")
-        .select("role")
-        .eq("staff_id", staffId)
-        .eq("project_id", projectId)
-        .maybeSingle(),
-    ]);
-    projectName = project?.name ?? null;
-    isProjectAdmin = membership?.role === "project_admin";
-  }
-
-  // 利用可能モードを確定（運用者はops固定、管理者はadmin固定、スタッフのみstaffと切替可）
+  // ── 表示モード確定 ───────────────────────────────────
   type ViewMode = "staff" | "admin" | "ops";
   let viewMode: ViewMode;
   if (isExecutive) {
@@ -109,28 +102,38 @@ export default async function PortalLayout({
   } else if (isGlobalAdmin) {
     viewMode = "admin";
   } else if (isProjectAdmin) {
-    // project_admin はstaffビューへの切替可
     const savedMode = cookieStore.get("rqp-view-mode")?.value as ViewMode | undefined;
     viewMode = (savedMode === "staff" || savedMode === "admin") ? savedMode : "admin";
   } else {
     viewMode = "staff";
   }
 
-  // 表示モードに応じてメニューを構築
+  // ── セクション構築 ───────────────────────────────────
   let sections: NavSection[];
+
   if (viewMode === "ops") {
+    // 運用者：管理セクションに案件切り替えタブを付与
+    const projectTabs = opsProjects.map(p => ({
+      id: p.id, name: p.name, isActive: p.id === projectId,
+    }));
     sections = [
-      { mobileLabel: "メイン", icon: "Home",     items: [...STAFF_ITEMS, MY_ADMIN] },
-      { title: "管理",         icon: "Settings", items: PROJECT_ADMIN_ITEMS },
-      { title: "運営",         icon: "Shield",   items: EXECUTIVE_ITEMS },
+      { mobileLabel: "メイン", icon: "Home",
+        items: [...STAFF_ITEMS, TASK_ITEM, MY_ITEM] },
+      { title: "管理", icon: "Settings",
+        items: ADMIN_MENU_ITEMS,
+        projectTabs },
+      { title: "運営", icon: "Shield",
+        items: OPS_MENU_ITEMS },
     ];
   } else if (viewMode === "admin") {
     sections = [
-      { mobileLabel: "メイン", icon: "Home",     items: [...STAFF_ITEMS, MY_ADMIN] },
-      { title: "管理",         icon: "Settings", items: PROJECT_ADMIN_ITEMS },
+      { mobileLabel: "メイン", icon: "Home",
+        items: [...STAFF_ITEMS, TASK_ITEM, MY_ITEM] },
+      { title: "管理", icon: "Settings",
+        items: ADMIN_MENU_ITEMS },
     ];
   } else {
-    sections = [{ items: [...STAFF_ITEMS, MY_STAFF] }];
+    sections = [{ items: [...STAFF_ITEMS, MY_ITEM] }];
   }
 
   const staffName = staff?.display_name ?? staff?.name ?? staffId;
@@ -141,6 +144,7 @@ export default async function PortalLayout({
       staffName={staffName}
       projectName={projectName}
       logoutAction={logoutAction}
+      switchProjectAction={switchProjectAction}
       initialCollapsed={initialCollapsed}
     >
       {children}
