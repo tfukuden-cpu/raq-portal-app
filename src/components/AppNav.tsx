@@ -59,31 +59,10 @@ export default function AppNav({
   const activeSection = sections[activeSectionIdx] ?? sections[0];
   const showSectionTabs = sections.length > 1;
 
-  // ── 案件タブコンポーネント（PC用） ───────────────────
-  function ProjectTabsPC({ tabs }: { tabs: NonNullable<NavSection["projectTabs"]> }) {
-    return (
-      <div className="px-2 pb-1.5">
-        <div className="flex flex-wrap gap-1">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => handleSwitchProject(tab.id)}
-              disabled={switching}
-              className={[
-                "px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors truncate max-w-[80px]",
-                tab.isActive
-                  ? "bg-blue-600 text-white"
-                  : "bg-white/[0.06] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.1]",
-              ].join(" ")}
-              title={tab.name}
-            >
-              {tab.name.length > 6 ? tab.name.slice(0, 6) + "…" : tab.name}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // 全セクションから projectTabs を抽出（最初に見つかったもの）
+  const allProjectTabs = sections.flatMap(s => s.projectTabs ?? []).length > 0
+    ? sections.find(s => s.projectTabs && s.projectTabs.length > 0)?.projectTabs ?? null
+    : null;
 
   // ── 案件タブコンポーネント（モバイル用） ─────────────
   function ProjectTabsMobile({ tabs }: { tabs: NonNullable<NavSection["projectTabs"]> }) {
@@ -147,10 +126,6 @@ export default function AppNav({
                   {section.title}
                 </p>
               )}
-              {/* 案件切り替えタブ（運用者の管理セクション） */}
-              {!isCol && section.projectTabs && section.projectTabs.length > 0 && (
-                <ProjectTabsPC tabs={section.projectTabs} />
-              )}
               {section.items.map((item) => {
                 const active = isActive(item.href);
                 const Icon = ICON_MAP[item.icon];
@@ -210,9 +185,32 @@ export default function AppNav({
       </aside>
 
       {/* ── メインコンテンツ ── */}
-      <div className={`flex-1 min-w-0 transition-[padding] duration-200 ease-in-out pb-safe md:pb-0 ${
+      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out pb-safe md:pb-0 ${
         isCol ? "md:pl-14" : "md:pl-52"
       }`}>
+
+        {/* ファイルタブ風 案件切り替えバー（PC・運用者のみ） */}
+        {allProjectTabs && allProjectTabs.length > 0 && (
+          <div className="hidden md:flex items-end overflow-x-auto border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 flex-shrink-0" style={{ scrollbarWidth: "none" }}>
+            {allProjectTabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => handleSwitchProject(tab.id)}
+                disabled={switching}
+                title={tab.name}
+                className={[
+                  "relative flex items-center gap-1.5 px-4 h-9 text-[12px] font-medium whitespace-nowrap transition-colors flex-shrink-0 border-b-2",
+                  tab.isActive
+                    ? "border-blue-500 text-zinc-900 dark:text-zinc-50 bg-white dark:bg-zinc-950"
+                    : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
+                ].join(" ")}
+              >
+                {tab.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         {children}
       </div>
 
