@@ -128,8 +128,10 @@ export default function SeatLayoutEditor({
   const stepX = 100 / cols;
   const stepY = 100 / rows;
 
-  function snapX(x: number) { return Math.round(x / stepX) * stepX; }
-  function snapY(y: number) { return Math.round(y / stepY) * stepY; }
+  const halfX = stepX / 2;
+  const halfY = stepY / 2;
+  function snapX(x: number) { return Math.round(x / halfX) * halfX; }
+  function snapY(y: number) { return Math.round(y / halfY) * halfY; }
   function toKey(x: number, y: number) { return `${snapX(x).toFixed(3)},${snapY(y).toFixed(3)}`; }
 
   // クライアント座標 → キャンバス %（スクロール補正済）
