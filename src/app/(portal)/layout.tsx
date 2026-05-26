@@ -28,8 +28,6 @@ const STAFF_ITEMS: NavItem[] = [
   { href: "/help",       icon: "HelpCircle",    label: "ヘルプ" },
 ];
 
-const TASK_ITEM: NavItem = { href: "/tasks", icon: "CheckSquare", label: "タスク" };
-
 // ── 管理メニュー（管理者・運用者共通） ───────────────────
 const ADMIN_MENU_ITEMS: NavItem[] = [
   { href: "/attendance",      icon: "Users",           label: "当日状況" },   // 座席表統合
@@ -118,7 +116,7 @@ export default async function PortalLayout({ children }: { children: React.React
     }));
     sections = [
       { mobileLabel: "メイン", icon: "Home",
-        items: [...STAFF_ITEMS, TASK_ITEM, MY_ITEM] },
+        items: [...STAFF_ITEMS, MY_ITEM] },
       { title: "管理", icon: "Settings",
         items: ADMIN_MENU_ITEMS,
         projectTabs },
@@ -128,7 +126,7 @@ export default async function PortalLayout({ children }: { children: React.React
   } else if (viewMode === "admin") {
     sections = [
       { mobileLabel: "メイン", icon: "Home",
-        items: [...STAFF_ITEMS, TASK_ITEM, MY_ITEM] },
+        items: [...STAFF_ITEMS, MY_ITEM] },
       { title: "管理", icon: "Settings",
         items: ADMIN_MENU_ITEMS },
     ];

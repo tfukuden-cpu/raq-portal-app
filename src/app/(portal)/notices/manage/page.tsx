@@ -1,11 +1,12 @@
-﻿/**
- * 周知事項管理画面（管理者用）
+/**
+ * 周知・問合せ管理画面（管理者用）
+ * 周知事項と問い合わせをタブで切り替え
  */
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
-import NoticesManageClient from "./NoticesManageClient";
-import { ChevronLeftIcon } from "@/components/icons";
+import CommunicationsManageClient from "./CommunicationsManageClient";
 
 export default async function ManageNoticesPage() {
   const supabase = await createClient();
@@ -17,52 +18,40 @@ export default async function ManageNoticesPage() {
   if (!projectId) redirect("/select-project");
 
   // 権限チェック
-  const { data: myMembership } = await supabase
-    .from("project_members")
-    .select("role")
-    .eq("staff_id", staffId)
-    .eq("project_id", projectId)
-    .maybeSingle();
-  const { data: myStaff } = await supabase
-    .from("staffs")
-    .select("global_role")
-    .eq("id", staffId)
-    .maybeSingle();
+  const [{ data: myMembership }, { data: myStaff }] = await Promise.all([
+    supabase.from("project_members").select("role")
+      .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle(),
+    supabase.from("staffs").select("global_role").eq("id", staffId).maybeSingle(),
+  ]);
+
   const isAuthorized =
     myMembership?.role === "project_admin" ||
     myStaff?.global_role === "admin" ||
     myStaff?.global_role === "executive";
 
-  if (!isAuthorized) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black p-4">
-        <div className="text-center">
-          <p className="text-zinc-700 dark:text-zinc-300 mb-3">
-            このページにアクセスする権限がありません
-          </p>
-          <a href="/notices" className="text-sm text-blue-600 hover:text-blue-700">
-            <ChevronLeftIcon className="w-4 h-4 inline-block mr-1" />周知事項に戻る
-          </a>
-        </div>
-      </main>
-    );
-  }
+  if (!isAuthorized) redirect("/dashboard");
 
-  // 案件情報
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, name")
-    .eq("id", projectId)
-    .maybeSingle();
+  const admin = createAdminClient();
 
-  // お知らせ一覧
-  const { data: rawNotices } = await supabase
-    .from("notices")
-    .select("id, title, body, is_pinned, created_at, posted_by, staffs(display_name, name)")
-    .eq("project_id", projectId)
-    .order("is_pinned", { ascending: false })
-    .order("created_at", { ascending: false });
+  // 案件情報・周知事項・問い合わせを並列取得
+  const [
+    { data: project },
+    { data: rawNotices },
+    { data: rawInquiries },
+  ] = await Promise.all([
+    supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
+    supabase.from("notices")
+      .select("id, title, body, is_pinned, created_at, posted_by, staffs(display_name, name)")
+      .eq("project_id", projectId)
+      .order("is_pinned", { ascending: false })
+      .order("created_at", { ascending: false }),
+    admin.from("inquiries")
+      .select("id, title, body, status, reply, replied_by, replied_at, created_at, staff_id")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false }),
+  ]);
 
+  // 周知事項を整形
   const notices = (rawNotices ?? []).map((n) => {
     const staff = Array.isArray(n.staffs) ? n.staffs[0] : n.staffs;
     return {
@@ -72,26 +61,41 @@ export default async function ManageNoticesPage() {
       is_pinned: n.is_pinned,
       created_at: n.created_at,
       posted_by: n.posted_by,
-      poster_name: staff?.display_name ?? staff?.name ?? n.posted_by,
+      poster_name: (staff as { display_name?: string; name?: string } | null)?.display_name
+        ?? (staff as { display_name?: string; name?: string } | null)?.name
+        ?? n.posted_by,
     };
   });
 
+  // 問い合わせを整形（スタッフ名を別途取得）
+  const staffIds = [...new Set((rawInquiries ?? []).map(i => i.staff_id))];
+  const { data: staffRows } = staffIds.length > 0
+    ? await admin.from("staffs").select("id, display_name, name").in("id", staffIds)
+    : { data: [] };
+  const staffMap = new Map((staffRows ?? []).map(s => [s.id, s.display_name ?? s.name ?? s.id]));
+
+  const inquiries = (rawInquiries ?? []).map(inq => ({
+    id: inq.id,
+    staffName: staffMap.get(inq.staff_id) ?? inq.staff_id,
+    title: inq.title,
+    body: inq.body,
+    status: inq.status,
+    reply: inq.reply ?? null,
+    replied_at: inq.replied_at ?? null,
+    created_at: inq.created_at,
+  }));
+
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
-      {/* ── Sticky header ── */}
       <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 pt-5 pb-4">
-          <a href="/notices" className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 hover:text-zinc-600 transition-colors mb-1.5">
-            <ChevronLeftIcon className="w-3.5 h-3.5" />お知らせ
-          </a>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">周知事項管理</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">周知・問合せ管理</h1>
           <p className="text-sm font-semibold text-zinc-400 mt-0.5">{project?.name}</p>
         </div>
       </div>
       <div className="max-w-5xl mx-auto px-4 pt-4 pb-10">
-        <NoticesManageClient notices={notices} />
+        <CommunicationsManageClient notices={notices} inquiries={inquiries} />
       </div>
     </main>
   );
 }
-
