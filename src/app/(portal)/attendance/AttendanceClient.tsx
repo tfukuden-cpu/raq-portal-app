@@ -652,37 +652,48 @@ function ShiftChangesTab({
   });
 
   // シフトパターン軸に変換
-  // 各変更を「出たパターン（before）」と「入ったパターン（after）」に振り分け
-  type PatternRow =
-    | { type: "add";    staffName: string; fromShift: string | null }
-    | { type: "remove"; staffName: string; toShift:   string | null };
-
-  const patternMap = new Map<string, PatternRow[]>();
-
-  function push(pattern: string, row: PatternRow) {
-    if (!patternMap.has(pattern)) patternMap.set(pattern, []);
-    patternMap.get(pattern)!.push(row);
-  }
+  // パターンごとに「外れた人」「入った人」を収集し、ペアは「変更 A⇒B」で表示
+  const patternAdded   = new Map<string, string[]>(); // パターン → 入った人リスト
+  const patternRemoved = new Map<string, string[]>(); // パターン → 外れた人リスト
 
   for (const c of shiftChanges) {
     const before = c.beforeShift;
     const after  = c.afterShift;
+    if (!before && !after) continue;
+    if (before === after) continue;
 
-    if (!before && after) {
-      // 新規追加
-      push(after, { type: "add", staffName: c.staffName, fromShift: null });
-    } else if (before && !after) {
-      // 削除
-      push(before, { type: "remove", staffName: c.staffName, toShift: null });
-    } else if (before && after && before !== after) {
-      // 変更：beforeから出て afterへ入る
-      push(before, { type: "remove", staffName: c.staffName, toShift: after });
-      push(after,  { type: "add",    staffName: c.staffName, fromShift: before });
+    if (before) {
+      if (!patternRemoved.has(before)) patternRemoved.set(before, []);
+      patternRemoved.get(before)!.push(c.staffName);
     }
-    // before === after は実質変更なし（スキップ）
+    if (after) {
+      if (!patternAdded.has(after)) patternAdded.set(after, []);
+      patternAdded.get(after)!.push(c.staffName);
+    }
   }
 
-  const patterns = [...patternMap.entries()];
+  // 全パターン名を収集（追加・削除両方）
+  const allPatterns = [...new Set([...patternAdded.keys(), ...patternRemoved.keys()])];
+
+  // パターンごとに表示行を生成
+  type DisplayRow =
+    | { kind: "swap";   patternName: string; from: string; to: string }
+    | { kind: "add";    patternName: string; name: string }
+    | { kind: "remove"; patternName: string; name: string };
+
+  const displayRows: DisplayRow[] = [];
+  for (const pat of allPatterns) {
+    const added   = [...(patternAdded.get(pat)   ?? [])];
+    const removed = [...(patternRemoved.get(pat) ?? [])];
+    // ペアを「変更」として消化
+    while (added.length > 0 && removed.length > 0) {
+      displayRows.push({ kind: "swap", patternName: pat, from: removed.shift()!, to: added.shift()! });
+    }
+    // 余った追加
+    for (const name of added)   displayRows.push({ kind: "add",    patternName: pat, name });
+    // 余った削除
+    for (const name of removed) displayRows.push({ kind: "remove", patternName: pat, name });
+  }
 
   return (
     <div>
@@ -690,52 +701,45 @@ function ShiftChangesTab({
         確定シフト展開：{fmtPublished}
       </p>
 
-      {patterns.length === 0 ? (
+      {displayRows.length === 0 ? (
         <div className="py-10 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
           <p className="text-sm font-semibold text-zinc-500">変更なし</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {patterns.map(([patternName, rows]) => {
-            const added   = rows.filter(r => r.type === "add")    as Extract<PatternRow, { type: "add" }>[];
-            const removed = rows.filter(r => r.type === "remove") as Extract<PatternRow, { type: "remove" }>[];
-            const delta   = added.length - removed.length;
-
-            return (
-              <div key={patternName} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-                {/* パターンヘッダー */}
-                <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-between">
-                  <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{patternName}</span>
-                  {delta !== 0 && (
-                    <span className={`text-xs font-bold tabular-nums ${delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
-                      {delta > 0 ? `+${delta}` : delta}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {displayRows.map((row, i) => (
+              <div key={i} className="px-4 py-2.5 flex items-center gap-3">
+                {/* パターン名 */}
+                <span className="w-24 shrink-0 text-sm font-semibold text-zinc-700 dark:text-zinc-200 truncate">
+                  {row.patternName}
+                </span>
+                {/* 種別ラベル */}
+                {row.kind === "swap" && (
+                  <>
+                    <span className="shrink-0 text-xs font-semibold text-amber-600 dark:text-amber-400 w-8">変更</span>
+                    <span className="text-sm text-zinc-800 dark:text-zinc-100 flex items-center gap-1">
+                      <span className="text-zinc-500 dark:text-zinc-400">{row.from}</span>
+                      <span className="text-zinc-400">⇒</span>
+                      <span className="font-semibold">{row.to}</span>
                     </span>
-                  )}
-                </div>
-                {/* 増減リスト */}
-                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {added.map((r, i) => (
-                    <div key={`add-${i}`} className="px-4 py-2 flex items-center gap-2">
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold text-sm w-4 shrink-0">＋</span>
-                      <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{r.staffName}</span>
-                      {r.fromShift && (
-                        <span className="text-xs text-zinc-400 ml-1">（{r.fromShift} から）</span>
-                      )}
-                    </div>
-                  ))}
-                  {removed.map((r, i) => (
-                    <div key={`rem-${i}`} className="px-4 py-2 flex items-center gap-2">
-                      <span className="text-red-500 dark:text-red-400 font-bold text-sm w-4 shrink-0">－</span>
-                      <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">{r.staffName}</span>
-                      {r.toShift && (
-                        <span className="text-xs text-zinc-400 ml-1">（→ {r.toShift}）</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                  </>
+                )}
+                {row.kind === "add" && (
+                  <>
+                    <span className="shrink-0 text-xs font-semibold text-emerald-600 dark:text-emerald-400 w-8">追加</span>
+                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{row.name}</span>
+                  </>
+                )}
+                {row.kind === "remove" && (
+                  <>
+                    <span className="shrink-0 text-xs font-semibold text-red-500 dark:text-red-400 w-8">削除</span>
+                    <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">{row.name}</span>
+                  </>
+                )}
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
     </div>
