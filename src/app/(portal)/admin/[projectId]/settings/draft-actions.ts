@@ -463,7 +463,9 @@ export async function generateShiftDraftAction(
         if (pattern.section) {
           const ms = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
           const effectiveSections = ms.length > 0 ? ms : (m.section ? [m.section] : []);
-          if (effectiveSections.length > 0 && !effectiveSections.includes(pattern.section)) return false;
+          // セクション未設定スタッフはセクション指定パターンに配置不可
+          if (effectiveSections.length === 0) return false;
+          if (!effectiveSections.includes(pattern.section)) return false;
         }
 
         // ロール一致
@@ -570,7 +572,7 @@ export async function generateShiftDraftAction(
       if (diagPattern?.section) {
         const ms = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
         const eff = ms.length > 0 ? ms : (m.section ? [m.section] : []);
-        if (eff.length > 0 && !eff.includes(diagPattern.section)) { diag.section++; continue; }
+        if (eff.length === 0 || !eff.includes(diagPattern.section)) { diag.section++; continue; }
       }
       if (diagPattern?.target_role === "admin" && m.role !== "project_admin") { diag.role++; continue; }
       if (diagPattern?.target_role === "staff" && m.role !== "staff")          { diag.role++; continue; }
