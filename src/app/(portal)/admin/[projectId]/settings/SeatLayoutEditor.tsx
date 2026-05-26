@@ -15,8 +15,8 @@ export type SeatItem = {
 const SECTIONS = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク", ""];
 
 // グリッド設定（列数・行数）
-const COLS = 12;
-const ROWS = 9;
+const COLS = 20;
+const ROWS = 15;
 const STEP_X = 100 / COLS; // ≈ 8.33%
 const STEP_Y = 100 / ROWS; // ≈ 11.11%
 
@@ -246,13 +246,21 @@ export default function SeatLayoutEditor({
     const src = seats.find(s => s.localId === localId);
     if (!src) return;
     const newLocalId = `${baseId}-${Date.now()}`;
-    // 元席から1グリッド右 or 下にずらす
+    // 番号ラベルなら最大値+1、それ以外はそのままコピー
+    const maxNum = seats.reduce((max, s) => {
+      const n = parseInt(s.label);
+      return isNaN(n) ? max : Math.max(max, n);
+    }, 0);
+    const srcNum = parseInt(src.label);
+    const newLabel = isNaN(srcNum) ? src.label : `${maxNum + 1}`;
+    // 元席から1グリッド右にずらす
     const xPct = clamp(snapX(src.xPct + STEP_X), STEP_X / 2, 100 - STEP_X / 2);
     const yPct = clamp(snapY(src.yPct),           STEP_Y / 2, 100 - STEP_Y / 2);
     setSeats(prev => [...prev, {
       ...src,
       id: undefined,
       localId: newLocalId,
+      label: newLabel,
       xPct,
       yPct,
     }]);
