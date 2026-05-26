@@ -780,6 +780,8 @@ export default function ShiftEditGrid({
   const [regenError, setRegenError] = useState<string | null>(null);
   const [regenDone, setRegenDone] = useState<number | null>(null); // 完了後の割当数
   const [regenSection, setRegenSection] = useState<string>(""); // "" = 全セクション
+  // 仮保存チェックポイント履歴（戻す機能用）
+  const [draftHistory, setDraftHistory] = useState<Array<{ label: string; state: Map<string, DraftCell> }>>([]);
   // 保存系エラー（上部バナー）
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draftMsg, setDraftMsg] = useState<string | null>(null);
@@ -1029,6 +1031,8 @@ export default function ShiftEditGrid({
       if (r.ok) {
         setHasDraftFromDB(true);
         const now = new Date().toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
+        // 仮保存成功時にチェックポイントを記録（戻す用）
+        setDraftHistory(prev => [...prev, { label: now, state: new Map(drafts) }]);
         setDraftMsg(`仮保存しました（${now}）`);
         setTimeout(() => setDraftMsg(null), 3000);
       } else {
@@ -1048,27 +1052,82 @@ export default function ShiftEditGrid({
         setRegenError(r.message ?? "再仮組みに失敗しました");
         return;
       }
-      // 新しい下書きをグリッド状態に反映
-      const newDrafts = new Map<string, DraftCell>();
-      for (const e of r.draftEntries ?? []) {
-        const raw = e as unknown as Record<string, unknown>;
-        const key = (typeof e.k === "string" && e.k)
-          ? e.k
-          : (typeof raw.staffId === "string" && typeof raw.date === "string")
-          ? `${raw.staffId}__${raw.date}` : null;
-        if (!key) continue;
-        const shiftName  = typeof e.n === "string" ? e.n : null;
-        const shiftStart = typeof e.s === "string" ? e.s : null;
-        const shiftEnd   = typeof e.e === "string" ? e.e : null;
-        newDrafts.set(key, e.d ? null : { shiftName, shiftStart, shiftEnd });
+
+      // draftEntries → Map に変換するヘルパー
+      function parseDraftEntries(entries: typeof r.draftEntries): Map<string, DraftCell> {
+        const result = new Map<string, DraftCell>();
+        for (const e of entries ?? []) {
+          const raw = e as unknown as Record<string, unknown>;
+          const key = (typeof e.k === "string" && e.k)
+            ? e.k
+            : (typeof raw.staffId === "string" && typeof raw.date === "string")
+            ? `${raw.staffId}__${raw.date}` : null;
+          if (!key) continue;
+          const shiftName  = typeof e.n === "string" ? e.n : null;
+          const shiftStart = typeof e.s === "string" ? e.s : null;
+          const shiftEnd   = typeof e.e === "string" ? e.e : null;
+          result.set(key, e.d ? null : { shiftName, shiftStart, shiftEnd });
+        }
+        return result;
       }
-      setDrafts(newDrafts);
-      setRegenDone(r.assignedCount ?? newDrafts.size);
+
+      if (targetSection) {
+        // セクション指定の場合: 対象セクションのエントリのみ差し替え、他セクションは現在の drafts を保持
+        const regenPatternNames = new Set(
+          shiftPatterns.filter(p => p.section === targetSection).map(p => p.name)
+        );
+        // 現在の drafts をコピーして対象セクション分を削除
+        const merged = new Map(drafts);
+        for (const [key, val] of [...merged]) {
+          if (val !== null && val.shiftName && regenPatternNames.has(val.shiftName)) {
+            merged.delete(key);
+          }
+        }
+        // 新規生成エントリのうち対象セクション分を追加
+        for (const [key, val] of parseDraftEntries(r.draftEntries)) {
+          if (val === null || (val.shiftName && regenPatternNames.has(val.shiftName))) {
+            merged.set(key, val);
+          }
+        }
+        setDrafts(merged);
+      } else {
+        // 全セクション: DB から返ってきた全エントリで置き換え
+        setDrafts(parseDraftEntries(r.draftEntries));
+      }
+
+      setRegenDone(r.assignedCount ?? 0);
     });
   }
 
   // ── 確定保存 ─────────────────────────────────────────────────
-  function resetDrafts() { setDrafts(new Map()); setSaveError(null); }
+  function resetDrafts() {
+    if (draftHistory.length > 0) {
+      // 直前の仮保存チェックポイントに戻す
+      const prev = draftHistory[draftHistory.length - 1];
+      setDrafts(new Map(prev.state));
+      setDraftHistory(h => h.slice(0, -1));
+    } else {
+      // チェックポイントなし → 最初のロード状態（initialDraft）に戻す
+      setDrafts(() => {
+        if (!initialDraft || initialDraft.length === 0) return new Map();
+        const m = new Map<string, DraftCell>();
+        for (const e of initialDraft) {
+          const raw = e as unknown as Record<string, unknown>;
+          const key = (typeof e.k === "string" && e.k)
+            ? e.k
+            : (typeof raw.staffId === "string" && typeof raw.date === "string")
+            ? `${raw.staffId}__${raw.date}` : null;
+          if (!key) continue;
+          const shiftName = typeof e.n === "string" ? e.n : typeof raw.shiftName === "string" ? raw.shiftName : null;
+          const shiftStart = typeof e.s === "string" ? e.s : typeof raw.shiftStart === "string" ? raw.shiftStart : null;
+          const shiftEnd   = typeof e.e === "string" ? e.e : typeof raw.shiftEnd   === "string" ? raw.shiftEnd   : null;
+          m.set(key, e.d === true ? null : { shiftName, shiftStart, shiftEnd });
+        }
+        return m;
+      });
+    }
+    setSaveError(null);
+  }
 
   function handleCommit() {
     const snapshot = [...draftChanges]; // 通知用にスナップショット
@@ -1242,10 +1301,12 @@ export default function ShiftEditGrid({
               </span>
             )}
           </button>
-          {hasChanges && (
+          {(hasChanges || draftHistory.length > 0) && (
             <button onClick={resetDrafts} disabled={isPending || isSavingDraft}
-              className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
-              戻す
+              className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+              title={draftHistory.length > 0 ? `仮保存${draftHistory.length}件の履歴あり` : undefined}
+            >
+              {draftHistory.length > 0 ? `戻す (${draftHistory.length})` : "戻す"}
             </button>
           )}
           {!isPublished && (
