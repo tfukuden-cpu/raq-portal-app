@@ -152,6 +152,22 @@ export async function POST(req: NextRequest) {
     console.error("[webhook] fatal error:", err, "body:", rawBody.slice(0, 500));
   }
 
+  // 転送先が設定されていれば非同期で転送（fire-and-forget）
+  // 同じチャンネルシークレットで署名済みなので転送先でも検証が通る
+  const forwardUrl = process.env.LINE_FORWARD_WEBHOOK_URL;
+  if (forwardUrl && rawBody) {
+    fetch(forwardUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type":    "application/json",
+        "x-line-signature": req.headers.get("x-line-signature") ?? "",
+      },
+      body: rawBody,
+    }).catch(err => {
+      console.error("[webhook] forward error:", err);
+    });
+  }
+
   // LINEには常に200を返す（エラーでも再送させない）
   return NextResponse.json({ ok: true });
 }
