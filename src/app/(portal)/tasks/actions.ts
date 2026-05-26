@@ -93,25 +93,10 @@ export async function deleteTaskGroupAction(id: string) {
 
 // 手動でタスク抽出を実行
 export async function triggerExtractTasksAction() {
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      ? process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000"
-      : "http://localhost:3000";
-
-    const res = await fetch(`${baseUrl}/api/cron/extract-tasks`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${process.env.CRON_SECRET ?? ""}`,
-      },
-    });
-    const json = await res.json() as { ok?: boolean; extracted?: number; error?: string };
-    revalidatePath("/tasks");
-    return { success: json.ok ?? false, extracted: json.extracted ?? 0, message: json.error };
-  } catch (e) {
-    return { success: false, message: String(e) };
-  }
+  const { runExtractTasks } = await import("@/lib/extract-tasks");
+  const result = await runExtractTasks();
+  revalidatePath("/tasks");
+  return { success: result.ok, extracted: result.extracted, message: result.error };
 }
 
 // タスクを手動で追加
