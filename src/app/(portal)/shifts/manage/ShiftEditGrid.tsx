@@ -1984,8 +1984,6 @@ export default function ShiftEditGrid({
                                 : isToday
                                 ? "bg-blue-50/40 dark:bg-blue-950/10"
                                 : "",
-                              // ドラフト変更セル → 内枠で示す
-                              isDraftCell ? "ring-inset ring-2 ring-blue-500 dark:ring-blue-400" : "",
                             ].filter(Boolean).join(" ")}
                           >
                             {/* 希望休ラベル（シフト未配置の場合）→ 黒背景に白文字 */}
