@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
         }
 
         // ── グループテキストメッセージ → タスク抽出用に保存 ──
-        // Botが参加しているグループ（line_groups）のメッセージはすべて保存する
+        // グループからメッセージが届いたら line_groups に自動登録しつつ保存する
         if (
           event.type === "message" &&
           event.message?.type === "text" &&
@@ -112,23 +112,24 @@ export async function POST(req: NextRequest) {
           event.source?.type === "group" &&
           userId
         ) {
-          const { data: knownGroup } = await admin
-            .from("line_groups")
-            .select("group_id")
-            .eq("group_id", groupId)
-            .maybeSingle();
+          // グループを line_groups に自動登録（未登録でも登録済みでもOK）
+          await admin.from("line_groups").upsert(
+            { group_id: groupId, joined_at: new Date().toISOString() },
+            { onConflict: "group_id", ignoreDuplicates: true }
+          );
 
-          if (knownGroup) {
-            await admin.from("line_group_messages").insert({
-              group_id:     groupId,
-              user_id:      userId,
-              message_text: event.message.text,
-              sent_at:      event.timestamp
-                ? new Date(event.timestamp).toISOString()
-                : new Date().toISOString(),
-              processed:    false,
-            });
-          }
+          // メッセージを保存
+          await admin.from("line_group_messages").insert({
+            group_id:     groupId,
+            user_id:      userId,
+            message_text: event.message.text,
+            sent_at:      event.timestamp
+              ? new Date(event.timestamp).toISOString()
+              : new Date().toISOString(),
+            processed:    false,
+          });
+
+          console.log(`[webhook] group message saved: groupId=${groupId}`);
         }
 
         // ── グループ参加/退出 ──
