@@ -1554,12 +1554,27 @@ export default function ShiftEditGrid({
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={() => { setShowRegenConfirm(false); setRegenDone(null); setRegenSection(""); }}
-                    className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-                  >
-                    閉じる
-                  </button>
+                  <>
+                    <button
+                      onClick={() => {
+                        handleSaveDraft();
+                        setShowRegenConfirm(false);
+                        setRegenDone(null);
+                        setRegenSection("");
+                      }}
+                      disabled={isSavingDraft}
+                      className="w-full py-3 rounded-2xl text-sm font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-700 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                    >
+                      {isSavingDraft ? "保存中…" : "仮保存する"}
+                    </button>
+                    <button
+                      onClick={() => { setShowRegenConfirm(false); setRegenDone(null); setRegenSection(""); }}
+                      disabled={isSavingDraft}
+                      className="w-full py-2 rounded-2xl text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 disabled:opacity-50 transition-colors"
+                    >
+                      あとで保存
+                    </button>
+                  </>
                 )}
               </div>
             </div>
