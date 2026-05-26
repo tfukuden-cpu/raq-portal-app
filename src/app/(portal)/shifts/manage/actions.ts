@@ -378,6 +378,7 @@ export async function regenerateShiftDraftAction(
   projectId: string,
   year: number,
   month: number,
+  targetSection?: string,
 ): Promise<{ success: boolean; message?: string; assignedCount?: number; draftEntries?: import("../actions").GridDraftEntry[] }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -404,11 +405,11 @@ export async function regenerateShiftDraftAction(
     target_role: (p.target_role ?? "all") as string,
   }));
 
-  // generateShiftDraftAction に委譲
+  // セクション指定時はパターンも絞り込む（全体取得後にフィルタリングはdraft-actions内で行う）
   const { generateShiftDraftAction } = await import(
     "@/app/(portal)/admin/[projectId]/settings/draft-actions"
   );
-  const result = await generateShiftDraftAction(projectId, year, month, patterns);
+  const result = await generateShiftDraftAction(projectId, year, month, patterns, targetSection);
   if (!result.success) return result;
 
   // 生成後、DB から最新の下書きエントリを取得して返す

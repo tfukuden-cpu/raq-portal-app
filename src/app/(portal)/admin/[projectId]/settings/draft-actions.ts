@@ -125,6 +125,7 @@ export async function generateShiftDraftAction(
   year: number,
   month: number,
   patterns: PatternDef[],
+  targetSection?: string,   // 指定時: そのセクションのみ再仮組み・他セクションのドラフトは保持
 ): Promise<GenerateDraftResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -183,11 +184,25 @@ export async function generateShiftDraftAction(
     return { success: false, message: "メンバーが登録されていません" };
   }
 
-  // 離脱済みメンバーを除外（end_date が対象月開始日より前のメンバーは含めない）
-  const activeMemberRows = memberRows.filter(m => {
+  // 離脱済みメンバーを除外
+  let activeMemberRows = memberRows.filter(m => {
     const endDate = (m as { end_date?: string | null }).end_date ?? null;
     return !endDate || endDate >= dateFrom;
   });
+
+  // セクション絞り込み: targetSection 指定時はそのセクション所属スタッフのみ対象
+  // セクション未設定スタッフは除外（全セクション対応扱いにしない）
+  if (targetSection) {
+    activeMemberRows = activeMemberRows.filter(m => {
+      const sections = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
+      const single   = (m as { section?: string | null }).section ?? null;
+      const effective = sections.length > 0 ? sections : (single ? [single] : []);
+      return effective.includes(targetSection);
+    });
+    // パターンもそのセクションのみに絞る
+    patterns = patterns.filter(p => p.section === targetSection);
+  }
+
   if (!slotReqRows || slotReqRows.length === 0) {
     return { success: false, message: "必要人数が設定されていません。先に必要数を保存してください" };
   }
@@ -380,13 +395,41 @@ export async function generateShiftDraftAction(
   }
 
   // GridDraftEntry 形式 { k, n, s, e, d } で保存（ShiftEditGrid と同じフォーマット）
-  const draftEntries = [...draft.entries()].map(([key, val]) => ({
+  const newEntries = [...draft.entries()].map(([key, val]) => ({
     k: key,
     n: val.shiftName,
     s: val.shiftStart,
     e: val.shiftEnd,
     d: false,
   }));
+
+  // セクション指定時: 他セクションのドラフトエントリを保持してマージ
+  let draftEntries = newEntries;
+  if (targetSection) {
+    // 対象セクションのパターン名セット
+    const targetPatternNames = new Set(patterns.map(p => p.name));
+
+    // 既存ドラフトを取得
+    const { data: existingDraft } = await admin
+      .from("shift_grid_drafts")
+      .select("draft_data")
+      .eq("project_id", projectId)
+      .eq("target_month", monthStr)
+      .maybeSingle();
+
+    type DraftEntry = { k: string; n: string; s: string | null; e: string | null; d: boolean };
+    const existing = (existingDraft?.draft_data as DraftEntry[] | null) ?? [];
+
+    // 他セクションのエントリ（対象セクションのパターンではないもの）は保持
+    const preserved = existing.filter(e => !targetPatternNames.has(e.n));
+
+    // 保持エントリ + 新規エントリをマージ（同キーは新規優先）
+    const newKeys = new Set(newEntries.map(e => e.k));
+    draftEntries = [
+      ...preserved.filter(e => !newKeys.has(e.k)),
+      ...newEntries,
+    ];
+  }
 
   const savedBy = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const { error } = await admin.from("shift_grid_drafts").upsert({

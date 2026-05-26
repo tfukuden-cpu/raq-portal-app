@@ -779,6 +779,7 @@ export default function ShiftEditGrid({
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const [regenError, setRegenError] = useState<string | null>(null);
   const [regenDone, setRegenDone] = useState<number | null>(null); // 完了後の割当数
+  const [regenSection, setRegenSection] = useState<string>(""); // "" = 全セクション
   // 保存系エラー（上部バナー）
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draftMsg, setDraftMsg] = useState<string | null>(null);
@@ -1037,12 +1038,12 @@ export default function ShiftEditGrid({
   }
 
   // ── 再仮組み ──────────────────────────────────────────────────
-  function handleRegen() {
+  function handleRegen(targetSection?: string) {
     setRegenError(null);
     setRegenDone(null);
     startRegenTransition(async () => {
       const [y, m] = targetMonth.split("-").map(Number);
-      const r = await regenerateShiftDraftAction(projectId, y, m);
+      const r = await regenerateShiftDraftAction(projectId, y, m, targetSection || undefined);
       if (!r.success) {
         setRegenError(r.message ?? "再仮組みに失敗しました");
         return;
@@ -1249,7 +1250,7 @@ export default function ShiftEditGrid({
           )}
           {!isPublished && (
             <button
-              onClick={() => { setRegenError(null); setRegenDone(null); setShowRegenConfirm(true); }}
+              onClick={() => { setRegenError(null); setRegenDone(null); setRegenSection(""); setShowRegenConfirm(true); }}
               disabled={isPending || isSavingDraft || isRegenerating}
               className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-700 hover:bg-orange-100 disabled:opacity-40 transition-colors"
             >
@@ -1272,48 +1273,77 @@ export default function ShiftEditGrid({
       </div>
 
       {/* 再仮組み確認モーダル */}
-      {showRegenConfirm && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center"
-          onClick={() => { if (!isRegenerating) setShowRegenConfirm(false); }}>
-          <div className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm px-4 pt-4 space-y-2"
-            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 0px))" }}
-            onClick={e => e.stopPropagation()}>
-            <div className="mb-1">
-              <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">再仮組みを実行</h2>
-              {regenDone === null ? (
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  希望休・シフトパターンをもとに自動で再配置します。<br />
-                  現在の編集内容は上書きされます。
-                </p>
-              ) : (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
-                  完了しました（{regenDone} 件割当）
+      {showRegenConfirm && (() => {
+        // セクション一覧（重複排除・null除外）
+        const sectionOptions = [...new Set(
+          shiftPatterns.map(p => p.section).filter((s): s is string => !!s)
+        )].sort();
+        return (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center"
+            onClick={() => { if (!isRegenerating) setShowRegenConfirm(false); }}>
+            <div className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm px-4 pt-4 space-y-3"
+              style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 0px))" }}
+              onClick={e => e.stopPropagation()}>
+              <div className="mb-1">
+                <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">再仮組みを実行</h2>
+                {regenDone === null ? (
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    希望休・シフトパターンをもとに自動で再配置します。
+                  </p>
+                ) : (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
+                    完了しました（{regenDone} 件割当）
+                  </p>
+                )}
+              </div>
+              {regenDone === null && sectionOptions.length > 0 && (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">対象セクション</label>
+                  <select
+                    value={regenSection}
+                    onChange={e => setRegenSection(e.target.value)}
+                    disabled={isRegenerating}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 disabled:opacity-50"
+                  >
+                    <option value="">全セクション（上書き）</option>
+                    {sectionOptions.map(s => (
+                      <option key={s} value={s}>{s}（他セクションは保持）</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {regenDone === null && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2">
+                  {regenSection
+                    ? `「${regenSection}」のシフト仮組みを再生成します。他セクションの内容は保持されます。`
+                    : "全セクションのシフト仮組みを再生成します。現在の編集内容は上書きされます。"
+                  }
                 </p>
               )}
+              {regenError && (
+                <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">{regenError}</p>
+              )}
+              {regenDone === null ? (
+                <>
+                  <button onClick={() => handleRegen(regenSection || undefined)} disabled={isRegenerating}
+                    className="w-full py-3 rounded-xl text-sm font-bold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">
+                    {isRegenerating ? "生成中…" : "再仮組みを実行"}
+                  </button>
+                  <button onClick={() => setShowRegenConfirm(false)} disabled={isRegenerating}
+                    className="w-full py-2 rounded-xl text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 disabled:opacity-50 transition-colors">
+                    キャンセル
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => setShowRegenConfirm(false)}
+                  className="w-full py-3 rounded-xl text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 transition-colors">
+                  閉じる
+                </button>
+              )}
             </div>
-            {regenError && (
-              <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">{regenError}</p>
-            )}
-            {regenDone === null ? (
-              <>
-                <button onClick={handleRegen} disabled={isRegenerating}
-                  className="w-full py-3 rounded-xl text-sm font-bold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">
-                  {isRegenerating ? "生成中…" : "再仮組みを実行"}
-                </button>
-                <button onClick={() => setShowRegenConfirm(false)} disabled={isRegenerating}
-                  className="w-full py-2 rounded-xl text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 disabled:opacity-50 transition-colors">
-                  キャンセル
-                </button>
-              </>
-            ) : (
-              <button onClick={() => setShowRegenConfirm(false)}
-                className="w-full py-3 rounded-xl text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 transition-colors">
-                閉じる
-              </button>
-            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 保存エラーバナー（保存失敗時のみ） */}
       {saveError && (
