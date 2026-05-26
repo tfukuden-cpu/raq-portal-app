@@ -25,6 +25,7 @@ import {
   type GridDraftEntry,
 } from "../actions";
 import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction } from "./actions";
+import StaffInfoPanel, { type StaffInfoMember, type StaffOffRequest } from "./StaffInfoPanel";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -36,7 +37,12 @@ type Shift = {
   shift_start: string | null;
   shift_end: string | null;
 };
-type Member = { id: string; name: string; section: string | null; sections: string[]; endDate?: string | null };
+type Member = {
+  id: string; name: string; section: string | null; sections: string[]; endDate?: string | null;
+  work_days_type?: string | null; work_days_count?: number | null;
+  preferred_shift?: string | null; preferred_section?: string | null;
+  max_consecutive_days?: number | null; shift_note?: string | null;
+};
 type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
   name: string;
@@ -77,7 +83,7 @@ type PendingNotify = {
   targetMonth: string;
 };
 
-type OffRequest = { staff_id: string; request_date: string; priority: string };
+type OffRequest = { staff_id: string; request_date: string; priority: string; source?: string };
 
 interface Props {
   projectId: string;
@@ -728,6 +734,28 @@ function EditModal({
 
 // ── Main ────────────────────────────────────────────────────────
 
+// ── セクション × 早番/遅番 カラーテーブル ───────────────────────
+// セクションのメインカラーを決め、early（早番）=薄色、late（遅番）=濃色
+const SECTION_SHIFT_COLORS: Record<string, { early: string; late: string; def: string }> = {
+  "SV":       { early: "bg-blue-100 dark:bg-blue-900/50",     late: "bg-blue-300 dark:bg-blue-700/70",     def: "bg-blue-200 dark:bg-blue-800/60" },
+  "査定":     { early: "bg-emerald-100 dark:bg-emerald-900/50", late: "bg-emerald-300 dark:bg-emerald-700/70", def: "bg-emerald-200 dark:bg-emerald-800/60" },
+  "販売":     { early: "bg-orange-100 dark:bg-orange-900/50",  late: "bg-orange-300 dark:bg-orange-700/70",  def: "bg-orange-200 dark:bg-orange-800/60" },
+  "MOTA":     { early: "bg-teal-100 dark:bg-teal-900/50",     late: "bg-teal-300 dark:bg-teal-700/70",     def: "bg-teal-200 dark:bg-teal-800/60" },
+  "リメイク": { early: "bg-pink-100 dark:bg-pink-900/50",     late: "bg-pink-300 dark:bg-pink-700/70",     def: "bg-pink-200 dark:bg-pink-800/60" },
+  "ローン":   { early: "bg-violet-100 dark:bg-violet-900/50", late: "bg-violet-300 dark:bg-violet-700/70", def: "bg-violet-200 dark:bg-violet-800/60" },
+};
+const SECTION_SHIFT_FALLBACK = { early: "bg-sky-100 dark:bg-sky-900/50", late: "bg-sky-300 dark:bg-sky-700/70", def: "bg-sky-200 dark:bg-sky-800/60" };
+
+function getPatternBg(shiftName: string | null, pattern: Pattern | null): string {
+  if (!shiftName || shiftName === "公休" || shiftName === "希望休") return "";
+  if (!pattern) return "";
+  const colors = SECTION_SHIFT_COLORS[pattern.section ?? ""] ?? SECTION_SHIFT_FALLBACK;
+  const startH = pattern.start_time ? parseInt(pattern.start_time.split(":")[0], 10) : null;
+  if (startH !== null && startH < 12) return colors.early;
+  if (startH !== null) return colors.late;
+  return colors.def;
+}
+
 const OFF_PRIORITY_BG: Record<string, string> = {
   "第一希望休": "bg-red-100 dark:bg-red-950/60",
   "第二希望休": "bg-rose-100 dark:bg-rose-950/60",
@@ -816,6 +844,8 @@ export default function ShiftEditGrid({
   const [popover, setPopover] = useState<PopoverTarget | null>(null);
   // 不足対応：充足サマリーセルのタップで選択
   const [selectedShortage, setSelectedShortage] = useState<{ date: string; patternName: string } | null>(null);
+  // スタッフ情報パネル
+  const [staffInfoTarget, setStaffInfoTarget] = useState<Member | null>(null);
   // 候補スタッフ選択（行フォーカス）
   const [focusedCandidateId, setFocusedCandidateId] = useState<string | null>(null);
   const staffRowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
@@ -1874,13 +1904,15 @@ export default function ShiftEditGrid({
                         else staffRowRefs.current.delete(member.id);
                       }}
                     >
-                      {/* 名前セル */}
+                      {/* 名前セル（クリックでスタッフ情報パネルを開く） */}
                       <td className={[
-                        "sticky left-0 z-10 border-b border-r-2 border-zinc-200 dark:border-zinc-700 align-middle h-8 transition-colors",
+                        "sticky left-0 z-10 border-b border-r-2 border-zinc-200 dark:border-zinc-700 align-middle h-8 transition-colors cursor-pointer",
                         isFocusedRow
                           ? "bg-blue-100 dark:bg-blue-900/40"
-                          : "bg-white dark:bg-zinc-950",
-                      ].join(" ")}>
+                          : "bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-800/60",
+                      ].join(" ")}
+                      onClick={() => setStaffInfoTarget(member)}
+                      >
                         <div className="px-2 flex items-center gap-1">
                           {isFocusedRow && (
                             <span className="w-1.5 h-5 rounded-full bg-blue-500 shrink-0" />
@@ -1930,44 +1962,57 @@ export default function ShiftEditGrid({
                             }}
                             className={[
                               "border-b border-r border-zinc-100 dark:border-zinc-800",
-                              "h-8 align-middle p-0 cursor-pointer overflow-hidden transition-colors",
-                              // フォーカス行 > 候補セル > 今日 > 希望休 > 下書き の順で優先
+                              "h-8 align-middle p-0 cursor-pointer overflow-hidden transition-colors relative",
+                              // フォーカス行 + 候補 → 青強調
                               isFocusedRow && isCandidate
                                 ? "bg-blue-300 dark:bg-blue-700/60 ring-inset ring-2 ring-blue-400"
                                 : isFocusedRow
                                 ? "bg-blue-50 dark:bg-blue-950/30"
                                 : isCandidate
                                 ? "bg-amber-200 dark:bg-amber-800/50 ring-inset ring-1 ring-amber-400"
+                                // 希望休・公休・希望休申請 → 黒ベース
+                                : shiftName === "希望休"
+                                ? "bg-zinc-700 dark:bg-zinc-700"
+                                : shiftName === "公休"
+                                ? "bg-zinc-500 dark:bg-zinc-600"
+                                : (offPriority && !shiftName)
+                                ? "bg-zinc-800 dark:bg-zinc-800"
+                                // シフトパターン → セクション色
+                                : shiftName && patternNameSet.has(shiftName)
+                                ? (getPatternBg(shiftName, patternByName.get(shiftName) ?? null) || (isToday ? "bg-blue-50/40 dark:bg-blue-950/10" : ""))
+                                // 今日
                                 : isToday
                                 ? "bg-blue-50/40 dark:bg-blue-950/10"
-                                : isDraftCell && shiftName
-                                ? "bg-blue-50/60 dark:bg-blue-950/20"
-                                : offPriority && !shiftName
-                                ? (OFF_PRIORITY_BG[offPriority] ?? "bg-zinc-100")
                                 : "",
                             ].filter(Boolean).join(" ")}
                           >
-                            {/* 希望休ラベル（シフト未配置の場合） */}
+                            {/* 希望休ラベル（シフト未配置の場合）→ 黒背景に白文字 */}
                             {offPriority && !shiftName && (
                               <div className="h-full flex items-center justify-center px-0.5">
-                                <span className={`text-[10px] font-bold leading-none ${OFF_PRIORITY_TEXT[offPriority] ?? "text-zinc-400"}`}>
+                                <span className="text-[10px] font-bold leading-none text-zinc-200">
                                   {OFF_PRIORITY_LABEL[offPriority] ?? "休"}
                                 </span>
                               </div>
+                            )}
+                            {/* ドラフト変更インジケーター（左上の青ドット） */}
+                            {isDraftCell && (
+                              <span className="absolute top-0.5 left-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 z-10" />
                             )}
                             {shiftName && (
                               <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
                                 <span className={[
                                   "text-[11px] leading-none font-medium text-center truncate w-full block",
-                                  isDraftCell
-                                    ? "text-blue-700 dark:text-blue-400 font-bold"
-                                    : isFocusedRow && isCandidate
+                                  isFocusedRow && isCandidate
                                     ? "text-blue-800 dark:text-blue-100 font-bold"
                                     : isFocusedRow
                                     ? "text-blue-600 dark:text-blue-300"
                                     : isCandidate
                                     ? "text-amber-800 dark:text-amber-200 font-semibold"
-                                    : "text-zinc-700 dark:text-zinc-300",
+                                    : shiftName === "希望休" || shiftName === "公休"
+                                    ? "text-white font-semibold"
+                                    : isDraftCell
+                                    ? "text-blue-700 dark:text-blue-300 font-bold"
+                                    : "text-zinc-700 dark:text-zinc-200",
                                 ].join(" ")}>
                                   {shiftName.slice(0, 4)}
                                   {hasLog && !isDraftCell && (
@@ -2179,6 +2224,31 @@ export default function ShiftEditGrid({
             )}
           </div>
         </div>
+      )}
+
+      {/* スタッフ情報パネル */}
+      {staffInfoTarget && (
+        <StaffInfoPanel
+          member={{
+            id:                   staffInfoTarget.id,
+            name:                 staffInfoTarget.name,
+            section:              staffInfoTarget.section,
+            sections:             staffInfoTarget.sections,
+            work_days_type:       staffInfoTarget.work_days_type ?? null,
+            work_days_count:      staffInfoTarget.work_days_count ?? null,
+            preferred_shift:      staffInfoTarget.preferred_shift ?? null,
+            preferred_section:    staffInfoTarget.preferred_section ?? null,
+            max_consecutive_days: staffInfoTarget.max_consecutive_days ?? null,
+            shift_note:           staffInfoTarget.shift_note ?? null,
+            endDate:              staffInfoTarget.endDate,
+          }}
+          offRequests={(offRequests ?? [])
+            .filter(r => r.staff_id === staffInfoTarget.id)
+            .map(r => ({ request_date: r.request_date, priority: r.priority, source: r.source ?? "user" }))
+          }
+          projectId={projectId}
+          onClose={() => setStaffInfoTarget(null)}
+        />
       )}
 
       {/* Summary Modal */}

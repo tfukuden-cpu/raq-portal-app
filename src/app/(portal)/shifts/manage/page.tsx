@@ -193,7 +193,7 @@ export default async function ManageShiftsPage(props: {
     shiftBatch4,
   ] = await Promise.all([
     admin.from("project_members")
-      .select("staff_id, role, section, sections, end_date, staffs(id, name, display_name)")
+      .select("staff_id, role, section, sections, end_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, staffs(id, name, display_name)")
       .eq("project_id", selectedProjectId),
     admin.from("shift_patterns")
       .select("name, required_count, required_weekday, required_weekend, section, start_time, end_time")
@@ -228,7 +228,7 @@ export default async function ManageShiftsPage(props: {
       .eq("target_month", `${targetYear}-${String(targetMonth).padStart(2, "0")}`)
       .maybeSingle(),
     admin.from("shift_off_requests")
-      .select("staff_id, request_date, priority")
+      .select("staff_id, request_date, priority, source")
       .eq("project_id", selectedProjectId)
       .gte("request_date", startDate)
       .lte("request_date", endDate),
@@ -263,16 +263,27 @@ export default async function ManageShiftsPage(props: {
       const sections = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
       const endDate = (m as { end_date?: string | null }).end_date ?? null;
       return {
-        id:       s?.id ?? m.staff_id,
-        name:     s?.display_name ?? s?.name ?? m.staff_id,
-        role:     m.role ?? "staff",
-        section:  m.section ?? null,
-        sections: sections.length > 0 ? sections : (m.section ? [m.section] : []),
+        id:                   s?.id ?? m.staff_id,
+        name:                 s?.display_name ?? s?.name ?? m.staff_id,
+        role:                 m.role ?? "staff",
+        section:              m.section ?? null,
+        sections:             sections.length > 0 ? sections : (m.section ? [m.section] : []),
         endDate,
+        work_days_type:       (m as { work_days_type?: string | null }).work_days_type ?? null,
+        work_days_count:      (m as { work_days_count?: number | null }).work_days_count ?? null,
+        preferred_shift:      (m as { preferred_shift?: string | null }).preferred_shift ?? null,
+        preferred_section:    (m as { preferred_section?: string | null }).preferred_section ?? null,
+        max_consecutive_days: (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? null,
+        shift_note:           (m as { shift_note?: string | null }).shift_note ?? null,
       };
     })
     .filter((m) => !!m.id)
-    .filter((m) => !m.endDate || m.endDate >= startDate) as { id: string; name: string; role: string; section: string | null; sections: string[]; endDate: string | null }[];
+    .filter((m) => !m.endDate || m.endDate >= startDate) as {
+      id: string; name: string; role: string; section: string | null; sections: string[]; endDate: string | null;
+      work_days_type: string | null; work_days_count: number | null;
+      preferred_shift: string | null; preferred_section: string | null;
+      max_consecutive_days: number | null; shift_note: string | null;
+    }[];
 
   const staffNameMap = new Map(activeMembers.map(m => [m.id, m.name]));
 
@@ -411,6 +422,7 @@ export default async function ManageShiftsPage(props: {
             staff_id:     r.staff_id as string,
             request_date: r.request_date as string,
             priority:     r.priority as string,
+            source:       (r as { source?: string }).source ?? "user",
           }))}
       />
     </main>

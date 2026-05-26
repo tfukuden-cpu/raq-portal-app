@@ -17,7 +17,12 @@ type Shift = {
   shift_end: string | null;
   note: string | null;
 };
-type Member = { id: string; name: string; role: string; section: string | null; sections: string[] };
+type Member = {
+  id: string; name: string; role: string; section: string | null; sections: string[];
+  work_days_type: string | null; work_days_count: number | null;
+  preferred_shift: string | null; preferred_section: string | null;
+  max_consecutive_days: number | null; shift_note: string | null;
+};
 type Pattern = {
   name: string;
   required_count: number;
@@ -33,7 +38,7 @@ type ShiftRequest = {
   reason: string | null; status: string;
 };
 type SlotReq = { section: string; pattern_name: string; shift_date: string; required_count: number };
-type OffRequest = { staff_id: string; request_date: string; priority: string };
+type OffRequest = { staff_id: string; request_date: string; priority: string; source: string };
 
 type Props = {
   projectId: string;

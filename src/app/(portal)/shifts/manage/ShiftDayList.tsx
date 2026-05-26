@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
+import StaffInfoPanel, { type StaffInfoMember, type StaffOffRequest } from "./StaffInfoPanel";
 
 const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -14,7 +15,13 @@ type Shift = {
   shift_end: string | null;
   note: string | null;
 };
-type Member  = { id: string; name: string; role: string; section: string | null; sections: string[] };
+type Member  = {
+  id: string; name: string; role: string; section: string | null; sections: string[];
+  work_days_type?: string | null; work_days_count?: number | null;
+  preferred_shift?: string | null; preferred_section?: string | null;
+  max_consecutive_days?: number | null; shift_note?: string | null;
+  endDate?: string | null;
+};
 type Pattern = {
   name: string;
   required_count: number;
@@ -95,7 +102,7 @@ export default function ShiftDayList({
   projectId: string;
   targetYear: number;
   targetMonth: number;
-  offRequests?: { staff_id: string; request_date: string; priority: string }[];
+  offRequests?: { staff_id: string; request_date: string; priority: string; source?: string }[];
 }) {
   // staff_id__date → priority のマップ
   const offRequestMap = new Map(
@@ -103,6 +110,7 @@ export default function ShiftDayList({
   );
   const [tabKey, setTabKey]   = useState<TabKey>("shukkin");
   const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string } | null>(null);
+  const [staffInfoTarget, setStaffInfoTarget] = useState<Member | null>(null);
   // パターンごとの折りたたみ状態（初期値: 全折りたたみ）
   const [collapsedPatterns, setCollapsedPatterns] = useState<Set<string>>(
     () => new Set(shiftPatterns.map(p => p.name))
@@ -426,7 +434,7 @@ export default function ShiftDayList({
                                     {member ? (
                                       <button
                                         type="button"
-                                        onClick={() => setStaffMenu({ staffId: member.id, staffName: member.name })}
+                                        onClick={() => setStaffInfoTarget(member)}
                                         className={cx(
                                           "text-[10px] font-semibold leading-none truncate px-0.5 hover:underline",
                                           absent
@@ -638,7 +646,7 @@ export default function ShiftDayList({
                                 return (
                                   <button
                                     type="button"
-                                    onClick={() => setStaffMenu({ staffId: member.id, staffName: member.name })}
+                                    onClick={() => setStaffInfoTarget(member)}
                                     className={cx(
                                       "text-[10px] font-semibold leading-none truncate px-0.5 hover:underline flex items-center gap-px",
                                       isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
@@ -702,6 +710,31 @@ export default function ShiftDayList({
           </div>
         );
       })()}
+
+      {/* スタッフ情報パネル */}
+      {staffInfoTarget && (
+        <StaffInfoPanel
+          member={{
+            id:                   staffInfoTarget.id,
+            name:                 staffInfoTarget.name,
+            section:              staffInfoTarget.section,
+            sections:             staffInfoTarget.sections,
+            work_days_type:       staffInfoTarget.work_days_type ?? null,
+            work_days_count:      staffInfoTarget.work_days_count ?? null,
+            preferred_shift:      staffInfoTarget.preferred_shift ?? null,
+            preferred_section:    staffInfoTarget.preferred_section ?? null,
+            max_consecutive_days: staffInfoTarget.max_consecutive_days ?? null,
+            shift_note:           staffInfoTarget.shift_note ?? null,
+            endDate:              staffInfoTarget.endDate,
+          }}
+          offRequests={(offRequests ?? [])
+            .filter(r => r.staff_id === staffInfoTarget.id)
+            .map(r => ({ request_date: r.request_date, priority: r.priority, source: r.source ?? "user" }))
+          }
+          projectId={projectId}
+          onClose={() => setStaffInfoTarget(null)}
+        />
+      )}
 
       {staffMenu && (
         <StaffPopupMenu
