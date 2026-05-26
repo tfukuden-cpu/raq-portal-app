@@ -21,7 +21,9 @@ const TASK_KEYWORDS = [
   "報告してください", "報告お願い",
 ];
 
-const ASSIGNEE_PATTERN = /([^\s、。「」()（）]{1,10})(さん|くん|ちゃん|君)/g;
+// @田中 形式 or 田中さん形式の両方に対応
+const ASSIGNEE_AT_PATTERN    = /@([^\s\n、。「」()（）]{1,10})/g;
+const ASSIGNEE_SUFFIX_PATTERN = /([^\s\n、。「」()（）@]{1,10})(さん|くん|ちゃん|君)/g;
 
 const DUE_PATTERNS: { pattern: RegExp; label: (m: RegExpMatchArray) => string }[] = [
   { pattern: /今日中|今日まで|本日中|本日まで/,        label: () => "今日" },
@@ -44,8 +46,12 @@ function extractDueText(text: string): string | null {
 }
 
 function extractAssigneeRaw(text: string): string | null {
-  const matches = [...text.matchAll(ASSIGNEE_PATTERN)];
-  if (matches.length > 0) return matches[0][1] + matches[0][2];
+  // @田中 形式を優先
+  const atMatches = [...text.matchAll(ASSIGNEE_AT_PATTERN)];
+  if (atMatches.length > 0) return atMatches[0][1]; // "@" を除いた名前
+  // 田中さん 形式
+  const suffixMatches = [...text.matchAll(ASSIGNEE_SUFFIX_PATTERN)];
+  if (suffixMatches.length > 0) return suffixMatches[0][1] + suffixMatches[0][2];
   return null;
 }
 
@@ -58,7 +64,7 @@ function buildTitle(text: string): string {
   return firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
 }
 
-export async function runExtractTasks(): Promise<{ ok: boolean; extracted: number; error?: string }> {
+export async function runExtractTasks(): Promise<{ ok: boolean; extracted: number; savedMessages?: number; error?: string }> {
   const admin = createAdminClient();
 
   try {
@@ -67,19 +73,21 @@ export async function runExtractTasks(): Promise<{ ok: boolean; extracted: numbe
       .select("group_id, project_id, group_label")
       .eq("enabled", true);
 
-    if (!groups || groups.length === 0) return { ok: true, extracted: 0 };
+    if (!groups || groups.length === 0) return { ok: true, extracted: 0, savedMessages: 0 };
 
     let totalExtracted = 0;
+    let totalSaved     = 0;
 
     for (const group of groups) {
-      const { data: messages } = await admin
+      const { data: messages, count } = await admin
         .from("line_group_messages")
-        .select("id, user_id, message_text, sent_at")
+        .select("id, user_id, message_text, sent_at", { count: "exact" })
         .eq("group_id", group.group_id)
         .eq("processed", false)
         .order("sent_at", { ascending: true })
         .limit(100);
 
+      totalSaved += count ?? 0;
       if (!messages || messages.length === 0) continue;
 
       const userIds = [...new Set(messages.map(m => m.user_id))];
@@ -141,7 +149,7 @@ export async function runExtractTasks(): Promise<{ ok: boolean; extracted: numbe
         .in("id", messages.map(m => m.id));
     }
 
-    return { ok: true, extracted: totalExtracted };
+    return { ok: true, extracted: totalExtracted, savedMessages: totalSaved };
   } catch (err) {
     console.error("[extract-tasks] error:", err);
     return { ok: false, extracted: 0, error: String(err) };

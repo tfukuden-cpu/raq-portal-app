@@ -86,7 +86,13 @@ export default function TasksClient({
     startTransition(async () => {
       const r = await triggerExtractTasksAction();
       if (r.success) {
-        showFlash(true, `タスクを${r.extracted}件抽出しました`);
+        if (r.extracted > 0) {
+          showFlash(true, `タスクを${r.extracted}件抽出しました`);
+        } else if ((r.savedMessages ?? 0) === 0) {
+          showFlash(false, "未処理メッセージがありません。グループが正しく設定されているか確認してください");
+        } else {
+          showFlash(true, `メッセージ${r.savedMessages}件を確認しましたが、タスクは検出されませんでした`);
+        }
       } else {
         showFlash(false, r.message ?? "抽出に失敗しました");
       }

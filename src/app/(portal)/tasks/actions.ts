@@ -96,7 +96,7 @@ export async function triggerExtractTasksAction() {
   const { runExtractTasks } = await import("@/lib/extract-tasks");
   const result = await runExtractTasks();
   revalidatePath("/tasks");
-  return { success: result.ok, extracted: result.extracted, message: result.error };
+  return { success: result.ok, extracted: result.extracted, savedMessages: result.savedMessages ?? 0, message: result.error };
 }
 
 // タスクを手動で追加
