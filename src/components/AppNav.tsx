@@ -59,11 +59,6 @@ export default function AppNav({
   const activeSection = sections[activeSectionIdx] ?? sections[0];
   const showSectionTabs = sections.length > 1;
 
-  // 全セクションから projectTabs を抽出（最初に見つかったもの）
-  const allProjectTabs = sections.flatMap(s => s.projectTabs ?? []).length > 0
-    ? sections.find(s => s.projectTabs && s.projectTabs.length > 0)?.projectTabs ?? null
-    : null;
-
   // ── 案件タブコンポーネント（モバイル用） ─────────────
   function ProjectTabsMobile({ tabs }: { tabs: NonNullable<NavSection["projectTabs"]> }) {
     return (
@@ -121,10 +116,35 @@ export default function AppNav({
               {si > 0 && (
                 <div className="my-2.5 mx-1 border-t border-white/[0.06]" />
               )}
-              {!isCol && section.title && (
-                <p className="px-2.5 pt-2 pb-1.5 text-[9px] font-semibold text-zinc-700 uppercase tracking-[0.12em] select-none">
-                  {section.title}
-                </p>
+              {!isCol && (
+                section.projectTabs && section.projectTabs.length > 0 ? (
+                  /* ── 案件タブ（ファイル見出し風） ── */
+                  <div
+                    className="flex overflow-x-auto mt-1 mb-0.5 border-b border-white/[0.08]"
+                    style={{ scrollbarWidth: "none" }}
+                  >
+                    {section.projectTabs.map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => handleSwitchProject(tab.id)}
+                        disabled={switching}
+                        title={tab.name}
+                        className={[
+                          "flex-shrink-0 px-3 py-1.5 text-[11px] font-medium whitespace-nowrap transition-colors border-b-2 -mb-px",
+                          tab.isActive
+                            ? "border-blue-500 text-zinc-100"
+                            : "border-transparent text-zinc-600 hover:text-zinc-300",
+                        ].join(" ")}
+                      >
+                        {tab.name.length > 7 ? tab.name.slice(0, 7) + "…" : tab.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : section.title ? (
+                  <p className="px-2.5 pt-2 pb-1.5 text-[9px] font-semibold text-zinc-700 uppercase tracking-[0.12em] select-none">
+                    {section.title}
+                  </p>
+                ) : null
               )}
               {section.items.map((item) => {
                 const active = isActive(item.href);
@@ -185,32 +205,9 @@ export default function AppNav({
       </aside>
 
       {/* ── メインコンテンツ ── */}
-      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out pb-safe md:pb-0 ${
+      <div className={`flex-1 min-w-0 transition-[padding] duration-200 ease-in-out pb-safe md:pb-0 ${
         isCol ? "md:pl-14" : "md:pl-52"
       }`}>
-
-        {/* ファイルタブ風 案件切り替えバー（PC・運用者のみ） */}
-        {allProjectTabs && allProjectTabs.length > 0 && (
-          <div className="hidden md:flex items-end overflow-x-auto border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 flex-shrink-0" style={{ scrollbarWidth: "none" }}>
-            {allProjectTabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => handleSwitchProject(tab.id)}
-                disabled={switching}
-                title={tab.name}
-                className={[
-                  "relative flex items-center gap-1.5 px-4 h-9 text-[12px] font-medium whitespace-nowrap transition-colors flex-shrink-0 border-b-2",
-                  tab.isActive
-                    ? "border-blue-500 text-zinc-900 dark:text-zinc-50 bg-white dark:bg-zinc-950"
-                    : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
-                ].join(" ")}
-              >
-                {tab.name}
-              </button>
-            ))}
-          </div>
-        )}
-
         {children}
       </div>
 
