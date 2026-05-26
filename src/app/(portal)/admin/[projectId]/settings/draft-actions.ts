@@ -454,12 +454,46 @@ export async function generateShiftDraftAction(
   if (draft.size === 0) {
     const sec = targetSection ?? "";
     const staffCount = activeMemberRows.length;
+    if (staffCount === 0) {
+      return { success: false, message: `対象スタッフが0人です。メンバー管理でセクションを「${sec}」に設定してください。` };
+    }
+
+    // 診断: 最初の日×最初のパターンで各条件を個別チェック
+    const diagDate    = allDates[0] ?? "";
+    const diagPattern = patterns[0];
+    const diag = { endDate: 0, holiday: 0, alreadyOn: 0, section: 0, role: 0, monthLimit: 0, consec: 0, interval: 0, pass: 0 };
+    const diagWeekKey = isoWeekKey(diagDate);
+    for (const m of activeMemberRows) {
+      const endDate = (m as { end_date?: string | null }).end_date ?? null;
+      if (endDate && diagDate > endDate)                        { diag.endDate++;   continue; }
+      if (holidaySet.has(`${m.staff_id}__${diagDate}`))         { diag.holiday++;   continue; }
+      if (existingMap.has(`${m.staff_id}__${diagDate}`))        { diag.alreadyOn++; continue; }
+      if (diagPattern?.section) {
+        const ms = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
+        const eff = ms.length > 0 ? ms : (m.section ? [m.section] : []);
+        if (eff.length > 0 && !eff.includes(diagPattern.section)) { diag.section++; continue; }
+      }
+      if (diagPattern?.target_role === "admin" && m.role !== "project_admin") { diag.role++; continue; }
+      if (diagPattern?.target_role === "staff" && m.role !== "staff")          { diag.role++; continue; }
+      const wdType  = (m as { work_days_type?: string | null }).work_days_type || "monthly";
+      const wdCount = (m as { work_days_count?: number | null }).work_days_count ?? 21;
+      if (wdType === "monthly") {
+        const cur = (draftMonthCount.get(m.staff_id) ?? 0) + (existingMonthCount.get(m.staff_id) ?? 0);
+        if (cur >= wdCount) { diag.monthLimit++; continue; }
+      }
+      const maxC = (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? 5;
+      if (consecutiveDaysBefore(m.staff_id, diagDate) >= maxC) { diag.consec++; continue; }
+      const prevP = getPrevDayPattern(m.staff_id, diagDate);
+      if (!hasAdequateInterval(prevP?.end_time, diagPattern?.start_time)) { diag.interval++; continue; }
+      diag.pass++;
+    }
+    const diagStr = `[診断(${diagDate}/${diagPattern?.name ?? "?"}): `
+      + `終了日=${diag.endDate} 希望休=${diag.holiday} 同日済=${diag.alreadyOn} `
+      + `セクション=${diag.section} ロール=${diag.role} 月上限=${diag.monthLimit} `
+      + `連勤=${diag.consec} 間隔=${diag.interval} 通過=${diag.pass}]`;
     return {
       success: false,
-      message: staffCount === 0
-        ? `対象スタッフが0人です。メンバー管理でセクションを「${sec}」に設定してください。`
-        : `配置できるスタッフが見つかりませんでした（対象${staffCount}人）。`
-          + `稼働日数上限・希望休・連勤制限を確認してください。`,
+      message: `配置できるスタッフが見つかりませんでした（対象${staffCount}人）。 ${diagStr}`,
     };
   }
 
