@@ -452,13 +452,23 @@ export async function generateShiftDraftAction(
   // 1→末日の順と違い月初・中旬・月末が均等に処理されるため月末不足が発生しにくい
   // かつ連続した日付が隣接して処理されないため連勤チェックも正確に機能する
   {
-    const stride = 11;
-    const processOrder: string[] = new Array(allDates.length);
-    let _pos = 0;
-    for (let _i = 0; _i < allDates.length; _i++) {
-      processOrder[_i] = allDates[_pos];
-      _pos = (_pos + stride) % allDates.length;
+    // ── 日付処理順：希望休が多い日（配置が難しい日）から先に処理 ──────────────
+    // 固定ストライドだと特定の日が常に「最後」になり不足が偏る。
+    // 希望休が集中している日ほどスタッフの候補が少ない → 先に処理して空き容量を確保。
+    // 同率はカレンダー順（決定論的）。
+    const dateHolidayCount = new Map<string, number>();
+    for (const d of allDates) {
+      let cnt = 0;
+      for (const m of activeMemberRows) {
+        if (holidaySet.has(`${m.staff_id}__${d}`)) cnt++;
+      }
+      dateHolidayCount.set(d, cnt);
     }
+    const processOrder = allDates.slice().sort((a, b) => {
+      const diff = (dateHolidayCount.get(b) ?? 0) - (dateHolidayCount.get(a) ?? 0);
+      if (diff !== 0) return diff; // 希望休が多い日を先に
+      return a < b ? -1 : 1; // 同率はカレンダー昇順
+    });
 
   let processedCount = 0;
   for (const date of processOrder) {
@@ -559,17 +569,11 @@ export async function generateShiftDraftAction(
       });
 
       // ── 容量均等ペーシング（ハード制約） ──────────────────────────────
-      // 残り日数に対して残プール容量を均等配分し、今日の割当上限を決める。
-      // これにより処理順に関わらず「今日使いすぎて後日が足りない」状態を防ぐ。
+      // 「今日実際に配置可能なスタッフ（candidates）」の残稼働容量を残り日数で均等配分し、
+      // 今日の割当上限を決める。これにより本日休みのスタッフを過大評価せず、
+      // 後日に十分な容量を残せる。
       const remainingDateCount = processOrder.length - processedCount + 1;
-      const eligiblePool = pattern.section
-        ? activeMemberRows.filter(m2 => {
-            const ms2 = ((m2 as { sections?: string[] | null }).sections ?? []).filter(Boolean);
-            const eff2 = ms2.length > 0 ? ms2 : (m2.section ? [m2.section] : []);
-            return eff2.includes(pattern.section!);
-          })
-        : activeMemberRows;
-      const poolRemainingCap = eligiblePool.reduce((sum, m2) => {
+      const poolRemainingCap = candidates.reduce((sum, m2) => {
         const wdType2 = (m2 as { work_days_type?: string | null }).work_days_type || "monthly";
         if (wdType2 !== "monthly") return sum + lastDay;
         const wdRaw2 = (m2 as { work_days_count?: number | null }).work_days_count;
