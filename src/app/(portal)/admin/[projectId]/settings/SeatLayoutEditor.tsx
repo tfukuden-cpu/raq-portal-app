@@ -14,21 +14,54 @@ export type SeatItem = {
 
 const SECTIONS = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク", ""];
 
+// グリッド設定（列数・行数）
+const COLS = 12;
+const ROWS = 9;
+const STEP_X = 100 / COLS; // ≈ 8.33%
+const STEP_Y = 100 / ROWS; // ≈ 11.11%
+
+function snapX(x: number) {
+  return Math.round(x / STEP_X) * STEP_X;
+}
+function snapY(y: number) {
+  return Math.round(y / STEP_Y) * STEP_Y;
+}
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
+}
+
+// ── グリッドドット背景（SVG） ──────────────────────────────
+function GridDots() {
+  const dots: React.ReactNode[] = [];
+  for (let col = 0; col <= COLS; col++) {
+    for (let row = 0; row <= ROWS; row++) {
+      dots.push(
+        <circle
+          key={`${col}-${row}`}
+          cx={`${(col / COLS) * 100}%`}
+          cy={`${(row / ROWS) * 100}%`}
+          r="1.5"
+          className="fill-zinc-300 dark:fill-zinc-600"
+        />
+      );
+    }
+  }
+  return (
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden>
+      {dots}
+    </svg>
+  );
 }
 
 // ── カード上のポップオーバー ──────────────────────────────
 function SeatPopover({
   seat,
-  canvasRef,
   onUpdate,
   onDuplicate,
   onDelete,
   onClose,
 }: {
   seat: SeatItem;
-  canvasRef: React.RefObject<HTMLDivElement | null>;
   onUpdate: (patch: Partial<SeatItem>) => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -36,11 +69,9 @@ function SeatPopover({
 }) {
   const popRef = useRef<HTMLDivElement>(null);
 
-  // キャンバス外クリックで閉じる
   useEffect(() => {
     function handleDown(e: MouseEvent) {
       if (popRef.current && !popRef.current.contains(e.target as Node)) {
-        // カード自体のクリックは SeatCard 側で制御するので、ここでは閉じるだけ
         onClose();
       }
     }
@@ -48,32 +79,30 @@ function SeatPopover({
     return () => document.removeEventListener("mousedown", handleDown);
   }, [onClose]);
 
-  // ポップオーバーをカードの上 or 下に出す（yPct が 50 より大きければ上）
   const above = seat.yPct > 50;
 
   return (
     <div
       ref={popRef}
-      // ポインターイベントを通さないようにして drag 邪魔しない
       onPointerDown={e => e.stopPropagation()}
       style={{
         position: "absolute",
         left: `${seat.xPct}%`,
-        top: above ? `calc(${seat.yPct}% - 34px)` : `calc(${seat.yPct}% + 34px)`,
+        top: above
+          ? `calc(${seat.yPct}% - 34px)`
+          : `calc(${seat.yPct}% + 34px)`,
         transform: above ? "translate(-50%, -100%)" : "translate(-50%, 0%)",
         zIndex: 30,
       }}
       className="bg-white dark:bg-zinc-800 rounded-2xl border border-zinc-200 dark:border-zinc-700 shadow-xl p-3 w-52 space-y-2"
     >
       {/* 小三角 */}
-      <div
-        className={[
-          "absolute left-1/2 -translate-x-1/2 w-0 h-0",
-          above
-            ? "bottom-[-6px] border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-zinc-200 dark:border-t-zinc-700"
-            : "top-[-6px] border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-zinc-200 dark:border-b-zinc-700",
-        ].join(" ")}
-      />
+      <div className={[
+        "absolute left-1/2 -translate-x-1/2 w-0 h-0",
+        above
+          ? "bottom-[-6px] border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-zinc-200 dark:border-t-zinc-700"
+          : "top-[-6px] border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-zinc-200 dark:border-b-zinc-700",
+      ].join(" ")} />
 
       {/* ラベル */}
       <div className="space-y-0.5">
@@ -101,7 +130,7 @@ function SeatPopover({
         </select>
       </div>
 
-      {/* アクションボタン */}
+      {/* アクション */}
       <div className="flex gap-1.5 pt-0.5">
         <button
           onClick={onDuplicate}
@@ -120,6 +149,7 @@ function SeatPopover({
   );
 }
 
+// ── メイン ────────────────────────────────────────────────
 export default function SeatLayoutEditor({
   projectId,
   initialSeats,
@@ -136,16 +166,15 @@ export default function SeatLayoutEditor({
   const canvasRef   = useRef<HTMLDivElement>(null);
   const draggingRef = useRef<string | null>(null);
   const dragOffRef  = useRef<{ ox: number; oy: number }>({ ox: 0, oy: 0 });
-  const didDragRef  = useRef(false); // ドラッグ判定フラグ
+  const didDragRef  = useRef(false);
 
   // ── ドラッグ ──────────────────────────────────────────
   const handlePointerDown = useCallback((e: React.PointerEvent, localId: string) => {
-    // ポップオーバー内のクリックは無視
     if ((e.target as HTMLElement).closest(".seat-popover")) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     draggingRef.current = localId;
-    didDragRef.current = false;
+    didDragRef.current  = false;
     const rect = canvasRef.current!.getBoundingClientRect();
     const seat = seats.find(s => s.localId === localId)!;
     dragOffRef.current = {
@@ -159,25 +188,26 @@ export default function SeatLayoutEditor({
     const rect = canvasRef.current.getBoundingClientRect();
     const dx = e.clientX - rect.left - dragOffRef.current.ox;
     const dy = e.clientY - rect.top  - dragOffRef.current.oy;
-    // 5px 以上動いたらドラッグとみなす
     if (!didDragRef.current && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
       didDragRef.current = true;
-      setEditingId(null); // ドラッグ開始時にポップオーバーを閉じる
+      setEditingId(null);
     }
     if (!didDragRef.current) return;
-    const xPct = clamp((dx / rect.width)  * 100, 3, 97);
-    const yPct = clamp((dy / rect.height) * 100, 3, 97);
+    // グリッドスナップ
+    const rawX = clamp((dx / rect.width)  * 100, 0, 100);
+    const rawY = clamp((dy / rect.height) * 100, 0, 100);
+    const xPct = clamp(snapX(rawX), STEP_X / 2, 100 - STEP_X / 2);
+    const yPct = clamp(snapY(rawY), STEP_Y / 2, 100 - STEP_Y / 2);
     setSeats(prev => prev.map(s =>
       s.localId === draggingRef.current ? { ...s, xPct, yPct } : s
     ));
   }, []);
 
-  const handlePointerUp = useCallback((e: React.PointerEvent, localId: string) => {
+  const handlePointerUp = useCallback((_e: React.PointerEvent, localId: string) => {
     const wasDrag = didDragRef.current;
     draggingRef.current = null;
-    didDragRef.current = false;
+    didDragRef.current  = false;
     if (!wasDrag) {
-      // クリックとみなす → ポップオーバーをトグル
       setEditingId(prev => prev === localId ? null : localId);
     }
   }, []);
@@ -189,9 +219,20 @@ export default function SeatLayoutEditor({
       const n = parseInt(s.label);
       return isNaN(n) ? max : Math.max(max, n);
     }, 0);
+    // 既存と重ならないグリッド点を探す
+    const occupied = new Set(seats.map(s => `${snapX(s.xPct)},${snapY(s.yPct)}`));
+    let xPct = snapX(STEP_X * 2);
+    let yPct = snapY(STEP_Y * 2);
+    outer: for (let row = 1; row < ROWS; row++) {
+      for (let col = 1; col < COLS; col++) {
+        const cx = snapX(col * STEP_X);
+        const cy = snapY(row * STEP_Y);
+        if (!occupied.has(`${cx},${cy}`)) { xPct = cx; yPct = cy; break outer; }
+      }
+    }
     setSeats(prev => [
       ...prev,
-      { localId, label: `${maxNum + 1}`, xPct: 50, yPct: 50, section: "" },
+      { localId, label: `${maxNum + 1}`, xPct, yPct, section: "" },
     ]);
     setEditingId(localId);
   }
@@ -205,14 +246,16 @@ export default function SeatLayoutEditor({
     const src = seats.find(s => s.localId === localId);
     if (!src) return;
     const newLocalId = `${baseId}-${Date.now()}`;
-    const newSeat: SeatItem = {
+    // 元席から1グリッド右 or 下にずらす
+    const xPct = clamp(snapX(src.xPct + STEP_X), STEP_X / 2, 100 - STEP_X / 2);
+    const yPct = clamp(snapY(src.yPct),           STEP_Y / 2, 100 - STEP_Y / 2);
+    setSeats(prev => [...prev, {
       ...src,
-      id: undefined, // DBのIDは持たせない（新規扱い）
+      id: undefined,
       localId: newLocalId,
-      xPct: clamp(src.xPct + 5, 3, 97),
-      yPct: clamp(src.yPct + 5, 3, 97),
-    };
-    setSeats(prev => [...prev, newSeat]);
+      xPct,
+      yPct,
+    }]);
     setEditingId(newLocalId);
   }
 
@@ -267,11 +310,14 @@ export default function SeatLayoutEditor({
       <div
         ref={canvasRef}
         onPointerMove={handlePointerMove}
-        className="relative w-full bg-zinc-50 dark:bg-zinc-900 rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 touch-none overflow-visible"
+        className="relative w-full bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-700 touch-none overflow-visible"
         style={{ aspectRatio: "4/3", minHeight: 240 }}
       >
+        {/* グリッドドット */}
+        <GridDots />
+
         {seats.length === 0 && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-zinc-400">
+          <p className="absolute inset-0 flex items-center justify-center text-sm text-zinc-400 pointer-events-none">
             「席を追加」してドラッグで配置
           </p>
         )}
@@ -281,9 +327,13 @@ export default function SeatLayoutEditor({
             key={seat.localId}
             onPointerDown={e => handlePointerDown(e, seat.localId)}
             onPointerUp={e => handlePointerUp(e, seat.localId)}
-            style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
+            style={{
+              left: `${seat.xPct}%`,
+              top:  `${seat.yPct}%`,
+              transform: "translate(-50%, -50%)",
+            }}
             className={[
-              "absolute w-[68px] h-[54px] rounded-xl border-2 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none",
+              "absolute w-[68px] h-[54px] rounded-xl border-2 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none transition-shadow",
               editingId === seat.localId
                 ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40 shadow-lg"
                 : "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 hover:border-zinc-400 shadow-sm",
@@ -298,12 +348,11 @@ export default function SeatLayoutEditor({
           </div>
         ))}
 
-        {/* ポップオーバー（選択中の席に追随） */}
+        {/* ポップオーバー */}
         {editing && (
           <div className="seat-popover">
             <SeatPopover
               seat={editing}
-              canvasRef={canvasRef}
               onUpdate={patch => updateSeat(editing.localId, patch)}
               onDuplicate={() => duplicateSeat(editing.localId)}
               onDelete={() => removeSeat(editing.localId)}
@@ -314,7 +363,7 @@ export default function SeatLayoutEditor({
       </div>
 
       <p className="text-[11px] text-zinc-400">
-        席をクリック → ラベル・セクション設定・複製／削除　／　ドラッグで移動
+        席をクリック → 設定・複製・削除　／　ドラッグで移動（グリッドにスナップ）
       </p>
     </div>
   );
