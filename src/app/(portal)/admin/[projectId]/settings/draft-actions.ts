@@ -193,6 +193,9 @@ export async function generateShiftDraftAction(
     return !endDate || endDate >= dateFrom;
   });
 
+  // 全パターン定義を保存（仮確定セクション判定で後から参照するため）
+  const allPatternDefs = [...patterns];
+
   // セクション絞り込み: targetSection 指定時はそのセクション所属スタッフのみ対象
   // セクション未設定スタッフは除外（全セクション対応扱いにしない）
   if (targetSection) {
@@ -225,12 +228,14 @@ export async function generateShiftDraftAction(
   if (targetSection) {
     const { data: currentDraft } = await admin
       .from("shift_grid_drafts")
-      .select("draft_data")
+      .select("draft_data, locked_sections")
       .eq("project_id", projectId)
       .eq("target_month", monthStr)
       .maybeSingle();
 
     storedDraftEntries = (currentDraft?.draft_data as DraftEntry[] | null) ?? [];
+    const lockedSectionsFromDB = (currentDraft?.locked_sections as string[] | null) ?? [];
+
     const targetPNames = new Set(patterns.map(p => p.name));
     const otherEntries = storedDraftEntries.filter(e => !targetPNames.has(e.n));
 
@@ -246,6 +251,31 @@ export async function generateShiftDraftAction(
       // 当月分のみカウント（月稼働日数上限チェック用）
       if (date >= dateFrom && date <= dateTo) {
         otherSectionMonthCount.set(staffId, (otherSectionMonthCount.get(staffId) ?? 0) + 1);
+      }
+    }
+
+    // ── 仮確定セクションのスタッフを候補から完全除外 ──────────────
+    // 仮確定セクションにいる人は「人を奪う」ことになるため、再仮組み対象外にする
+    if (lockedSectionsFromDB.length > 0) {
+      // 仮確定セクションのパターン名セット（全パターン定義から逆引き）
+      const lockedPatternNames = new Set(
+        allPatternDefs
+          .filter(p => p.section && lockedSectionsFromDB.includes(p.section))
+          .map(p => p.name)
+      );
+
+      // 仮確定セクションのドラフトエントリに登場するスタッフIDを収集
+      const lockedStaffIds = new Set<string>();
+      for (const e of storedDraftEntries) {
+        if (lockedPatternNames.has(e.n)) {
+          const si = e.k.lastIndexOf("__");
+          lockedStaffIds.add(e.k.slice(0, si));
+        }
+      }
+
+      // そのスタッフを候補から除外（同日保護だけでなく月全体で使わない）
+      if (lockedStaffIds.size > 0) {
+        activeMemberRows = activeMemberRows.filter(m => !lockedStaffIds.has(m.staff_id));
       }
     }
   }
@@ -358,7 +388,8 @@ export async function generateShiftDraftAction(
   // ── 必要数が未設定（0）のパターン向け: スタッフ人数から自動計算 ──
   // スタッフ平均稼働目標日数（デフォルト21日）
   const avgTargetDays = activeMemberRows.reduce((sum, m) => {
-    const wdCount = (m as { work_days_count?: number | null }).work_days_count ?? 21;
+    const wdRaw = (m as { work_days_count?: number | null }).work_days_count;
+    const wdCount = (wdRaw != null && wdRaw > 0) ? wdRaw : 21;
     return sum + Math.min(wdCount, allDates.length);
   }, 0) / activeMemberRows.length;
 
@@ -436,7 +467,8 @@ export async function generateShiftDraftAction(
 
         // 月稼働日数上限（未設定時は月21日をデフォルトとして適用）
         const wdType  = (m as { work_days_type?: string | null }).work_days_type  || "monthly";
-        const wdCount = (m as { work_days_count?: number | null }).work_days_count ?? 21;
+        const wdCountRaw = (m as { work_days_count?: number | null }).work_days_count;
+        const wdCount = (wdCountRaw != null && wdCountRaw > 0) ? wdCountRaw : 21;
         if (wdType === "monthly") {
           const current = (draftMonthCount.get(m.staff_id) ?? 0)
             + (existingMonthCount.get(m.staff_id) ?? 0)
@@ -483,8 +515,10 @@ export async function generateShiftDraftAction(
         const bAssigned = (draftMonthCount.get(b.m.staff_id) ?? 0)
           + (existingMonthCount.get(b.m.staff_id) ?? 0)
           + (otherSectionMonthCount?.get(b.m.staff_id) ?? 0);
-        const aTarget = (a.m as { work_days_count?: number | null }).work_days_count ?? 21;
-        const bTarget = (b.m as { work_days_count?: number | null }).work_days_count ?? 21;
+        const aTargetRaw = (a.m as { work_days_count?: number | null }).work_days_count;
+        const bTargetRaw = (b.m as { work_days_count?: number | null }).work_days_count;
+        const aTarget = (aTargetRaw != null && aTargetRaw > 0) ? aTargetRaw : 21;
+        const bTarget = (bTargetRaw != null && bTargetRaw > 0) ? bTargetRaw : 21;
         const aRate = aAssigned / Math.max(1, aTarget);
         const bRate = bAssigned / Math.max(1, bTarget);
         if (Math.abs(aRate - bRate) > 0.005) return aRate - bRate; // 稼働率が低い方を先に使う
@@ -536,7 +570,8 @@ export async function generateShiftDraftAction(
       if (diagPattern?.target_role === "admin" && m.role !== "project_admin") { diag.role++; continue; }
       if (diagPattern?.target_role === "staff" && m.role !== "staff")          { diag.role++; continue; }
       const wdType  = (m as { work_days_type?: string | null }).work_days_type || "monthly";
-      const wdCount = (m as { work_days_count?: number | null }).work_days_count ?? 21;
+      const wdDiagRaw = (m as { work_days_count?: number | null }).work_days_count;
+      const wdCount = (wdDiagRaw != null && wdDiagRaw > 0) ? wdDiagRaw : 21;
       if (wdType === "monthly") {
         const cur = (draftMonthCount.get(m.staff_id) ?? 0) + (existingMonthCount.get(m.staff_id) ?? 0);
         if (cur >= wdCount) { diag.monthLimit++; continue; }
