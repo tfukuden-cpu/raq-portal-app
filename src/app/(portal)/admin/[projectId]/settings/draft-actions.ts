@@ -293,26 +293,27 @@ export async function generateShiftDraftAction(
   // ── 仮組グリッド生成 ────────────────────────────────────────
   const draft = new Map<string, { shiftName: string; shiftStart: string | null; shiftEnd: string | null }>();
 
-  // ── 事前診断: 必要人数が1件もないとパターン設定の問題 ─────────
-  const hasAnyRequired = allDates.some(date =>
-    patterns.some(p => {
-      const slotReq = slotMap.get(`${p.name}__${date}`);
-      if (slotReq !== undefined) return slotReq > 0;
-      const dow = new Date(date + "T00:00:00Z").getUTCDay();
-      const isWe = dow === 0 || dow === 6;
-      const req = isWe ? (p.required_weekend ?? p.required_count ?? 0) : (p.required_weekday ?? p.required_count ?? 0);
-      return req > 0;
-    })
-  );
-  if (!hasAnyRequired) {
+  // スタッフが0人なら早期エラー
+  if (activeMemberRows.length === 0) {
     const sec = targetSection ? `「${targetSection}」セクション` : "";
-    return {
-      success: false,
-      message: `${sec}のパターンに必要人数が設定されていません。`
-        + `シフト設定タブでパターンの必要人数(required_count)を設定するか、`
-        + `各日付の必要数テーブルに人数を登録してください。`,
-    };
+    return { success: false, message: `${sec}の対象スタッフが0人です。メンバー管理でセクションを確認してください。` };
   }
+
+  // ── 必要数が未設定（0）のパターン向け: スタッフ人数から自動計算 ──
+  // スタッフ平均稼働目標日数（デフォルト21日）
+  const avgTargetDays = activeMemberRows.reduce((sum, m) => {
+    const wdCount = (m as { work_days_count?: number | null }).work_days_count ?? 21;
+    return sum + Math.min(wdCount, allDates.length);
+  }, 0) / activeMemberRows.length;
+
+  // パターン数（同じセクション内で分担）
+  const patternCount = Math.max(1, patterns.length);
+
+  // 1パターン・1日あたりの自動配置人数
+  // = (スタッフ数 × 平均稼働日数) / 月日数 / パターン数
+  const autoRequiredPerDay = Math.max(1, Math.round(
+    activeMemberRows.length * avgTargetDays / allDates.length / patternCount
+  ));
 
   for (const date of allDates) {
     const weekKey = isoWeekKey(date);
@@ -329,14 +330,17 @@ export async function generateShiftDraftAction(
       const slotRequired = slotMap.get(`${pattern.name}__${date}`);
       let required: number;
       if (slotRequired !== undefined) {
+        // スロット設定が明示的にある場合はそれを使用
         required = slotRequired;
       } else {
-        // スロット設定がない日は、パターン自体の必要人数設定にフォールバック
+        // パターン自体の必要人数設定を確認
         const dow = new Date(date + "T00:00:00Z").getUTCDay();
         const isWeekend = dow === 0 || dow === 6;
-        required = isWeekend
+        const patternRequired = isWeekend
           ? (pattern.required_weekend ?? pattern.required_count ?? 0)
           : (pattern.required_weekday ?? pattern.required_count ?? 0);
+        // 0（未設定）の場合はスタッフ人数ベースの自動計算値を使用
+        required = patternRequired > 0 ? patternRequired : autoRequiredPerDay;
       }
       if (required === 0) continue;
 
