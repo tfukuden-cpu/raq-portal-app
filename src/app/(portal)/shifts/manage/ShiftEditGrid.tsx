@@ -1526,14 +1526,6 @@ export default function ShiftEditGrid({
                     );
                   })}
 
-                  {/* 全セクション上書き（仮確定も含む明示オプション） */}
-                  <button
-                    onClick={() => handleRegen(undefined, true)}
-                    disabled={isRegenerating || isLocking}
-                    className="w-full py-2.5 rounded-2xl text-xs font-semibold border transition-colors mt-1 bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-40"
-                  >
-                    全セクション（仮確定も上書き）
-                  </button>
                 </div>
               )}
 
@@ -1557,6 +1549,8 @@ export default function ShiftEditGrid({
                         ? "生成中…"
                         : regenSection
                         ? `「${regenSection}」を再仮組み`
+                        : lockedSections.size > 0
+                        ? `再仮組み（仮確定${lockedSections.size}件はスキップ）`
                         : "全セクションを再仮組み"}
                     </button>
                     <button
