@@ -418,7 +418,9 @@ export async function generateShiftDraftAction(
       [processOrder[i], processOrder[j]] = [processOrder[j], processOrder[i]];
     }
 
+  let processedCount = 0;
   for (const date of processOrder) {
+    processedCount++;
     const weekKey = isoWeekKey(date);
 
     const assignedOnDate = new Set<string>();
@@ -514,8 +516,24 @@ export async function generateShiftDraftAction(
         return true;
       });
 
+      // ── ペーシングガード（ソフト制約） ──────────────────────────────
+      // 処理済み日数 n/総日数 の割合に比例して各スタッフの割当上限を設ける。
+      // 例: 10日目の処理時点 → 各スタッフは最大 ceil(target×10/30) 日まで。
+      // これにより早い処理順の日程がスタッフ容量を先食いするのを防ぐ。
+      // 候補数が needMore を下回る場合はガードなし（フォールバック）。
+      const pacedCandidates = candidates.filter(m => {
+        const cur = (draftMonthCount.get(m.staff_id) ?? 0)
+          + (existingMonthCount.get(m.staff_id) ?? 0)
+          + (otherSectionMonthCount?.get(m.staff_id) ?? 0);
+        const wdRaw2 = (m as { work_days_count?: number | null }).work_days_count;
+        const wdTarget2 = (wdRaw2 != null && wdRaw2 > 0) ? wdRaw2 : 21;
+        const paceLimit = Math.ceil(wdTarget2 * processedCount / lastDay);
+        return cur < paceLimit;
+      });
+      const sourceCandidates = pacedCandidates.length >= needMore ? pacedCandidates : candidates;
+
       // 優先度スコアでソート（同点時は稼働率が低いスタッフ優先で均等配分）
-      const scored = candidates.map(m => {
+      const scored = sourceCandidates.map(m => {
         const ps   = (m as { preferred_shift?: string | null }).preferred_shift;
         const pSec = (m as { preferred_section?: string | null }).preferred_section;
         let score = 0;
