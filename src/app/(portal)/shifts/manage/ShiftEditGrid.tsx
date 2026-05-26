@@ -1396,7 +1396,7 @@ export default function ShiftEditGrid({
                   >
                     <option value="">全セクション（上書き）</option>
                     {sectionOptions.map(s => (
-                      <option key={s} value={s}>{s}（他セクションは保持）</option>
+                      <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
                 </div>

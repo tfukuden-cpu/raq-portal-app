@@ -366,7 +366,7 @@ export default async function ManageShiftsPage(props: {
 
             <div className="flex flex-col items-end gap-2">
               <div className="flex items-center gap-2">
-                <PublishButton projectId={selectedProjectId} year={targetYear} month={targetMonth} />
+                <PublishButton projectId={selectedProjectId} year={targetYear} month={targetMonth} isPublished={isPublished} />
               </div>
               <div className="flex items-center gap-1">
                 <a href={`${monthNavBase}${prevMonth.year}&month=${prevMonth.month}`}
