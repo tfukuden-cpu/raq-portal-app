@@ -227,10 +227,20 @@ export async function generateShiftDraftAction(
     (holidayRows ?? []).map(h => `${h.staff_id}__${h.request_date}`)
   );
 
+  // セクション再仮組み時: 対象セクションの確定済みシフトは「置き換え対象」なので除外判定しない
+  // （すでに確定済みでも再仮組みで上書きできるようにする）
+  const regenPatternNames = targetSection
+    ? new Set(patterns.map(p => p.name))
+    : null;
+
   // 既存シフトマップ: "staffId__date" → shiftName
+  // targetSection 指定時: 再仮組み対象パターンのシフトはスキップ（上書き対象のため）
   const existingMap = new Map<string, string>();
   for (const s of (existingShiftRows ?? [])) {
-    if (s.shift_name) existingMap.set(`${s.staff_id}__${s.shift_date}`, s.shift_name as string);
+    if (s.shift_name) {
+      if (regenPatternNames?.has(s.shift_name as string)) continue;
+      existingMap.set(`${s.staff_id}__${s.shift_date}`, s.shift_name as string);
+    }
   }
 
   // スロット必要数マップ
@@ -264,6 +274,8 @@ export async function generateShiftDraftAction(
   for (const s of allExistingRows) {
     const name = s.shift_name as string | null;
     if (!name || name === "公休" || name === "希望休") continue;
+    // 再仮組み対象パターンは稼働カウント・日付セットから除外（上書き対象のため）
+    if (regenPatternNames?.has(name)) continue;
     if (!existingDateSet.has(s.staff_id)) existingDateSet.set(s.staff_id, new Set());
     existingDateSet.get(s.staff_id)!.add(s.shift_date as string);
     // 当月分のみカウント（月稼働日数上限チェック用）
