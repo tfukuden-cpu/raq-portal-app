@@ -62,6 +62,18 @@ export type ChangeLog = {
 type DraftValue = { shiftName: string | null; shiftStart: string | null; shiftEnd: string | null };
 type DraftCell = DraftValue | null;
 
+// ── セクション別チップ配色 ──────────────────────────────────────
+// early = 早番（薄め）, late = 遅番（濃いめ）
+const SECTION_CHIP: Record<string, { early: string; late: string }> = {
+  "SV":       { early: "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200",       late: "bg-violet-300 text-violet-900 dark:bg-violet-700/70 dark:text-violet-100" },
+  "査定":     { early: "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-200",                   late: "bg-sky-300 text-sky-900 dark:bg-sky-700/70 dark:text-sky-100" },
+  "販売":     { early: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200",   late: "bg-emerald-300 text-emerald-900 dark:bg-emerald-700/70 dark:text-emerald-100" },
+  "MOTA":     { early: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-200",       late: "bg-orange-300 text-orange-900 dark:bg-orange-700/70 dark:text-orange-100" },
+  "リメイク": { early: "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-200",               late: "bg-rose-300 text-rose-900 dark:bg-rose-700/70 dark:text-rose-100" },
+  "ローン":   { early: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200",           late: "bg-amber-300 text-amber-900 dark:bg-amber-700/70 dark:text-amber-100" },
+};
+const SECTION_CHIP_DEFAULT = "bg-zinc-100 text-zinc-600 dark:bg-zinc-700/50 dark:text-zinc-300";
+
 type EditTarget =
   | { kind: "existing";     staffId: string; patternName: string; date: string }
   | { kind: "empty";        patternName: string; date: string }
@@ -1698,23 +1710,40 @@ export default function ShiftEditGrid({
                             )}
                             {shiftName && (
                               <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
-                                <span className={[
-                                  "text-[11px] leading-none font-medium text-center truncate w-full block",
-                                  isDraftCell
-                                    ? "text-blue-700 dark:text-blue-400 font-bold"
-                                    : isFocusedRow && isCandidate
-                                    ? "text-blue-800 dark:text-blue-100 font-bold"
-                                    : isFocusedRow
-                                    ? "text-blue-600 dark:text-blue-300"
-                                    : isCandidate
-                                    ? "text-amber-800 dark:text-amber-200 font-semibold"
-                                    : "text-zinc-700 dark:text-zinc-300",
-                                ].join(" ")}>
-                                  {shiftName.slice(0, 4)}
-                                  {hasLog && !isDraftCell && (
-                                    <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5" />
-                                  )}
-                                </span>
+                                {(isFocusedRow || isCandidate || isDraftCell) ? (
+                                  // フォーカス・候補・下書き状態: 既存のハイライト色を優先
+                                  <span className={[
+                                    "text-[11px] leading-none font-medium text-center truncate w-full block",
+                                    isDraftCell
+                                      ? "text-blue-700 dark:text-blue-400 font-bold"
+                                      : isFocusedRow && isCandidate
+                                      ? "text-blue-800 dark:text-blue-100 font-bold"
+                                      : isFocusedRow
+                                      ? "text-blue-600 dark:text-blue-300"
+                                      : "text-amber-800 dark:text-amber-200 font-semibold",
+                                  ].join(" ")}>
+                                    {shiftName.slice(0, 4)}
+                                    {hasLog && !isDraftCell && (
+                                      <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5" />
+                                    )}
+                                  </span>
+                                ) : (
+                                  // 通常状態: セクション別カラーチップ
+                                  <span className={[
+                                    "text-[10px] leading-none font-semibold text-center truncate w-full block rounded-sm px-0.5",
+                                    (() => {
+                                      const sec = patternByName.get(shiftName)?.section ?? null;
+                                      const styles = sec ? SECTION_CHIP[sec] : null;
+                                      if (!styles) return SECTION_CHIP_DEFAULT;
+                                      return shiftName.includes("遅") ? styles.late : styles.early;
+                                    })(),
+                                  ].join(" ")}>
+                                    {shiftName.slice(0, 4)}
+                                    {hasLog && (
+                                      <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5" />
+                                    )}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </td>
@@ -1736,7 +1765,7 @@ export default function ShiftEditGrid({
       </div>
 
       {/* 凡例 */}
-      <div className="shrink-0 px-4 py-1.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center text-[10px] text-zinc-400 gap-3 flex-wrap">
+      <div className="shrink-0 px-4 py-1.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center text-[10px] text-zinc-400 gap-x-3 gap-y-1 flex-wrap">
         <span><span className="text-blue-700 dark:text-blue-400 font-bold">名前</span>＝変更中</span>
         <span className="flex items-center gap-0.5">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />＝変更履歴あり
@@ -1749,6 +1778,15 @@ export default function ShiftEditGrid({
             <span className="inline-block w-2.5 h-2.5 rounded bg-amber-200" />＝不足日候補
           </span>
         )}
+        {/* セクションカラー凡例 */}
+        <span className="flex items-center gap-1 flex-wrap">
+          {Object.entries(SECTION_CHIP).map(([sec, styles]) => (
+            <span key={sec} className="flex items-center gap-0.5">
+              <span className={`inline-block rounded-sm px-1 text-[9px] font-semibold ${styles.early}`}>{sec}早</span>
+              <span className={`inline-block rounded-sm px-1 text-[9px] font-semibold ${styles.late}`}>{sec}遅</span>
+            </span>
+          ))}
+        </span>
         <span className="ml-auto text-[9px]">タップ：シフト編集　–＝離脱後</span>
       </div>
 

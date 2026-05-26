@@ -96,18 +96,21 @@ export default async function ManageShiftsPage(props: {
   if (tab === "settings") {
     const { data: shiftPatternFull } = await admin
       .from("shift_patterns")
-      .select("id, name, short_name, start_time, end_time, section, target_role, required_weekday, required_weekend")
+      .select("id, name, short_name, start_time, end_time, section, target_role, required_count, required_weekday, required_weekend")
       .eq("project_id", selectedProjectId)
       .order("sort_order");
 
     const patternList = (shiftPatternFull ?? []).map(p => ({
-      id:          (p as { id?: string }).id ?? undefined,
-      name:        p.name,
-      short_name:  (p as { short_name?: string }).short_name ?? "",
-      start_time:  (p.start_time ?? "") as string,
-      end_time:    (p.end_time   ?? "") as string,
-      section:     (p as { section?: string | null }).section ?? "",
-      target_role: (p as { target_role?: string }).target_role ?? "all",
+      id:               (p as { id?: string }).id ?? undefined,
+      name:             p.name,
+      short_name:       (p as { short_name?: string }).short_name ?? "",
+      start_time:       (p.start_time ?? "") as string,
+      end_time:         (p.end_time   ?? "") as string,
+      section:          (p as { section?: string | null }).section ?? "",
+      target_role:      (p as { target_role?: string }).target_role ?? "all",
+      required_count:   (p as { required_count?: number | null }).required_count   ?? null,
+      required_weekday: (p as { required_weekday?: number | null }).required_weekday ?? null,
+      required_weekend: (p as { required_weekend?: number | null }).required_weekend ?? null,
     }));
 
     return (

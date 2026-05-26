@@ -62,6 +62,9 @@ type PatternDef = {
   start_time: string | null;
   end_time: string | null;
   target_role: string;
+  required_count:   number | null;
+  required_weekday: number | null;
+  required_weekend: number | null;
 };
 
 // ── ユーティリティ ──────────────────────────────────────────
@@ -203,8 +206,9 @@ export async function generateShiftDraftAction(
     patterns = patterns.filter(p => p.section === targetSection);
   }
 
-  if (!slotReqRows || slotReqRows.length === 0) {
-    return { success: false, message: "必要人数が設定されていません。先に必要数を保存してください" };
+  // slotReqRows が null はDBエラー。空（length=0）はパターン自体の required_count で代替するため許容
+  if (!slotReqRows) {
+    return { success: false, message: "必要人数の取得に失敗しました" };
   }
 
   // パターンマップ（インターバル計算で参照）
@@ -301,7 +305,18 @@ export async function generateShiftDraftAction(
     }
 
     for (const pattern of patterns) {
-      const required = slotMap.get(`${pattern.name}__${date}`) ?? 0;
+      const slotRequired = slotMap.get(`${pattern.name}__${date}`);
+      let required: number;
+      if (slotRequired !== undefined) {
+        required = slotRequired;
+      } else {
+        // スロット設定がない日は、パターン自体の必要人数設定にフォールバック
+        const dow = new Date(date + "T00:00:00Z").getUTCDay();
+        const isWeekend = dow === 0 || dow === 6;
+        required = isWeekend
+          ? (pattern.required_weekend ?? pattern.required_count ?? 0)
+          : (pattern.required_weekday ?? pattern.required_count ?? 0);
+      }
       if (required === 0) continue;
 
       const alreadyAssigned = (existingShiftRows ?? []).filter(

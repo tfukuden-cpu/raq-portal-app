@@ -11,6 +11,9 @@ type ShiftPattern = {
   end_time: string;
   section: string;
   target_role: string;
+  required_count?:   number | null;
+  required_weekday?: number | null;
+  required_weekend?: number | null;
 };
 
 export default function ShiftSettingsTab({
@@ -40,11 +43,14 @@ export default function ShiftSettingsTab({
         <ShiftDraftSection
           projectId={projectId}
           patterns={initialPatterns.map(p => ({
-            name:        p.name,
-            section:     p.section || null,
-            start_time:  p.start_time || null,
-            end_time:    p.end_time   || null,
-            target_role: p.target_role,
+            name:             p.name,
+            section:          p.section || null,
+            start_time:       p.start_time || null,
+            end_time:         p.end_time   || null,
+            target_role:      p.target_role,
+            required_count:   p.required_count   ?? null,
+            required_weekday: p.required_weekday ?? null,
+            required_weekend: p.required_weekend ?? null,
           }))}
         />
       </section>

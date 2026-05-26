@@ -389,7 +389,7 @@ export async function regenerateShiftDraftAction(
   // パターン一覧を取得
   const { data: patternRows, error: patternErr } = await admin
     .from("shift_patterns")
-    .select("name, section, start_time, end_time, target_role")
+    .select("name, section, start_time, end_time, target_role, required_count, required_weekday, required_weekend")
     .eq("project_id", projectId)
     .order("sort_order");
 
@@ -398,11 +398,14 @@ export async function regenerateShiftDraftAction(
   }
 
   const patterns = patternRows.map(p => ({
-    name:        p.name as string,
-    section:     (p.section ?? null) as string | null,
-    start_time:  (p.start_time ?? null) as string | null,
-    end_time:    (p.end_time ?? null) as string | null,
-    target_role: (p.target_role ?? "all") as string,
+    name:             p.name as string,
+    section:          (p.section ?? null) as string | null,
+    start_time:       (p.start_time ?? null) as string | null,
+    end_time:         (p.end_time ?? null) as string | null,
+    target_role:      (p.target_role ?? "all") as string,
+    required_count:   (p.required_count ?? null) as number | null,
+    required_weekday: (p.required_weekday ?? null) as number | null,
+    required_weekend: (p.required_weekend ?? null) as number | null,
   }));
 
   // セクション指定時はパターンも絞り込む（全体取得後にフィルタリングはdraft-actions内で行う）

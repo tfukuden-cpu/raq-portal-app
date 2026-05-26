@@ -17,6 +17,9 @@ type Pattern = {
   start_time: string | null;
   end_time: string | null;
   target_role: string;
+  required_count:   number | null;
+  required_weekday: number | null;
+  required_weekend: number | null;
 };
 
 function pad(n: number) { return String(n).padStart(2, "0"); }
