@@ -12,6 +12,7 @@ type HomeState = "pre_departure" | "pre_clock_in" | "working" | "clocked_out";
 type ModalType = "none" | "departure" | "absence" | "late";
 
 export interface HomeClientProps {
+  isAdmin?: boolean;
   displayName: string;
   projectName: string;
   hasMultipleProjects: boolean;

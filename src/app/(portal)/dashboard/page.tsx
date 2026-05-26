@@ -8,6 +8,8 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getCurrentProjectId } from "@/lib/project-context";
 import HomeClient from "./HomeClient";
+import AdminHomeWrapper from "./AdminHomeWrapper";
+import type { GroupTask, TaskGroup, StaffOption, NameMapping } from "../tasks/TasksClient";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -55,6 +57,7 @@ export default async function DashboardPage() {
   if (staff?.must_change_password) redirect("/change-password");
 
   const displayName = staff?.display_name ?? staff?.name ?? staffId;
+  const isGlobalAdmin = staff?.global_role === "admin" || staff?.global_role === "executive";
 
   // ── 一般スタッフ / 案件管理者 ──
 
@@ -91,11 +94,15 @@ export default async function DashboardPage() {
     ? currentMembership.projects[0]
     : currentMembership.projects;
 
+  const isAdmin = isGlobalAdmin || currentMembership.role === "project_admin";
+
   const today = tokyoToday();
   const todayStart = `${today}T00:00:00+09:00`;
   const todayEnd = `${today}T23:59:59+09:00`;
   const weekLater = new Date(); weekLater.setDate(weekLater.getDate() + 7);
   const weekLaterStr = weekLater.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+
+  const adminClient = createAdminClient();
 
   // 並列クエリ
   const [
@@ -108,6 +115,11 @@ export default async function DashboardPage() {
     { data: readNotices },
     { data: upcomingShiftRows },
     { data: projectSettings },
+    rawTasksResult,
+    rawGroupsResult,
+    membersResult,
+    knownGroupsResult,
+    rawMappingsResult,
   ] = await Promise.all([
     supabase
       .from("punch_logs")
@@ -166,11 +178,37 @@ export default async function DashboardPage() {
       .not("shift_name", "in", '("公休","休","公休日")')
       .order("shift_date")
       .limit(5),
-    createAdminClient()
+    adminClient
       .from("project_settings")
       .select("enable_departure_report")
       .eq("project_id", currentProjectId!)
       .maybeSingle(),
+    // タスク関連（管理者のみ使用）
+    isAdmin
+      ? supabase.from("group_tasks")
+          .select("id, title, description, assignee_staff_id, assignee_raw, due_text, due_date, status, group_id, created_at, completed_at, source_messages")
+          .eq("project_id", currentProjectId!).in("status", ["pending", "done"])
+          .order("created_at", { ascending: false }).limit(200)
+      : Promise.resolve({ data: [] }),
+    isAdmin
+      ? supabase.from("task_extraction_groups")
+          .select("id, group_id, group_label, enabled")
+          .eq("project_id", currentProjectId!).order("created_at")
+      : Promise.resolve({ data: [] }),
+    isAdmin
+      ? adminClient.from("project_members")
+          .select("staff_id, staffs(name, display_name)")
+          .eq("project_id", currentProjectId!).order("staff_id")
+      : Promise.resolve({ data: [] }),
+    isAdmin
+      ? adminClient.from("line_groups")
+          .select("group_id, joined_at").order("joined_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+    isAdmin
+      ? adminClient.from("line_name_mappings")
+          .select("id, raw_name, staff_id")
+          .eq("project_id", currentProjectId!).order("raw_name")
+      : Promise.resolve({ data: [] }),
   ]);
 
   const readIds = new Set((readNotices ?? []).map(r => r.notice_id as string));
@@ -181,44 +219,95 @@ export default async function DashboardPage() {
     .reverse()
     .find((p) => p.punch_type === "clock_out");
 
-  return (
-    <HomeClient
-      displayName={displayName}
-      projectName={currentProject?.name ?? ""}
-      hasMultipleProjects={activeMemberships.length > 1}
-      todayLabel={getTodayLabel()}
-      shift={
-        todayShift
-          ? {
-              name: todayShift.shift_name,
-              start: todayShift.shift_start,
-              end: todayShift.shift_end,
-            }
-          : null
-      }
-      departureTime={
-        todayDeparture?.reported_at
-          ? fmtTime(todayDeparture.reported_at)
-          : null
-      }
-      clockInTime={
-        clockInEntry?.recorded_at ? fmtTime(clockInEntry.recorded_at) : null
-      }
-      clockOutTime={
-        clockOutEntry?.recorded_at ? fmtTime(clockOutEntry.recorded_at) : null
-      }
-      hasAbsenceReport={!!todayAbsence}
-      absenceStatus={todayAbsence?.status ?? null}
-      hasLateReport={!!todayLate}
-      lateStatus={todayLate?.status ?? null}
-      enableDeparture={(projectSettings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true}
-      noticeCount={unreadCount}
-      upcomingShifts={(upcomingShiftRows ?? []).map(s => ({
-        date: s.shift_date as string,
-        name: s.shift_name as string | null,
-        start: s.shift_start as string | null,
-        end: s.shift_end as string | null,
-      }))}
-    />
-  );
+  // ── 共通の home props ──
+  const homeProps = {
+    displayName,
+    projectName: currentProject?.name ?? "",
+    hasMultipleProjects: activeMemberships.length > 1,
+    todayLabel: getTodayLabel(),
+    shift: todayShift
+      ? { name: todayShift.shift_name, start: todayShift.shift_start, end: todayShift.shift_end }
+      : null,
+    departureTime: todayDeparture?.reported_at ? fmtTime(todayDeparture.reported_at) : null,
+    clockInTime:   clockInEntry?.recorded_at   ? fmtTime(clockInEntry.recorded_at)   : null,
+    clockOutTime:  clockOutEntry?.recorded_at  ? fmtTime(clockOutEntry.recorded_at)  : null,
+    hasAbsenceReport: !!todayAbsence,
+    absenceStatus: todayAbsence?.status ?? null,
+    hasLateReport: !!todayLate,
+    lateStatus: todayLate?.status ?? null,
+    enableDeparture: (projectSettings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true,
+    noticeCount: unreadCount,
+    upcomingShifts: (upcomingShiftRows ?? []).map(s => ({
+      date:  s.shift_date  as string,
+      name:  s.shift_name  as string | null,
+      start: s.shift_start as string | null,
+      end:   s.shift_end   as string | null,
+    })),
+  };
+
+  // ── 管理者・運用者はタスクタブ付きラッパーを返す ──
+  if (isAdmin) {
+    const rawTasks    = rawTasksResult.data ?? [];
+    const rawGroups   = rawGroupsResult.data ?? [];
+    const members     = membersResult.data ?? [];
+    const knownGroups = knownGroupsResult.data ?? [];
+    const rawMappings = rawMappingsResult.data ?? [];
+
+    const staffNameMap = new Map<string, string>();
+    for (const m of members) {
+      const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+        { name: string | null; display_name: string | null } | null;
+      staffNameMap.set(m.staff_id, s?.display_name ?? s?.name ?? m.staff_id);
+    }
+    const groupLabelMap = new Map<string, string | null>();
+    for (const g of rawGroups) groupLabelMap.set(g.group_id, g.group_label ?? null);
+
+    const tasks: GroupTask[] = rawTasks.map(t => ({
+      id: t.id, title: t.title, description: t.description,
+      assignee_staff_id: t.assignee_staff_id, assignee_raw: t.assignee_raw,
+      due_text: t.due_text, due_date: t.due_date, status: t.status,
+      group_id: t.group_id, group_label: groupLabelMap.get(t.group_id) ?? null,
+      created_at: t.created_at, completed_at: t.completed_at,
+      assignee_name: t.assignee_staff_id ? (staffNameMap.get(t.assignee_staff_id) ?? null) : null,
+      source_messages: (t.source_messages as { sent_at: string; user_id: string; text: string }[] | null) ?? null,
+    }));
+
+    const taskGroups: TaskGroup[] = rawGroups.map(g => ({
+      id: g.id, group_id: g.group_id, group_label: g.group_label, enabled: g.enabled,
+    }));
+
+    const staffOptions: StaffOption[] = members.map(m => {
+      const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+        { name: string | null; display_name: string | null } | null;
+      return { staffId: m.staff_id, name: s?.display_name ?? s?.name ?? m.staff_id };
+    });
+
+    const registeredGroupIds = new Set(rawGroups.map(g => g.group_id));
+    const discoveredGroups   = (knownGroups ?? [])
+      .filter(g => !registeredGroupIds.has(g.group_id))
+      .map(g => ({ group_id: g.group_id }));
+
+    const nameMappings: NameMapping[] = rawMappings.map(m => ({
+      id: m.id, rawName: m.raw_name, staffId: m.staff_id,
+      staffName: staffNameMap.get(m.staff_id) ?? m.staff_id,
+    }));
+
+    const pendingTaskCount = tasks.filter(t => t.status === "pending").length;
+
+    return (
+      <AdminHomeWrapper
+        {...homeProps}
+        tasks={tasks}
+        taskGroups={taskGroups}
+        staffOptions={staffOptions}
+        projectId={currentProjectId!}
+        discoveredGroups={discoveredGroups}
+        myStaffId={staffId}
+        nameMappings={nameMappings}
+        pendingTaskCount={pendingTaskCount}
+      />
+    );
+  }
+
+  return <HomeClient {...homeProps} />;
 }
