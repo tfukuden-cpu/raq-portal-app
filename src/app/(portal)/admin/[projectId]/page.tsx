@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { isGSheetsConfigured } from "@/lib/gsheets";
 import { archiveProjectAction } from "./settings/actions";
 import { SettingsContainer } from "./settings/SettingsClient";
-import { type SeatItem } from "./settings/SeatLayoutEditor";
+import { type SeatItem, type WallItem } from "./settings/SeatLayoutEditor";
 import { ChevronLeftIcon } from "@/components/icons";
 import { Suspense } from "react";
 
@@ -50,6 +50,7 @@ export default async function ProjectDetailPage(props: {
     { data: recentShifts },
     { data: recentPunches },
     { data: seatsRaw },
+    { data: wallsRaw },
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
@@ -76,6 +77,10 @@ export default async function ProjectDetailPage(props: {
     createAdminClient().from("seats")
       .select("id, label, x_pct, y_pct, section")
       .eq("project_id", projectId).eq("is_active", true),
+    // 壁レイアウト
+    createAdminClient().from("seat_walls")
+      .select("id, x1_pct, y1_pct, x2_pct, y2_pct")
+      .eq("project_id", projectId),
   ]);
 
   if (!project) redirect("/admin");
@@ -138,6 +143,13 @@ export default async function ProjectDetailPage(props: {
     };
   });
 
+  const initialWalls: WallItem[] = (wallsRaw ?? []).map(w => ({
+    id:     w.id,
+    localId: w.id,
+    x1Pct: w.x1_pct as number, y1Pct: w.y1_pct as number,
+    x2Pct: w.x2_pct as number, y2Pct: w.y2_pct as number,
+  }));
+
   const initialSeats: SeatItem[] = (seatsRaw ?? []).map(s => ({
     id:      s.id,
     localId: s.id,
@@ -185,6 +197,7 @@ export default async function ProjectDetailPage(props: {
             archiveAction={archiveAction}
             canArchive={isExecutive || isAdmin}
             initialSeats={initialSeats}
+            initialWalls={initialWalls}
           />
         </Suspense>
       </div>

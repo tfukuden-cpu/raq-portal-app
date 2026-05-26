@@ -137,6 +137,33 @@ export async function autoAssignSeatsAction(
   return { success: true, assignments };
 }
 
+/** 壁レイアウト保存 */
+export async function saveSeatWallsAction(
+  projectId: string,
+  walls: { id?: string; x1Pct: number; y1Pct: number; x2Pct: number; y2Pct: number }[],
+): Promise<{ success: boolean; message?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+  // 既存を全削除して入れ直す
+  await admin.from("seat_walls").delete().eq("project_id", projectId);
+
+  if (walls.length > 0) {
+    const rows = walls.map(w => ({
+      project_id: projectId,
+      x1_pct: w.x1Pct, y1_pct: w.y1Pct,
+      x2_pct: w.x2Pct, y2_pct: w.y2Pct,
+    }));
+    const { error } = await admin.from("seat_walls").insert(rows);
+    if (error) return { success: false, message: error.message };
+  }
+
+  revalidatePath("/seating");
+  return { success: true };
+}
+
 /** 座席レイアウト保存 */
 export async function saveSeatLayoutAction(
   projectId: string,

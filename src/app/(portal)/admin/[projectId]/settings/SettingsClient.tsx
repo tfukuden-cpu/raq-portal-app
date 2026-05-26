@@ -33,7 +33,7 @@ import {
   DEFAULT_HOLIDAY_RULES,
   getRuleConfig,
 } from "../../holiday-rule-config";
-import SeatLayoutEditor, { type SeatItem } from "./SeatLayoutEditor";
+import SeatLayoutEditor, { type SeatItem, type WallItem } from "./SeatLayoutEditor";
 
 type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; end_date: string | null; compliance: number | null };
 type ShiftPattern = {
@@ -88,6 +88,7 @@ export function SettingsContainer({
   archiveAction,
   canArchive = true,
   initialSeats,
+  initialWalls,
 }: {
   projectId: string;
   projectName: string;
@@ -101,6 +102,7 @@ export function SettingsContainer({
   archiveAction: (fd: FormData) => Promise<void>;
   canArchive?: boolean;
   initialSeats?: SeatItem[];
+  initialWalls?: WallItem[];
 }) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as TabId | null) ?? "basic";
@@ -226,6 +228,7 @@ export function SettingsContainer({
           <SeatLayoutEditor
             projectId={projectId}
             initialSeats={initialSeats ?? []}
+            initialWalls={initialWalls ?? []}
           />
         </div>
       )}
