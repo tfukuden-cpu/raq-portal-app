@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition, useCallback, useId } from "react";
+import { useState, useRef, useTransition, useCallback, useId, useEffect } from "react";
 import { saveSeatLayoutAction } from "@/app/(portal)/seating/actions";
 
 export type SeatItem = {
@@ -18,6 +18,108 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
+// ── カード上のポップオーバー ──────────────────────────────
+function SeatPopover({
+  seat,
+  canvasRef,
+  onUpdate,
+  onDuplicate,
+  onDelete,
+  onClose,
+}: {
+  seat: SeatItem;
+  canvasRef: React.RefObject<HTMLDivElement | null>;
+  onUpdate: (patch: Partial<SeatItem>) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const popRef = useRef<HTMLDivElement>(null);
+
+  // キャンバス外クリックで閉じる
+  useEffect(() => {
+    function handleDown(e: MouseEvent) {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) {
+        // カード自体のクリックは SeatCard 側で制御するので、ここでは閉じるだけ
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleDown);
+    return () => document.removeEventListener("mousedown", handleDown);
+  }, [onClose]);
+
+  // ポップオーバーをカードの上 or 下に出す（yPct が 50 より大きければ上）
+  const above = seat.yPct > 50;
+
+  return (
+    <div
+      ref={popRef}
+      // ポインターイベントを通さないようにして drag 邪魔しない
+      onPointerDown={e => e.stopPropagation()}
+      style={{
+        position: "absolute",
+        left: `${seat.xPct}%`,
+        top: above ? `calc(${seat.yPct}% - 34px)` : `calc(${seat.yPct}% + 34px)`,
+        transform: above ? "translate(-50%, -100%)" : "translate(-50%, 0%)",
+        zIndex: 30,
+      }}
+      className="bg-white dark:bg-zinc-800 rounded-2xl border border-zinc-200 dark:border-zinc-700 shadow-xl p-3 w-52 space-y-2"
+    >
+      {/* 小三角 */}
+      <div
+        className={[
+          "absolute left-1/2 -translate-x-1/2 w-0 h-0",
+          above
+            ? "bottom-[-6px] border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-zinc-200 dark:border-t-zinc-700"
+            : "top-[-6px] border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-zinc-200 dark:border-b-zinc-700",
+        ].join(" ")}
+      />
+
+      {/* ラベル */}
+      <div className="space-y-0.5">
+        <p className="text-[10px] font-semibold text-zinc-400">席ラベル</p>
+        <input
+          type="text"
+          value={seat.label}
+          onChange={e => onUpdate({ label: e.target.value })}
+          placeholder="1, A-1 など"
+          className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        />
+      </div>
+
+      {/* セクション */}
+      <div className="space-y-0.5">
+        <p className="text-[10px] font-semibold text-zinc-400">セクション</p>
+        <select
+          value={seat.section}
+          onChange={e => onUpdate({ section: e.target.value })}
+          className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        >
+          {SECTIONS.map(s => (
+            <option key={s} value={s}>{s || "（なし）"}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* アクションボタン */}
+      <div className="flex gap-1.5 pt-0.5">
+        <button
+          onClick={onDuplicate}
+          className="flex-1 px-2 py-1.5 text-[11px] font-semibold rounded-lg bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
+        >
+          複製
+        </button>
+        <button
+          onClick={onDelete}
+          className="flex-1 px-2 py-1.5 text-[11px] font-semibold rounded-lg bg-red-50 dark:bg-red-950/40 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+        >
+          削除
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function SeatLayoutEditor({
   projectId,
   initialSeats,
@@ -31,37 +133,53 @@ export default function SeatLayoutEditor({
   const [isPending, startTransition] = useTransition();
   const [flash, setFlash] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const canvasRef    = useRef<HTMLDivElement>(null);
-  const draggingRef  = useRef<string | null>(null);
-  const dragOffRef   = useRef<{ ox: number; oy: number }>({ ox: 0, oy: 0 });
+  const canvasRef   = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef<string | null>(null);
+  const dragOffRef  = useRef<{ ox: number; oy: number }>({ ox: 0, oy: 0 });
+  const didDragRef  = useRef(false); // ドラッグ判定フラグ
 
   // ── ドラッグ ──────────────────────────────────────────
   const handlePointerDown = useCallback((e: React.PointerEvent, localId: string) => {
-    if ((e.target as HTMLElement).closest("input,select,button.delete-btn")) return;
+    // ポップオーバー内のクリックは無視
+    if ((e.target as HTMLElement).closest(".seat-popover")) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     draggingRef.current = localId;
+    didDragRef.current = false;
     const rect = canvasRef.current!.getBoundingClientRect();
     const seat = seats.find(s => s.localId === localId)!;
     dragOffRef.current = {
       ox: e.clientX - rect.left - (seat.xPct / 100) * rect.width,
       oy: e.clientY - rect.top  - (seat.yPct / 100) * rect.height,
     };
-    setEditingId(null);
   }, [seats]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!draggingRef.current || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const xPct = clamp(((e.clientX - rect.left - dragOffRef.current.ox) / rect.width)  * 100, 3, 97);
-    const yPct = clamp(((e.clientY - rect.top  - dragOffRef.current.oy) / rect.height) * 100, 3, 97);
+    const dx = e.clientX - rect.left - dragOffRef.current.ox;
+    const dy = e.clientY - rect.top  - dragOffRef.current.oy;
+    // 5px 以上動いたらドラッグとみなす
+    if (!didDragRef.current && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+      didDragRef.current = true;
+      setEditingId(null); // ドラッグ開始時にポップオーバーを閉じる
+    }
+    if (!didDragRef.current) return;
+    const xPct = clamp((dx / rect.width)  * 100, 3, 97);
+    const yPct = clamp((dy / rect.height) * 100, 3, 97);
     setSeats(prev => prev.map(s =>
       s.localId === draggingRef.current ? { ...s, xPct, yPct } : s
     ));
   }, []);
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e: React.PointerEvent, localId: string) => {
+    const wasDrag = didDragRef.current;
     draggingRef.current = null;
+    didDragRef.current = false;
+    if (!wasDrag) {
+      // クリックとみなす → ポップオーバーをトグル
+      setEditingId(prev => prev === localId ? null : localId);
+    }
   }, []);
 
   // ── 席追加 ────────────────────────────────────────────
@@ -77,6 +195,21 @@ export default function SeatLayoutEditor({
   function removeSeat(localId: string) {
     setSeats(prev => prev.filter(s => s.localId !== localId));
     if (editingId === localId) setEditingId(null);
+  }
+
+  function duplicateSeat(localId: string) {
+    const src = seats.find(s => s.localId === localId);
+    if (!src) return;
+    const newLocalId = `${baseId}-${Date.now()}`;
+    const newSeat: SeatItem = {
+      ...src,
+      id: undefined, // DBのIDは持たせない（新規扱い）
+      localId: newLocalId,
+      xPct: clamp(src.xPct + 5, 3, 97),
+      yPct: clamp(src.yPct + 5, 3, 97),
+    };
+    setSeats(prev => [...prev, newSeat]);
+    setEditingId(newLocalId);
   }
 
   function updateSeat(localId: string, patch: Partial<SeatItem>) {
@@ -130,9 +263,7 @@ export default function SeatLayoutEditor({
       <div
         ref={canvasRef}
         onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-        className="relative w-full bg-zinc-50 dark:bg-zinc-900 rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 touch-none"
+        className="relative w-full bg-zinc-50 dark:bg-zinc-900 rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 touch-none overflow-visible"
         style={{ aspectRatio: "4/3", minHeight: 240 }}
       >
         {seats.length === 0 && (
@@ -140,11 +271,12 @@ export default function SeatLayoutEditor({
             「席を追加」してドラッグで配置
           </p>
         )}
+
         {seats.map(seat => (
           <div
             key={seat.localId}
             onPointerDown={e => handlePointerDown(e, seat.localId)}
-            onClick={() => setEditingId(id => id === seat.localId ? null : seat.localId)}
+            onPointerUp={e => handlePointerUp(e, seat.localId)}
             style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
             className={[
               "absolute w-[68px] h-[54px] rounded-xl border-2 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none",
@@ -153,66 +285,33 @@ export default function SeatLayoutEditor({
                 : "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 hover:border-zinc-400 shadow-sm",
             ].join(" ")}
           >
-            <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200">{seat.label || "－"}</span>
+            <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200 pointer-events-none">
+              {seat.label || "－"}
+            </span>
             {seat.section && (
-              <span className="text-[9px] text-zinc-400">{seat.section}</span>
+              <span className="text-[9px] text-zinc-400 pointer-events-none">{seat.section}</span>
             )}
-            <button
-              className="delete-btn absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-zinc-400 hover:bg-red-500 text-white text-[10px] flex items-center justify-center leading-none"
-              onClick={e => { e.stopPropagation(); removeSeat(seat.localId); }}
-            >×</button>
           </div>
         ))}
+
+        {/* ポップオーバー（選択中の席に追随） */}
+        {editing && (
+          <div className="seat-popover">
+            <SeatPopover
+              seat={editing}
+              canvasRef={canvasRef}
+              onUpdate={patch => updateSeat(editing.localId, patch)}
+              onDuplicate={() => duplicateSeat(editing.localId)}
+              onDelete={() => removeSeat(editing.localId)}
+              onClose={() => setEditingId(null)}
+            />
+          </div>
+        )}
       </div>
 
-      {/* 選択中席の編集フォーム */}
-      {editing && (
-        <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-3 space-y-2">
-          <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">席の設定</p>
-          <div className="flex gap-3 flex-wrap">
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] text-zinc-400">席ラベル</span>
-              <input
-                type="text"
-                value={editing.label}
-                onChange={e => updateSeat(editing.localId, { label: e.target.value })}
-                className="w-20 px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
-                placeholder="1, A-1 など"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] text-zinc-400">セクション</span>
-              <select
-                value={editing.section}
-                onChange={e => updateSeat(editing.localId, { section: e.target.value })}
-                className="px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
-              >
-                {SECTIONS.map(s => (
-                  <option key={s} value={s}>{s || "（なし）"}</option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] text-zinc-400">X位置 %</span>
-              <input
-                type="number" min={3} max={97} step={1}
-                value={Math.round(editing.xPct)}
-                onChange={e => updateSeat(editing.localId, { xPct: clamp(Number(e.target.value), 3, 97) })}
-                className="w-16 px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] text-zinc-400">Y位置 %</span>
-              <input
-                type="number" min={3} max={97} step={1}
-                value={Math.round(editing.yPct)}
-                onChange={e => updateSeat(editing.localId, { yPct: clamp(Number(e.target.value), 3, 97) })}
-                className="w-16 px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
-              />
-            </label>
-          </div>
-        </div>
-      )}
+      <p className="text-[11px] text-zinc-400">
+        席をクリック → ラベル・セクション設定・複製／削除　／　ドラッグで移動
+      </p>
     </div>
   );
 }
