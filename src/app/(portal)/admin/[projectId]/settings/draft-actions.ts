@@ -407,7 +407,18 @@ export async function generateShiftDraftAction(
     activeMemberRows.length * avgTargetDays / allDates.length / patternCount
   ));
 
-  for (const date of allDates) {
+  // 月末偏りを防ぐため日付処理順を等間隔ストライドに並び替える
+  // 例(30日・stride=3): [1,4,7,…,28] → [2,5,8,…,29] → [3,6,9,…,30]
+  // → 上旬/中旬/下旬をまんべんなく処理することでスタッフの稼働日数が月全体に均等分散される
+  const STRIDE = Math.max(2, Math.round(allDates.length / 8));
+  const processOrder: string[] = [];
+  for (let offset = 0; offset < STRIDE; offset++) {
+    for (let i = offset; i < allDates.length; i += STRIDE) {
+      processOrder.push(allDates[i]);
+    }
+  }
+
+  for (const date of processOrder) {
     const weekKey = isoWeekKey(date);
 
     const assignedOnDate = new Set<string>();
