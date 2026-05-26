@@ -42,11 +42,11 @@ export type StaffOption = {
 
 type Tab = "my" | "pending" | "done" | "settings";
 
-/** due_date (YYYY-MM-DD) を "M月D日" 形式に */
+/** due_date (YYYY-MM-DD) を "M/D" 形式に */
 function formatDueDate(dateStr: string): string {
   const m = dateStr.match(/^\d{4}-(\d{2})-(\d{2})$/);
   if (!m) return dateStr;
-  return `${parseInt(m[1])}月${parseInt(m[2])}日`;
+  return `${parseInt(m[1])}/${parseInt(m[2])}`;
 }
 
 export default function TasksClient({
@@ -161,18 +161,30 @@ export default function TasksClient({
     const [editAssignee, setEditAssignee] = useState(task.assignee_staff_id ?? "");
     const [editDue, setEditDue]           = useState(task.due_date ?? "");
 
+    // 担当者表示（@メンション名を優先、未解決なら assignee_name）
+    const toLabel    = task.assignee_raw ?? task.assignee_name ?? null;
+    const toResolved = !!task.assignee_staff_id; // スタッフIDに紐づいていれば青
+    // 期日表示
+    const dateLabel  = task.due_date ? formatDueDate(task.due_date) : (task.due_text ?? null);
+    // 送信者
+    const fromName   = task.source_messages?.[0]?.sender ?? null;
+    const msgText    = task.source_messages?.[0]?.text ?? null;
+
     return (
       <div className={`rounded-xl border bg-white dark:bg-zinc-900 transition-all ${
         task.status === "done"
-          ? "border-zinc-100 dark:border-zinc-800 opacity-60"
+          ? "border-zinc-100 dark:border-zinc-800 opacity-55"
           : "border-zinc-200 dark:border-zinc-700"
       }`}>
-        <div className="flex items-start gap-3 p-3">
-          {/* 完了チェック */}
+
+        {/* ── メイン行 To … │ タイトル │ 期日 │ トグル ── */}
+        <div className="flex items-center gap-0 px-3 py-2.5">
+
+          {/* 完了サークル */}
           <button
             type="button"
             onClick={() => handleStatusChange(task.id, task.status === "done" ? "pending" : "done")}
-            className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+            className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors mr-3 ${
               task.status === "done"
                 ? "bg-emerald-500 border-emerald-500 text-white"
                 : "border-zinc-300 dark:border-zinc-600 hover:border-emerald-400"
@@ -185,50 +197,44 @@ export default function TasksClient({
             )}
           </button>
 
-          <div className="flex-1 min-w-0">
-            <p className={`text-sm font-semibold text-zinc-800 dark:text-zinc-100 leading-snug ${
-              task.status === "done" ? "line-through text-zinc-400" : ""
-            }`}>
-              {task.title}
-            </p>
+          {/* To 担当者 */}
+          {toLabel && (
+            <>
+              <span className={`text-xs font-bold flex-shrink-0 ${
+                toResolved
+                  ? "text-blue-600 dark:text-blue-400"
+                  : "text-zinc-400 dark:text-zinc-500"
+              }`}>
+                To {toLabel}
+              </span>
+              <span className="text-zinc-200 dark:text-zinc-700 mx-2 flex-shrink-0 select-none">│</span>
+            </>
+          )}
 
-            {/* タスク内容プレビュー（description = 2行目の内容） */}
-            {task.description && task.description !== task.title && (
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate leading-relaxed">
-                {task.description}
-              </p>
-            )}
+          {/* タスクタイトル */}
+          <p className={`flex-1 min-w-0 text-sm font-semibold leading-snug truncate ${
+            task.status === "done"
+              ? "line-through text-zinc-400"
+              : "text-zinc-800 dark:text-zinc-100"
+          }`}>
+            {task.title}
+          </p>
 
-            {/* メタ情報 */}
-            <div className="flex flex-wrap gap-1.5 mt-1.5">
-              {task.assignee_name && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold">
-                  {task.assignee_name}
-                </span>
-              )}
-              {!task.assignee_name && task.assignee_raw && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-semibold">
-                  {task.assignee_raw}
-                </span>
-              )}
-              {(task.due_date || task.due_text) && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 font-semibold tabular-nums">
-                  {task.due_date ? formatDueDate(task.due_date) : task.due_text}
-                </span>
-              )}
-              {task.group_id !== "manual" && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400">
-                  {task.group_label ?? "LINE"}
-                </span>
-              )}
-            </div>
-          </div>
+          {/* 期日 */}
+          {dateLabel && (
+            <>
+              <span className="text-zinc-200 dark:text-zinc-700 mx-2 flex-shrink-0 select-none">│</span>
+              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex-shrink-0 tabular-nums">
+                {dateLabel}
+              </span>
+            </>
+          )}
 
-          {/* 展開ボタン */}
+          {/* トグル */}
           <button
             type="button"
             onClick={() => setExpandedId(expanded ? null : task.id)}
-            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 flex-shrink-0 p-1"
+            className="ml-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 flex-shrink-0 p-1"
           >
             <svg className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`}
               fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -237,29 +243,35 @@ export default function TasksClient({
           </button>
         </div>
 
-        {/* 展開エリア */}
+        {/* ── 展開エリア from … │ メッセージ文 ── */}
         {expanded && (
           <div className="border-t border-zinc-100 dark:border-zinc-800 px-3 pb-3 pt-2 space-y-2">
-            {/* 元のLINEメッセージ */}
-            {task.source_messages && task.source_messages.length > 0 && (
-              <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-2 space-y-1">
-                {task.source_messages[0].sender && (
-                  <p className="text-[10px] text-zinc-400 font-semibold">
-                    {task.source_messages[0].sender} より
-                  </p>
+
+            {/* from 送信者 │ メッセージ全文 */}
+            {msgText ? (
+              <div className="flex gap-2 text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                {fromName && (
+                  <>
+                    <span className="font-semibold text-zinc-500 dark:text-zinc-400 flex-shrink-0 whitespace-nowrap">
+                      from {fromName}
+                    </span>
+                    <span className="text-zinc-200 dark:text-zinc-700 flex-shrink-0 select-none">│</span>
+                  </>
                 )}
-                <p className="text-xs text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
-                  {task.source_messages[0].text}
-                </p>
+                <p className="whitespace-pre-wrap">{msgText}</p>
               </div>
-            )}
-            {/* 手動追加タスクは description を表示 */}
-            {(!task.source_messages || task.source_messages.length === 0) && task.description && (
+            ) : task.description ? (
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">{task.description}</p>
+            ) : null}
+
+            {/* グループラベル */}
+            {task.group_id !== "manual" && task.group_label && (
+              <p className="text-[10px] text-zinc-400">{task.group_label}</p>
             )}
 
+            {/* 編集フォーム or アクションボタン */}
             {isEditing ? (
-              <div className="space-y-2">
+              <div className="space-y-2 pt-1">
                 <div>
                   <label className="text-[10px] text-zinc-500 font-semibold">担当者</label>
                   <select value={editAssignee} onChange={e => setEditAssignee(e.target.value)}
@@ -295,7 +307,7 @@ export default function TasksClient({
                 </div>
               </div>
             ) : (
-              <div className="flex gap-2">
+              <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setEditId(task.id)}
                   className="text-[11px] px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
                   編集
