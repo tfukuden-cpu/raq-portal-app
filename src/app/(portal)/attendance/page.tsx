@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceClient from "./AttendanceClient";
-import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember } from "./AttendanceClient";
+import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry } from "./AttendanceClient";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -106,6 +106,8 @@ export default async function AttendancePage() {
   const todayStart = `${today}T00:00:00+09:00`;
   const todayEnd   = `${today}T23:59:59+09:00`;
 
+  const currentMonth = today.slice(0, 7); // YYYY-MM
+
   const [
     { data: project },
     { data: memberRows },
@@ -116,6 +118,7 @@ export default async function AttendancePage() {
     { data: lateRows },
     { data: shiftPatterns },
     { data: projectSettings },
+    { data: monthStatus },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -151,6 +154,11 @@ export default async function AttendancePage() {
       .select("enable_departure_report")
       .eq("project_id", projectId)
       .maybeSingle(),
+    admin.from("shift_month_status")
+      .select("published_at")
+      .eq("project_id", projectId)
+      .eq("year_month", currentMonth)
+      .maybeSingle(),
   ]);
 
   // シフトパターンの時刻マップ
@@ -174,6 +182,39 @@ export default async function AttendancePage() {
       section:       m.section ?? null,
       accountNumber: (s?.account_number as string | null | undefined) ?? null,
     });
+  }
+
+  // 展開後変更ログ
+  const publishedAt = (monthStatus as { published_at: string | null } | null)?.published_at ?? null;
+  let shiftChanges: ShiftChangeEntry[] = [];
+  if (publishedAt) {
+    const { data: changeLogs } = await admin
+      .from("shift_change_logs")
+      .select("staff_id, action, before_data, after_data, changed_by, changed_at")
+      .eq("project_id", projectId)
+      .eq("shift_date", today)
+      .gt("changed_at", publishedAt)
+      .order("changed_at");
+
+    // changed_by の名前を取得
+    const changedByIds = [...new Set((changeLogs ?? []).map(l => l.changed_by as string).filter(Boolean))];
+    const { data: changedByStaffs } = changedByIds.length > 0
+      ? await admin.from("staffs").select("id, display_name, name").in("id", changedByIds)
+      : { data: [] };
+    const changedByNameMap = new Map(
+      (changedByStaffs ?? []).map(s => [s.id as string, ((s.display_name ?? s.name ?? s.id) as string)])
+    );
+
+    shiftChanges = (changeLogs ?? []).map(l => ({
+      staffId:       l.staff_id as string,
+      staffName:     memberMap.get(l.staff_id as string)?.name ?? (l.staff_id as string),
+      action:        l.action as string,
+      beforeShift:   ((l.before_data as Record<string, string | null> | null)?.shift_name) ?? null,
+      afterShift:    ((l.after_data  as Record<string, string | null> | null)?.shift_name) ?? null,
+      changedBy:     l.changed_by as string,
+      changedByName: changedByNameMap.get(l.changed_by as string) ?? (l.changed_by as string),
+      changedAt:     l.changed_at as string,
+    }));
   }
 
   // 打刻マップ
@@ -278,6 +319,8 @@ export default async function AttendancePage() {
       grouped={grouped}
       offMembers={offMembers}
       enableDeparture={enableDeparture}
+      publishedAt={publishedAt}
+      shiftChanges={shiftChanges}
     />
   );
 }

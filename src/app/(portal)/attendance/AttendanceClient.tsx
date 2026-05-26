@@ -42,6 +42,17 @@ export type OffMember = {
   shiftName: string;
 };
 
+export type ShiftChangeEntry = {
+  staffId: string;
+  staffName: string;
+  action: string;
+  beforeShift: string | null;
+  afterShift: string | null;
+  changedBy: string;
+  changedByName: string;
+  changedAt: string;
+};
+
 // ── 定数 ──────────────────────────────────────────────────
 const STATUS_LABEL: Record<StatusKey, string> = {
   working:      "勤務中",
@@ -85,6 +96,8 @@ interface Props {
   grouped: SectionGroup[];
   offMembers: OffMember[];
   enableDeparture: boolean;
+  publishedAt: string | null;
+  shiftChanges: ShiftChangeEntry[];
 }
 
 type SelectionMode = "reminder" | "request";
@@ -95,7 +108,9 @@ export default function AttendanceClient({
   projectId, today, dateLabel, projectName,
   total, departed, clockedIn, late, absent, notClocked,
   grouped, offMembers, enableDeparture,
+  publishedAt, shiftChanges,
 }: Props) {
+  const [activeTab, setActiveTab] = useState<"today" | "changes">("today");
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
@@ -214,13 +229,53 @@ export default function AttendanceClient({
           <SummaryCard value={late}                   label="遅刻" color="text-amber-500" />
           <SummaryCard value={absent}                 label="欠勤" color="text-red-500" />
         </div>
+        {/* タブ */}
+        <div className="max-w-5xl mx-auto px-4 pb-1 flex gap-1">
+          <button
+            onClick={() => setActiveTab("today")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === "today"
+                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            }`}
+          >
+            当日シフト
+          </button>
+          <button
+            onClick={() => setActiveTab("changes")}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === "changes"
+                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            }`}
+          >
+            確定後変更
+            {shiftChanges.length > 0 && (
+              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full tabular-nums ${
+                activeTab === "changes"
+                  ? "bg-white/20 text-white dark:bg-zinc-900/20 dark:text-zinc-900"
+                  : "bg-red-500 text-white"
+              }`}>
+                {shiftChanges.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
       <div className="max-w-5xl mx-auto px-4 pt-4 pb-32">
 
-        {/* セクション別アコーディオン */}
-        {grouped.length === 0 ? (
+        {/* ── 確定後変更タブ ── */}
+        {activeTab === "changes" && (
+          <ShiftChangesTab
+            publishedAt={publishedAt}
+            shiftChanges={shiftChanges}
+          />
+        )}
+
+        {/* ── 当日シフトタブ ── */}
+        {activeTab === "today" && grouped.length === 0 ? (
           <p className="text-sm text-zinc-400 text-center py-10">本日の出勤予定者はいません</p>
-        ) : (
+        ) : activeTab === "today" && (
           <div className="space-y-2">
             {grouped.map(({ section, shiftGroups }) => {
               const sAll = shiftGroups.flatMap(g => g.members);
@@ -333,7 +388,7 @@ export default function AttendanceClient({
         )}
 
         {/* 本日休みスタッフ（補填調整用） */}
-        {offMembers.length > 0 && (
+        {activeTab === "today" && offMembers.length > 0 && (
           <details className="group mt-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
             <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none list-none hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
               <div className="flex items-center gap-2">
@@ -571,6 +626,100 @@ function ChevronRight({ className }: { className?: string }) {
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
     </svg>
+  );
+}
+
+// ── 確定後変更タブ ────────────────────────────────────────
+function ShiftChangesTab({
+  publishedAt,
+  shiftChanges,
+}: {
+  publishedAt: string | null;
+  shiftChanges: ShiftChangeEntry[];
+}) {
+  if (!publishedAt) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-sm font-semibold text-zinc-400">シフトが未展開です</p>
+        <p className="text-xs text-zinc-400 mt-1">展開後の変更がここに表示されます</p>
+      </div>
+    );
+  }
+
+  const fmtPublished = new Date(publishedAt).toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo", month: "numeric", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+
+  const ACTION_LABEL: Record<string, string> = {
+    create: "追加",
+    update: "変更",
+    delete: "削除",
+  };
+  const ACTION_COLOR: Record<string, string> = {
+    create: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+    update: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+    delete: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  };
+
+  return (
+    <div>
+      {/* 展開日時 */}
+      <p className="text-xs text-zinc-400 mb-3 tabular-nums">
+        確定シフト展開日時：{fmtPublished}
+      </p>
+
+      {shiftChanges.length === 0 ? (
+        <div className="py-10 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
+          <p className="text-sm font-semibold text-zinc-500">変更なし</p>
+          <p className="text-xs text-zinc-400 mt-1">展開後に変更されたシフトはありません</p>
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+          <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
+            <span className="text-xs font-bold text-zinc-500">{shiftChanges.length}件の変更</span>
+          </div>
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {shiftChanges.map((c, i) => {
+              const changedAtStr = new Date(c.changedAt).toLocaleTimeString("ja-JP", {
+                timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false,
+              });
+              return (
+                <div key={i} className="px-4 py-3 flex items-start gap-3">
+                  {/* アクションバッジ */}
+                  <span className={`shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${ACTION_COLOR[c.action] ?? "bg-zinc-100 text-zinc-500"}`}>
+                    {ACTION_LABEL[c.action] ?? c.action}
+                  </span>
+                  {/* メイン情報 */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{c.staffName}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      {c.beforeShift && (
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400 line-through">{c.beforeShift}</span>
+                      )}
+                      {c.beforeShift && c.afterShift && (
+                        <span className="text-xs text-zinc-400">→</span>
+                      )}
+                      {c.afterShift && (
+                        <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{c.afterShift}</span>
+                      )}
+                      {!c.afterShift && c.action === "delete" && (
+                        <span className="text-xs text-zinc-400">（削除）</span>
+                      )}
+                    </div>
+                  </div>
+                  {/* 右側：変更者・時刻 */}
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs text-zinc-400 tabular-nums">{changedAtStr}</p>
+                    <p className="text-[11px] text-zinc-400">{c.changedByName}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
