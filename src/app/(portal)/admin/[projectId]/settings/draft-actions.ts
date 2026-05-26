@@ -349,17 +349,17 @@ export async function generateShiftDraftAction(
     for (const pattern of patterns) {
       const slotRequired = slotMap.get(`${pattern.name}__${date}`);
       let required: number;
-      if (slotRequired !== undefined) {
-        // スロット設定が明示的にある場合はそれを使用
+      if (slotRequired !== undefined && slotRequired > 0) {
+        // スロット要件が 1以上 明示設定されている場合のみ使用（0は「未設定」と同じ扱い）
         required = slotRequired;
       } else {
-        // パターン自体の必要人数設定を確認
+        // 未設定 or 0 → パターン自体の必要人数設定を確認
         const dow = new Date(date + "T00:00:00Z").getUTCDay();
         const isWeekend = dow === 0 || dow === 6;
         const patternRequired = isWeekend
           ? (pattern.required_weekend ?? pattern.required_count ?? 0)
           : (pattern.required_weekday ?? pattern.required_count ?? 0);
-        // 0（未設定）の場合はスタッフ人数ベースの自動計算値を使用
+        // パターンも 0（未設定）ならスタッフ人数ベースの自動計算値を使用
         required = patternRequired > 0 ? patternRequired : autoRequiredPerDay;
       }
       if (required === 0) continue;
