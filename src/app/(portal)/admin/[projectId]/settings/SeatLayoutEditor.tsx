@@ -185,9 +185,13 @@ export default function SeatLayoutEditor({
   // ── 席追加 ────────────────────────────────────────────
   function addSeat() {
     const localId = `${baseId}-${Date.now()}`;
+    const maxNum = seats.reduce((max, s) => {
+      const n = parseInt(s.label);
+      return isNaN(n) ? max : Math.max(max, n);
+    }, 0);
     setSeats(prev => [
       ...prev,
-      { localId, label: `${prev.length + 1}`, xPct: 50, yPct: 50, section: "" },
+      { localId, label: `${maxNum + 1}`, xPct: 50, yPct: 50, section: "" },
     ]);
     setEditingId(localId);
   }
