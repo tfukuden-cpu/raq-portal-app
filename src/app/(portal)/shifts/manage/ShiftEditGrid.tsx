@@ -781,8 +781,9 @@ export default function ShiftEditGrid({
   const [regenError, setRegenError] = useState<string | null>(null);
   const [regenDone, setRegenDone] = useState<number | null>(null); // 完了後の割当数
   const [regenSection, setRegenSection] = useState<string>(""); // "" = 全セクション
-  // 仮保存チェックポイント履歴（戻す機能用）
+  // 仮保存チェックポイント履歴（戻る／進む用）
   const [draftHistory, setDraftHistory] = useState<Array<{ label: string; state: Map<string, DraftCell> }>>([]);
+  const [redoHistory,  setRedoHistory]  = useState<Array<{ label: string; state: Map<string, DraftCell> }>>([]);
   // 保存系エラー（上部バナー）
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draftMsg, setDraftMsg] = useState<string | null>(null);
@@ -1032,8 +1033,9 @@ export default function ShiftEditGrid({
       if (r.ok) {
         setHasDraftFromDB(true);
         const now = new Date().toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
-        // 仮保存成功時にチェックポイントを記録（戻す用）
+        // 仮保存成功時にチェックポイントを記録（戻る用）・redoをクリア
         setDraftHistory(prev => [...prev, { label: now, state: new Map(drafts) }]);
+        setRedoHistory([]);
         setDraftMsg(`仮保存しました（${now}）`);
         setTimeout(() => setDraftMsg(null), 3000);
       } else {
@@ -1101,32 +1103,48 @@ export default function ShiftEditGrid({
   }
 
   // ── 確定保存 ─────────────────────────────────────────────────
+
+  // 現在のdraftsをinitialDraftから復元する共通ヘルパー
+  function buildInitialDraftMap(): Map<string, DraftCell> {
+    if (!initialDraft || initialDraft.length === 0) return new Map();
+    const m = new Map<string, DraftCell>();
+    for (const e of initialDraft) {
+      const raw = e as unknown as Record<string, unknown>;
+      const key = (typeof e.k === "string" && e.k)
+        ? e.k
+        : (typeof raw.staffId === "string" && typeof raw.date === "string")
+        ? `${raw.staffId}__${raw.date}` : null;
+      if (!key) continue;
+      const shiftName  = typeof e.n === "string" ? e.n  : typeof raw.shiftName  === "string" ? raw.shiftName  : null;
+      const shiftStart = typeof e.s === "string" ? e.s  : typeof raw.shiftStart === "string" ? raw.shiftStart : null;
+      const shiftEnd   = typeof e.e === "string" ? e.e  : typeof raw.shiftEnd   === "string" ? raw.shiftEnd   : null;
+      m.set(key, e.d === true ? null : { shiftName, shiftStart, shiftEnd });
+    }
+    return m;
+  }
+
+  // 戻る: undoスタックから1ステップ戻り、現在状態をredoスタックへ
   function resetDrafts() {
     if (draftHistory.length > 0) {
-      // 直前の仮保存チェックポイントに戻す
       const prev = draftHistory[draftHistory.length - 1];
+      setRedoHistory(r => [...r, { label: "現在", state: new Map(drafts) }]);
       setDrafts(new Map(prev.state));
       setDraftHistory(h => h.slice(0, -1));
     } else {
-      // チェックポイントなし → 最初のロード状態（initialDraft）に戻す
-      setDrafts(() => {
-        if (!initialDraft || initialDraft.length === 0) return new Map();
-        const m = new Map<string, DraftCell>();
-        for (const e of initialDraft) {
-          const raw = e as unknown as Record<string, unknown>;
-          const key = (typeof e.k === "string" && e.k)
-            ? e.k
-            : (typeof raw.staffId === "string" && typeof raw.date === "string")
-            ? `${raw.staffId}__${raw.date}` : null;
-          if (!key) continue;
-          const shiftName = typeof e.n === "string" ? e.n : typeof raw.shiftName === "string" ? raw.shiftName : null;
-          const shiftStart = typeof e.s === "string" ? e.s : typeof raw.shiftStart === "string" ? raw.shiftStart : null;
-          const shiftEnd   = typeof e.e === "string" ? e.e : typeof raw.shiftEnd   === "string" ? raw.shiftEnd   : null;
-          m.set(key, e.d === true ? null : { shiftName, shiftStart, shiftEnd });
-        }
-        return m;
-      });
+      // チェックポイントなし → initialDraft状態へ（現在状態をredoへ）
+      setRedoHistory(r => [...r, { label: "現在", state: new Map(drafts) }]);
+      setDrafts(buildInitialDraftMap());
     }
+    setSaveError(null);
+  }
+
+  // 進む: redoスタックから1ステップ進み、現在状態をundoスタックへ
+  function forwardDrafts() {
+    if (redoHistory.length === 0) return;
+    const next = redoHistory[redoHistory.length - 1];
+    setDraftHistory(h => [...h, { label: "戻る前", state: new Map(drafts) }]);
+    setDrafts(new Map(next.state));
+    setRedoHistory(r => r.slice(0, -1));
     setSaveError(null);
   }
 
@@ -1302,14 +1320,23 @@ export default function ShiftEditGrid({
               </span>
             )}
           </button>
-          {(hasChanges || draftHistory.length > 0) && (
-            <button onClick={resetDrafts} disabled={isPending || isSavingDraft}
-              className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
-              title={draftHistory.length > 0 ? `仮保存${draftHistory.length}件の履歴あり` : undefined}
-            >
-              {draftHistory.length > 0 ? `戻す (${draftHistory.length})` : "戻す"}
-            </button>
-          )}
+          {/* 戻る・進む（仮保存チェックポイント間ナビゲーション） */}
+          <button
+            onClick={resetDrafts}
+            disabled={isPending || isSavingDraft || (draftHistory.length === 0 && !hasChanges)}
+            title={draftHistory.length > 0 ? `仮保存${draftHistory.length}件前へ` : "最初の状態へ戻る"}
+            className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+          >
+            ← 戻る{draftHistory.length > 0 ? ` (${draftHistory.length})` : ""}
+          </button>
+          <button
+            onClick={forwardDrafts}
+            disabled={isPending || isSavingDraft || redoHistory.length === 0}
+            title={redoHistory.length > 0 ? `${redoHistory.length}件進める` : undefined}
+            className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
+          >
+            進む →{redoHistory.length > 0 ? ` (${redoHistory.length})` : ""}
+          </button>
           {!isPublished && (
             <button
               onClick={() => { setRegenError(null); setRegenDone(null); setRegenSection(""); setShowRegenConfirm(true); }}
