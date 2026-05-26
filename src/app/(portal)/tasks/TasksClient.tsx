@@ -25,7 +25,7 @@ export type GroupTask = {
   created_at: string;
   completed_at: string | null;
   assignee_name: string | null;
-  source_messages: { sent_at: string; user_id: string; text: string }[] | null;
+  source_messages: { sent_at: string; user_id: string; sender?: string | null; text: string }[] | null;
 };
 
 export type TaskGroup = {
@@ -192,6 +192,13 @@ export default function TasksClient({
               {task.title}
             </p>
 
+            {/* タスク内容プレビュー（description = 2行目の内容） */}
+            {task.description && task.description !== task.title && (
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate leading-relaxed">
+                {task.description}
+              </p>
+            )}
+
             {/* メタ情報 */}
             <div className="flex flex-wrap gap-1.5 mt-1.5">
               {task.assignee_name && (
@@ -235,16 +242,18 @@ export default function TasksClient({
           <div className="border-t border-zinc-100 dark:border-zinc-800 px-3 pb-3 pt-2 space-y-2">
             {/* 元のLINEメッセージ */}
             {task.source_messages && task.source_messages.length > 0 && (
-              <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-2">
-                {task.description && (
-                  <p className="text-[10px] text-zinc-400 font-semibold mb-1">{task.description}</p>
+              <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-2 space-y-1">
+                {task.source_messages[0].sender && (
+                  <p className="text-[10px] text-zinc-400 font-semibold">
+                    {task.source_messages[0].sender} より
+                  </p>
                 )}
                 <p className="text-xs text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
                   {task.source_messages[0].text}
                 </p>
               </div>
             )}
-            {/* source_messages がない（手動追加）場合は description を表示 */}
+            {/* 手動追加タスクは description を表示 */}
             {(!task.source_messages || task.source_messages.length === 0) && task.description && (
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">{task.description}</p>
             )}

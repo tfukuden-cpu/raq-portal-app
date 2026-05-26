@@ -92,9 +92,26 @@ function isTaskMessage(text: string): boolean {
   return TASK_KEYWORDS.some(kw => text.includes(kw));
 }
 
+/**
+ * @メンションのみの行をスキップして最初の有意義な行をタイトルにする
+ * 例: "@田中\n発注書を確認してください" → "発注書を確認してください"
+ */
 function buildTitle(text: string): string {
-  const firstLine = text.split(/[\n\r]/)[0].trim();
-  return firstLine.length > 60 ? firstLine.slice(0, 57) + "…" : firstLine;
+  const lines = text.split(/[\n\r]/).map(l => l.trim()).filter(Boolean);
+  // @XXX だけの行（宛先指定行）をスキップ
+  const contentLine = lines.find(l => !/^@[\S]{1,20}$/.test(l)) ?? lines[0] ?? "";
+  return contentLine.length > 60 ? contentLine.slice(0, 57) + "…" : contentLine;
+}
+
+/**
+ * LINEメッセージから内容プレビュー（タイトル行以外の最初の行）を取得
+ */
+export function buildPreview(text: string, title: string): string | null {
+  const lines = text.split(/[\n\r]/).map(l => l.trim()).filter(Boolean);
+  // タイトルと@メンション行以外で最初の行を返す
+  const preview = lines.find(l => l !== title && !/^@[\S]{1,20}$/.test(l));
+  if (!preview) return null;
+  return preview.length > 80 ? preview.slice(0, 77) + "…" : preview;
 }
 
 export async function runExtractTasks(): Promise<{ ok: boolean; extracted: number; savedMessages?: number; error?: string }> {
@@ -123,16 +140,37 @@ export async function runExtractTasks(): Promise<{ ok: boolean; extracted: numbe
       totalSaved += count ?? 0;
       if (!messages || messages.length === 0) continue;
 
+      // ── 送信者マップ（line_user_id → スタッフ情報）─────────────────
       const userIds = [...new Set(messages.map(m => m.user_id))];
-      const { data: staffRows } = await admin
+      const { data: senderStaffs } = await admin
         .from("staffs")
         .select("id, name, display_name, line_user_id")
         .in("line_user_id", userIds);
 
       const staffMap = new Map<string, { staffId: string; name: string }>();
-      for (const s of staffRows ?? []) {
+      for (const s of senderStaffs ?? []) {
         if (s.line_user_id) {
           staffMap.set(s.line_user_id, {
+            staffId: s.id,
+            name: s.display_name ?? s.name ?? s.id,
+          });
+        }
+      }
+
+      // ── 担当者解決マップ（プロジェクト全メンバー対象）─────────────
+      // @田中 のような @メンションからスタッフIDを引くため全メンバーを取得
+      const { data: memberRows } = await admin
+        .from("project_members")
+        .select("staff_id, staffs(id, name, display_name)")
+        .eq("project_id", group.project_id);
+
+      // staffId → 名前 のマップ
+      const memberNameMap = new Map<string, { staffId: string; name: string }>();
+      for (const m of memberRows ?? []) {
+        const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+          { id: string; name: string | null; display_name: string | null } | null;
+        if (s) {
+          memberNameMap.set(s.id, {
             staffId: s.id,
             name: s.display_name ?? s.name ?? s.id,
           });
@@ -145,12 +183,16 @@ export async function runExtractTasks(): Promise<{ ok: boolean; extracted: numbe
         const assigneeRaw = extractAssigneeRaw(msg.message_text);
         const dueText     = extractDueText(msg.message_text);
         const dueDate     = dueDateFromText(dueText); // 期日未指定なら翌日
+        const title       = buildTitle(msg.message_text);
+        const preview     = buildPreview(msg.message_text, title);
 
+        // プロジェクト全メンバーの名前から担当者を解決
         let assigneeStaffId: string | null = null;
         if (assigneeRaw) {
           const rawName = assigneeRaw.replace(/(さん|くん|ちゃん|君)$/, "");
-          for (const [, s] of staffMap) {
-            if (s.name.includes(rawName) || rawName.includes(s.name)) {
+          for (const [, s] of memberNameMap) {
+            const sName = s.name.replace(/\s/g, ""); // スペース除去して比較
+            if (sName.includes(rawName) || rawName.includes(sName)) {
               assigneeStaffId = s.staffId;
               break;
             }
@@ -162,17 +204,18 @@ export async function runExtractTasks(): Promise<{ ok: boolean; extracted: numbe
         await admin.from("group_tasks").insert({
           project_id:        group.project_id,
           group_id:          group.group_id,
-          title:             buildTitle(msg.message_text),
-          description:       sender ? `${sender} より` : null,
+          title,
+          description:       preview ?? (sender ? `${sender} より` : null),
           assignee_staff_id: assigneeStaffId,
           assignee_raw:      assigneeRaw,
           due_text:          dueText ?? "翌日",
           due_date:          dueDate,
           status:            "pending",
           source_messages:   [{
-            sent_at: msg.sent_at,
-            user_id: msg.user_id,
-            text:    msg.message_text,
+            sent_at:  msg.sent_at,
+            user_id:  msg.user_id,
+            sender:   sender,
+            text:     msg.message_text,
           }],
         });
         totalExtracted++;
