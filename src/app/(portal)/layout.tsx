@@ -115,18 +115,29 @@ export default async function PortalLayout({
     viewMode = "staff";
   }
 
+  // 案件設定リンク（現在の projectId に基づく動的アイテム）
+  const projectSettingsItem: NavItem | null = projectId
+    ? { href: `/admin/${projectId}`, icon: "Settings", label: "案件設定" }
+    : null;
+
   // 表示モードに応じてメニューを構築
   let sections: NavSection[];
   if (viewMode === "ops") {
+    const adminItems = projectSettingsItem
+      ? [...PROJECT_ADMIN_ITEMS, projectSettingsItem]
+      : PROJECT_ADMIN_ITEMS;
     sections = [
       { mobileLabel: "メイン", icon: "Home",     items: [...STAFF_ITEMS, MY_ADMIN] },
-      { title: "管理",         icon: "Settings", items: PROJECT_ADMIN_ITEMS },
+      { title: "管理",         icon: "Settings", items: adminItems },
       { title: "運営",         icon: "Shield",   items: EXECUTIVE_ITEMS },
     ];
   } else if (viewMode === "admin") {
+    const adminItems = projectSettingsItem
+      ? [...PROJECT_ADMIN_ITEMS, projectSettingsItem]
+      : PROJECT_ADMIN_ITEMS;
     sections = [
       { mobileLabel: "メイン", icon: "Home",     items: [...STAFF_ITEMS, MY_ADMIN] },
-      { title: "管理",         icon: "Settings", items: PROJECT_ADMIN_ITEMS },
+      { title: "管理",         icon: "Settings", items: adminItems },
     ];
   } else {
     sections = [{ items: [...STAFF_ITEMS, MY_STAFF] }];
