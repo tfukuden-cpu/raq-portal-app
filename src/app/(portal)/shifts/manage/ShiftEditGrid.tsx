@@ -1536,12 +1536,16 @@ export default function ShiftEditGrid({
                   <React.Fragment key={member.id}>
                     {showSectionHeader && (
                       <tr>
-                        <td colSpan={allDates.length + 2}
+                        {/* 名前列だけ sticky にして横スクロール時も固定 */}
+                        <td
                           className="sticky left-0 z-10 bg-zinc-100 dark:bg-zinc-800/80 px-2 py-0.5 border-b border-zinc-200 dark:border-zinc-700">
                           <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tracking-wide uppercase">
                             {member.section ?? "セクション未設定"}
                           </span>
                         </td>
+                        {/* 残り列は背景だけ埋める（sticky なし） */}
+                        <td colSpan={allDates.length + 1}
+                          className="bg-zinc-100 dark:bg-zinc-800/80 border-b border-zinc-200 dark:border-zinc-700" />
                       </tr>
                     )}
                     <tr
