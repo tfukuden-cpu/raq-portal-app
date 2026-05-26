@@ -21,6 +21,7 @@ const STAFF_ITEMS: NavItem[] = [
 
 const PROJECT_ADMIN_ITEMS: NavItem[] = [
   { href: "/attendance",      icon: "Users",           label: "当日状況" },
+  { href: "/seating",         icon: "LayoutGrid",      label: "座席表" },
   { href: "/shifts/manage",   icon: "CalendarSettings", label: "シフト管理" },
   { href: "/members",         icon: "IdCard",          label: "メンバー管理" },
   { href: "/notices/manage",  icon: "Megaphone",       label: "周知管理" },

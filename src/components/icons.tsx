@@ -360,6 +360,18 @@ export function SmartphoneIcon({ className }: IconProps) {
   );
 }
 
+function LayoutGridIcon({ className }: { className?: string }) {
+  const base = { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  return (
+    <svg {...base} className={className}>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
 export const ICON_MAP = {
   Home: HomeIcon,
   Clock: ClockIcon,
@@ -385,6 +397,7 @@ export const ICON_MAP = {
   HelpCircle: HelpCircleIcon,
   Smartphone: SmartphoneIcon,
   CheckSquare: CheckSquareIcon,
+  LayoutGrid: LayoutGridIcon,
 } as const;
 
 export type IconKey = keyof typeof ICON_MAP;

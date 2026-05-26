@@ -33,6 +33,7 @@ import {
   DEFAULT_HOLIDAY_RULES,
   getRuleConfig,
 } from "../../holiday-rule-config";
+import SeatLayoutEditor, { type SeatItem } from "./SeatLayoutEditor";
 
 type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; end_date: string | null; compliance: number | null };
 type ShiftPattern = {
@@ -44,7 +45,7 @@ type ShiftPattern = {
   section: string;
   target_role: string; // "all" | "admin" | "staff"
 };
-type TabId = "basic" | "members" | "line" | "notify" | "danger";
+type TabId = "basic" | "members" | "seats" | "line" | "notify" | "danger";
 
 // ── 共通フィードバック ──────────────────────────────────
 
@@ -86,6 +87,7 @@ export function SettingsContainer({
   enableDeparture,
   archiveAction,
   canArchive = true,
+  initialSeats,
 }: {
   projectId: string;
   projectName: string;
@@ -98,6 +100,7 @@ export function SettingsContainer({
   enableDeparture: boolean;
   archiveAction: (fd: FormData) => Promise<void>;
   canArchive?: boolean;
+  initialSeats?: SeatItem[];
 }) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as TabId | null) ?? "basic";
@@ -107,6 +110,7 @@ export function SettingsContainer({
   const TABS: { id: TabId; label: string; count?: number; red?: boolean }[] = [
     { id: "basic",   label: "基本設定" },
     { id: "members", label: "メンバー", count: members.length },
+    { id: "seats",   label: "座席" },
     { id: "line",    label: "LINE連携", count: members.filter(m => !m.lineLinked).length || undefined },
     { id: "notify",  label: "LINE通知" },
     ...(canArchive ? [{ id: "danger" as TabId, label: "危険操作", red: true }] : []),
@@ -210,6 +214,19 @@ export function SettingsContainer({
               initialSettings={notificationSettings}
             />
           </section>
+        </div>
+      )}
+
+      {/* ── 座席タブ ── */}
+      {tab === "seats" && (
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-400">
+            座席をドラッグして位置を調整し、「レイアウト保存」してください。配置は当日座席表・翌日配置モードで使われます。
+          </p>
+          <SeatLayoutEditor
+            projectId={projectId}
+            initialSeats={initialSeats ?? []}
+          />
         </div>
       )}
 

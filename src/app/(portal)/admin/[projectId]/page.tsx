@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { isGSheetsConfigured } from "@/lib/gsheets";
 import { archiveProjectAction } from "./settings/actions";
 import { SettingsContainer } from "./settings/SettingsClient";
+import { type SeatItem } from "./settings/SeatLayoutEditor";
 import { ChevronLeftIcon } from "@/components/icons";
 import { Suspense } from "react";
 
@@ -48,6 +49,7 @@ export default async function ProjectDetailPage(props: {
     { data: shiftPatterns },
     { data: recentShifts },
     { data: recentPunches },
+    { data: seatsRaw },
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
@@ -70,6 +72,10 @@ export default async function ProjectDetailPage(props: {
       .eq("punch_type", "clock_in")
       .gte("recorded_at", dateFrom30 + "T00:00:00+09:00")
       .lte("recorded_at", dateTo30   + "T23:59:59+09:00"),
+    // 座席レイアウト
+    createAdminClient().from("seats")
+      .select("id, label, x_pct, y_pct, section")
+      .eq("project_id", projectId).eq("is_active", true),
   ]);
 
   if (!project) redirect("/admin");
@@ -132,6 +138,15 @@ export default async function ProjectDetailPage(props: {
     };
   });
 
+  const initialSeats: SeatItem[] = (seatsRaw ?? []).map(s => ({
+    id:      s.id,
+    localId: s.id,
+    label:   s.label as string,
+    xPct:    s.x_pct as number,
+    yPct:    s.y_pct as number,
+    section: (s.section as string | null) ?? "",
+  }));
+
   async function archiveAction(fd: FormData) {
     "use server";
     fd.set("projectId", projectId);
@@ -169,6 +184,7 @@ export default async function ProjectDetailPage(props: {
             enableDeparture={(settings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true}
             archiveAction={archiveAction}
             canArchive={isExecutive || isAdmin}
+            initialSeats={initialSeats}
           />
         </Suspense>
       </div>
