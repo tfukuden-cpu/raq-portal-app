@@ -407,16 +407,58 @@ export async function generateShiftDraftAction(
     activeMemberRows.length * avgTargetDays / allDates.length / patternCount
   ));
 
-  // 月末偏りを防ぐため日付処理順を等間隔ストライドに並び替える
-  // 例(30日・stride=3): [1,4,7,…,28] → [2,5,8,…,29] → [3,6,9,…,30]
-  // → 上旬/中旬/下旬をまんべんなく処理することでスタッフの稼働日数が月全体に均等分散される
-  const STRIDE = Math.max(2, Math.round(allDates.length / 8));
-  const processOrder: string[] = [];
-  for (let offset = 0; offset < STRIDE; offset++) {
-    for (let i = offset; i < allDates.length; i += STRIDE) {
-      processOrder.push(allDates[i]);
+  // ── セクション別カバレッジ比率を事前計算 ─────────────────────────
+  // 総キャパシティ（スタッフの稼働可能日数合計）÷ 総必要人数 を各パターンに適用することで
+  // 不足をすべての日に均等分散させる（月末・特定曜日への集中を防ぐ）
+  const patternCoverageMap = new Map<string, number>(); // patternName → ratio (0～1)
+  {
+    for (const p of patterns) {
+      // このパターンに配置可能なスタッフの総稼働可能日数
+      const eligible = activeMemberRows.filter(m => {
+        if (!p.section) return true;
+        const ms = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
+        const eff = ms.length > 0 ? ms : (m.section ? [m.section] : []);
+        return eff.length > 0 && eff.includes(p.section);
+      });
+      const totalCap = eligible.reduce((sum, m) => {
+        const wdRaw = (m as { work_days_count?: number | null }).work_days_count;
+        const wdCount = (wdRaw != null && wdRaw > 0) ? wdRaw : 21;
+        // 既に確定済みの稼働分を差し引いた残り日数
+        const used = (existingMonthCount.get(m.staff_id) ?? 0)
+          + (otherSectionMonthCount?.get(m.staff_id) ?? 0);
+        return sum + Math.max(0, Math.min(wdCount, allDates.length) - used);
+      }, 0);
+
+      // このパターンの総必要人数
+      let totalReq = 0;
+      for (const date of allDates) {
+        const slotReq = slotMap.get(`${p.name}__${date}`);
+        if (slotReq !== undefined && slotReq > 0) {
+          totalReq += slotReq;
+        } else {
+          const dow = new Date(date + "T00:00:00Z").getUTCDay();
+          const isWeekend = dow === 0 || dow === 6;
+          const pr = isWeekend
+            ? (p.required_weekend ?? p.required_count ?? 0)
+            : (p.required_weekday ?? p.required_count ?? 0);
+          totalReq += pr > 0 ? pr : autoRequiredPerDay;
+        }
+      }
+      patternCoverageMap.set(p.name, totalReq > 0 ? Math.min(1.0, totalCap / totalReq) : 1.0);
     }
   }
+
+  // ── 日付処理順：月固定シードのランダムシャッフル ──────────────────
+  // ストライド方式は「後半パスの日付」に不足が集中する副作用があるため廃止
+  // 月ごとに固定シードで再現性を持たせつつ、順序依存を除去する
+  {
+    let seed = year * 100 + month;
+    const lcg = () => { seed = (seed * 1664525 + 1013904223) & 0x7fffffff; return seed / 0x7fffffff; };
+    const processOrder = [...allDates];
+    for (let i = processOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(lcg() * (i + 1));
+      [processOrder[i], processOrder[j]] = [processOrder[j], processOrder[i]];
+    }
 
   for (const date of processOrder) {
     const weekKey = isoWeekKey(date);
@@ -543,7 +585,11 @@ export async function generateShiftDraftAction(
         return Math.random() - 0.5;
       });
 
-      const toAssign = scored.slice(0, needMore).map(s => s.m);
+      // カバレッジ比率キャップ: 月全体の不足を各日に均等分散させる
+      // 例: capacity/required=0.8 → 1日あたり ceil(needMore×0.8) 人まで配置
+      const coverageRatio = patternCoverageMap.get(pattern.name) ?? 1.0;
+      const cappedNeed = Math.ceil(needMore * coverageRatio);
+      const toAssign = scored.slice(0, cappedNeed).map(s => s.m);
 
       for (const m of toAssign) {
         draft.set(`${m.staff_id}__${date}`, {
@@ -561,7 +607,7 @@ export async function generateShiftDraftAction(
         draftPatternByDate.get(m.staff_id)!.set(date, pattern.name);
       }
     }
-  }
+  }} // for processOrder / processOrder block
 
   if (draft.size === 0) {
     const sec = targetSection ?? "";
