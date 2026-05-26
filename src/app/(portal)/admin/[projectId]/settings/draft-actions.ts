@@ -525,8 +525,6 @@ export async function generateShiftDraftAction(
           // 離脱日チェック
           const endDate = (m as { end_date?: string | null }).end_date ?? null;
           if (endDate && date > endDate) return false;
-          // このラウンドで既に使用済みのスタッフは除外（1ラウンド＝各スタッフ最大1日）
-          if (usedInRound.has(m.staff_id)) return false;
           // 希望休・同日割当済み
           if (holidaySet.has(`${m.staff_id}__${date}`)) return false;
           if (assignedOnDate.has(m.staff_id)) return false;
@@ -603,7 +601,7 @@ export async function generateShiftDraftAction(
           return a.m.staff_id < b.m.staff_id ? -1 : 1;
         });
 
-        // このラウンドで1人だけ配置（usedInRound に追加して同一ラウンド内の重複を防ぐ）
+        // このラウンドで1人だけ配置
         const m = scored[0].m;
         draft.set(`${m.staff_id}__${date}`, {
           shiftName:  pattern.name,
@@ -611,7 +609,6 @@ export async function generateShiftDraftAction(
           shiftEnd:   pattern.end_time,
         });
         assignedOnDate.add(m.staff_id);
-        usedInRound.add(m.staff_id);
         draftMonthCount.set(m.staff_id, (draftMonthCount.get(m.staff_id) ?? 0) + 1);
         if (!draftDates.has(m.staff_id)) draftDates.set(m.staff_id, new Set());
         draftDates.get(m.staff_id)!.add(date);
