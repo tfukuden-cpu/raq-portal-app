@@ -132,8 +132,9 @@ export async function generateShiftDraftAction(
   year: number,
   month: number,
   patterns: PatternDef[],
-  targetSection?: string,   // 指定時: そのセクションのみ再仮組み・他セクションのドラフトは保持
-  noSave?: boolean,         // true のとき DB 書き込みをスキップ（グリッド編集内再仮組み用）
+  targetSection?: string,     // 指定時: そのセクションのみ再仮組み・他セクションのドラフトは保持
+  noSave?: boolean,           // true のとき DB 書き込みをスキップ（グリッド編集内再仮組み用）
+  skipSections?: string[],    // 全体再仮組み時にスキップ（仮確定済み）するセクション
 ): Promise<GenerateDraftResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -285,6 +286,45 @@ export async function generateShiftDraftAction(
     }
   }
 
+  // ── 全体再仮組み時のロック済みセクション保護 ──────────────────────
+  // skipSections に指定されたセクションは再仮組みせず既存ドラフトを保持する
+  let skipPatternNames: Set<string> = new Set();
+  if (!targetSection && skipSections && skipSections.length > 0) {
+    skipPatternNames = new Set(
+      allPatternDefs.filter(p => p.section && skipSections.includes(p.section)).map(p => p.name)
+    );
+    if (skipPatternNames.size > 0) {
+      const { data: currentDraft } = await admin
+        .from("shift_grid_drafts")
+        .select("draft_data")
+        .eq("project_id", projectId)
+        .eq("target_month", monthStr)
+        .maybeSingle();
+      storedDraftEntries = (currentDraft?.draft_data as DraftEntry[] | null) ?? [];
+      // ロック済みパターンを再仮組み対象から除外
+      patterns = patterns.filter(p => !p.section || !skipSections.includes(p.section));
+      // ロック済みセクションのスタッフの日程・月稼働を「使用済み」として記録
+      otherSectionDates      = new Map();
+      otherSectionMonthCount = new Map();
+      const lockedStaffIds   = new Set<string>();
+      for (const e of storedDraftEntries.filter(e2 => skipPatternNames.has(e2.n))) {
+        const si = e.k.lastIndexOf("__");
+        const staffId = e.k.slice(0, si);
+        const date    = e.k.slice(si + 2);
+        lockedStaffIds.add(staffId);
+        if (!otherSectionDates.has(staffId)) otherSectionDates.set(staffId, new Set());
+        otherSectionDates.get(staffId)!.add(date);
+        if (date >= dateFrom && date <= dateTo) {
+          otherSectionMonthCount.set(staffId, (otherSectionMonthCount.get(staffId) ?? 0) + 1);
+        }
+      }
+      // ロック済みセクションのスタッフは候補から完全除外（人を奪わない）
+      if (lockedStaffIds.size > 0) {
+        activeMemberRows = activeMemberRows.filter(m => !lockedStaffIds.has(m.staff_id));
+      }
+    }
+  }
+
   // slotReqRows が null はDBエラー。空（length=0）はパターン自体の required_count で代替するため許容
   if (!slotReqRows) {
     return { success: false, message: "必要人数の取得に失敗しました" };
@@ -407,11 +447,18 @@ export async function generateShiftDraftAction(
     activeMemberRows.length * avgTargetDays / allDates.length / patternCount
   ));
 
-  // ── 日付処理順：1日→末日の順（カレンダー順） ──────────────────────
-  // シャッフルをやめてカレンダー順に処理することで「連勤チェック」が正確に機能する。
-  // 同一スタッフが連続してアサインされると連勤上限に近づき後続の連勤ソートで自然に外れる。
+  // ── 日付処理順：コプライム・ストライド11 ──────────────────────────
+  // gcd(11, 28/29/30/31) = 1 → どの月長でも全日を1パスでカバーできる
+  // 1→末日の順と違い月初・中旬・月末が均等に処理されるため月末不足が発生しにくい
+  // かつ連続した日付が隣接して処理されないため連勤チェックも正確に機能する
   {
-    const processOrder = [...allDates]; // カレンダー順（変更不要・allDates はすでに昇順）
+    const stride = 11;
+    const processOrder: string[] = new Array(allDates.length);
+    let _pos = 0;
+    for (let _i = 0; _i < allDates.length; _i++) {
+      processOrder[_i] = allDates[_pos];
+      _pos = (_pos + stride) % allDates.length;
+    }
 
   let processedCount = 0;
   for (const date of processOrder) {
@@ -641,16 +688,21 @@ export async function generateShiftDraftAction(
     d: false,
   }));
 
-  // セクション指定時: 他セクションのドラフトエントリを保持してマージ
+  // セクション指定 or スキップセクション指定時: 既存ドラフトと新規エントリをマージ
   let draftEntries = newEntries;
   if (targetSection) {
     // 対象セクションのパターン名セット
     const targetPatternNames = new Set(patterns.map(p => p.name));
-
     // storedDraftEntries は事前取得済み（otherSectionDates 構築時に使用したもの）
     const preserved = storedDraftEntries.filter(e => !targetPatternNames.has(e.n));
-
-    // 保持エントリ + 新規エントリをマージ（同キーは新規優先）
+    const newKeys = new Set(newEntries.map(e => e.k));
+    draftEntries = [
+      ...preserved.filter(e => !newKeys.has(e.k)),
+      ...newEntries,
+    ];
+  } else if (skipPatternNames.size > 0) {
+    // 全体再仮組み時: ロック済みセクションのエントリを保持してマージ
+    const preserved = storedDraftEntries.filter(e => skipPatternNames.has(e.n));
     const newKeys = new Set(newEntries.map(e => e.k));
     draftEntries = [
       ...preserved.filter(e => !newKeys.has(e.k)),

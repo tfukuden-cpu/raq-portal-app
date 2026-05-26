@@ -52,6 +52,7 @@ type Props = {
   draftSavedBy: string | null;
   draftSavedAt: string | null;
   isPublished: boolean;
+  lockedSections: string[];
   offRequests: OffRequest[];
 };
 
@@ -60,7 +61,7 @@ type Props = {
 function ShiftEditGridOverlay({
   projectId, targetMonthStr, allDates, shifts, activeMembers, shiftPatterns,
   slotRequirements, changeLogs, activeDraft, draftSavedBy, draftSavedAt,
-  offRequests, isPublished,
+  offRequests, isPublished, lockedSections,
   onSaved, onCancel,
 }: {
   projectId: string; targetMonthStr: string; allDates: string[];
@@ -69,6 +70,7 @@ function ShiftEditGridOverlay({
   changeLogs: Props["changeLogs"]; activeDraft: GridDraftEntry[] | null;
   draftSavedBy: string | null; draftSavedAt: string | null;
   offRequests: Props["offRequests"]; isPublished: boolean;
+  lockedSections: string[];
   onSaved: () => void; onCancel: () => void;
 }) {
   useEffect(() => {
@@ -104,6 +106,7 @@ function ShiftEditGridOverlay({
         draftSavedAt={activeDraft ? draftSavedAt : null}
         offRequests={offRequests}
         isPublished={isPublished}
+        initialLockedSections={lockedSections}
         onSaved={onSaved}
         onCancel={onCancel}
       />
@@ -122,7 +125,7 @@ export default function ShiftManageClient({
   projectId, targetYear, targetMonth, allDates, defaultDate,
   shifts, activeMembers, shiftPatterns, shiftRequests, slotRequirements,
   changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
-  isPublished, offRequests,
+  isPublished, lockedSections, offRequests,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [mode, setMode] = useState<"list" | "edit">("list");
@@ -174,7 +177,8 @@ export default function ShiftManageClient({
   function handleRegen() {
     setRegenError(null);
     startRegen(async () => {
-      const r = await regenerateShiftDraftAction(projectId, targetYear, targetMonth);
+      // 仮確定済みセクションはスキップ（解除するまで保持）
+      const r = await regenerateShiftDraftAction(projectId, targetYear, targetMonth, undefined, undefined, lockedSections);
       if (!r.success) {
         setRegenError(r.message ?? "仮組み生成に失敗しました");
         return;
@@ -199,6 +203,7 @@ export default function ShiftManageClient({
       draftSavedAt={draftSavedAt}
       offRequests={offRequests}
       isPublished={isPublished}
+      lockedSections={lockedSections}
       onSaved={handleSaved}
       onCancel={() => setMode("list")}
     />;

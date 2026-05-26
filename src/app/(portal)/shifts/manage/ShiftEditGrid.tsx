@@ -1126,13 +1126,17 @@ export default function ShiftEditGrid({
   }
 
   // ── 再仮組み ──────────────────────────────────────────────────
-  function handleRegen(targetSection?: string) {
+  // overrideLocked=true のときのみロック済みセクションも上書き（明示的な全上書き）
+  function handleRegen(targetSection?: string, overrideLocked?: boolean) {
     setRegenError(null);
     setRegenDone(null);
     startRegenTransition(async () => {
       const [y, m] = targetMonth.split("-").map(Number);
       // noSave=true: DBへ書き込まず、返ってきたエントリのみグリッドに反映
-      const r = await regenerateShiftDraftAction(projectId, y, m, targetSection || undefined, true);
+      // 全体再仮組みかつ overrideLocked でない場合はロック済みセクションをサーバー側でもスキップ
+      const skipForServer = (!targetSection && !overrideLocked && lockedSections.size > 0)
+        ? [...lockedSections] : undefined;
+      const r = await regenerateShiftDraftAction(projectId, y, m, targetSection || undefined, true, skipForServer);
       if (!r.success) {
         setRegenError(r.message ?? "再仮組みに失敗しました");
         return;
@@ -1175,7 +1179,22 @@ export default function ShiftEditGrid({
         }
         newState = merged;
       } else {
-        newState = parseDraftEntries(r.draftEntries);
+        const parsed = parseDraftEntries(r.draftEntries);
+        // ロック済みセクションのエントリをクライアント側でも保持
+        if (!overrideLocked && lockedSections.size > 0) {
+          const lockedPatterns = new Set(
+            shiftPatterns.filter(p => p.section && lockedSections.has(p.section)).map(p => p.name)
+          );
+          const merged = new Map(parsed);
+          for (const [key, val] of drafts) {
+            if (val !== null && val.shiftName && lockedPatterns.has(val.shiftName)) {
+              merged.set(key, val);
+            }
+          }
+          newState = merged;
+        } else {
+          newState = parsed;
+        }
       }
 
       // 再仮組み前の状態を undo スタックに積む（戻れるようにする）
@@ -1507,16 +1526,11 @@ export default function ShiftEditGrid({
                     );
                   })}
 
-                  {/* 全セクション */}
+                  {/* 全セクション上書き（仮確定も含む明示オプション） */}
                   <button
-                    onClick={() => setRegenSection("")}
-                    disabled={isRegenerating}
-                    className={[
-                      "w-full py-2.5 rounded-2xl text-xs font-semibold border transition-colors mt-1",
-                      regenSection === ""
-                        ? "bg-zinc-100 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300"
-                        : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:bg-zinc-50",
-                    ].join(" ")}
+                    onClick={() => handleRegen(undefined, true)}
+                    disabled={isRegenerating || isLocking}
+                    className="w-full py-2.5 rounded-2xl text-xs font-semibold border transition-colors mt-1 bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-40"
                   >
                     全セクション（仮確定も上書き）
                   </button>
@@ -1554,27 +1568,12 @@ export default function ShiftEditGrid({
                     </button>
                   </>
                 ) : (
-                  <>
-                    <button
-                      onClick={() => {
-                        handleSaveDraft();
-                        setShowRegenConfirm(false);
-                        setRegenDone(null);
-                        setRegenSection("");
-                      }}
-                      disabled={isSavingDraft}
-                      className="w-full py-3 rounded-2xl text-sm font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-700 hover:bg-amber-100 disabled:opacity-50 transition-colors"
-                    >
-                      {isSavingDraft ? "保存中…" : "仮保存する"}
-                    </button>
-                    <button
-                      onClick={() => { setShowRegenConfirm(false); setRegenDone(null); setRegenSection(""); }}
-                      disabled={isSavingDraft}
-                      className="w-full py-2 rounded-2xl text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 disabled:opacity-50 transition-colors"
-                    >
-                      あとで保存
-                    </button>
-                  </>
+                  <button
+                    onClick={() => { setShowRegenConfirm(false); setRegenDone(null); setRegenSection(""); }}
+                    className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                  >
+                    閉じる
+                  </button>
                 )}
               </div>
             </div>

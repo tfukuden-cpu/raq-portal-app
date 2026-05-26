@@ -420,7 +420,8 @@ export async function regenerateShiftDraftAction(
   year: number,
   month: number,
   targetSection?: string,
-  noSave?: boolean,  // true = DBへ書き込まない（グリッド編集内の再仮組み用）
+  noSave?: boolean,          // true = DBへ書き込まない（グリッド編集内の再仮組み用）
+  lockedSections?: string[], // 全体再仮組み時にスキップするセクション（仮確定済み）
 ): Promise<{ success: boolean; message?: string; assignedCount?: number; draftEntries?: import("../actions").GridDraftEntry[] }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -453,7 +454,7 @@ export async function regenerateShiftDraftAction(
   const { generateShiftDraftAction } = await import(
     "@/app/(portal)/admin/[projectId]/settings/draft-actions"
   );
-  const result = await generateShiftDraftAction(projectId, year, month, patterns, targetSection, noSave);
+  const result = await generateShiftDraftAction(projectId, year, month, patterns, targetSection, noSave, lockedSections);
   if (!result.success) return result;
 
   // noSave=true のときは result.draftEntries をそのまま返す（DB フェッチ不要）
