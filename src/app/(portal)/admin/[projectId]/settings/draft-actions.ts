@@ -204,6 +204,14 @@ export async function generateShiftDraftAction(
     });
     // パターンもそのセクションのみに絞る
     patterns = patterns.filter(p => p.section === targetSection);
+
+    if (patterns.length === 0) {
+      return {
+        success: false,
+        message: `「${targetSection}」セクションに対応するシフトパターンが見つかりません。`
+          + `シフトパターン設定でパターンのセクションを「${targetSection}」に設定してください。`,
+      };
+    }
   }
 
   // slotReqRows が null はDBエラー。空（length=0）はパターン自体の required_count で代替するため許容
