@@ -1248,6 +1248,25 @@ export default function ShiftEditGrid({
     }),
   [shiftPatterns, slotRequirements]);
 
+  // SVセクションのパターン
+  const svPatterns = useMemo(
+    () => shiftPatterns.filter(p => p.section === "SV"),
+    [shiftPatterns],
+  );
+
+  // 日付ごとのSV配置人数
+  const svCountByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const date of allDates) {
+      const count = svPatterns.reduce(
+        (sum, p) => sum + (resolvedGrid.get(`${p.name}__${date}`) ?? []).length,
+        0,
+      );
+      map.set(date, count);
+    }
+    return map;
+  }, [svPatterns, resolvedGrid, allDates]);
+
   // 選択不足セルの候補スタッフ（スコアリング付き）
   const shortageCandidates = useMemo(() => {
     if (!selectedShortage) return [];
@@ -1624,8 +1643,8 @@ export default function ShiftEditGrid({
                     </th>
                   );
                 })}
-                {/* 合計列ヘッダー */}
-                <th className="sticky top-0 z-20 h-11 bg-white dark:bg-zinc-950 border-b border-l-2 border-zinc-300 dark:border-zinc-600">
+                {/* 合計列ヘッダー（右固定） */}
+                <th className="sticky top-0 right-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-l-2 border-zinc-300 dark:border-zinc-600">
                   <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">合計</span>
                 </th>
               </tr>
@@ -1735,7 +1754,7 @@ export default function ShiftEditGrid({
                             isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
                             isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
                           ].join(" ")}
-                          style={{ position: "sticky", top: topOffset, zIndex: 18 }}
+                          style={{ position: "sticky", top: topOffset, right: 0, zIndex: 22 }}
                         >
                           <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center">
                             <span className={`text-[10px] leading-none ${totText}`}>{totDisplay}</span>
@@ -1751,6 +1770,57 @@ export default function ShiftEditGrid({
                   </tr>
                 );
               })}
+
+              {/* ── SV配置数行（充足サマリーの直下・SVパターンがある場合のみ） ── */}
+              {showSummaryRows && svPatterns.length > 0 && (() => {
+                const svTopOffset = HEADER_H + SUM_ROW_H * summaryPatterns.length;
+                const totalSv = allDates.reduce((sum, d) => sum + (svCountByDate.get(d) ?? 0), 0);
+                return (
+                  <tr style={{ height: `${SUM_ROW_H}px` }}>
+                    {/* ラベルセル */}
+                    <td
+                      className="p-0 overflow-hidden bg-violet-100 dark:bg-violet-900/30 border-r-2 border-zinc-400 dark:border-zinc-500 border-t-2 border-b-2 border-t-violet-400 dark:border-t-violet-600 border-b-violet-400 dark:border-b-violet-600"
+                      style={{ position: "sticky", left: 0, top: svTopOffset, zIndex: 20 }}
+                    >
+                      <div style={{ height: `${SUM_ROW_H}px` }} className="flex items-center px-2">
+                        <span className="text-[10px] font-bold text-violet-700 dark:text-violet-300 leading-none">SV</span>
+                      </div>
+                    </td>
+                    {/* 日付セル */}
+                    {allDates.map((date) => {
+                      const cnt = svCountByDate.get(date) ?? 0;
+                      const isToday = date === todayJST;
+                      return (
+                        <td
+                          key={date}
+                          className={[
+                            "tabular-nums p-0 overflow-hidden border-t-2 border-b-2 border-r border-t-violet-400 dark:border-t-violet-600 border-b-violet-400 dark:border-b-violet-600 border-r-zinc-200 dark:border-r-zinc-700",
+                            isToday ? "bg-violet-200 dark:bg-violet-900/40" : "bg-violet-50 dark:bg-violet-950/20",
+                          ].join(" ")}
+                          style={{ position: "sticky", top: svTopOffset, zIndex: 18 }}
+                        >
+                          <div style={{ height: `${SUM_ROW_H}px` }} className="flex items-center justify-center">
+                            <span className={`text-[10px] leading-none font-semibold ${cnt > 0 ? "text-violet-700 dark:text-violet-300" : "text-zinc-300 dark:text-zinc-600"}`}>
+                              {cnt > 0 ? cnt : ""}
+                            </span>
+                          </div>
+                        </td>
+                      );
+                    })}
+                    {/* 合計セル */}
+                    <td
+                      className="tabular-nums p-0 overflow-hidden border-l-2 border-t-2 border-b-2 border-l-zinc-300 dark:border-zinc-600 border-t-violet-400 dark:border-t-violet-600 border-b-violet-400 dark:border-b-violet-600 bg-violet-100 dark:bg-violet-900/30"
+                      style={{ position: "sticky", top: svTopOffset, right: 0, zIndex: 22 }}
+                    >
+                      <div style={{ height: `${SUM_ROW_H}px` }} className="flex items-center justify-center">
+                        <span className="text-[10px] leading-none font-bold text-violet-700 dark:text-violet-300 tabular-nums">
+                          {totalSv > 0 ? totalSv : ""}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })()}
 
               {/* ── スタッフ軸 ── */}
               {sortedMembersBySection.map((member, idx) => {
@@ -1909,8 +1979,8 @@ export default function ShiftEditGrid({
                           </td>
                         );
                       })}
-                      {/* 月合計セル */}
-                      <td className="border-b border-l-2 border-zinc-200 dark:border-zinc-700 h-8 align-middle text-center tabular-nums bg-white dark:bg-zinc-950">
+                      {/* 月合計セル（右固定） */}
+                      <td className="sticky right-0 z-10 border-b border-l-2 border-zinc-200 dark:border-zinc-700 h-8 align-middle text-center tabular-nums bg-white dark:bg-zinc-950">
                         <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
                           {monthTotal > 0 ? monthTotal : ""}
                         </span>
