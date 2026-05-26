@@ -198,9 +198,18 @@ export default function SeatLayoutEditor({
     const rawY = clamp((dy / rect.height) * 100, 0, 100);
     const xPct = clamp(snapX(rawX), STEP_X / 2, 100 - STEP_X / 2);
     const yPct = clamp(snapY(rawY), STEP_Y / 2, 100 - STEP_Y / 2);
-    setSeats(prev => prev.map(s =>
-      s.localId === draggingRef.current ? { ...s, xPct, yPct } : s
-    ));
+    setSeats(prev => {
+      // 移動先に別の席がいる場合は動かさない
+      const occupied = prev.some(
+        s => s.localId !== draggingRef.current &&
+             Math.abs(s.xPct - xPct) < 1 &&
+             Math.abs(s.yPct - yPct) < 1
+      );
+      if (occupied) return prev;
+      return prev.map(s =>
+        s.localId === draggingRef.current ? { ...s, xPct, yPct } : s
+      );
+    });
   }, []);
 
   const handlePointerUp = useCallback((_e: React.PointerEvent, localId: string) => {
@@ -253,9 +262,16 @@ export default function SeatLayoutEditor({
     }, 0);
     const srcNum = parseInt(src.label);
     const newLabel = isNaN(srcNum) ? src.label : `${maxNum + 1}`;
-    // 元席から1グリッド右にずらす
-    const xPct = clamp(snapX(src.xPct + STEP_X), STEP_X / 2, 100 - STEP_X / 2);
-    const yPct = clamp(snapY(src.yPct),           STEP_Y / 2, 100 - STEP_Y / 2);
+    // 空いているグリッド点を近傍から探す
+    const occupied = new Set(seats.map(s => `${snapX(s.xPct).toFixed(2)},${snapY(s.yPct).toFixed(2)}`));
+    let xPct = src.xPct, yPct = src.yPct;
+    outer: for (let d = 1; d <= COLS; d++) {
+      for (const [dx2, dy2] of [[d,0],[-d,0],[0,d],[0,-d],[d,d],[-d,d],[d,-d],[-d,-d]]) {
+        const cx = clamp(snapX(src.xPct + dx2 * STEP_X), STEP_X / 2, 100 - STEP_X / 2);
+        const cy = clamp(snapY(src.yPct + dy2 * STEP_Y), STEP_Y / 2, 100 - STEP_Y / 2);
+        if (!occupied.has(`${cx.toFixed(2)},${cy.toFixed(2)}`)) { xPct = cx; yPct = cy; break outer; }
+      }
+    }
     setSeats(prev => [...prev, {
       ...src,
       id: undefined,
