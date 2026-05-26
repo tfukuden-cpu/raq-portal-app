@@ -371,6 +371,47 @@ export async function publishShiftsAction(
 }
 
 /**
+ * セクション仮確定のON/OFFを切り替える
+ */
+export async function setSectionLockedAction(
+  projectId: string,
+  targetMonth: string,
+  sectionName: string,
+  locked: boolean,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+
+  // 現在の locked_sections を取得
+  const { data: draftRow } = await admin
+    .from("shift_grid_drafts")
+    .select("locked_sections")
+    .eq("project_id", projectId)
+    .eq("target_month", targetMonth)
+    .maybeSingle();
+
+  const current = (draftRow?.locked_sections as string[] | null) ?? [];
+  const updated = locked
+    ? [...new Set([...current, sectionName])]
+    : current.filter((s: string) => s !== sectionName);
+
+  const { error } = await admin
+    .from("shift_grid_drafts")
+    .upsert(
+      { project_id: projectId, target_month: targetMonth, locked_sections: updated },
+      { onConflict: "project_id,target_month" },
+    );
+
+  if (error) return { success: false, message: error.message };
+
+  revalidatePath("/shifts/manage");
+  return { success: true };
+}
+
+/**
  * 再仮組：シフトパターンを自動取得して仮組みを生成する
  * （展開前の管理画面から「再仮組」ボタン用）
  */
@@ -379,6 +420,7 @@ export async function regenerateShiftDraftAction(
   year: number,
   month: number,
   targetSection?: string,
+  noSave?: boolean,  // true = DBへ書き込まない（グリッド編集内の再仮組み用）
 ): Promise<{ success: boolean; message?: string; assignedCount?: number; draftEntries?: import("../actions").GridDraftEntry[] }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -408,24 +450,16 @@ export async function regenerateShiftDraftAction(
     required_weekend: (p.required_weekend ?? null) as number | null,
   }));
 
-  // セクション指定時はパターンも絞り込む（全体取得後にフィルタリングはdraft-actions内で行う）
   const { generateShiftDraftAction } = await import(
     "@/app/(portal)/admin/[projectId]/settings/draft-actions"
   );
-  const result = await generateShiftDraftAction(projectId, year, month, patterns, targetSection);
+  const result = await generateShiftDraftAction(projectId, year, month, patterns, targetSection, noSave);
   if (!result.success) return result;
 
-  // 生成後、DB から最新の下書きエントリを取得して返す
-  const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
-  const { data: draftRow } = await admin
-    .from("shift_grid_drafts")
-    .select("draft_data")
-    .eq("project_id", projectId)
-    .eq("target_month", yearMonth)
-    .maybeSingle();
-
+  // noSave=true のときは result.draftEntries をそのまま返す（DB フェッチ不要）
+  // noSave=false のときも result.draftEntries が返されるので DB フェッチ不要
   return {
     ...result,
-    draftEntries: (draftRow?.draft_data as import("../actions").GridDraftEntry[] | null) ?? [],
+    draftEntries: (result.draftEntries ?? []) as import("../actions").GridDraftEntry[],
   };
 }

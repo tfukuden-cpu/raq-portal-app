@@ -24,7 +24,7 @@ import {
   type BulkDeleteItem,
   type GridDraftEntry,
 } from "../actions";
-import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction } from "./actions";
+import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction } from "./actions";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -93,6 +93,7 @@ interface Props {
   draftSavedAt: string | null;
   offRequests?: OffRequest[];
   isPublished?: boolean;
+  initialLockedSections?: string[];
   onSaved: () => void;
   onCancel: () => void;
 }
@@ -737,7 +738,7 @@ export default function ShiftEditGrid({
   projectId, targetMonth, allDates, shifts, activeMembers,
   shiftPatterns, slotRequirements, changeLogs,
   initialDraft, draftSavedBy, draftSavedAt,
-  offRequests, isPublished,
+  offRequests, isPublished, initialLockedSections,
   onSaved, onCancel,
 }: Props) {
   // offRequests マップ: staffId__date → priority
@@ -768,10 +769,6 @@ export default function ShiftEditGrid({
     }
     return m;
   });
-  const [hasDraftFromDB, setHasDraftFromDB] = useState(
-    initialDraft !== null && initialDraft.length > 0
-  );
-
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [showSummary, setShowSummary] = useState(false);
   const [isPending] = useTransition();
@@ -781,9 +778,16 @@ export default function ShiftEditGrid({
   const [regenError, setRegenError] = useState<string | null>(null);
   const [regenDone, setRegenDone] = useState<number | null>(null); // 完了後の割当数
   const [regenSection, setRegenSection] = useState<string>(""); // "" = 全セクション
-  // 仮保存チェックポイント履歴（戻る／進む用）
-  const [draftHistory, setDraftHistory] = useState<Array<{ label: string; state: Map<string, DraftCell> }>>([]);
-  const [redoHistory,  setRedoHistory]  = useState<Array<{ label: string; state: Map<string, DraftCell> }>>([]);
+  // 仮確定セクション管理
+  const [lockedSections, setLockedSections] = useState<Set<string>>(
+    () => new Set(initialLockedSections ?? [])
+  );
+  const [isLocking, startLockTransition] = useTransition();
+  const [lockError, setLockError] = useState<string | null>(null);
+  // undo/redo スタック（個別セル編集・再仮組みを追跡）
+  const MAX_UNDO = 50;
+  const [undoStack, setUndoStack] = useState<Array<Map<string, DraftCell>>>([]);
+  const [redoStack, setRedoStack] = useState<Array<Map<string, DraftCell>>>([]);
   // 保存系エラー（上部バナー）
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draftMsg, setDraftMsg] = useState<string | null>(null);
@@ -934,6 +938,51 @@ export default function ShiftEditGrid({
     return list.sort((a, b) => a.date.localeCompare(b.date));
   }, [resolvedGrid, allDates, shiftPatterns, slotReqMap]);
 
+  // ── セクション仮確定ステータス ─────────────────────────────────
+  // 'none' = 未着手, 'draft' = ドラフト済, 'locked' = 仮確定
+  const sectionDraftStatus = useMemo(() => {
+    const status = new Map<string, "none" | "draft" | "locked">();
+    const sections = [...new Set(
+      shiftPatterns.map(p => p.section).filter((s): s is string => !!s)
+    )];
+    for (const section of sections) {
+      if (lockedSections.has(section)) {
+        status.set(section, "locked");
+        continue;
+      }
+      const sectionPatternNames = new Set(
+        shiftPatterns.filter(p => p.section === section).map(p => p.name)
+      );
+      let hasDraft = false;
+      for (const [, val] of drafts) {
+        if (val !== null && val.shiftName && sectionPatternNames.has(val.shiftName)) {
+          hasDraft = true;
+          break;
+        }
+      }
+      status.set(section, hasDraft ? "draft" : "none");
+    }
+    return status;
+  }, [shiftPatterns, lockedSections, drafts]);
+
+  // 仮確定トグル
+  function handleToggleLock(sectionName: string, lock: boolean) {
+    setLockError(null);
+    startLockTransition(async () => {
+      const r = await setSectionLockedAction(projectId, targetMonth, sectionName, lock);
+      if (r.success) {
+        setLockedSections(prev => {
+          const next = new Set(prev);
+          if (lock) next.add(sectionName);
+          else next.delete(sectionName);
+          return next;
+        });
+      } else {
+        setLockError(r.message ?? "仮確定の変更に失敗しました");
+      }
+    });
+  }
+
   // ── 変更一覧（サマリー用） ─────────────────────────────────────
   const draftChanges = useMemo(() => {
     const changes: { staffId: string; staffName: string; date: string; from: string | null; to: string | null }[] = [];
@@ -970,6 +1019,32 @@ export default function ShiftEditGrid({
     return before + 1 + after;
   }
 
+  // ── undo/redo ─────────────────────────────────────────────────
+  // 編集を追跡して undoStack に push し drafts を更新
+  function applyEdit(newState: Map<string, DraftCell>) {
+    setUndoStack(prev => [...prev.slice(-(MAX_UNDO - 1)), new Map(drafts)]);
+    setRedoStack([]);
+    setDrafts(newState);
+  }
+
+  function handleUndo() {
+    if (undoStack.length === 0) return;
+    const prev = undoStack[undoStack.length - 1];
+    setRedoStack(r => [...r, new Map(drafts)]);
+    setDrafts(new Map(prev));
+    setUndoStack(s => s.slice(0, -1));
+    setSaveError(null);
+  }
+
+  function handleRedo() {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setUndoStack(s => [...s, new Map(drafts)]);
+    setDrafts(new Map(next));
+    setRedoStack(r => r.slice(0, -1));
+    setSaveError(null);
+  }
+
   // ── Popover handlers ──────────────────────────────────────────
   function handlePopoverAssign(patternName: string) {
     if (!popover) return;
@@ -977,21 +1052,17 @@ export default function ShiftEditGrid({
     const key = `${staffId}__${date}`;
     const p = patternByName.get(patternName);
     const orig = shiftsByKey.get(key);
-    setDrafts(prev => {
-      const next = new Map(prev);
-      next.set(key, { shiftName: patternName, shiftStart: p?.start_time ?? orig?.shift_start ?? null, shiftEnd: p?.end_time ?? orig?.shift_end ?? null });
-      return next;
-    });
+    const next = new Map(drafts);
+    next.set(key, { shiftName: patternName, shiftStart: p?.start_time ?? orig?.shift_start ?? null, shiftEnd: p?.end_time ?? orig?.shift_end ?? null });
+    applyEdit(next);
     setPopover(null);
   }
   function handlePopoverRemove() {
     if (!popover) return;
     const key = `${popover.staffId}__${popover.date}`;
-    setDrafts(prev => {
-      const next = new Map(prev);
-      next.set(key, { shiftName: "公休", shiftStart: null, shiftEnd: null });
-      return next;
-    });
+    const next = new Map(drafts);
+    next.set(key, { shiftName: "公休", shiftStart: null, shiftEnd: null });
+    applyEdit(next);
     setPopover(null);
   }
 
@@ -1000,15 +1071,13 @@ export default function ShiftEditGrid({
     if (!editTarget || editTarget.kind !== "staff_assign") return;
     const { staffId, date } = editTarget;
     const p = patternByName.get(patternName);
-    setDrafts((prev) => {
-      const next = new Map(prev);
-      next.set(`${staffId}__${date}`, {
-        shiftName: patternName,
-        shiftStart: p?.start_time ?? null,
-        shiftEnd: p?.end_time ?? null,
-      });
-      return next;
+    const next = new Map(drafts);
+    next.set(`${staffId}__${date}`, {
+      shiftName: patternName,
+      shiftStart: p?.start_time ?? null,
+      shiftEnd: p?.end_time ?? null,
     });
+    applyEdit(next);
     setEditTarget(null);
   }
 
@@ -1031,11 +1100,7 @@ export default function ShiftEditGrid({
     startDraftTransition(async () => {
       const r = await saveGridDraftAction(projectId, targetMonth, entries);
       if (r.ok) {
-        setHasDraftFromDB(true);
         const now = new Date().toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
-        // 仮保存成功時にチェックポイントを記録（戻る用）・redoをクリア
-        setDraftHistory(prev => [...prev, { label: now, state: new Map(drafts) }]);
-        setRedoHistory([]);
         setDraftMsg(`仮保存しました（${now}）`);
         setTimeout(() => setDraftMsg(null), 3000);
       } else {
@@ -1050,7 +1115,8 @@ export default function ShiftEditGrid({
     setRegenDone(null);
     startRegenTransition(async () => {
       const [y, m] = targetMonth.split("-").map(Number);
-      const r = await regenerateShiftDraftAction(projectId, y, m, targetSection || undefined);
+      // noSave=true: DBへ書き込まず、返ってきたエントリのみグリッドに反映
+      const r = await regenerateShiftDraftAction(projectId, y, m, targetSection || undefined, true);
       if (!r.success) {
         setRegenError(r.message ?? "再仮組みに失敗しました");
         return;
@@ -1074,79 +1140,37 @@ export default function ShiftEditGrid({
         return result;
       }
 
+      let newState: Map<string, DraftCell>;
       if (targetSection) {
         // セクション指定の場合: 対象セクションのエントリのみ差し替え、他セクションは現在の drafts を保持
         const regenPatternNames = new Set(
           shiftPatterns.filter(p => p.section === targetSection).map(p => p.name)
         );
-        // 現在の drafts をコピーして対象セクション分を削除
         const merged = new Map(drafts);
         for (const [key, val] of [...merged]) {
           if (val !== null && val.shiftName && regenPatternNames.has(val.shiftName)) {
             merged.delete(key);
           }
         }
-        // 新規生成エントリのうち対象セクション分を追加
         for (const [key, val] of parseDraftEntries(r.draftEntries)) {
           if (val === null || (val.shiftName && regenPatternNames.has(val.shiftName))) {
             merged.set(key, val);
           }
         }
-        setDrafts(merged);
+        newState = merged;
       } else {
-        // 全セクション: DB から返ってきた全エントリで置き換え
-        setDrafts(parseDraftEntries(r.draftEntries));
+        newState = parseDraftEntries(r.draftEntries);
       }
 
+      // 再仮組み前の状態を undo スタックに積む（戻れるようにする）
+      setUndoStack(prev => [...prev.slice(-(MAX_UNDO - 1)), new Map(drafts)]);
+      setRedoStack([]);
+      setDrafts(newState);
       setRegenDone(r.assignedCount ?? 0);
     });
   }
 
   // ── 確定保存 ─────────────────────────────────────────────────
-
-  // 現在のdraftsをinitialDraftから復元する共通ヘルパー
-  function buildInitialDraftMap(): Map<string, DraftCell> {
-    if (!initialDraft || initialDraft.length === 0) return new Map();
-    const m = new Map<string, DraftCell>();
-    for (const e of initialDraft) {
-      const raw = e as unknown as Record<string, unknown>;
-      const key = (typeof e.k === "string" && e.k)
-        ? e.k
-        : (typeof raw.staffId === "string" && typeof raw.date === "string")
-        ? `${raw.staffId}__${raw.date}` : null;
-      if (!key) continue;
-      const shiftName  = typeof e.n === "string" ? e.n  : typeof raw.shiftName  === "string" ? raw.shiftName  : null;
-      const shiftStart = typeof e.s === "string" ? e.s  : typeof raw.shiftStart === "string" ? raw.shiftStart : null;
-      const shiftEnd   = typeof e.e === "string" ? e.e  : typeof raw.shiftEnd   === "string" ? raw.shiftEnd   : null;
-      m.set(key, e.d === true ? null : { shiftName, shiftStart, shiftEnd });
-    }
-    return m;
-  }
-
-  // 戻る: undoスタックから1ステップ戻り、現在状態をredoスタックへ
-  function resetDrafts() {
-    if (draftHistory.length > 0) {
-      const prev = draftHistory[draftHistory.length - 1];
-      setRedoHistory(r => [...r, { label: "現在", state: new Map(drafts) }]);
-      setDrafts(new Map(prev.state));
-      setDraftHistory(h => h.slice(0, -1));
-    } else {
-      // チェックポイントなし → initialDraft状態へ（現在状態をredoへ）
-      setRedoHistory(r => [...r, { label: "現在", state: new Map(drafts) }]);
-      setDrafts(buildInitialDraftMap());
-    }
-    setSaveError(null);
-  }
-
-  // 進む: redoスタックから1ステップ進み、現在状態をundoスタックへ
-  function forwardDrafts() {
-    if (redoHistory.length === 0) return;
-    const next = redoHistory[redoHistory.length - 1];
-    setDraftHistory(h => [...h, { label: "戻る前", state: new Map(drafts) }]);
-    setDrafts(new Map(next.state));
-    setRedoHistory(r => r.slice(0, -1));
-    setSaveError(null);
-  }
 
   function handleCommit() {
     const snapshot = [...draftChanges]; // 通知用にスナップショット
@@ -1320,30 +1344,35 @@ export default function ShiftEditGrid({
               </span>
             )}
           </button>
-          {/* 戻る・進む（仮保存チェックポイント間ナビゲーション） */}
+          {/* 戻る・進む（個別編集・再仮組みを追跡） */}
           <button
-            onClick={resetDrafts}
-            disabled={isPending || isSavingDraft || (draftHistory.length === 0 && !hasChanges)}
-            title={draftHistory.length > 0 ? `仮保存${draftHistory.length}件前へ` : "最初の状態へ戻る"}
+            onClick={handleUndo}
+            disabled={isPending || isSavingDraft || undoStack.length === 0}
+            title={undoStack.length > 0 ? `${undoStack.length}ステップ戻れます` : undefined}
             className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
           >
-            ← 戻る{draftHistory.length > 0 ? ` (${draftHistory.length})` : ""}
+            ← 戻る{undoStack.length > 0 ? ` (${undoStack.length})` : ""}
           </button>
           <button
-            onClick={forwardDrafts}
-            disabled={isPending || isSavingDraft || redoHistory.length === 0}
-            title={redoHistory.length > 0 ? `${redoHistory.length}件進める` : undefined}
+            onClick={handleRedo}
+            disabled={isPending || isSavingDraft || redoStack.length === 0}
+            title={redoStack.length > 0 ? `${redoStack.length}ステップ進めます` : undefined}
             className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors"
           >
-            進む →{redoHistory.length > 0 ? ` (${redoHistory.length})` : ""}
+            進む →{redoStack.length > 0 ? ` (${redoStack.length})` : ""}
           </button>
           {!isPublished && (
             <button
-              onClick={() => { setRegenError(null); setRegenDone(null); setRegenSection(""); setShowRegenConfirm(true); }}
+              onClick={() => { setRegenError(null); setLockError(null); setRegenDone(null); setRegenSection(""); setShowRegenConfirm(true); }}
               disabled={isPending || isSavingDraft || isRegenerating}
-              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-700 hover:bg-orange-100 disabled:opacity-40 transition-colors"
+              className="relative px-2.5 py-1.5 text-xs font-semibold rounded-lg text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-700 hover:bg-orange-100 disabled:opacity-40 transition-colors"
             >
               再仮組み
+              {lockedSections.size > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center tabular-nums">
+                  {lockedSections.size}
+                </span>
+              )}
             </button>
           )}
           <button onClick={onCancel} disabled={isPending || isSavingDraft}
@@ -1363,72 +1392,160 @@ export default function ShiftEditGrid({
 
       {/* 再仮組み確認モーダル */}
       {showRegenConfirm && (() => {
-        // セクション一覧（重複排除・null除外）
         const sectionOptions = [...new Set(
           shiftPatterns.map(p => p.section).filter((s): s is string => !!s)
         )].sort();
         return (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center"
-            onClick={() => { if (!isRegenerating) setShowRegenConfirm(false); }}>
-            <div className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm px-4 pt-4 space-y-3"
-              style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 0px))" }}
+            onClick={() => { if (!isRegenerating && !isLocking) { setShowRegenConfirm(false); setRegenSection(""); } }}>
+            <div className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm flex flex-col max-h-[90dvh]"
+              style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
               onClick={e => e.stopPropagation()}>
-              <div className="mb-1">
-                <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">再仮組みを実行</h2>
-                {regenDone === null ? (
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    希望休・シフトパターンをもとに自動で再配置します。
-                  </p>
-                ) : (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
-                    完了しました（{regenDone} 件割当）
-                  </p>
-                )}
+
+              {/* ヘッダー */}
+              <div className="px-4 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+                <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">再仮組み</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">セクションを選んで再生成、または仮確定で保護</p>
               </div>
-              {regenDone === null && sectionOptions.length > 0 && (
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">対象セクション</label>
-                  <select
-                    value={regenSection}
-                    onChange={e => setRegenSection(e.target.value)}
-                    disabled={isRegenerating}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 disabled:opacity-50"
-                  >
-                    <option value="">全セクション（上書き）</option>
-                    {sectionOptions.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
+
+              {/* 完了メッセージ */}
+              {regenDone !== null && (
+                <div className="px-4 py-5 text-center space-y-1">
+                  <p className="text-2xl">✓</p>
+                  <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{regenDone} 件割当しました</p>
                 </div>
               )}
+
+              {/* セクションリスト */}
               {regenDone === null && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2">
-                  {regenSection
-                    ? `「${regenSection}」のシフト仮組みを再生成します。他セクションの内容は保持されます。`
-                    : "全セクションのシフト仮組みを再生成します。現在の編集内容は上書きされます。"
-                  }
+                <div className="overflow-y-auto flex-1 px-3 py-3 space-y-1.5">
+                  {sectionOptions.map(section => {
+                    const st = sectionDraftStatus.get(section) ?? "none";
+                    const isLocked = st === "locked";
+                    const isSelected = regenSection === section;
+                    return (
+                      <div key={section} className={[
+                        "rounded-2xl border transition-all overflow-hidden",
+                        isLocked
+                          ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20"
+                          : isSelected
+                          ? "border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/20"
+                          : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800",
+                      ].join(" ")}>
+                        {/* メイン行 */}
+                        <div className="flex items-center gap-2 px-3 py-2.5">
+                          {/* セクション選択（ロック中は選択不可） */}
+                          <button
+                            onClick={() => { if (!isLocked) setRegenSection(isSelected ? "" : section); }}
+                            disabled={isLocked || isRegenerating}
+                            className="flex items-center gap-2.5 flex-1 min-w-0 text-left disabled:cursor-default"
+                          >
+                            {/* ステータスアイコン */}
+                            {isLocked ? (
+                              <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center shrink-0">
+                                <svg viewBox="0 0 10 10" className="w-3 h-3 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </span>
+                            ) : isSelected ? (
+                              <span className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center shrink-0">
+                                <span className="w-2 h-2 rounded-full bg-white" />
+                              </span>
+                            ) : (
+                              <span className="w-5 h-5 rounded-full border-2 border-zinc-300 dark:border-zinc-600 shrink-0" />
+                            )}
+
+                            <div className="flex items-baseline gap-2 min-w-0">
+                              <span className={[
+                                "text-sm font-bold truncate",
+                                isLocked
+                                  ? "text-emerald-700 dark:text-emerald-300"
+                                  : "text-zinc-800 dark:text-zinc-100",
+                              ].join(" ")}>{section}</span>
+                              <span className={[
+                                "text-[10px] font-semibold shrink-0",
+                                st === "locked" ? "text-emerald-600 dark:text-emerald-400"
+                                : st === "draft" ? "text-blue-500 dark:text-blue-400"
+                                : "text-zinc-400",
+                              ].join(" ")}>
+                                {st === "locked" ? "仮確定済" : st === "draft" ? "ドラフト済" : "未着手"}
+                              </span>
+                            </div>
+                          </button>
+
+                          {/* 仮確定トグル */}
+                          <button
+                            onClick={() => handleToggleLock(section, !isLocked)}
+                            disabled={isRegenerating || isLocking}
+                            className={[
+                              "shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40",
+                              isLocked
+                                ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200"
+                                : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600",
+                            ].join(" ")}
+                          >
+                            {isLocked ? "解除" : "仮確定"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* 全セクション */}
+                  <button
+                    onClick={() => setRegenSection("")}
+                    disabled={isRegenerating}
+                    className={[
+                      "w-full py-2.5 rounded-2xl text-xs font-semibold border transition-colors mt-1",
+                      regenSection === ""
+                        ? "bg-zinc-100 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300"
+                        : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:bg-zinc-50",
+                    ].join(" ")}
+                  >
+                    全セクション（仮確定も上書き）
+                  </button>
+                </div>
+              )}
+
+              {/* 警告・エラー */}
+              {regenDone === null && (regenError || lockError) && (
+                <p className="mx-3 mb-2 text-xs text-red-500 bg-red-50 dark:bg-red-950/40 rounded-xl px-3 py-2 shrink-0">
+                  {regenError || lockError}
                 </p>
               )}
-              {regenError && (
-                <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">{regenError}</p>
-              )}
-              {regenDone === null ? (
-                <>
-                  <button onClick={() => handleRegen(regenSection || undefined)} disabled={isRegenerating}
-                    className="w-full py-3 rounded-xl text-sm font-bold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors">
-                    {isRegenerating ? "生成中…" : "再仮組みを実行"}
+
+              {/* フッターボタン */}
+              <div className="px-3 pb-4 pt-2 space-y-2 shrink-0 border-t border-zinc-100 dark:border-zinc-800">
+                {regenDone === null ? (
+                  <>
+                    <button
+                      onClick={() => handleRegen(regenSection || undefined)}
+                      disabled={isRegenerating || isLocking}
+                      className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                    >
+                      {isRegenerating
+                        ? "生成中…"
+                        : regenSection
+                        ? `「${regenSection}」を再仮組み`
+                        : "全セクションを再仮組み"}
+                    </button>
+                    <button
+                      onClick={() => { setShowRegenConfirm(false); setRegenSection(""); }}
+                      disabled={isRegenerating || isLocking}
+                      className="w-full py-2 rounded-2xl text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                    >
+                      キャンセル
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => { setShowRegenConfirm(false); setRegenDone(null); setRegenSection(""); }}
+                    className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                  >
+                    閉じる
                   </button>
-                  <button onClick={() => setShowRegenConfirm(false)} disabled={isRegenerating}
-                    className="w-full py-2 rounded-xl text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 disabled:opacity-50 transition-colors">
-                    キャンセル
-                  </button>
-                </>
-              ) : (
-                <button onClick={() => setShowRegenConfirm(false)}
-                  className="w-full py-3 rounded-xl text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 transition-colors">
-                  閉じる
-                </button>
-              )}
+                )}
+              </div>
             </div>
           </div>
         );
@@ -1627,14 +1744,34 @@ export default function ShiftEditGrid({
                       <tr>
                         {/* 名前列だけ sticky にして横スクロール時も固定 */}
                         <td
-                          className="sticky left-0 z-10 bg-zinc-100 dark:bg-zinc-800/80 px-2 py-0.5 border-b border-zinc-200 dark:border-zinc-700">
-                          <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tracking-wide uppercase">
-                            {member.section ?? "セクション未設定"}
-                          </span>
+                          className={[
+                            "sticky left-0 z-10 px-2 py-0.5 border-b",
+                            member.section && lockedSections.has(member.section)
+                              ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                              : "bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700",
+                          ].join(" ")}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tracking-wide uppercase">
+                              {member.section ?? "セクション未設定"}
+                            </span>
+                            {member.section && lockedSections.has(member.section) && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
+                                <svg viewBox="0 0 10 10" className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                仮確定
+                              </span>
+                            )}
+                          </div>
                         </td>
                         {/* 残り列は背景だけ埋める（sticky なし） */}
                         <td colSpan={allDates.length + 1}
-                          className="bg-zinc-100 dark:bg-zinc-800/80 border-b border-zinc-200 dark:border-zinc-700" />
+                          className={[
+                            "border-b",
+                            member.section && lockedSections.has(member.section)
+                              ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                              : "bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700",
+                          ].join(" ")} />
                       </tr>
                     )}
                     <tr

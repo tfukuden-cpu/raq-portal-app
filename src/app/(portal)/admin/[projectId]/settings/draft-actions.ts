@@ -50,10 +50,14 @@ export async function fetchSlotRequirementsForMonthAction(
   };
 }
 
+// GridDraftEntry（ShiftEditGrid と同じフォーマット）
+type GridDraftEntry = { k: string; n: string | null; s: string | null; e: string | null; d: boolean };
+
 export type GenerateDraftResult = {
   success: boolean;
   message?: string;
   assignedCount?: number;
+  draftEntries?: GridDraftEntry[];
 };
 
 type PatternDef = {
@@ -129,6 +133,7 @@ export async function generateShiftDraftAction(
   month: number,
   patterns: PatternDef[],
   targetSection?: string,   // 指定時: そのセクションのみ再仮組み・他セクションのドラフトは保持
+  noSave?: boolean,         // true のとき DB 書き込みをスキップ（グリッド編集内再仮組み用）
 ): Promise<GenerateDraftResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -618,16 +623,18 @@ export async function generateShiftDraftAction(
     ];
   }
 
-  const savedBy = user.email?.split("@")[0]?.toUpperCase() ?? "";
-  const { error } = await admin.from("shift_grid_drafts").upsert({
-    project_id:   projectId,
-    target_month: monthStr,
-    draft_data:   draftEntries,
-    saved_by:     savedBy,
-    saved_at:     new Date().toISOString(),
-  }, { onConflict: "project_id,target_month" });
+  if (!noSave) {
+    const savedBy = user.email?.split("@")[0]?.toUpperCase() ?? "";
+    const { error } = await admin.from("shift_grid_drafts").upsert({
+      project_id:   projectId,
+      target_month: monthStr,
+      draft_data:   draftEntries,
+      saved_by:     savedBy,
+      saved_at:     new Date().toISOString(),
+    }, { onConflict: "project_id,target_month" });
 
-  if (error) return { success: false, message: error.message };
+    if (error) return { success: false, message: error.message };
+  }
 
-  return { success: true, assignedCount: draft.size };
+  return { success: true, assignedCount: draft.size, draftEntries };
 }
