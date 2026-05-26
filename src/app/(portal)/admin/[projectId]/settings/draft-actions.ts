@@ -469,10 +469,15 @@ export async function generateShiftDraftAction(
   const draftSlotCount = new Map<string, number>();
 
   for (let round = 1; round <= maxRound; round++) {
-    // このラウンドで既に使ったスタッフ（1ラウンド＝各スタッフ最大1日の保証）
-    const usedInRound = new Set<string>();
+    // ラウンドごとに開始日をずらす（stride=11はすべての月長と互いに素）
+    // → スタッフAがラウンドごとに異なる日から始まるため月全体に均等分散する
+    // 例) 30日月: R1=1日目, R2=12日目, R3=23日目, R4=4日目 ...
+    const startIdx = ((round - 1) * 11) % allDates.length;
+    const dateOrder = startIdx === 0
+      ? allDates
+      : [...allDates.slice(startIdx), ...allDates.slice(0, startIdx)];
 
-    for (const date of allDates) { // カレンダー順（1日→末日）
+    for (const date of dateOrder) {
       const weekKey = isoWeekKey(date);
 
       // その日に既に割り当て済みのスタッフ（既存確定 + ドラフト + 他セクション）
