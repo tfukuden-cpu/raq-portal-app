@@ -223,7 +223,7 @@ export default async function ManageShiftsPage(props: {
       .gte("absence_date", startDate)
       .lte("absence_date", endDate),
     admin.from("shift_grid_drafts")
-      .select("draft_data, saved_by, saved_at")
+      .select("draft_data, saved_by, saved_at, locked_sections")
       .eq("project_id", selectedProjectId)
       .eq("target_month", `${targetYear}-${String(targetMonth).padStart(2, "0")}`)
       .maybeSingle(),
@@ -330,6 +330,7 @@ export default async function ManageShiftsPage(props: {
     ? (staffNameMap2.get(draftRow.saved_by as string) ?? draftRow.saved_by as string)
     : null;
   const draftSavedAt = draftRow?.saved_at as string | null ?? null;
+  const lockedSections = (draftRow?.locked_sections as string[] | null) ?? [];
 
   const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
   const allDates = Array.from({ length: daysInMonth }, (_, i) =>
@@ -405,6 +406,7 @@ export default async function ManageShiftsPage(props: {
           draftSavedBy={draftSavedBy}
           draftSavedAt={draftSavedAt}
           isPublished={isPublished}
+          lockedSections={lockedSections}
           offRequests={(offRequestsRaw ?? []).map(r => ({
             staff_id:     r.staff_id as string,
             request_date: r.request_date as string,
