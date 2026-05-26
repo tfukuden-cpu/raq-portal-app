@@ -15,8 +15,8 @@ export type WallItem = {
 const SECTIONS = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク", ""];
 const CARD_W = 76;   // カード幅 + 余白
 const CARD_H = 62;   // カード高 + 余白
-const CANVAS_MIN_W = 1000;
-const CANVAS_MIN_H = 750;
+const CANVAS_MIN_W = 1800;
+const CANVAS_MIN_H = 1200;
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
@@ -385,7 +385,7 @@ export default function SeatLayoutEditor({
       <div
         ref={scrollRef}
         className="rounded-2xl border border-zinc-200 dark:border-zinc-700 overflow-auto"
-        style={{ maxHeight: 520, cursor: mode === "wall" ? "crosshair" : isPanRef.current ? "grabbing" : "grab" }}
+        style={{ maxHeight: 620, cursor: mode === "wall" ? "crosshair" : isPanRef.current ? "grabbing" : "grab" }}
       >
         {/* キャンバス（大きめ固定） */}
         <div
