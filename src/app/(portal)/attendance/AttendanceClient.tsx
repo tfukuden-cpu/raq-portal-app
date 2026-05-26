@@ -651,68 +651,62 @@ function ShiftChangesTab({
     hour: "2-digit", minute: "2-digit",
   });
 
-  const ACTION_LABEL: Record<string, string> = {
-    create: "追加",
-    update: "変更",
-    delete: "削除",
-  };
-  const ACTION_COLOR: Record<string, string> = {
-    create: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-    update: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-    delete: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-  };
-
   return (
     <div>
-      {/* 展開日時 */}
       <p className="text-xs text-zinc-400 mb-3 tabular-nums">
-        確定シフト展開日時：{fmtPublished}
+        確定シフト展開：{fmtPublished}
       </p>
 
       {shiftChanges.length === 0 ? (
         <div className="py-10 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
           <p className="text-sm font-semibold text-zinc-500">変更なし</p>
-          <p className="text-xs text-zinc-400 mt-1">展開後に変更されたシフトはありません</p>
         </div>
       ) : (
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-          <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
-            <span className="text-xs font-bold text-zinc-500">{shiftChanges.length}件の変更</span>
-          </div>
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {shiftChanges.map((c, i) => {
+              // シフト変化の表示文字列を組み立てる
+              let shiftLabel: React.ReactNode;
+              if (c.action === "create" || (!c.beforeShift && c.afterShift)) {
+                // 追加
+                shiftLabel = (
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                    ＋{c.afterShift ?? "追加"}
+                  </span>
+                );
+              } else if (c.action === "delete" || (c.beforeShift && !c.afterShift)) {
+                // 削除
+                shiftLabel = (
+                  <span className="text-red-500 dark:text-red-400 font-semibold line-through">
+                    {c.beforeShift ?? "削除"}
+                  </span>
+                );
+              } else {
+                // 変更：前→後
+                shiftLabel = (
+                  <span className="flex items-center gap-1">
+                    <span className="text-zinc-400 dark:text-zinc-500">{c.beforeShift}</span>
+                    <span className="text-zinc-400">→</span>
+                    <span className="text-zinc-800 dark:text-zinc-100 font-semibold">{c.afterShift}</span>
+                  </span>
+                );
+              }
+
               const changedAtStr = new Date(c.changedAt).toLocaleTimeString("ja-JP", {
                 timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false,
               });
+
               return (
-                <div key={i} className="px-4 py-3 flex items-start gap-3">
-                  {/* アクションバッジ */}
-                  <span className={`shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${ACTION_COLOR[c.action] ?? "bg-zinc-100 text-zinc-500"}`}>
-                    {ACTION_LABEL[c.action] ?? c.action}
+                <div key={i} className="px-4 py-2.5 flex items-center gap-3">
+                  <span className="w-20 shrink-0 text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate">
+                    {c.staffName}
                   </span>
-                  {/* メイン情報 */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{c.staffName}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      {c.beforeShift && (
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400 line-through">{c.beforeShift}</span>
-                      )}
-                      {c.beforeShift && c.afterShift && (
-                        <span className="text-xs text-zinc-400">→</span>
-                      )}
-                      {c.afterShift && (
-                        <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{c.afterShift}</span>
-                      )}
-                      {!c.afterShift && c.action === "delete" && (
-                        <span className="text-xs text-zinc-400">（削除）</span>
-                      )}
-                    </div>
-                  </div>
-                  {/* 右側：変更者・時刻 */}
-                  <div className="shrink-0 text-right">
-                    <p className="text-xs text-zinc-400 tabular-nums">{changedAtStr}</p>
-                    <p className="text-[11px] text-zinc-400">{c.changedByName}</p>
-                  </div>
+                  <span className="flex-1 text-sm flex items-center gap-1 min-w-0">
+                    {shiftLabel}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-zinc-400 tabular-nums whitespace-nowrap">
+                    {changedAtStr}
+                  </span>
                 </div>
               );
             })}
