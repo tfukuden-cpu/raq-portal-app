@@ -3,6 +3,7 @@
 import { useState } from "react";
 import HomeClient, { type HomeClientProps } from "./HomeClient";
 import TasksClient, { type GroupTask, type TaskGroup, type StaffOption, type NameMapping } from "../tasks/TasksClient";
+import MyTasksWidget from "./MyTasksWidget";
 
 interface AdminHomeWrapperProps extends HomeClientProps {
   tasks: GroupTask[];
@@ -25,6 +26,11 @@ export default function AdminHomeWrapper(props: AdminHomeWrapperProps) {
   } = props;
 
   const [tab, setTab] = useState<Tab>("home");
+
+  // 自分に割り当てられた未完了タスク
+  const myTasks = tasks.filter(
+    t => t.assignee_staff_id === myStaffId && t.status === "pending"
+  );
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -65,7 +71,12 @@ export default function AdminHomeWrapper(props: AdminHomeWrapperProps) {
 
       {/* コンテンツ */}
       {tab === "home" ? (
-        <HomeClient {...homeProps} />
+        <>
+          {/* ホームUI */}
+          <HomeClient {...homeProps} />
+          {/* 自分のタスクウィジェット */}
+          <MyTasksWidget tasks={myTasks} onSeeAll={() => setTab("tasks")} />
+        </>
       ) : (
         <div className="max-w-5xl mx-auto px-4 pb-24">
           <TasksClient

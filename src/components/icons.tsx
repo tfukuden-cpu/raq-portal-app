@@ -143,6 +143,14 @@ export function CheckSquareIcon({ className }: IconProps) {
   );
 }
 
+export function SquareIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    </svg>
+  );
+}
+
 export function MegaphoneIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>
