@@ -8,7 +8,6 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import TasksClient from "./TasksClient";
 import type { GroupTask, TaskGroup, StaffOption } from "./TasksClient";
-import { cookies } from "next/headers";
 
 export default async function TasksPage() {
   const supabase = await createClient();
@@ -31,11 +30,6 @@ export default async function TasksPage() {
     membership?.role === "project_admin" ||
     myStaff?.global_role === "admin" ||
     myStaff?.global_role === "executive";
-
-  // 視点モード対応（DevBanner）
-  const cookieStore = await cookies();
-  const viewMode = cookieStore.get("rqp-view-mode")?.value ?? "staff";
-  const effectiveAdmin = viewMode !== "staff" && isAdmin;
 
   const admin = createAdminClient();
 
@@ -132,7 +126,7 @@ export default async function TasksPage() {
           staffOptions={staffOptions}
           projectId={projectId}
           discoveredGroups={discoveredGroups}
-          isAdmin={effectiveAdmin}
+          isAdmin={isAdmin}
           myStaffId={staffId}
         />
       </div>

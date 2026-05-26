@@ -319,7 +319,7 @@ export default function TasksClient({
             { id: "my"       as Tab, label: `自分 ${myTasks.length}` },
             { id: "pending"  as Tab, label: `全体 ${pendingTasks.length}` },
             { id: "done"     as Tab, label: `完了済 ${doneTasks.length}` },
-            ...(isAdmin ? [{ id: "settings" as Tab, label: "設定" }] : []),
+            { id: "settings" as Tab, label: "設定" },
           ]).map(t => (
             <button key={t.id} type="button" onClick={() => setTab(t.id)}
               className={[
@@ -398,16 +398,14 @@ export default function TasksClient({
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">自分のタスク</p>
               <div className="flex gap-2">
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={handleTriggerExtract}
-                    disabled={isPending || taskGroups.filter(g => g.enabled).length === 0}
-                    className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors"
-                  >
-                    {isPending ? "抽出中…" : "今すぐ抽出"}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleTriggerExtract}
+                  disabled={isPending || taskGroups.filter(g => g.enabled).length === 0}
+                  className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors"
+                >
+                  {isPending ? "抽出中…" : "今すぐ抽出"}
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowAddTask(v => !v)}
@@ -437,16 +435,14 @@ export default function TasksClient({
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">未完了タスク一覧</p>
               <div className="flex gap-2">
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={handleTriggerExtract}
-                    disabled={isPending || taskGroups.filter(g => g.enabled).length === 0}
-                    className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors"
-                  >
-                    {isPending ? "抽出中…" : "今すぐ抽出"}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleTriggerExtract}
+                  disabled={isPending || taskGroups.filter(g => g.enabled).length === 0}
+                  className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors"
+                >
+                  {isPending ? "抽出中…" : "今すぐ抽出"}
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowAddTask(v => !v)}
