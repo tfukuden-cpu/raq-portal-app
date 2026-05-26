@@ -9,6 +9,8 @@ import {
   deleteTaskGroupAction,
   triggerExtractTasksAction,
   addTaskManualAction,
+  linkAssigneeAction,
+  unlinkAssigneeAction,
 } from "./actions";
 
 export type GroupTask = {
@@ -40,6 +42,13 @@ export type StaffOption = {
   name: string;
 };
 
+export type NameMapping = {
+  id: string;
+  rawName: string;
+  staffId: string;
+  staffName: string;
+};
+
 type Tab = "my" | "pending" | "done" | "settings";
 
 /** due_date (YYYY-MM-DD) を "M/D" 形式に */
@@ -57,6 +66,7 @@ export default function TasksClient({
   discoveredGroups,
   isAdmin,
   myStaffId,
+  nameMappings,
 }: {
   tasks: GroupTask[];
   taskGroups: TaskGroup[];
@@ -65,6 +75,7 @@ export default function TasksClient({
   discoveredGroups: { group_id: string }[];
   isAdmin: boolean;
   myStaffId: string;
+  nameMappings: NameMapping[];
 }) {
   const [tab, setTab]                   = useState<Tab>("my");
   const [isPending, startTransition]    = useTransition();
@@ -158,8 +169,10 @@ export default function TasksClient({
   function TaskCard({ task }: { task: GroupTask }) {
     const expanded  = expandedId === task.id;
     const isEditing = editId === task.id;
-    const [editAssignee, setEditAssignee] = useState(task.assignee_staff_id ?? "");
-    const [editDue, setEditDue]           = useState(task.due_date ?? "");
+    const [editAssignee,  setEditAssignee]  = useState(task.assignee_staff_id ?? "");
+    const [editDue,       setEditDue]       = useState(task.due_date ?? "");
+    const [linkStaffId,   setLinkStaffId]   = useState("");
+    const [showLinkForm,  setShowLinkForm]  = useState(false);
 
     // 担当者表示（@メンション名を優先、未解決なら assignee_name）
     const toLabel    = task.assignee_raw ?? task.assignee_name ?? null;
@@ -267,6 +280,57 @@ export default function TasksClient({
             {/* グループラベル */}
             {task.group_id !== "manual" && task.group_label && (
               <p className="text-[10px] text-zinc-400">{task.group_label}</p>
+            )}
+
+            {/* ── 未解決担当者の紐づけUI ── */}
+            {task.assignee_raw && !task.assignee_staff_id && (
+              <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 px-3 py-2 space-y-2">
+                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                  「{task.assignee_raw}」はアカウントに紐づいていません
+                </p>
+                {showLinkForm ? (
+                  <div className="flex gap-2 items-center">
+                    <select
+                      value={linkStaffId}
+                      onChange={e => setLinkStaffId(e.target.value)}
+                      className="flex-1 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="">スタッフを選択</option>
+                      {staffOptions.map(s => (
+                        <option key={s.staffId} value={s.staffId}>{s.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={!linkStaffId || isPending}
+                      onClick={() => {
+                        startTransition(async () => {
+                          const r = await linkAssigneeAction(task.assignee_raw!, linkStaffId);
+                          if (r.success) {
+                            setShowLinkForm(false);
+                            showFlash(true, `「${task.assignee_raw}」を紐づけました`);
+                          } else {
+                            showFlash(false, r.message ?? "紐づけに失敗しました");
+                          }
+                        });
+                      }}
+                      className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-semibold disabled:opacity-40 flex-shrink-0"
+                    >
+                      紐づける
+                    </button>
+                    <button type="button" onClick={() => setShowLinkForm(false)}
+                      className="text-xs text-zinc-400 flex-shrink-0">キャンセル</button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowLinkForm(true)}
+                    className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-700 transition-colors"
+                  >
+                    アカウントに紐づける
+                  </button>
+                )}
+              </div>
             )}
 
             {/* 編集フォーム or アクションボタン */}
@@ -625,6 +689,45 @@ export default function TasksClient({
                 ))}
               </div>
             )}
+
+            {/* ── 名前の紐づけ管理 ── */}
+            <div className="space-y-2">
+              <div>
+                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">名前の紐づけ</p>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  LINEの @メンション名とスタッフアカウントの対応を管理します。
+                  タスクカードの「アカウントに紐づける」から追加できます。
+                </p>
+              </div>
+              {nameMappings.length === 0 ? (
+                <div className="text-center py-6 text-zinc-400">
+                  <p className="text-xs">紐づけがまだありません</p>
+                  <p className="text-[11px] mt-0.5">タスクカードを開いて「アカウントに紐づける」から追加してください</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {nameMappings.map(m => (
+                    <div key={m.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                      <div className="flex-1 min-w-0 flex items-center gap-2">
+                        <span className="text-xs font-semibold text-zinc-500 flex-shrink-0">@{m.rawName}</span>
+                        <span className="text-zinc-300 dark:text-zinc-600 flex-shrink-0">→</span>
+                        <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 truncate">{m.staffName}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => startTransition(() => unlinkAssigneeAction(m.id).then(() => {}))}
+                        className="text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1 flex-shrink-0"
+                        title="紐づけを解除"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-3 space-y-1">
               <p className="text-xs font-semibold text-zinc-500">自動抽出について</p>

@@ -157,6 +157,17 @@ export async function runExtractTasks(): Promise<{ ok: boolean; extracted: numbe
         }
       }
 
+      // ── 手動紐づけマップ（優先）──────────────────────────────────
+      const { data: mappingRows } = await admin
+        .from("line_name_mappings")
+        .select("raw_name, staff_id")
+        .eq("project_id", group.project_id);
+
+      const nameMappings = new Map<string, string>(); // raw_name → staff_id
+      for (const row of mappingRows ?? []) {
+        nameMappings.set(row.raw_name, row.staff_id);
+      }
+
       // ── 担当者解決マップ（プロジェクト全メンバー対象）─────────────
       // @田中 のような @メンションからスタッフIDを引くため全メンバーを取得
       const { data: memberRows } = await admin
@@ -186,15 +197,21 @@ export async function runExtractTasks(): Promise<{ ok: boolean; extracted: numbe
         const title       = buildTitle(msg.message_text);
         const preview     = buildPreview(msg.message_text, title);
 
-        // プロジェクト全メンバーの名前から担当者を解決
+        // 担当者解決：① 手動マッピング優先 → ② 名前の部分一致
         let assigneeStaffId: string | null = null;
         if (assigneeRaw) {
           const rawName = assigneeRaw.replace(/(さん|くん|ちゃん|君)$/, "");
-          for (const [, s] of memberNameMap) {
-            const sName = s.name.replace(/\s/g, ""); // スペース除去して比較
-            if (sName.includes(rawName) || rawName.includes(sName)) {
-              assigneeStaffId = s.staffId;
-              break;
+          // ① 手動紐づけテーブルを優先チェック
+          if (nameMappings.has(rawName)) {
+            assigneeStaffId = nameMappings.get(rawName)!;
+          } else {
+            // ② プロジェクト全メンバーの名前から部分一致で解決
+            for (const [, s] of memberNameMap) {
+              const sName = s.name.replace(/\s/g, "");
+              if (sName.includes(rawName) || rawName.includes(sName)) {
+                assigneeStaffId = s.staffId;
+                break;
+              }
             }
           }
         }

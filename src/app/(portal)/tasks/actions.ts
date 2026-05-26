@@ -99,6 +99,59 @@ export async function triggerExtractTasksAction() {
   return { success: result.ok, extracted: result.extracted, savedMessages: result.savedMessages ?? 0, message: result.error };
 }
 
+// LINE名 → スタッフアカウントの紐づけを保存し、既存タスクも一括更新
+export async function linkAssigneeAction(rawName: string, staffId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "未認証" };
+
+  const projectId = await getCurrentProjectId();
+  if (!projectId) return { success: false, message: "案件未選択" };
+
+  const admin = createAdminClient();
+
+  // マッピングを upsert（同じ raw_name があれば上書き）
+  const { error: mapErr } = await admin
+    .from("line_name_mappings")
+    .upsert(
+      { project_id: projectId, raw_name: rawName, staff_id: staffId },
+      { onConflict: "project_id,raw_name" },
+    );
+  if (mapErr) return { success: false, message: mapErr.message };
+
+  // 同じ raw_name の未解決タスクを一括で紐づけ
+  await admin
+    .from("group_tasks")
+    .update({ assignee_staff_id: staffId })
+    .eq("project_id", projectId)
+    .eq("assignee_raw", rawName)
+    .is("assignee_staff_id", null);
+
+  revalidatePath("/tasks");
+  return { success: true };
+}
+
+// 紐づけを削除
+export async function unlinkAssigneeAction(mappingId: string) {
+  const admin = createAdminClient();
+  await admin.from("line_name_mappings").delete().eq("id", mappingId);
+  revalidatePath("/tasks");
+  return { success: true };
+}
+
+// 紐づけ一覧を取得（設定タブ用）
+export async function getNameMappingsAction() {
+  const supabase = await createClient();
+  const projectId = await getCurrentProjectId();
+  if (!projectId) return { data: [] };
+  const { data } = await supabase
+    .from("line_name_mappings")
+    .select("id, raw_name, staff_id")
+    .eq("project_id", projectId)
+    .order("raw_name");
+  return { data: data ?? [] };
+}
+
 // タスクを手動で追加
 export async function addTaskManualAction(fd: FormData) {
   const supabase = await createClient();

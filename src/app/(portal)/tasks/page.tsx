@@ -38,6 +38,7 @@ export default async function TasksPage() {
     { data: rawGroups },
     { data: members },
     { data: knownGroups },
+    { data: rawMappings },
   ] = await Promise.all([
     supabase
       .from("group_tasks")
@@ -60,6 +61,11 @@ export default async function TasksPage() {
       .from("line_groups")
       .select("group_id, joined_at")
       .order("joined_at", { ascending: false }),
+    admin
+      .from("line_name_mappings")
+      .select("id, raw_name, staff_id")
+      .eq("project_id", projectId)
+      .order("raw_name"),
   ]);
 
   // タスクの担当者名を解決
@@ -117,6 +123,13 @@ export default async function TasksPage() {
     .filter(g => !registeredGroupIds.has(g.group_id))
     .map(g => ({ group_id: g.group_id }));
 
+  const nameMappings = (rawMappings ?? []).map(m => ({
+    id:       m.id,
+    rawName:  m.raw_name,
+    staffId:  m.staff_id,
+    staffName: staffNameMap.get(m.staff_id) ?? m.staff_id,
+  }));
+
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
       <div className="max-w-5xl mx-auto px-4 pb-24">
@@ -128,6 +141,7 @@ export default async function TasksPage() {
           discoveredGroups={discoveredGroups}
           isAdmin={isAdmin}
           myStaffId={staffId}
+          nameMappings={nameMappings}
         />
       </div>
     </main>
