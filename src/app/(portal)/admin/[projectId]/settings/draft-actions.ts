@@ -293,6 +293,27 @@ export async function generateShiftDraftAction(
   // ── 仮組グリッド生成 ────────────────────────────────────────
   const draft = new Map<string, { shiftName: string; shiftStart: string | null; shiftEnd: string | null }>();
 
+  // ── 事前診断: 必要人数が1件もないとパターン設定の問題 ─────────
+  const hasAnyRequired = allDates.some(date =>
+    patterns.some(p => {
+      const slotReq = slotMap.get(`${p.name}__${date}`);
+      if (slotReq !== undefined) return slotReq > 0;
+      const dow = new Date(date + "T00:00:00Z").getUTCDay();
+      const isWe = dow === 0 || dow === 6;
+      const req = isWe ? (p.required_weekend ?? p.required_count ?? 0) : (p.required_weekday ?? p.required_count ?? 0);
+      return req > 0;
+    })
+  );
+  if (!hasAnyRequired) {
+    const sec = targetSection ? `「${targetSection}」セクション` : "";
+    return {
+      success: false,
+      message: `${sec}のパターンに必要人数が設定されていません。`
+        + `シフト設定タブでパターンの必要人数(required_count)を設定するか、`
+        + `各日付の必要数テーブルに人数を登録してください。`,
+    };
+  }
+
   for (const date of allDates) {
     const weekKey = isoWeekKey(date);
 
@@ -406,7 +427,15 @@ export async function generateShiftDraftAction(
   }
 
   if (draft.size === 0) {
-    return { success: false, message: "割当可能なスタッフがいませんでした" };
+    const sec = targetSection ?? "";
+    const staffCount = activeMemberRows.length;
+    return {
+      success: false,
+      message: staffCount === 0
+        ? `対象スタッフが0人です。メンバー管理でセクションを「${sec}」に設定してください。`
+        : `配置できるスタッフが見つかりませんでした（対象${staffCount}人）。`
+          + `稼働日数上限・希望休・連勤制限を確認してください。`,
+    };
   }
 
   // GridDraftEntry 形式 { k, n, s, e, d } で保存（ShiftEditGrid と同じフォーマット）
