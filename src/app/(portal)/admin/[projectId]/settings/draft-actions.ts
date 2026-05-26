@@ -558,20 +558,29 @@ export async function generateShiftDraftAction(
         return true;
       });
 
-      // ── ペーシングガード（ソフト制約） ──────────────────────────────
-      // n日目の処理時点で各スタッフは最大 ceil(target×n/lastDay) 日まで。
-      // カレンダー順処理なので n≈日番号。先行日程のアサインが月後半の容量を食わないよう保護。
-      // 候補数が needMore を下回る場合はガードなし（フォールバック）。
-      const pacedCandidates = candidates.filter(m => {
-        const cur = (draftMonthCount.get(m.staff_id) ?? 0)
-          + (existingMonthCount.get(m.staff_id) ?? 0)
-          + (otherSectionMonthCount?.get(m.staff_id) ?? 0);
-        const wdRaw2 = (m as { work_days_count?: number | null }).work_days_count;
+      // ── 容量均等ペーシング（ハード制約） ──────────────────────────────
+      // 残り日数に対して残プール容量を均等配分し、今日の割当上限を決める。
+      // これにより処理順に関わらず「今日使いすぎて後日が足りない」状態を防ぐ。
+      const remainingDateCount = processOrder.length - processedCount + 1;
+      const eligiblePool = pattern.section
+        ? activeMemberRows.filter(m2 => {
+            const ms2 = ((m2 as { sections?: string[] | null }).sections ?? []).filter(Boolean);
+            const eff2 = ms2.length > 0 ? ms2 : (m2.section ? [m2.section] : []);
+            return eff2.includes(pattern.section!);
+          })
+        : activeMemberRows;
+      const poolRemainingCap = eligiblePool.reduce((sum, m2) => {
+        const wdType2 = (m2 as { work_days_type?: string | null }).work_days_type || "monthly";
+        if (wdType2 !== "monthly") return sum + lastDay;
+        const wdRaw2 = (m2 as { work_days_count?: number | null }).work_days_count;
         const wdTarget2 = (wdRaw2 != null && wdRaw2 > 0) ? wdRaw2 : 21;
-        const paceLimit = Math.ceil(wdTarget2 * processedCount / lastDay);
-        return cur < paceLimit;
-      });
-      const sourceCandidates = pacedCandidates.length >= needMore ? pacedCandidates : candidates;
+        const cur2 = (draftMonthCount.get(m2.staff_id) ?? 0)
+          + (existingMonthCount.get(m2.staff_id) ?? 0)
+          + (otherSectionMonthCount?.get(m2.staff_id) ?? 0);
+        return sum + Math.max(0, wdTarget2 - cur2);
+      }, 0);
+      const capacityBudget = Math.max(1, Math.ceil(poolRemainingCap / remainingDateCount));
+      const sourceCandidates = candidates;
 
       // 連勤日数を事前キャッシュ（sort 内で複数回参照するため）
       const conseqCache = new Map<string, number>(
@@ -612,7 +621,7 @@ export async function generateShiftDraftAction(
         return a.m.staff_id < b.m.staff_id ? -1 : 1; // 決定論的タイブレーカー
       });
 
-      const toAssign = scored.slice(0, needMore).map(s => s.m);
+      const toAssign = scored.slice(0, Math.min(needMore, capacityBudget)).map(s => s.m);
 
       for (const m of toAssign) {
         draft.set(`${m.staff_id}__${date}`, {
