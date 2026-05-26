@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
         }
 
         // ── グループテキストメッセージ → タスク抽出用に保存 ──
+        // Botが参加しているグループ（line_groups）のメッセージはすべて保存する
         if (
           event.type === "message" &&
           event.message?.type === "text" &&
@@ -111,16 +112,13 @@ export async function POST(req: NextRequest) {
           event.source?.type === "group" &&
           userId
         ) {
-          // task_extraction_groups に登録されたグループのみ保存
-          const { data: teg } = await admin
-            .from("task_extraction_groups")
-            .select("id")
+          const { data: knownGroup } = await admin
+            .from("line_groups")
+            .select("group_id")
             .eq("group_id", groupId)
-            .eq("enabled", true)
-            .limit(1)
             .maybeSingle();
 
-          if (teg) {
+          if (knownGroup) {
             await admin.from("line_group_messages").insert({
               group_id:     groupId,
               user_id:      userId,

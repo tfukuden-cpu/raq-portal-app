@@ -36,6 +36,7 @@ export default async function TasksPage() {
     { data: rawTasks },
     { data: rawGroups },
     { data: members },
+    { data: knownGroups },
   ] = await Promise.all([
     supabase
       .from("group_tasks")
@@ -54,6 +55,10 @@ export default async function TasksPage() {
       .select("staff_id, staffs(name, display_name)")
       .eq("project_id", projectId)
       .order("staff_id"),
+    admin
+      .from("line_groups")
+      .select("group_id, joined_at")
+      .order("joined_at", { ascending: false }),
   ]);
 
   // タスクの担当者名を解決
@@ -102,6 +107,14 @@ export default async function TasksPage() {
     };
   });
 
+  // すでに登録済みのグループIDセット
+  const registeredGroupIds = new Set((rawGroups ?? []).map(g => g.group_id));
+
+  // Botが参加中で未登録のグループ（設定画面で1クリック登録できるもの）
+  const discoveredGroups = (knownGroups ?? [])
+    .filter(g => !registeredGroupIds.has(g.group_id))
+    .map(g => ({ group_id: g.group_id }));
+
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
       <div className="max-w-5xl mx-auto px-4 pb-24">
@@ -110,6 +123,7 @@ export default async function TasksPage() {
           taskGroups={taskGroups}
           staffOptions={staffOptions}
           projectId={projectId}
+          discoveredGroups={discoveredGroups}
         />
       </div>
     </main>

@@ -46,11 +46,13 @@ export default function TasksClient({
   taskGroups,
   staffOptions,
   projectId,
+  discoveredGroups,
 }: {
   tasks: GroupTask[];
   taskGroups: TaskGroup[];
   staffOptions: StaffOption[];
   projectId: string;
+  discoveredGroups: { group_id: string }[];
 }) {
   const [tab, setTab]                   = useState<Tab>("pending");
   const [isPending, startTransition]    = useTransition();
@@ -455,12 +457,39 @@ export default function TasksClient({
               </div>
             )}
 
-            {taskGroups.length === 0 ? (
+            {/* Botが参加中で未登録のグループを自動検出 */}
+            {discoveredGroups.length > 0 && (
+              <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20 p-3 space-y-2">
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  検出済みグループ（未登録）
+                </p>
+                <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                  Botが参加しているグループです。タスク抽出対象にするには「登録」してください。
+                </p>
+                {discoveredGroups.map(g => (
+                  <div key={g.group_id} className="flex items-center gap-2">
+                    <p className="text-[11px] font-mono text-zinc-500 flex-1 truncate">{g.group_id}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewGroupId(g.group_id);
+                        setShowAddGroup(true);
+                      }}
+                      className="flex-shrink-0 text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors"
+                    >
+                      登録
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {taskGroups.length === 0 && discoveredGroups.length === 0 ? (
               <div className="text-center py-8 text-zinc-400">
                 <p className="text-sm">対象グループが設定されていません</p>
-                <p className="text-xs mt-1">「＋ 追加」からLINEグループを登録してください</p>
+                <p className="text-xs mt-1">Botをグループに追加すると自動検出されます</p>
               </div>
-            ) : (
+            ) : taskGroups.length === 0 ? null : (
               <div className="space-y-2">
                 {taskGroups.map(g => (
                   <div key={g.id} className="flex items-center gap-3 px-3 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
@@ -494,7 +523,7 @@ export default function TasksClient({
             <div className="rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-3 space-y-1">
               <p className="text-xs font-semibold text-zinc-500">自動抽出について</p>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                対象グループに設定されたLINEグループの発言を5分おきにClaude AIが解析し、タスク・依頼・確認事項を自動で抽出します。<br />
+                対象グループに設定されたLINEグループの発言を5分おきに解析し、「お願い」「してください」などキーワードを含む発言をタスクとして自動登録します。<br />
                 「今すぐ抽出」ボタンで手動実行も可能です。
               </p>
             </div>
