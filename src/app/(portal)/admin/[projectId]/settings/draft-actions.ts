@@ -214,6 +214,42 @@ export async function generateShiftDraftAction(
     }
   }
 
+  // ── 他セクションのドラフト割当を事前取得（セクション再仮組み時） ──────
+  // 目的1: 再仮組み時に他セクションで割当済みの人を奪わないようにする
+  // 目的2: 月稼働日数上限の計算に他セクション分を含める
+  type DraftEntry = { k: string; n: string; s: string | null; e: string | null; d: boolean };
+  let storedDraftEntries: DraftEntry[] = [];          // 後の merge 処理でも再利用
+  let otherSectionDates: Map<string, Set<string>> | null = null;  // staffId → 割当日Set
+  let otherSectionMonthCount: Map<string, number>   | null = null; // staffId → 当月割当数
+
+  if (targetSection) {
+    const { data: currentDraft } = await admin
+      .from("shift_grid_drafts")
+      .select("draft_data")
+      .eq("project_id", projectId)
+      .eq("target_month", monthStr)
+      .maybeSingle();
+
+    storedDraftEntries = (currentDraft?.draft_data as DraftEntry[] | null) ?? [];
+    const targetPNames = new Set(patterns.map(p => p.name));
+    const otherEntries = storedDraftEntries.filter(e => !targetPNames.has(e.n));
+
+    otherSectionDates      = new Map();
+    otherSectionMonthCount = new Map();
+
+    for (const e of otherEntries) {
+      const sepIdx = e.k.lastIndexOf("__");
+      const staffId = e.k.slice(0, sepIdx);
+      const date    = e.k.slice(sepIdx + 2);
+      if (!otherSectionDates.has(staffId)) otherSectionDates.set(staffId, new Set());
+      otherSectionDates.get(staffId)!.add(date);
+      // 当月分のみカウント（月稼働日数上限チェック用）
+      if (date >= dateFrom && date <= dateTo) {
+        otherSectionMonthCount.set(staffId, (otherSectionMonthCount.get(staffId) ?? 0) + 1);
+      }
+    }
+  }
+
   // slotReqRows が null はDBエラー。空（length=0）はパターン自体の required_count で代替するため許容
   if (!slotReqRows) {
     return { success: false, message: "必要人数の取得に失敗しました" };
@@ -345,6 +381,12 @@ export async function generateShiftDraftAction(
     for (const [staffId, dates] of draftDates) {
       if (dates.has(date)) assignedOnDate.add(staffId);
     }
+    // 他セクションのドラフト割当も「その日は使用済み」として扱う
+    if (otherSectionDates) {
+      for (const [staffId, dates] of otherSectionDates) {
+        if (dates.has(date)) assignedOnDate.add(staffId);
+      }
+    }
 
     for (const pattern of patterns) {
       const slotRequired = slotMap.get(`${pattern.name}__${date}`);
@@ -396,7 +438,9 @@ export async function generateShiftDraftAction(
         const wdType  = (m as { work_days_type?: string | null }).work_days_type  || "monthly";
         const wdCount = (m as { work_days_count?: number | null }).work_days_count ?? 21;
         if (wdType === "monthly") {
-          const current = (draftMonthCount.get(m.staff_id) ?? 0) + (existingMonthCount.get(m.staff_id) ?? 0);
+          const current = (draftMonthCount.get(m.staff_id) ?? 0)
+            + (existingMonthCount.get(m.staff_id) ?? 0)
+            + (otherSectionMonthCount?.get(m.staff_id) ?? 0); // 他セクション分を加算
           if (current >= wdCount) return false;
         }
 
@@ -420,7 +464,7 @@ export async function generateShiftDraftAction(
         return true;
       });
 
-      // 優先度スコアでソート
+      // 優先度スコアでソート（同点時は稼働率が低いスタッフ優先で均等配分）
       const scored = candidates.map(m => {
         const ps   = (m as { preferred_shift?: string | null }).preferred_shift;
         const pSec = (m as { preferred_section?: string | null }).preferred_section;
@@ -429,7 +473,23 @@ export async function generateShiftDraftAction(
         if (pattern.section && pSec === pattern.section) score++;
         return { m, score };
       });
-      scored.sort((a, b) => b.score !== a.score ? b.score - a.score : Math.random() - 0.5);
+      scored.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        // 均等配分: 稼働率（割当済/目標）が低いスタッフを優先
+        // → 月全体を通じて各スタッフの稼働が平均的に分散される
+        const aAssigned = (draftMonthCount.get(a.m.staff_id) ?? 0)
+          + (existingMonthCount.get(a.m.staff_id) ?? 0)
+          + (otherSectionMonthCount?.get(a.m.staff_id) ?? 0);
+        const bAssigned = (draftMonthCount.get(b.m.staff_id) ?? 0)
+          + (existingMonthCount.get(b.m.staff_id) ?? 0)
+          + (otherSectionMonthCount?.get(b.m.staff_id) ?? 0);
+        const aTarget = (a.m as { work_days_count?: number | null }).work_days_count ?? 21;
+        const bTarget = (b.m as { work_days_count?: number | null }).work_days_count ?? 21;
+        const aRate = aAssigned / Math.max(1, aTarget);
+        const bRate = bAssigned / Math.max(1, bTarget);
+        if (Math.abs(aRate - bRate) > 0.005) return aRate - bRate; // 稼働率が低い方を先に使う
+        return Math.random() - 0.5;
+      });
 
       const toAssign = scored.slice(0, needMore).map(s => s.m);
 
@@ -512,19 +572,8 @@ export async function generateShiftDraftAction(
     // 対象セクションのパターン名セット
     const targetPatternNames = new Set(patterns.map(p => p.name));
 
-    // 既存ドラフトを取得
-    const { data: existingDraft } = await admin
-      .from("shift_grid_drafts")
-      .select("draft_data")
-      .eq("project_id", projectId)
-      .eq("target_month", monthStr)
-      .maybeSingle();
-
-    type DraftEntry = { k: string; n: string; s: string | null; e: string | null; d: boolean };
-    const existing = (existingDraft?.draft_data as DraftEntry[] | null) ?? [];
-
-    // 他セクションのエントリ（対象セクションのパターンではないもの）は保持
-    const preserved = existing.filter(e => !targetPatternNames.has(e.n));
+    // storedDraftEntries は事前取得済み（otherSectionDates 構築時に使用したもの）
+    const preserved = storedDraftEntries.filter(e => !targetPatternNames.has(e.n));
 
     // 保持エントリ + 新規エントリをマージ（同キーは新規優先）
     const newKeys = new Set(newEntries.map(e => e.k));
