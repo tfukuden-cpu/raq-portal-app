@@ -651,66 +651,91 @@ function ShiftChangesTab({
     hour: "2-digit", minute: "2-digit",
   });
 
+  // シフトパターン軸に変換
+  // 各変更を「出たパターン（before）」と「入ったパターン（after）」に振り分け
+  type PatternRow =
+    | { type: "add";    staffName: string; fromShift: string | null }
+    | { type: "remove"; staffName: string; toShift:   string | null };
+
+  const patternMap = new Map<string, PatternRow[]>();
+
+  function push(pattern: string, row: PatternRow) {
+    if (!patternMap.has(pattern)) patternMap.set(pattern, []);
+    patternMap.get(pattern)!.push(row);
+  }
+
+  for (const c of shiftChanges) {
+    const before = c.beforeShift;
+    const after  = c.afterShift;
+
+    if (!before && after) {
+      // 新規追加
+      push(after, { type: "add", staffName: c.staffName, fromShift: null });
+    } else if (before && !after) {
+      // 削除
+      push(before, { type: "remove", staffName: c.staffName, toShift: null });
+    } else if (before && after && before !== after) {
+      // 変更：beforeから出て afterへ入る
+      push(before, { type: "remove", staffName: c.staffName, toShift: after });
+      push(after,  { type: "add",    staffName: c.staffName, fromShift: before });
+    }
+    // before === after は実質変更なし（スキップ）
+  }
+
+  const patterns = [...patternMap.entries()];
+
   return (
     <div>
       <p className="text-xs text-zinc-400 mb-3 tabular-nums">
         確定シフト展開：{fmtPublished}
       </p>
 
-      {shiftChanges.length === 0 ? (
+      {patterns.length === 0 ? (
         <div className="py-10 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
           <p className="text-sm font-semibold text-zinc-500">変更なし</p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {shiftChanges.map((c, i) => {
-              // シフト変化の表示文字列を組み立てる
-              let shiftLabel: React.ReactNode;
-              if (c.action === "create" || (!c.beforeShift && c.afterShift)) {
-                // 追加
-                shiftLabel = (
-                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                    ＋{c.afterShift ?? "追加"}
-                  </span>
-                );
-              } else if (c.action === "delete" || (c.beforeShift && !c.afterShift)) {
-                // 削除
-                shiftLabel = (
-                  <span className="text-red-500 dark:text-red-400 font-semibold line-through">
-                    {c.beforeShift ?? "削除"}
-                  </span>
-                );
-              } else {
-                // 変更：前→後
-                shiftLabel = (
-                  <span className="flex items-center gap-1">
-                    <span className="text-zinc-400 dark:text-zinc-500">{c.beforeShift}</span>
-                    <span className="text-zinc-400">→</span>
-                    <span className="text-zinc-800 dark:text-zinc-100 font-semibold">{c.afterShift}</span>
-                  </span>
-                );
-              }
+        <div className="space-y-2">
+          {patterns.map(([patternName, rows]) => {
+            const added   = rows.filter(r => r.type === "add")    as Extract<PatternRow, { type: "add" }>[];
+            const removed = rows.filter(r => r.type === "remove") as Extract<PatternRow, { type: "remove" }>[];
+            const delta   = added.length - removed.length;
 
-              const changedAtStr = new Date(c.changedAt).toLocaleTimeString("ja-JP", {
-                timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false,
-              });
-
-              return (
-                <div key={i} className="px-4 py-2.5 flex items-center gap-3">
-                  <span className="w-20 shrink-0 text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate">
-                    {c.staffName}
-                  </span>
-                  <span className="flex-1 text-sm flex items-center gap-1 min-w-0">
-                    {shiftLabel}
-                  </span>
-                  <span className="shrink-0 text-[11px] text-zinc-400 tabular-nums whitespace-nowrap">
-                    {changedAtStr}
-                  </span>
+            return (
+              <div key={patternName} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+                {/* パターンヘッダー */}
+                <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-between">
+                  <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{patternName}</span>
+                  {delta !== 0 && (
+                    <span className={`text-xs font-bold tabular-nums ${delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+                      {delta > 0 ? `+${delta}` : delta}
+                    </span>
+                  )}
                 </div>
-              );
-            })}
-          </div>
+                {/* 増減リスト */}
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {added.map((r, i) => (
+                    <div key={`add-${i}`} className="px-4 py-2 flex items-center gap-2">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold text-sm w-4 shrink-0">＋</span>
+                      <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{r.staffName}</span>
+                      {r.fromShift && (
+                        <span className="text-xs text-zinc-400 ml-1">（{r.fromShift} から）</span>
+                      )}
+                    </div>
+                  ))}
+                  {removed.map((r, i) => (
+                    <div key={`rem-${i}`} className="px-4 py-2 flex items-center gap-2">
+                      <span className="text-red-500 dark:text-red-400 font-bold text-sm w-4 shrink-0">－</span>
+                      <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">{r.staffName}</span>
+                      {r.toShift && (
+                        <span className="text-xs text-zinc-400 ml-1">（→ {r.toShift}）</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
