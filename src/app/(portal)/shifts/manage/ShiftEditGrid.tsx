@@ -1984,6 +1984,8 @@ export default function ShiftEditGrid({
                                 : isToday
                                 ? "bg-blue-50/40 dark:bg-blue-950/10"
                                 : "",
+                              // ドラフト変更セル → 内枠で示す
+                              isDraftCell ? "ring-inset ring-2 ring-blue-500 dark:ring-blue-400" : "",
                             ].filter(Boolean).join(" ")}
                           >
                             {/* 希望休ラベル（シフト未配置の場合）→ 黒背景に白文字 */}
@@ -1993,10 +1995,6 @@ export default function ShiftEditGrid({
                                   {OFF_PRIORITY_LABEL[offPriority] ?? "休"}
                                 </span>
                               </div>
-                            )}
-                            {/* ドラフト変更インジケーター（左上の青ドット） */}
-                            {isDraftCell && (
-                              <span className="absolute top-0.5 left-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 z-10" />
                             )}
                             {shiftName && (
                               <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
