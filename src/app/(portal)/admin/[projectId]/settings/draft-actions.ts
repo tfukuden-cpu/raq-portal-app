@@ -407,16 +407,11 @@ export async function generateShiftDraftAction(
     activeMemberRows.length * avgTargetDays / allDates.length / patternCount
   ));
 
-  // ── 日付処理順：月固定シードのランダムシャッフル ──────────────────
-  // 順序依存（月末・特定曜日への集中）を除去しつつ同月は毎回同じ順序で再現性を保つ
+  // ── 日付処理順：1日→末日の順（カレンダー順） ──────────────────────
+  // シャッフルをやめてカレンダー順に処理することで「連勤チェック」が正確に機能する。
+  // 同一スタッフが連続してアサインされると連勤上限に近づき後続の連勤ソートで自然に外れる。
   {
-    let seed = year * 100 + month;
-    const lcg = () => { seed = (seed * 1664525 + 1013904223) & 0x7fffffff; return seed / 0x7fffffff; };
-    const processOrder = [...allDates];
-    for (let i = processOrder.length - 1; i > 0; i--) {
-      const j = Math.floor(lcg() * (i + 1));
-      [processOrder[i], processOrder[j]] = [processOrder[j], processOrder[i]];
-    }
+    const processOrder = [...allDates]; // カレンダー順（変更不要・allDates はすでに昇順）
 
   let processedCount = 0;
   for (const date of processOrder) {
@@ -517,9 +512,8 @@ export async function generateShiftDraftAction(
       });
 
       // ── ペーシングガード（ソフト制約） ──────────────────────────────
-      // 処理済み日数 n/総日数 の割合に比例して各スタッフの割当上限を設ける。
-      // 例: 10日目の処理時点 → 各スタッフは最大 ceil(target×10/30) 日まで。
-      // これにより早い処理順の日程がスタッフ容量を先食いするのを防ぐ。
+      // n日目の処理時点で各スタッフは最大 ceil(target×n/lastDay) 日まで。
+      // カレンダー順処理なので n≈日番号。先行日程のアサインが月後半の容量を食わないよう保護。
       // 候補数が needMore を下回る場合はガードなし（フォールバック）。
       const pacedCandidates = candidates.filter(m => {
         const cur = (draftMonthCount.get(m.staff_id) ?? 0)
@@ -531,6 +525,11 @@ export async function generateShiftDraftAction(
         return cur < paceLimit;
       });
       const sourceCandidates = pacedCandidates.length >= needMore ? pacedCandidates : candidates;
+
+      // 連勤日数を事前キャッシュ（sort 内で複数回参照するため）
+      const conseqCache = new Map<string, number>(
+        sourceCandidates.map(m => [m.staff_id, consecutiveDaysBefore(m.staff_id, date)])
+      );
 
       // 優先度スコアでソート（同点時は稼働率が低いスタッフ優先で均等配分）
       const scored = sourceCandidates.map(m => {
@@ -558,7 +557,12 @@ export async function generateShiftDraftAction(
         const aRate = aAssigned / Math.max(1, aTarget);
         const bRate = bAssigned / Math.max(1, bTarget);
         if (Math.abs(aRate - bRate) > 0.005) return aRate - bRate; // 稼働率が低い方を先に使う
-        return Math.random() - 0.5;
+        // 連勤日数が少ない（より休んでいる）スタッフを優先
+        // → 各スタッフの連勤パターンが自然にずれ、強制休日が特定日に集中しなくなる
+        const aConsec = conseqCache.get(a.m.staff_id) ?? 0;
+        const bConsec = conseqCache.get(b.m.staff_id) ?? 0;
+        if (aConsec !== bConsec) return aConsec - bConsec;
+        return a.m.staff_id < b.m.staff_id ? -1 : 1; // 決定論的タイブレーカー
       });
 
       const toAssign = scored.slice(0, needMore).map(s => s.m);
