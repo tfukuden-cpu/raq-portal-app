@@ -27,7 +27,7 @@ export default function MyTasksWidget({ tasks, onSeeAll }: MyTasksWidgetProps) {
     <div className="mx-4 mb-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
       {/* ヘッダー */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
-        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">自分のタスク</p>
+        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">今日のタスク</p>
         <button
           type="button"
           onClick={onSeeAll}
@@ -40,7 +40,7 @@ export default function MyTasksWidget({ tasks, onSeeAll }: MyTasksWidgetProps) {
 
       {/* タスク一覧 */}
       {visible.length === 0 ? (
-        <p className="px-4 py-5 text-sm text-zinc-400 text-center">担当タスクはありません</p>
+        <p className="px-4 py-5 text-sm text-zinc-400 text-center">今日のタスクはありません</p>
       ) : (
         <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
           {visible.map(task => (

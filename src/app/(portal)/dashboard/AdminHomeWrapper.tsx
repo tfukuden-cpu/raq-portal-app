@@ -27,9 +27,12 @@ export default function AdminHomeWrapper(props: AdminHomeWrapperProps) {
 
   const [tab, setTab] = useState<Tab>("home");
 
-  // 自分に割り当てられた未完了タスク
-  const myTasks = tasks.filter(
-    t => t.assignee_staff_id === myStaffId && t.status === "pending"
+  // 今日の自分のタスク（due_date が今日、または due_date なしで今日作成）
+  const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  const myTodayTasks = tasks.filter(
+    t => t.assignee_staff_id === myStaffId
+      && t.status === "pending"
+      && (t.due_date === todayStr || (!t.due_date && t.created_at.startsWith(todayStr)))
   );
 
   return (
@@ -75,7 +78,7 @@ export default function AdminHomeWrapper(props: AdminHomeWrapperProps) {
           {/* ホームUI */}
           <HomeClient {...homeProps} />
           {/* 自分のタスクウィジェット */}
-          <MyTasksWidget tasks={myTasks} onSeeAll={() => setTab("tasks")} />
+          <MyTasksWidget tasks={myTodayTasks} onSeeAll={() => setTab("tasks")} />
         </>
       ) : (
         <div className="max-w-5xl mx-auto px-4 pb-24">
