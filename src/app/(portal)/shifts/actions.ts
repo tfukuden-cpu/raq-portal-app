@@ -699,6 +699,61 @@ export async function clearGridDraftAction(
     .eq("target_month", targetMonth);
 }
 
+/**
+ * 特定セルを上書き（希望休・研修日追加時にドラフトへ即反映）
+ * cells の各 date が属する target_month ごとに draft_data を patch する
+ */
+export async function overrideDraftCellsAction(
+  projectId: string,
+  cells: { staffId: string; date: string; shiftName: string }[],
+): Promise<{ success: boolean; message?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+  if (cells.length === 0) return { success: true };
+
+  const admin = createAdminClient();
+
+  // target_month 別にグループ化
+  const byMonth = new Map<string, typeof cells>();
+  for (const cell of cells) {
+    const month = cell.date.slice(0, 7); // "YYYY-MM"
+    if (!byMonth.has(month)) byMonth.set(month, []);
+    byMonth.get(month)!.push(cell);
+  }
+
+  for (const [month, monthCells] of byMonth) {
+    // 既存ドラフト取得
+    const { data } = await admin
+      .from("shift_grid_drafts")
+      .select("draft_data")
+      .eq("project_id", projectId)
+      .eq("target_month", month)
+      .maybeSingle();
+
+    const existing: GridDraftEntry[] = (data?.draft_data as GridDraftEntry[] | null) ?? [];
+    const draftMap = new Map(existing.map(e => [e.k, e]));
+
+    // セルを上書き
+    for (const cell of monthCells) {
+      const key = `${cell.staffId}__${cell.date}`;
+      draftMap.set(key, { k: key, n: cell.shiftName, s: null, e: null, d: false });
+    }
+
+    const newData = [...draftMap.values()];
+    const { error } = await admin
+      .from("shift_grid_drafts")
+      .upsert(
+        { project_id: projectId, target_month: month, draft_data: newData },
+        { onConflict: "project_id,target_month" },
+      );
+    if (error) return { success: false, message: error.message };
+  }
+
+  revalidatePath("/shifts/manage");
+  return { success: true };
+}
+
 export type CsvImportResult = {
   success: boolean;
   imported: number;

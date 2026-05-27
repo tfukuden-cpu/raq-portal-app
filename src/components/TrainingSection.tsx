@@ -15,6 +15,7 @@ export type TrainingDate = TrainingEntry;
 interface Props {
   staffId: string;
   initialDates: TrainingEntry[];
+  onTrainingAdded?: (entries: { date: string; name: string | null }[]) => void;
 }
 
 const DOW_JP = ["日", "月", "火", "水", "木", "金", "土"];
@@ -37,7 +38,7 @@ function fmtLabel(entry: TrainingEntry): string {
 }
 
 
-export default function TrainingSection({ staffId, initialDates }: Props) {
+export default function TrainingSection({ staffId, initialDates, onTrainingAdded }: Props) {
   const now = new Date();
   const [entries, setEntries]       = useState<TrainingEntry[]>(initialDates);
   const [panelOpen, setPanelOpen]   = useState(false);
@@ -108,6 +109,7 @@ export default function TrainingSection({ staffId, initialDates }: Props) {
         setEntries(prev =>
           [...prev, ...newEntries].sort((a, b) => a.training_date.localeCompare(b.training_date))
         );
+        onTrainingAdded?.(newEntries.map(e => ({ date: e.training_date, name: e.training_name })));
       }
       setSelected(new Set());
       setPanelOpen(false);

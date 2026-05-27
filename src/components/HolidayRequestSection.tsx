@@ -14,6 +14,7 @@ interface Props {
   staffId: string;
   projectId: string;
   initialEntries: HolidayRequestEntry[];
+  onDatesAdded?: (dates: string[]) => void;
 }
 
 const DOW_JP = ["日", "月", "火", "水", "木", "金", "土"];
@@ -42,7 +43,7 @@ function nowJST(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
 
-export default function HolidayRequestSection({ staffId, projectId, initialEntries }: Props) {
+export default function HolidayRequestSection({ staffId, projectId, initialEntries, onDatesAdded }: Props) {
   const now     = new Date();
   const todayStr = nowJST();
   const curMon  = todayStr.slice(0, 7);
@@ -128,6 +129,7 @@ export default function HolidayRequestSection({ staffId, projectId, initialEntri
         setEntries(prev =>
           [...prev, ...newEntries].sort((a, b) => a.request_date.localeCompare(b.request_date))
         );
+        onDatesAdded?.(newEntries.map(e => e.request_date));
       }
       setSelected(new Set());
       setPanelOpen(false);

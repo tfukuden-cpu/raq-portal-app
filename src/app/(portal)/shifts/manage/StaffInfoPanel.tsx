@@ -14,6 +14,7 @@ import HolidayRequestSection from "@/components/HolidayRequestSection";
 import { type HolidayRequestEntry, fetchHolidayRequestsForStaffAction } from "@/app/(portal)/admin/[projectId]/settings/holiday-request-actions";
 import { fetchTrainingDatesAction } from "@/app/(portal)/admin/[projectId]/settings/training-actions";
 import { updateShiftSettingsAction } from "@/app/(portal)/admin/[projectId]/settings/actions";
+import { overrideDraftCellsAction } from "@/app/(portal)/shifts/actions";
 
 export type StaffInfoMember = {
   id: string;
@@ -395,6 +396,12 @@ export default function StaffInfoPanel({
                 staffId={member.id}
                 projectId={projectId}
                 initialEntries={holidayEntries}
+                onDatesAdded={async (dates) => {
+                  await overrideDraftCellsAction(
+                    projectId,
+                    dates.map(d => ({ staffId: member.id, date: d, shiftName: "希望休" })),
+                  );
+                }}
               />
             )}
           </section>
@@ -408,6 +415,12 @@ export default function StaffInfoPanel({
               <TrainingSection
                 staffId={member.id}
                 initialDates={trainingDates}
+                onTrainingAdded={async (entries) => {
+                  await overrideDraftCellsAction(
+                    projectId,
+                    entries.map(e => ({ staffId: member.id, date: e.date, shiftName: e.name ?? "研修" })),
+                  );
+                }}
               />
             )}
           </section>
