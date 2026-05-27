@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition, useId, useEffect } from "react";
+import { useState, useRef, useTransition, useId, useEffect, useCallback } from "react";
 import { saveSeatLayoutAction, saveSeatWallsAction } from "@/app/(portal)/seating/actions";
 import { getSeatBgClass, getSeatBorderClass, getSeatTextClass } from "@/lib/seatColors";
 
@@ -128,6 +128,8 @@ export default function SeatLayoutEditor({
   const [seats, setSeats] = useState<SeatItem[]>(initialSeats);
   const [walls, setWalls] = useState<WallItem[]>(initialWalls);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [clipboard, setClipboard] = useState<SeatItem[]>([]);
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [mode, setMode] = useState<"select" | "wall">("select");
   const [wallStart, setWallStart] = useState<{ xPct: number; yPct: number } | null>(null);
@@ -143,6 +145,10 @@ export default function SeatLayoutEditor({
   const didDragRef  = useRef(false);
   const panRef      = useRef<{ x: number; y: number; sl: number; st: number } | null>(null);
   const isPanRef    = useRef(false);
+  // マルチドラッグ用：ドラッグ開始時の全選択席の位置
+  const multiDragStartRef = useRef<Map<string, { xPct: number; yPct: number }> | null>(null);
+  // マルチドラッグ用：ドラッグ中の基準席の開始位置
+  const dragStartPosRef = useRef<{ xPct: number; yPct: number } | null>(null);
 
   // キャンバスサイズ → グリッド計算
   const [canvasSize, setCanvasSize] = useState({ w: CANVAS_MIN_W, h: CANVAS_MIN_H });
@@ -176,29 +182,208 @@ export default function SeatLayoutEditor({
     };
   }
 
-  // Escape キー
+  // ── 席操作 ───────────────────────────────────────────
+  function findFreeCell(nearX: number, nearY: number, excludeIds?: Set<string> | string) {
+    const excludeSet = typeof excludeIds === "string"
+      ? new Set([excludeIds])
+      : excludeIds ?? new Set<string>();
+    const occupied = new Set(
+      seats.filter(s => !excludeSet.has(s.localId)).map(s => toKey(s.xPct, s.yPct))
+    );
+    for (let d = 0; d <= Math.max(cols, rows); d++) {
+      const offsets: [number, number][] = [];
+      for (let dc = -d; dc <= d; dc++) offsets.push([dc, -d], [dc, d]);
+      for (let dr = -d + 1; dr < d; dr++) offsets.push([-d, dr], [d, dr]);
+      for (const [dc, dr] of offsets) {
+        const xPct = clamp(snapX(nearX + dc * stepX), stepX / 2, 100 - stepX / 2);
+        const yPct = clamp(snapY(nearY + dr * stepY), stepY / 2, 100 - stepY / 2);
+        if (!occupied.has(toKey(xPct, yPct))) return { xPct, yPct };
+      }
+    }
+    return { xPct: nearX, yPct: nearY };
+  }
+
+  function addSeat() {
+    const localId = `${baseId}-${Date.now()}`;
+    const maxNum = seats.reduce((m, s) => { const n = parseInt(s.label); return isNaN(n) ? m : Math.max(m, n); }, 0);
+    const { xPct, yPct } = findFreeCell(stepX, stepY);
+    setSeats(prev => [...prev, { localId, label: `${maxNum + 1}`, xPct, yPct, section: "", seatType: "normal", shiftSlot: "" }]);
+    setEditingId(localId);
+    setSelectedIds(new Set());
+  }
+
+  function removeSeat(localId: string) {
+    setSeats(prev => prev.filter(s => s.localId !== localId));
+    if (editingId === localId) setEditingId(null);
+    setSelectedIds(prev => { const s = new Set(prev); s.delete(localId); return s; });
+  }
+
+  function removeSelected() {
+    const toRemove = selectedIds.size > 0 ? selectedIds : editingId ? new Set([editingId]) : new Set<string>();
+    if (toRemove.size === 0) return;
+    setSeats(prev => prev.filter(s => !toRemove.has(s.localId)));
+    setSelectedIds(new Set());
+    if (editingId && toRemove.has(editingId)) setEditingId(null);
+  }
+
+  function duplicateSeat(localId: string) {
+    const src = seats.find(s => s.localId === localId);
+    if (!src) return;
+    const maxNum = seats.reduce((m, s) => { const n = parseInt(s.label); return isNaN(n) ? m : Math.max(m, n); }, 0);
+    const srcNum = parseInt(src.label);
+    const { xPct, yPct } = findFreeCell(src.xPct + stepX, src.yPct, localId);
+    const newLocalId = `${baseId}-${Date.now()}`;
+    setSeats(prev => [...prev, {
+      ...src, id: undefined, localId: newLocalId,
+      label: isNaN(srcNum) ? src.label : `${maxNum + 1}`,
+      xPct, yPct,
+    }]);
+    setEditingId(newLocalId);
+    setSelectedIds(new Set());
+  }
+
+  function updateSeat(localId: string, patch: Partial<SeatItem>) {
+    setSeats(prev => prev.map(s => s.localId === localId ? { ...s, ...patch } : s));
+  }
+
+  // コピー
+  const copySelected = useCallback(() => {
+    const ids = selectedIds.size > 0 ? selectedIds : editingId ? new Set([editingId]) : new Set<string>();
+    if (ids.size === 0) return;
+    setClipboard(seats.filter(s => ids.has(s.localId)));
+  }, [selectedIds, editingId, seats]);
+
+  // ペースト
+  const pasteClipboard = useCallback(() => {
+    if (clipboard.length === 0) return;
+    const now = Date.now();
+    const maxNum = seats.reduce((m, s) => { const n = parseInt(s.label); return isNaN(n) ? m : Math.max(m, n); }, 0);
+    let maxLabelNum = maxNum;
+    const newSeats: SeatItem[] = [];
+    const newIds = new Set<string>();
+    // 全席のocupied集合（順次追加していく）
+    const occupied = new Set(seats.map(s => toKey(s.xPct, s.yPct)));
+    clipboard.forEach((src, i) => {
+      // 貼り付け位置：元の位置 + 1グリッド右下
+      let nearX = src.xPct + stepX;
+      let nearY = src.yPct + stepY;
+      // 空きセルを探す
+      let placed = false;
+      outer:
+      for (let d = 0; d <= Math.max(cols, rows); d++) {
+        const offsets: [number, number][] = [];
+        for (let dc = -d; dc <= d; dc++) offsets.push([dc, -d], [dc, d]);
+        for (let dr = -d + 1; dr < d; dr++) offsets.push([-d, dr], [d, dr]);
+        for (const [dc, dr] of offsets) {
+          const xPct = clamp(snapX(nearX + dc * stepX), stepX / 2, 100 - stepX / 2);
+          const yPct = clamp(snapY(nearY + dr * stepY), stepY / 2, 100 - stepY / 2);
+          if (!occupied.has(toKey(xPct, yPct))) {
+            const srcNum = parseInt(src.label);
+            maxLabelNum++;
+            const newLocalId = `${baseId}-${now + i}`;
+            newSeats.push({ ...src, id: undefined, localId: newLocalId, xPct, yPct, label: isNaN(srcNum) ? src.label : `${maxLabelNum}` });
+            newIds.add(newLocalId);
+            occupied.add(toKey(xPct, yPct));
+            placed = true;
+            break outer;
+          }
+        }
+      }
+      if (!placed) {
+        const newLocalId = `${baseId}-${now + i}`;
+        newSeats.push({ ...src, id: undefined, localId: newLocalId });
+        newIds.add(newLocalId);
+      }
+    });
+    setSeats(prev => [...prev, ...newSeats]);
+    setSelectedIds(newIds);
+    setEditingId(null);
+  }, [clipboard, seats, baseId, cols, rows, stepX, stepY]);
+
+  // 全選択
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(seats.map(s => s.localId)));
+    setEditingId(null);
+  }, [seats]);
+
+  // ── 壁操作 ───────────────────────────────────────────
+  function removeWall(localId: string) {
+    setWalls(prev => prev.filter(w => w.localId !== localId));
+    if (selectedWallId === localId) setSelectedWallId(null);
+  }
+
+  function cancelWall() {
+    setWallStart(null); setGhostPos(null); setMode("select");
+  }
+
+  // ── キーボードショートカット ─────────────────────────
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
+      const ctrl = e.ctrlKey || e.metaKey;
+
       if (e.key === "Escape") {
         setWallStart(null); setGhostPos(null);
         if (mode === "wall") setMode("select");
         setSelectedWallId(null); setEditingId(null);
+        setSelectedIds(new Set());
+        return;
+      }
+
+      // 入力フォーカス中はショートカット無効
+      const active = document.activeElement;
+      if (active && (active.tagName === "INPUT" || active.tagName === "SELECT" || active.tagName === "TEXTAREA")) return;
+
+      if (ctrl && e.key === "a") {
+        e.preventDefault();
+        selectAll();
+        return;
+      }
+      if (ctrl && e.key === "c") {
+        e.preventDefault();
+        copySelected();
+        return;
+      }
+      if (ctrl && e.key === "v") {
+        e.preventDefault();
+        pasteClipboard();
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        removeSelected();
+        return;
       }
     };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
-  }, [mode]);
+  }, [mode, copySelected, pasteClipboard, selectAll, selectedIds, editingId]);
 
   // ── キャンバス PointerDown ────────────────────────────
   function handleCanvasPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
     const seatEl = target.closest("[data-seat-id]") as HTMLElement | null;
+    const isCtrl = e.ctrlKey || e.metaKey;
 
     // 席クリック / ドラッグ
     if (seatEl) {
       e.preventDefault();
       (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
       const localId = seatEl.dataset.seatId!;
+
+      if (isCtrl) {
+        // Ctrl+Click: 選択トグル（ポップオーバーは開かない）
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          if (next.has(localId)) next.delete(localId);
+          else next.add(localId);
+          return next;
+        });
+        setEditingId(null);
+        // ドラッグは不要（Ctrl+クリックは選択のみ）
+        seatDragRef.current = null;
+        return;
+      }
+
       seatDragRef.current = localId;
       didDragRef.current  = false;
       const rect = canvasRef.current!.getBoundingClientRect();
@@ -207,6 +392,19 @@ export default function SeatLayoutEditor({
         ox: e.clientX - rect.left - (seat.xPct / 100) * rect.width,
         oy: e.clientY - rect.top  - (seat.yPct / 100) * rect.height,
       };
+
+      // マルチドラッグ準備：選択中の複数席をまとめて動かす
+      if (selectedIds.has(localId) && selectedIds.size > 1) {
+        const startMap = new Map<string, { xPct: number; yPct: number }>();
+        seats.forEach(s => {
+          if (selectedIds.has(s.localId)) startMap.set(s.localId, { xPct: s.xPct, yPct: s.yPct });
+        });
+        multiDragStartRef.current = startMap;
+        dragStartPosRef.current = { xPct: seat.xPct, yPct: seat.yPct };
+      } else {
+        multiDragStartRef.current = null;
+        dragStartPosRef.current = null;
+      }
       return;
     }
 
@@ -237,6 +435,7 @@ export default function SeatLayoutEditor({
     isPanRef.current = false;
     setSelectedWallId(null);
     setEditingId(null);
+    if (!isCtrl) setSelectedIds(new Set());
   }
 
   // ── キャンバス PointerMove ───────────────────────────
@@ -257,10 +456,29 @@ export default function SeatLayoutEditor({
         setEditingId(null);
       }
       if (!didDragRef.current) return;
+
       const rawX = clamp(dx / rect.width  * 100, 0, 100);
       const rawY = clamp(dy / rect.height * 100, 0, 100);
       const xPct = clamp(snapX(rawX), stepX / 2, 100 - stepX / 2);
       const yPct = clamp(snapY(rawY), stepY / 2, 100 - stepY / 2);
+
+      // マルチドラッグ（複数席を同時移動）
+      if (multiDragStartRef.current && dragStartPosRef.current) {
+        const deltaX = xPct - dragStartPosRef.current.xPct;
+        const deltaY = yPct - dragStartPosRef.current.yPct;
+        setSeats(prev => prev.map(s => {
+          const start = multiDragStartRef.current!.get(s.localId);
+          if (!start) return s;
+          return {
+            ...s,
+            xPct: clamp(snapX(start.xPct + deltaX), stepX / 2, 100 - stepX / 2),
+            yPct: clamp(snapY(start.yPct + deltaY), stepY / 2, 100 - stepY / 2),
+          };
+        }));
+        return;
+      }
+
+      // 通常ドラッグ（1席）
       setSeats(prev => {
         const occupied = prev.some(
           s => s.localId !== seatDragRef.current && toKey(s.xPct, s.yPct) === toKey(xPct, yPct)
@@ -287,71 +505,18 @@ export default function SeatLayoutEditor({
     if (seatDragRef.current) {
       const localId = seatDragRef.current;
       const wasDrag = didDragRef.current;
-      seatDragRef.current = null; didDragRef.current = false;
-      if (!wasDrag) setEditingId(prev => prev === localId ? null : localId);
+      seatDragRef.current = null;
+      didDragRef.current = false;
+      multiDragStartRef.current = null;
+      dragStartPosRef.current = null;
+      if (!wasDrag) {
+        // クリック確定 → ポップオーバー表示（選択解除して1席だけ）
+        setSelectedIds(new Set());
+        setEditingId(prev => prev === localId ? null : localId);
+      }
       return;
     }
     panRef.current = null; isPanRef.current = false;
-  }
-
-  // ── 席操作 ───────────────────────────────────────────
-  function findFreeCell(nearX: number, nearY: number, excludeId?: string) {
-    const occupied = new Set(
-      seats.filter(s => s.localId !== excludeId).map(s => toKey(s.xPct, s.yPct))
-    );
-    for (let d = 0; d <= Math.max(cols, rows); d++) {
-      const offsets: [number, number][] = [];
-      for (let dc = -d; dc <= d; dc++) offsets.push([dc, -d], [dc, d]);
-      for (let dr = -d + 1; dr < d; dr++) offsets.push([-d, dr], [d, dr]);
-      for (const [dc, dr] of offsets) {
-        const xPct = clamp(snapX(nearX + dc * stepX), stepX / 2, 100 - stepX / 2);
-        const yPct = clamp(snapY(nearY + dr * stepY), stepY / 2, 100 - stepY / 2);
-        if (!occupied.has(toKey(xPct, yPct))) return { xPct, yPct };
-      }
-    }
-    return { xPct: nearX, yPct: nearY };
-  }
-
-  function addSeat() {
-    const localId = `${baseId}-${Date.now()}`;
-    const maxNum = seats.reduce((m, s) => { const n = parseInt(s.label); return isNaN(n) ? m : Math.max(m, n); }, 0);
-    const { xPct, yPct } = findFreeCell(stepX, stepY);
-    setSeats(prev => [...prev, { localId, label: `${maxNum + 1}`, xPct, yPct, section: "", seatType: "normal", shiftSlot: "" }]);
-    setEditingId(localId);
-  }
-
-  function removeSeat(localId: string) {
-    setSeats(prev => prev.filter(s => s.localId !== localId));
-    if (editingId === localId) setEditingId(null);
-  }
-
-  function duplicateSeat(localId: string) {
-    const src = seats.find(s => s.localId === localId);
-    if (!src) return;
-    const maxNum = seats.reduce((m, s) => { const n = parseInt(s.label); return isNaN(n) ? m : Math.max(m, n); }, 0);
-    const srcNum = parseInt(src.label);
-    const { xPct, yPct } = findFreeCell(src.xPct + stepX, src.yPct, localId);
-    const newLocalId = `${baseId}-${Date.now()}`;
-    setSeats(prev => [...prev, {
-      ...src, id: undefined, localId: newLocalId,
-      label: isNaN(srcNum) ? src.label : `${maxNum + 1}`,
-      xPct, yPct,
-    }]);
-    setEditingId(newLocalId);
-  }
-
-  function updateSeat(localId: string, patch: Partial<SeatItem>) {
-    setSeats(prev => prev.map(s => s.localId === localId ? { ...s, ...patch } : s));
-  }
-
-  // ── 壁操作 ───────────────────────────────────────────
-  function removeWall(localId: string) {
-    setWalls(prev => prev.filter(w => w.localId !== localId));
-    if (selectedWallId === localId) setSelectedWallId(null);
-  }
-
-  function cancelWall() {
-    setWallStart(null); setGhostPos(null); setMode("select");
   }
 
   // ── 保存 ─────────────────────────────────────────────
@@ -374,6 +539,7 @@ export default function SeatLayoutEditor({
 
   const editing = editingId ? seats.find(s => s.localId === editingId) : null;
   const selectedWall = selectedWallId ? walls.find(w => w.localId === selectedWallId) : null;
+  const selCount = selectedIds.size;
 
   return (
     <div className="space-y-3">
@@ -400,6 +566,32 @@ export default function SeatLayoutEditor({
           <button onClick={() => removeWall(selectedWall.localId)}
             className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-red-50 dark:bg-red-950/40 text-red-500 hover:bg-red-100 border border-red-200 dark:border-red-800 transition-colors">
             選択中の壁を削除
+          </button>
+        )}
+
+        {/* 複数席選択中のアクションバー */}
+        {selCount > 1 && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-700">
+            <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">{selCount}席選択中</span>
+            <button onClick={copySelected}
+              className="px-2 py-0.5 text-xs font-semibold rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 hover:bg-blue-200 transition-colors">
+              コピー
+            </button>
+            <button onClick={removeSelected}
+              className="px-2 py-0.5 text-xs font-semibold rounded-lg bg-red-50 dark:bg-red-950/40 text-red-500 hover:bg-red-100 transition-colors">
+              削除
+            </button>
+            <button onClick={() => setSelectedIds(new Set())}
+              className="px-2 py-0.5 text-xs font-semibold rounded-lg bg-zinc-100 dark:bg-zinc-700 text-zinc-500 hover:bg-zinc-200 transition-colors">
+              解除
+            </button>
+          </div>
+        )}
+
+        {clipboard.length > 0 && selCount === 0 && (
+          <button onClick={pasteClipboard}
+            className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700 hover:bg-emerald-100 transition-colors">
+            貼り付け（{clipboard.length}席）
           </button>
         )}
 
@@ -485,6 +677,8 @@ export default function SeatLayoutEditor({
           {seats.map(seat => {
             const isDisabled = seat.seatType === "disabled";
             const isFree     = seat.seatType === "free";
+            const isSelected = selectedIds.has(seat.localId);
+            const isEditing  = editingId === seat.localId;
             return (
               <div
                 key={seat.localId}
@@ -495,12 +689,15 @@ export default function SeatLayoutEditor({
                   transform: "translate(-50%,-50%)",
                   width:  `calc(${stepX}% - 8px)`,
                   height: `calc(${stepY}% - 8px)`,
-                  zIndex: 10,
+                  zIndex: isEditing || isSelected ? 15 : 10,
                   cursor: mode === "wall" ? "crosshair" : "grab",
+                  outline: isSelected ? "2px solid #3b82f6" : "none",
+                  outlineOffset: "2px",
+                  borderRadius: "12px",
                 }}
                 className={[
                   "rounded-xl border-2 flex flex-col items-center justify-center transition-shadow overflow-hidden",
-                  editingId === seat.localId
+                  isEditing
                     ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40 shadow-lg"
                     : isDisabled
                     ? "border-zinc-400 dark:border-zinc-500 bg-zinc-200 dark:bg-zinc-700 shadow-sm opacity-60"
@@ -548,7 +745,7 @@ export default function SeatLayoutEditor({
       </div>
 
       <p className="text-[11px] text-zinc-400">
-        空き部分ドラッグ：スクロール　／　席クリック：設定・複製・削除　／　壁を追加：クリックで始点→終点
+        席クリック：設定　／　Ctrl+クリック：複数選択　／　Ctrl+A：全選択　／　Ctrl+C/V：コピー&ペースト　／　Delete：削除　／　空き部分ドラッグ：スクロール
       </p>
     </div>
   );
