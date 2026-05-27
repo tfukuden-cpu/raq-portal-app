@@ -15,7 +15,8 @@ export type SeatData = {
   staffId: string | null;
   staffName: string | null;
   accountNumber: string | null;
-  shiftName: string | null;  // 早番/遅番判定用
+  shiftSlot: string | null;  // 席のシフト帯設定（早番/遅番）
+  shiftName: string | null;  // 配置スタッフの実際のシフト名（優先）
   status: "not_arrived" | "working" | "on_break" | "clocked_out" | "absent" | null;
 };
 
@@ -187,9 +188,9 @@ export default function SeatingClient({
                   isPending ? "opacity-60" : "",
                 ].join(" ")}
               >
-                {/* セクション色バー（上部） */}
+                {/* セクション色バー（上部）：スタッフのシフト名優先、なければ席のシフト帯設定 */}
                 {seat.section && !isFree && (
-                  <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(seat.section, seat.shiftName)}`} />
+                  <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(seat.section, seat.shiftName ?? seat.shiftSlot)}`} />
                 )}
                 <span className="text-[9px] text-zinc-400 leading-none">{seat.label}</span>
                 {seat.staffName ? (

@@ -12,6 +12,7 @@ export type PlanSeat = {
   yPct: number;
   section: string | null;
   seatType: "normal" | "free" | "disabled";
+  shiftSlot: string | null;  // 席のシフト帯設定
   staffId: string | null;
 };
 
@@ -197,9 +198,11 @@ export default function SeatingPlanClient({
             }
 
             // セクション色の計算
-            const seatSection = seat.section;
+            // 優先順：スタッフのシフト名 > 席のシフト帯設定 > なし
+            const seatSection   = seat.section;
             const assignedShift = s?.shiftName ?? null;
-            const sectionBg     = seatSection ? getSeatBgClass(seatSection, s ? assignedShift : null) : "";
+            const effectiveShift = assignedShift ?? seat.shiftSlot ?? null;
+            const sectionBg     = seatSection ? getSeatBgClass(seatSection, s ? effectiveShift : seat.shiftSlot ?? null) : "";
             const sectionBorder = seatSection ? getSeatBorderClass(seatSection) : "";
             const sectionText   = seatSection ? getSeatTextClass(seatSection) : "text-zinc-700 dark:text-zinc-200";
 

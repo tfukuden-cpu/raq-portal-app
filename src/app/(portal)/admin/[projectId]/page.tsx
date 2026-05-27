@@ -76,7 +76,7 @@ export default async function ProjectDetailPage(props: {
       .lte("recorded_at", dateTo30   + "T23:59:59+09:00"),
     // 座席レイアウト
     createAdminClient().from("seats")
-      .select("id, label, x_pct, y_pct, section, seat_type")
+      .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
       .eq("project_id", projectId).eq("is_active", true),
     // 壁レイアウト
     createAdminClient().from("seat_walls")
@@ -171,13 +171,14 @@ export default async function ProjectDetailPage(props: {
   }));
 
   const initialSeats: SeatItem[] = (seatsRaw ?? []).map(s => ({
-    id:       s.id,
-    localId:  s.id,
-    label:    s.label as string,
-    xPct:     s.x_pct as number,
-    yPct:     s.y_pct as number,
-    section:  (s.section as string | null) ?? "",
-    seatType: ((s as { seat_type?: string }).seat_type ?? "normal") as SeatItem["seatType"],
+    id:        s.id,
+    localId:   s.id,
+    label:     s.label as string,
+    xPct:      s.x_pct as number,
+    yPct:      s.y_pct as number,
+    section:   (s.section as string | null) ?? "",
+    seatType:  ((s as { seat_type?: string }).seat_type ?? "normal") as SeatItem["seatType"],
+    shiftSlot: (s as { shift_slot?: string | null }).shift_slot ?? "",
   }));
 
   async function archiveAction(fd: FormData) {

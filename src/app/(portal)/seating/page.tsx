@@ -30,7 +30,7 @@ export default async function SeatingPage() {
     { data: shiftRows },
   ] = await Promise.all([
     admin.from("seats")
-      .select("id, label, x_pct, y_pct, section, seat_type")
+      .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
       .eq("project_id", projectId).eq("is_active", true),
     admin.from("seat_assignments")
       .select("seat_id, staff_id")
@@ -97,6 +97,7 @@ export default async function SeatingPage() {
       yPct:          s.y_pct,
       section:       s.section ?? null,
       seatType:      seatType as SeatData["seatType"],
+      shiftSlot:     (s as { shift_slot?: string | null }).shift_slot ?? null,
       staffId,
       staffName:     member?.name ?? null,
       accountNumber: member?.accountNumber ?? null,

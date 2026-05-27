@@ -170,7 +170,7 @@ export async function saveSeatWallsAction(
 /** 座席レイアウト保存 */
 export async function saveSeatLayoutAction(
   projectId: string,
-  seats: { id?: string; label: string; xPct: number; yPct: number; section: string; seatType?: string }[],
+  seats: { id?: string; label: string; xPct: number; yPct: number; section: string; seatType?: string; shiftSlot?: string }[],
 ): Promise<{ success: boolean; message?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -200,6 +200,7 @@ export async function saveSeatLayoutAction(
     y_pct:      s.yPct,
     section:    s.section || null,
     seat_type:  s.seatType ?? "normal",
+    shift_slot: s.shiftSlot || null,
     is_active:  true,
   }));
 

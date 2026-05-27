@@ -11,6 +11,7 @@ export type SeatItem = {
   label: string; xPct: number; yPct: number;
   section: string;
   seatType: SeatType;
+  shiftSlot: string; // "" | "早番" | "遅番"
 };
 export type WallItem = {
   id?: string; localId: string;
@@ -84,13 +85,26 @@ function SeatPopover({
         </select>
       </div>
       {seat.seatType === "normal" && (
-        <div className="space-y-0.5">
-          <p className="text-[10px] font-semibold text-zinc-400">セクション</p>
-          <select value={seat.section} onChange={e => onUpdate({ section: e.target.value })}
-            className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-400">
-            {SECTIONS.map(s => <option key={s} value={s}>{s || "（なし）"}</option>)}
-          </select>
-        </div>
+        <>
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-semibold text-zinc-400">セクション</p>
+            <select value={seat.section} onChange={e => onUpdate({ section: e.target.value, shiftSlot: "" })}
+              className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-400">
+              {SECTIONS.map(s => <option key={s} value={s}>{s || "（なし）"}</option>)}
+            </select>
+          </div>
+          {seat.section && (
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-semibold text-zinc-400">シフト帯</p>
+              <select value={seat.shiftSlot} onChange={e => onUpdate({ shiftSlot: e.target.value })}
+                className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-400">
+                <option value="">（なし）</option>
+                <option value="早番">早番</option>
+                <option value="遅番">遅番</option>
+              </select>
+            </div>
+          )}
+        </>
       )}
       <div className="flex gap-1.5 pt-0.5">
         <button onClick={onDuplicate}
@@ -302,7 +316,7 @@ export default function SeatLayoutEditor({
     const localId = `${baseId}-${Date.now()}`;
     const maxNum = seats.reduce((m, s) => { const n = parseInt(s.label); return isNaN(n) ? m : Math.max(m, n); }, 0);
     const { xPct, yPct } = findFreeCell(stepX, stepY);
-    setSeats(prev => [...prev, { localId, label: `${maxNum + 1}`, xPct, yPct, section: "", seatType: "normal" }]);
+    setSeats(prev => [...prev, { localId, label: `${maxNum + 1}`, xPct, yPct, section: "", seatType: "normal", shiftSlot: "" }]);
     setEditingId(localId);
   }
 
@@ -345,7 +359,7 @@ export default function SeatLayoutEditor({
     startTransition(async () => {
       const [r1, r2] = await Promise.all([
         saveSeatLayoutAction(projectId, seats.map(s => ({
-          id: s.id, label: s.label, xPct: s.xPct, yPct: s.yPct, section: s.section, seatType: s.seatType,
+          id: s.id, label: s.label, xPct: s.xPct, yPct: s.yPct, section: s.section, seatType: s.seatType, shiftSlot: s.shiftSlot,
         }))),
         saveSeatWallsAction(projectId, walls.map(w => ({
           id: w.id, x1Pct: w.x1Pct, y1Pct: w.y1Pct, x2Pct: w.x2Pct, y2Pct: w.y2Pct,
@@ -493,7 +507,7 @@ export default function SeatLayoutEditor({
                     : isFree
                     ? "border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 shadow-sm"
                     : seat.section
-                    ? `${getSeatBorderClass(seat.section)} ${getSeatBgClass(seat.section)} shadow-sm`
+                    ? `${getSeatBorderClass(seat.section)} ${getSeatBgClass(seat.section, seat.shiftSlot || null)} shadow-sm`
                     : "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 hover:border-zinc-400 shadow-sm",
                 ].join(" ")}
               >
@@ -512,7 +526,9 @@ export default function SeatLayoutEditor({
                 ) : isFree ? (
                   <span className="text-[8px] text-emerald-600 pointer-events-none leading-tight">FREE</span>
                 ) : seat.section ? (
-                  <span className="text-[9px] opacity-60 pointer-events-none leading-tight">{seat.section}</span>
+                  <span className="text-[9px] opacity-60 pointer-events-none leading-tight">
+                    {seat.section}{seat.shiftSlot ? `・${seat.shiftSlot}` : ""}
+                  </span>
                 ) : null}
               </div>
             );
