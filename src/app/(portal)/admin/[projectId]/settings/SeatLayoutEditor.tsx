@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition, useId, useEffect, useCallback } from "react";
+import { useState, useRef, useTransition, useId, useEffect } from "react";
 import { saveSeatLayoutAction, saveSeatWallsAction } from "@/app/(portal)/seating/actions";
 import { getSeatBgClass, getSeatBorderClass, getSeatTextClass } from "@/lib/seatColors";
 
@@ -246,44 +246,73 @@ export default function SeatLayoutEditor({
     setSeats(prev => prev.map(s => s.localId === localId ? { ...s, ...patch } : s));
   }
 
-  // コピー
-  const copySelected = useCallback(() => {
+  // コピー（ツールバーボタン用）
+  function copySelected() {
     const ids = selectedIds.size > 0 ? selectedIds : editingId ? new Set([editingId]) : new Set<string>();
     if (ids.size === 0) return;
     setClipboard(seats.filter(s => ids.has(s.localId)));
-  }, [selectedIds, editingId, seats]);
+  }
 
-  // ペースト
-  const pasteClipboard = useCallback(() => {
-    if (clipboard.length === 0) return;
+  // ペースト（ツールバーボタン用）
+  function pasteClipboard() {
+    doPaste(clipboard, seats, stepX, stepY, cols, rows);
+  }
+
+  // ── 壁操作 ───────────────────────────────────────────
+  function removeWall(localId: string) {
+    setWalls(prev => prev.filter(w => w.localId !== localId));
+    if (selectedWallId === localId) setSelectedWallId(null);
+  }
+
+  function cancelWall() {
+    setWallStart(null); setGhostPos(null); setMode("select");
+  }
+
+  // ── 最新状態をRefで保持（キーボードハンドラはRefから読む）──
+  const latestRef = useRef({
+    seats, selectedIds, editingId, clipboard,
+    mode, wallStart,
+    stepX, stepY, cols, rows,
+  });
+  // 毎レンダーで更新
+  latestRef.current = { seats, selectedIds, editingId, clipboard, mode, wallStart, stepX, stepY, cols, rows };
+
+  // ペースト処理（latestRefからも呼べる純粋関数ライク）
+  function doPaste(
+    cbItems: SeatItem[], currentSeats: SeatItem[],
+    sx: number, sy: number, c: number, r: number,
+  ) {
+    if (cbItems.length === 0) return;
     const now = Date.now();
-    const maxNum = seats.reduce((m, s) => { const n = parseInt(s.label); return isNaN(n) ? m : Math.max(m, n); }, 0);
+    const maxNum = currentSeats.reduce((m, s) => { const n = parseInt(s.label); return isNaN(n) ? m : Math.max(m, n); }, 0);
     let maxLabelNum = maxNum;
     const newSeats: SeatItem[] = [];
     const newIds = new Set<string>();
-    // 全席のocupied集合（順次追加していく）
-    const occupied = new Set(seats.map(s => toKey(s.xPct, s.yPct)));
-    clipboard.forEach((src, i) => {
-      // 貼り付け位置：元の位置 + 1グリッド右下
-      let nearX = src.xPct + stepX;
-      let nearY = src.yPct + stepY;
-      // 空きセルを探す
+    const halfSx = sx / 2;
+    const halfSy = sy / 2;
+    const snapPx = (x: number) => Math.round(x / halfSx) * halfSx;
+    const snapPy = (y: number) => Math.round(y / halfSy) * halfSy;
+    const toKeyP = (x: number, y: number) => `${snapPx(x).toFixed(3)},${snapPy(y).toFixed(3)}`;
+    const occupied = new Set(currentSeats.map(s => toKeyP(s.xPct, s.yPct)));
+    cbItems.forEach((src, i) => {
+      const nearX = src.xPct + sx;
+      const nearY = src.yPct + sy;
       let placed = false;
       outer:
-      for (let d = 0; d <= Math.max(cols, rows); d++) {
+      for (let d = 0; d <= Math.max(c, r); d++) {
         const offsets: [number, number][] = [];
         for (let dc = -d; dc <= d; dc++) offsets.push([dc, -d], [dc, d]);
         for (let dr = -d + 1; dr < d; dr++) offsets.push([-d, dr], [d, dr]);
         for (const [dc, dr] of offsets) {
-          const xPct = clamp(snapX(nearX + dc * stepX), stepX / 2, 100 - stepX / 2);
-          const yPct = clamp(snapY(nearY + dr * stepY), stepY / 2, 100 - stepY / 2);
-          if (!occupied.has(toKey(xPct, yPct))) {
+          const xPct = clamp(snapPx(nearX + dc * sx), sx / 2, 100 - sx / 2);
+          const yPct = clamp(snapPy(nearY + dr * sy), sy / 2, 100 - sy / 2);
+          if (!occupied.has(toKeyP(xPct, yPct))) {
             const srcNum = parseInt(src.label);
             maxLabelNum++;
             const newLocalId = `${baseId}-${now + i}`;
             newSeats.push({ ...src, id: undefined, localId: newLocalId, xPct, yPct, label: isNaN(srcNum) ? src.label : `${maxLabelNum}` });
             newIds.add(newLocalId);
-            occupied.add(toKey(xPct, yPct));
+            occupied.add(toKeyP(xPct, yPct));
             placed = true;
             break outer;
           }
@@ -298,32 +327,19 @@ export default function SeatLayoutEditor({
     setSeats(prev => [...prev, ...newSeats]);
     setSelectedIds(newIds);
     setEditingId(null);
-  }, [clipboard, seats, baseId, cols, rows, stepX, stepY]);
-
-  // 全選択
-  const selectAll = useCallback(() => {
-    setSelectedIds(new Set(seats.map(s => s.localId)));
-    setEditingId(null);
-  }, [seats]);
-
-  // ── 壁操作 ───────────────────────────────────────────
-  function removeWall(localId: string) {
-    setWalls(prev => prev.filter(w => w.localId !== localId));
-    if (selectedWallId === localId) setSelectedWallId(null);
   }
 
-  function cancelWall() {
-    setWallStart(null); setGhostPos(null); setMode("select");
-  }
-
-  // ── キーボードショートカット ─────────────────────────
+  // ── キーボードショートカット（空deps + latestRefで常に最新状態を参照）──
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey;
+      const key = e.key;
+      const { seats: s, selectedIds: sel, editingId: eid, clipboard: cb,
+              mode: m, wallStart: ws, stepX: sx, stepY: sy, cols: c, rows: r } = latestRef.current;
 
-      if (e.key === "Escape") {
+      if (key === "Escape") {
         setWallStart(null); setGhostPos(null);
-        if (mode === "wall") setMode("select");
+        if (m === "wall") setMode("select");
         setSelectedWallId(null); setEditingId(null);
         setSelectedIds(new Set());
         return;
@@ -333,30 +349,39 @@ export default function SeatLayoutEditor({
       const active = document.activeElement;
       if (active && (active.tagName === "INPUT" || active.tagName === "SELECT" || active.tagName === "TEXTAREA")) return;
 
-      if (ctrl && e.key === "a") {
+      if (ctrl && key.toLowerCase() === "a") {
         e.preventDefault();
-        selectAll();
+        setSelectedIds(new Set(s.map(seat => seat.localId)));
+        setEditingId(null);
         return;
       }
-      if (ctrl && e.key === "c") {
+      if (ctrl && key.toLowerCase() === "c") {
         e.preventDefault();
-        copySelected();
+        const ids = sel.size > 0 ? sel : eid ? new Set([eid]) : new Set<string>();
+        if (ids.size > 0) setClipboard(s.filter(seat => ids.has(seat.localId)));
         return;
       }
-      if (ctrl && e.key === "v") {
+      if (ctrl && key.toLowerCase() === "v") {
         e.preventDefault();
-        pasteClipboard();
+        doPaste(cb, s, sx, sy, c, r);
         return;
       }
-      if (e.key === "Delete" || e.key === "Backspace") {
+      if (key === "Delete" || key === "Backspace") {
         e.preventDefault();
-        removeSelected();
+        const toRemove = sel.size > 0 ? sel : eid ? new Set([eid]) : new Set<string>();
+        if (toRemove.size === 0) return;
+        setSeats(prev => prev.filter(seat => !toRemove.has(seat.localId)));
+        setSelectedIds(new Set());
+        if (eid && toRemove.has(eid)) setEditingId(null);
         return;
       }
+
+      void ws; // suppress unused warning
     };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
-  }, [mode, copySelected, pasteClipboard, selectAll, selectedIds, editingId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 空deps: latestRefを通じて常に最新状態にアクセス
 
   // ── キャンバス PointerDown ────────────────────────────
   function handleCanvasPointerDown(e: React.PointerEvent<HTMLDivElement>) {
