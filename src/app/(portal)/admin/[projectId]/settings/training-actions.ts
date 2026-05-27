@@ -45,3 +45,17 @@ export async function removeTrainingDateAction(
   revalidatePath("/", "layout");
   return { success: true };
 }
+
+/** スタッフの導入研修日を最新取得（編集モーダル開くときに使う） */
+export async function fetchTrainingDatesAction(
+  staffId: string,
+): Promise<{ id: string; training_date: string }[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("staff_trainings")
+    .select("id, training_date")
+    .eq("staff_id", staffId)
+    .eq("training_type", "onboarding")
+    .order("training_date");
+  return (data ?? []).map(d => ({ id: d.id as string, training_date: d.training_date as string }));
+}

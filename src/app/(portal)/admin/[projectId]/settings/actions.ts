@@ -225,12 +225,13 @@ export async function addMemberAction(fd: FormData): Promise<SettingsResult> {
   const projectId = String(fd.get("projectId") ?? "").trim();
   const staffId   = String(fd.get("staffId")   ?? "").trim().toUpperCase();
   const role      = String(fd.get("role")       ?? "staff");
+  const startDate = String(fd.get("start_date") ?? "").trim() || null;
 
   if (!staffId) return { success: false, message: "社員を選択してください" };
   await assertAdmin(projectId);
 
   const { error } = await adminSupa().from("project_members").upsert(
-    { project_id: projectId, staff_id: staffId, role, is_main: false },
+    { project_id: projectId, staff_id: staffId, role, is_main: false, start_date: startDate },
     { onConflict: "project_id,staff_id" }
   );
   if (error) return { success: false, message: error.message };
@@ -265,6 +266,7 @@ export async function createAndAddStaffAction(fd: FormData): Promise<SettingsRes
   const companyName = String(fd.get("company_name")  ?? "").trim() || null;
   const role        = String(fd.get("role")          ?? "staff");
   const section     = String(fd.get("section")       ?? "").trim() || null;
+  const startDate   = String(fd.get("start_date")    ?? "").trim() || null;
 
   if (!name) return { success: false, message: "氏名は必須です" };
 
@@ -311,7 +313,7 @@ export async function createAndAddStaffAction(fd: FormData): Promise<SettingsRes
 
   // 案件メンバーとして紐付け
   const { error: memErr } = await admin.from("project_members").upsert(
-    { project_id: projectId, staff_id: id, role, section, is_main: true },
+    { project_id: projectId, staff_id: id, role, section, is_main: true, start_date: startDate },
     { onConflict: "project_id,staff_id" }
   );
   if (memErr) return { success: false, message: memErr.message };
@@ -596,18 +598,51 @@ export async function saveShiftPatternsAction(fd: FormData): Promise<SettingsRes
     return { success: false, message: "パターンデータが不正です" };
   }
 
+  // 削除されるセクション名を特定（保存前の既存パターンと比較）
+  const admin = adminSupa();
+  const { data: oldPatterns } = await admin
+    .from("shift_patterns")
+    .select("section")
+    .eq("project_id", projectId);
+  const oldSections = new Set((oldPatterns ?? []).map(p => p.section as string | null).filter(Boolean) as string[]);
+  const newSections = new Set(patterns.map(p => p.section).filter(Boolean) as string[]);
+  const removedSections = [...oldSections].filter(s => !newSections.has(s));
+
   // 既存を全削除してから再挿入
-  const { error: delErr } = await adminSupa()
+  const { error: delErr } = await admin
     .from("shift_patterns")
     .delete()
     .eq("project_id", projectId);
   if (delErr) return { success: false, message: delErr.message };
 
   if (patterns.length > 0) {
-    const { error: insErr } = await adminSupa()
+    const { error: insErr } = await admin
       .from("shift_patterns")
       .insert(patterns.map((p) => ({ ...p, project_id: projectId })));
     if (insErr) return { success: false, message: insErr.message };
+  }
+
+  // 削除されたセクションをメンバーの sections / section から除去
+  if (removedSections.length > 0) {
+    const { data: memberRows } = await admin
+      .from("project_members")
+      .select("staff_id, section, sections")
+      .eq("project_id", projectId);
+
+    for (const m of memberRows ?? []) {
+      const curSections = (m.sections as string[] | null) ?? [];
+      const updSections = curSections.filter(s => !removedSections.includes(s));
+      const curSection  = m.section as string | null;
+      const updSection  = curSection && removedSections.includes(curSection)
+        ? (updSections[0] ?? null)
+        : curSection;
+      if (updSections.length !== curSections.length || updSection !== curSection) {
+        await admin.from("project_members")
+          .update({ sections: updSections, section: updSection })
+          .eq("project_id", projectId)
+          .eq("staff_id", m.staff_id);
+      }
+    }
   }
 
   // スプシのシフトパターンシートを同期（エラーは無視して続行）
@@ -689,6 +724,7 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   const preferredSection = String(fd.get("preferred_section") ?? "").trim() || null;
   const maxConsecRaw     = String(fd.get("max_consecutive_days") ?? "").trim();
   const maxConsecDays    = maxConsecRaw ? (parseInt(maxConsecRaw, 10) || null) : null;
+  const startDate        = String(fd.get("start_date") ?? "").trim() || null;
 
   if (!name) return { success: false, message: "氏名を入力してください" };
 
@@ -702,7 +738,7 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
     .eq("id", staffId);
   if (staffErr) return { success: false, message: staffErr.message };
 
-  // project_members テーブル更新（ロール・セクション・シフト備考・稼働日数・優先パターン・連勤上限）
+  // project_members テーブル更新（ロール・セクション・稼働日数・優先パターン・連勤上限・アサイン日）
   const primarySection = sections[0] ?? null;
   const { error: memberErr } = await admin
     .from("project_members")
@@ -711,6 +747,7 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
       work_days_type: workDaysType, work_days_count: workDaysCount,
       preferred_shift: preferredShift, preferred_section: preferredSection,
       max_consecutive_days: maxConsecDays,
+      start_date: startDate,
     })
     .eq("project_id", projectId)
     .eq("staff_id", staffId);

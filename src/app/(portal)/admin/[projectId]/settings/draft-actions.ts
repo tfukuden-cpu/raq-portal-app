@@ -165,7 +165,7 @@ export async function generateShiftDraftAction(
     { data: trainingRows },
   ] = await Promise.all([
     admin.from("project_members")
-      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, end_date")
+      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, end_date")
       .eq("project_id", projectId),
     admin.from("shift_slot_requirements")
       .select("pattern_name, shift_date, required_count")
@@ -542,6 +542,9 @@ export async function generateShiftDraftAction(
 
         // 候補スタッフのフィルタリング
         const candidates = activeMemberRows.filter(m => {
+          // アサイン日チェック（start_date前はシフトに入れない）
+          const startDate = (m as { start_date?: string | null }).start_date ?? null;
+          if (startDate && date < startDate) return false;
           // 離脱日チェック
           const endDate = (m as { end_date?: string | null }).end_date ?? null;
           if (endDate && date > endDate) return false;

@@ -3,7 +3,8 @@
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import LineConnectionSection from "./LineConnectionSection";
-import TrainingSection from "@/components/TrainingSection";
+import TrainingSection, { type TrainingDate } from "@/components/TrainingSection";
+import { fetchTrainingDatesAction } from "./training-actions";
 import {
   updateProjectNameAction,
   saveSheetUrlAction,
@@ -36,7 +37,7 @@ import {
 } from "../../holiday-rule-config";
 import SeatLayoutEditor, { type SeatItem, type WallItem } from "./SeatLayoutEditor";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; end_date: string | null; compliance: number | null; trainingDates: { id: string; training_date: string }[] };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; compliance: number | null; trainingDates: TrainingDate[] };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -473,6 +474,7 @@ export function MemberList({
   const [newCompany, setNewCompany]   = useState("");
   const [newRole, setNewRole]         = useState("staff");
   const [newSection, setNewSection]   = useState("");
+  const [newAssignDate, setNewAssignDate] = useState("");
   const [search, setSearch]         = useState("");
   const [companyFilter, setCompanyFilter] = useState(""); // "" | "__unset__" | company name
   const [sectionFilter, setSectionFilter] = useState(""); // "" | "__unset__" | section name
@@ -498,6 +500,8 @@ export function MemberList({
   const [editPreferredShift, setEditPreferredShift] = useState("");
   const [editPreferredSection, setEditPreferredSection] = useState("");
   const [editMaxConsecDays, setEditMaxConsecDays] = useState("");
+  const [editStartDate, setEditStartDate]     = useState("");
+  const [editTrainingDates, setEditTrainingDates] = useState<TrainingDate[]>([]);
   const [shiftSettingsOpen, setShiftSettingsOpen] = useState(false);
   const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
   const [departType, setDepartType] = useState<"immediate" | "dated">("immediate");
@@ -528,9 +532,13 @@ export function MemberList({
     setEditPreferredShift(m.preferred_shift ?? "");
     setEditPreferredSection(m.preferred_section ?? "");
     setEditMaxConsecDays(m.max_consecutive_days != null ? String(m.max_consecutive_days) : "");
+    setEditStartDate(m.start_date ?? "");
     setShiftSettingsOpen(!!(m.work_days_type || m.preferred_shift || m.preferred_section || m.max_consecutive_days));
     setDepartStep("hidden");
     setDepartDate(new Date().toISOString().slice(0, 10));
+    // 研修日を最新データでフェッチ（他画面での変更も反映）
+    setEditTrainingDates(m.trainingDates); // まず既存データをセット
+    fetchTrainingDatesAction(m.staffId).then(dates => setEditTrainingDates(dates));
   };
 
   const handleSaveEdit = () => {
@@ -549,6 +557,7 @@ export function MemberList({
     fd.set("preferred_shift",      editPreferredShift);
     fd.set("preferred_section",    editPreferredSection);
     fd.set("max_consecutive_days", editMaxConsecDays);
+    fd.set("start_date",           editStartDate);
     start(async () => {
       const r = await updateMemberInfoAction(fd);
       setResult({ ok: r.success, msg: r.message ?? (r.success ? "更新しました" : "エラー") });
@@ -589,7 +598,7 @@ export function MemberList({
 
   const reset = (mode: AddMode = "none") => {
     setAddMode(mode);
-    setNewLast(""); setNewFirst(""); setNewCompany(""); setNewRole("staff"); setNewSection("");
+    setNewLast(""); setNewFirst(""); setNewCompany(""); setNewRole("staff"); setNewSection(""); setNewAssignDate("");
     setCsvText(""); setCsvPreview([]); setCsvResults(null);
     setResult(null);
   };
@@ -601,6 +610,7 @@ export function MemberList({
     fd.set("display_name", fullName); fd.set("role", newRole);
     if (newCompany.trim()) fd.set("company_name", newCompany.trim());
     if (newSection.trim()) fd.set("section", newSection.trim());
+    if (newAssignDate.trim()) fd.set("start_date", newAssignDate.trim());
     start(async () => {
       const r = await createAndAddStaffAction(fd);
       setResult({ ok: r.success, msg: r.message ?? (r.success ? "登録しました" : "エラー") });
@@ -905,6 +915,12 @@ export function MemberList({
               <input type="text" value={newSection} onChange={e => setNewSection(e.target.value)} placeholder="A班"
                 className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm mt-0.5" />
             </div>
+          </div>
+          <div>
+            <label className="text-[10px] text-zinc-500 font-semibold">アサイン日（任意）</label>
+            <p className="text-[9px] text-zinc-400 mb-0.5">設定するとこの日以前のシフト仮組みから除外されます</p>
+            <input type="date" value={newAssignDate} onChange={e => setNewAssignDate(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm mt-0.5" />
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={() => reset()}
@@ -1244,11 +1260,27 @@ export function MemberList({
                   </div>
                 )}
 
+                {/* アサイン日 */}
+                <div>
+                  <label className="text-[10px] text-zinc-500 font-semibold">アサイン日（参加日）</label>
+                  <p className="text-[9px] text-zinc-400 mb-0.5">設定するとこの日以前のシフト仮組みから除外されます</p>
+                  <input
+                    type="date"
+                    value={editStartDate}
+                    onChange={e => setEditStartDate(e.target.value)}
+                    className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  {editStartDate && (
+                    <button type="button" onClick={() => setEditStartDate("")}
+                      className="text-[10px] text-zinc-400 hover:text-zinc-600 mt-0.5">クリア</button>
+                  )}
+                </div>
+
                 {/* 導入研修 */}
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40 p-3">
                   <TrainingSection
                     staffId={editId}
-                    initialDates={editingMember?.trainingDates ?? []}
+                    initialDates={editTrainingDates}
                   />
                 </div>
 

@@ -55,7 +55,7 @@ export default async function ProjectDetailPage(props: {
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
-      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, end_date, staffs(name, display_name, company_name, line_user_id, account_number)")
+      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, end_date, staffs(name, display_name, company_name, line_user_id, account_number)")
       .eq("project_id", projectId),
     createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id, enable_departure_report").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
@@ -150,6 +150,7 @@ export default async function ProjectDetailPage(props: {
       preferred_shift:      (m as { preferred_shift?: string | null }).preferred_shift ?? null,
       preferred_section:    (m as { preferred_section?: string | null }).preferred_section ?? null,
       max_consecutive_days: (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? null,
+      start_date:           (m as { start_date?: string | null }).start_date ?? null,
       end_date:             (m as { end_date?: string | null }).end_date ?? null,
       compliance:           complianceMap.get(m.staff_id) ?? null,
       trainingDates:        (trainingMap.get(m.staff_id) ?? [])
