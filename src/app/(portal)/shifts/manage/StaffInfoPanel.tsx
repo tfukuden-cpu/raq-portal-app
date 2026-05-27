@@ -3,10 +3,10 @@
 /**
  * スタッフ情報パネル
  * シフト編集・確認モードでスタッフ名をタップしたときに表示するモーダル
- * セクション・稼働設定・優先・希望休申請一覧・導入研修日を表示する
+ * セクション・稼働設定・優先・希望休申請一覧・研修日を表示する（読み取り専用）
  */
 
-import TrainingSection, { type TrainingEntry } from "@/components/TrainingSection";
+import { type TrainingEntry } from "@/components/TrainingSection";
 
 export type StaffInfoMember = {
   id: string;
@@ -206,20 +206,19 @@ export default function StaffInfoPanel({
             )}
           </section>
 
-          {/* 導入研修 */}
-          <section>
-            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-2">導入研修</p>
-            <TrainingSection
-              staffId={member.id}
-              initialDates={member.trainingDates ?? []}
-            />
-          </section>
+          {/* 研修設定 */}
+          {(member.trainingDates ?? []).length > 0 && (
+            <section>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">研修設定</p>
+              <TrainingReadOnly entries={member.trainingDates ?? []} />
+            </section>
+          )}
         </div>
 
         {/* フッター */}
         <div className="px-4 pb-3 pt-2 border-t border-zinc-100 dark:border-zinc-800 shrink-0">
           <a
-            href={`/admin/${projectId}/settings?tab=members`}
+            href={`/members?edit=${member.id}`}
             className="block w-full py-2 rounded-xl text-center text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
           >
             メンバー設定を開く
@@ -236,6 +235,41 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <div className="flex items-start gap-2 py-1">
       <span className="text-[11px] text-zinc-400 w-20 shrink-0 pt-0.5">{label}</span>
       <div className="flex flex-wrap items-center gap-1 flex-1 min-w-0">{children}</div>
+    </div>
+  );
+}
+
+// ── 研修日 読み取り専用表示 ─────────────────────────────────────
+function TrainingReadOnly({ entries }: { entries: TrainingEntry[] }) {
+  // training_name ごとにグループ化
+  type Group = { name: string | null; entries: TrainingEntry[] };
+  const groups: Group[] = [];
+  for (const e of entries) {
+    const g = groups.find(g => g.name === e.training_name);
+    if (g) g.entries.push(e);
+    else groups.push({ name: e.training_name, entries: [e] });
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {groups.map((g, gi) => (
+        <div key={gi}>
+          {g.name && (
+            <p className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1">{g.name}</p>
+          )}
+          <div className="flex flex-wrap gap-1">
+            {g.entries.map(e => {
+              const [, m, d] = e.training_date.split("-");
+              return (
+                <span key={e.id}
+                  className="px-2 py-0.5 rounded-lg text-[11px] font-semibold tabular-nums bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                  {parseInt(m)}/{parseInt(d)}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
