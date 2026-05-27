@@ -523,7 +523,12 @@ export function MemberList({
     setEditName(m.name);
     setEditCompany(m.company_name ?? "");
     setEditSection(m.section ?? "");
-    setEditSections(m.sections.length > 0 ? m.sections : (m.section ? [m.section] : []));
+    // シフトパターンに存在しないセクションを除外（パターン削除後の残留データ対策）
+    const rawSections = m.sections.length > 0 ? m.sections : (m.section ? [m.section] : []);
+    const validSections = availableSections.length > 0
+      ? rawSections.filter(s => availableSections.includes(s))
+      : rawSections;
+    setEditSections(validSections);
     setEditSectionInput("");
     setEditRole(m.role);
     setEditAccountNumber(m.account_number ?? "");
