@@ -350,6 +350,14 @@ export async function generateShiftDraftAction(
     (trainingRows ?? []).map(t => `${t.staff_id}__${t.training_date}`)
   );
 
+  // スタッフ別研修日マップ（研修セクションパターンの割当制限に使用）
+  const trainingDatesByStaff = new Map<string, Set<string>>();
+  for (const t of (trainingRows ?? [])) {
+    const sid = t.staff_id as string;
+    if (!trainingDatesByStaff.has(sid)) trainingDatesByStaff.set(sid, new Set());
+    trainingDatesByStaff.get(sid)!.add(t.training_date as string);
+  }
+
   // セクション再仮組み時: 対象セクションの確定済みシフトは「置き換え対象」なので除外判定しない
   // （すでに確定済みでも再仮組みで上書きできるようにする）
   const regenPatternNames = targetSection
@@ -548,6 +556,15 @@ export async function generateShiftDraftAction(
             const effectiveSections = ms.length > 0 ? ms : (m.section ? [m.section] : []);
             if (effectiveSections.length === 0) return false;
             if (!effectiveSections.includes(pattern.section)) return false;
+            // 研修セクションへの配置制限:
+            // 研修日が設定されているスタッフは、登録された研修日のみ研修系パターンに配置可能
+            // （研修日以外の日は他セクションで通常勤務）
+            if (pattern.section.includes("研修")) {
+              const myTrainingDates = trainingDatesByStaff.get(m.staff_id);
+              if (myTrainingDates && myTrainingDates.size > 0 && !myTrainingDates.has(date)) {
+                return false;
+              }
+            }
           }
           // ロール一致
           if (pattern.target_role === "admin" && m.role !== "project_admin") return false;
