@@ -680,14 +680,40 @@ export async function generateShiftDraftAction(
     };
   }
 
+  // 全アクティブメンバー（セクション絞り込み前）の研修日エントリを生成
+  // セクション指定の再仮組みでも全員分を上書きして最新状態を保つ
+  const allActiveMemberIds = new Set(
+    (memberRows ?? [])
+      .filter(m => {
+        const endDate = (m as { end_date?: string | null }).end_date ?? null;
+        return !endDate || endDate >= dateFrom;
+      })
+      .map(m => m.staff_id as string)
+  );
+  const trainingEntries = (trainingRows ?? [])
+    .filter(t => allActiveMemberIds.has(t.staff_id as string))
+    .map(t => ({
+      k: `${t.staff_id as string}__${t.training_date as string}`,
+      n: "研修" as string,
+      s: null as string | null,
+      e: null as string | null,
+      d: false,
+    }));
+
   // GridDraftEntry 形式 { k, n, s, e, d } で保存（ShiftEditGrid と同じフォーマット）
-  const newEntries = [...draft.entries()].map(([key, val]) => ({
+  // 通常シフトより研修を優先（研修日は候補除外済みなので実際は重複しない）
+  const regularEntries = [...draft.entries()].map(([key, val]) => ({
     k: key,
     n: val.shiftName,
     s: val.shiftStart,
     e: val.shiftEnd,
     d: false,
   }));
+  const trainingKeySet = new Set(trainingEntries.map(e => e.k));
+  const newEntries = [
+    ...regularEntries.filter(e => !trainingKeySet.has(e.k)),
+    ...trainingEntries,
+  ];
 
   // セクション指定 or スキップセクション指定時: 既存ドラフトと新規エントリをマージ
   let draftEntries = newEntries;
