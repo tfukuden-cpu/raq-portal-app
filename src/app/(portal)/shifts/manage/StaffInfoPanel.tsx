@@ -6,7 +6,7 @@
  * セクション・稼働設定・優先・希望休申請・研修日を表示＋編集できる
  */
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { type TrainingEntry } from "@/components/TrainingSection";
 import TrainingSection from "@/components/TrainingSection";
@@ -108,6 +108,29 @@ export default function StaffInfoPanel({
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isPending, startTrans]   = useTransition();
+
+  // ── シフト一括反映 ────────────────────────────────────────
+  const [isApplying, startApplyTrans] = useTransition();
+  const [applyMsg, setApplyMsg]       = useState<string | null>(null);
+  // 追加された変更セルを蓄積（保存ボタン用に最新データへアクセスするためref）
+  const trainingRef  = useRef(trainingDates);
+  const holidayRef   = useRef(holidayEntries);
+  trainingRef.current = trainingDates;
+  holidayRef.current  = holidayEntries;
+
+  function handleApplyToShift() {
+    if (!onDraftCellsChanged) return;
+    startApplyTrans(async () => {
+      const cells: { staffId: string; date: string; shiftName: string }[] = [];
+      for (const h of holidayRef.current)  cells.push({ staffId: member.id, date: h.request_date, shiftName: "希望休" });
+      for (const t of trainingRef.current) cells.push({ staffId: member.id, date: t.training_date, shiftName: t.training_name ?? "研修" });
+      if (cells.length === 0) { setApplyMsg("反映する設定がありません"); setTimeout(() => setApplyMsg(null), 2000); return; }
+      await overrideDraftCellsAction(projectId, cells);
+      onDraftCellsChanged(cells);
+      setApplyMsg(`${cells.length}日をシフトに反映しました`);
+      setTimeout(() => setApplyMsg(null), 2500);
+    });
+  }
 
   function handleSave() {
     setSaveError(null);
@@ -429,7 +452,23 @@ export default function StaffInfoPanel({
         </div>
 
         {/* フッター */}
-        <div className="px-4 pb-3 pt-2 border-t border-zinc-100 dark:border-zinc-800 shrink-0">
+        <div className="px-4 pb-3 pt-2 border-t border-zinc-100 dark:border-zinc-800 shrink-0 space-y-2">
+          {/* シフト反映ボタン */}
+          {onDraftCellsChanged && (
+            <div>
+              <button
+                type="button"
+                onClick={handleApplyToShift}
+                disabled={isApplying || fetching}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 transition-colors"
+              >
+                {isApplying ? "反映中…" : "設定をシフトに保存・反映"}
+              </button>
+              {applyMsg && (
+                <p className="text-center text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1">{applyMsg}</p>
+              )}
+            </div>
+          )}
           <a
             href={`/members?edit=${member.id}`}
             className="block w-full py-2 rounded-xl text-center text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
