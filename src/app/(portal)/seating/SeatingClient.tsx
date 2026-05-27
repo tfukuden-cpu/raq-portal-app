@@ -10,6 +10,7 @@ export type SeatData = {
   xPct: number;
   yPct: number;
   section: string | null;
+  seatType: "normal" | "free" | "disabled";
   staffId: string | null;
   staffName: string | null;
   accountNumber: string | null;
@@ -134,13 +135,38 @@ export default function SeatingClient({
           )}
 
           {seats.map(seat => {
-            const status = seat.staffId
+            const isDisabled = seat.seatType === "disabled";
+            const isFree     = seat.seatType === "free";
+            const status = (!isDisabled && seat.staffId)
               ? (statuses.get(seat.staffId) ?? seat.status ?? "not_arrived")
               : null;
             const tappable =
+              !isDisabled &&
               seat.staffId &&
               (status === "working" || status === "on_break") &&
               (isAdmin || seat.staffId === myStaffId);
+
+            if (isDisabled) {
+              return (
+                <div
+                  key={seat.id}
+                  style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
+                  className="absolute w-[70px] h-[58px] rounded-xl border-2 border-zinc-300 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-800 opacity-50 flex flex-col items-center justify-center overflow-hidden"
+                >
+                  {/* ハッチング */}
+                  <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: "none" }}>
+                    <defs>
+                      <pattern id={`hatch-${seat.id}`} patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                        <line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" strokeWidth="1.5" className="text-zinc-300 dark:text-zinc-600" />
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill={`url(#hatch-${seat.id})`} />
+                  </svg>
+                  <span className="relative text-[9px] text-zinc-400 leading-none z-10">{seat.label}</span>
+                  <span className="relative text-[9px] text-zinc-400 leading-none z-10 mt-0.5">無効</span>
+                </div>
+              );
+            }
 
             return (
               <button
@@ -151,7 +177,10 @@ export default function SeatingClient({
                 className={[
                   "absolute flex flex-col items-center justify-center gap-px",
                   "w-[70px] h-[58px] rounded-xl border-2 text-center transition-all shadow-sm select-none overflow-hidden",
-                  status ? STATUS_BG[status] : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700",
+                  status ? STATUS_BG[status]
+                    : isFree
+                    ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-700"
+                    : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700",
                   tappable ? "cursor-pointer active:scale-95" : "cursor-default",
                   isPending ? "opacity-60" : "",
                 ].join(" ")}
@@ -172,7 +201,9 @@ export default function SeatingClient({
                     )}
                   </>
                 ) : (
-                  <span className="text-[10px] text-zinc-300 dark:text-zinc-600 mt-0.5">空席</span>
+                  <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-400 dark:text-emerald-600" : "text-zinc-300 dark:text-zinc-600"}`}>
+                    {isFree ? "FREE" : "空席"}
+                  </span>
                 )}
               </button>
             );

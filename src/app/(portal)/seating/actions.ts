@@ -95,7 +95,7 @@ export async function autoAssignSeatsAction(
   const OFF_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
 
   const [{ data: seats }, { data: shifts }, { data: members }] = await Promise.all([
-    admin.from("seats").select("id, section").eq("project_id", projectId).eq("is_active", true),
+    admin.from("seats").select("id, section, seat_type").eq("project_id", projectId).eq("is_active", true),
     admin.from("shifts")
       .select("staff_id, shift_name")
       .eq("project_id", projectId)
@@ -116,9 +116,12 @@ export async function autoAssignSeatsAction(
   const usedSeats  = new Set<string>();
   const usedStaff  = new Set<string>();
 
-  // パス1: セクション一致
-  for (const seat of seats ?? []) {
-    if (!seat.section) continue;
+  // 無効席は配置対象外
+  const activeSeats = (seats ?? []).filter(s => (s as { seat_type?: string }).seat_type !== "disabled");
+
+  // パス1: セクション一致（通常席）
+  for (const seat of activeSeats) {
+    if (!seat.section || (seat as { seat_type?: string }).seat_type === "free") continue;
     const match = workingStaff.find(s => !usedStaff.has(s.staffId) && s.section === seat.section);
     if (match) {
       assignments.push({ seatId: seat.id, staffId: match.staffId });
@@ -127,8 +130,8 @@ export async function autoAssignSeatsAction(
     }
   }
 
-  // パス2: セクション未指定席 or 余ったスタッフ
-  const remainSeats  = (seats ?? []).filter(s => !usedSeats.has(s.id));
+  // パス2: フリー席・セクション未指定席 → 余ったスタッフを順番に
+  const remainSeats  = activeSeats.filter(s => !usedSeats.has(s.id));
   const remainStaff  = workingStaff.filter(s => !usedStaff.has(s.staffId));
   for (let i = 0; i < Math.min(remainSeats.length, remainStaff.length); i++) {
     assignments.push({ seatId: remainSeats[i].id, staffId: remainStaff[i].staffId });
@@ -167,7 +170,7 @@ export async function saveSeatWallsAction(
 /** 座席レイアウト保存 */
 export async function saveSeatLayoutAction(
   projectId: string,
-  seats: { id?: string; label: string; xPct: number; yPct: number; section: string }[],
+  seats: { id?: string; label: string; xPct: number; yPct: number; section: string; seatType?: string }[],
 ): Promise<{ success: boolean; message?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -196,6 +199,7 @@ export async function saveSeatLayoutAction(
     x_pct:      s.xPct,
     y_pct:      s.yPct,
     section:    s.section || null,
+    seat_type:  s.seatType ?? "normal",
     is_active:  true,
   }));
 

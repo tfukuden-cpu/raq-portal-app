@@ -45,7 +45,7 @@ export default async function SeatingPlanPage() {
     { data: shifts },
   ] = await Promise.all([
     admin.from("seats")
-      .select("id, label, x_pct, y_pct, section")
+      .select("id, label, x_pct, y_pct, section, seat_type")
       .eq("project_id", projectId).eq("is_active", true),
     admin.from("seat_assignments")
       .select("seat_id, staff_id")
@@ -84,12 +84,15 @@ export default async function SeatingPlanPage() {
     : [...memberMap.keys()];
 
   const planSeats: PlanSeat[] = (seats ?? []).map(s => ({
-    id:      s.id,
-    label:   s.label,
-    xPct:    s.x_pct,
-    yPct:    s.y_pct,
-    section: s.section ?? null,
-    staffId: assignMap.get(s.id) ?? null,
+    id:       s.id,
+    label:    s.label,
+    xPct:     s.x_pct,
+    yPct:     s.y_pct,
+    section:  s.section ?? null,
+    seatType: ((s as { seat_type?: string }).seat_type ?? "normal") as PlanSeat["seatType"],
+    staffId:  (s as { seat_type?: string }).seat_type === "disabled"
+      ? null
+      : (assignMap.get(s.id) ?? null),
   }));
 
   const planStaff: PlanStaff[] = targetStaffIds.map(id => {

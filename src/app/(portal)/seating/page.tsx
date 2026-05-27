@@ -29,7 +29,7 @@ export default async function SeatingPage() {
     { data: absenceRows },
   ] = await Promise.all([
     admin.from("seats")
-      .select("id, label, x_pct, y_pct, section")
+      .select("id, label, x_pct, y_pct, section, seat_type")
       .eq("project_id", projectId).eq("is_active", true),
     admin.from("seat_assignments")
       .select("seat_id, staff_id")
@@ -80,7 +80,9 @@ export default async function SeatingPage() {
   const assignMap = new Map((assignments ?? []).map(a => [a.seat_id, a.staff_id]));
 
   const seatData: SeatData[] = (seats ?? []).map(s => {
-    const staffId = assignMap.get(s.id) ?? null;
+    const seatType = (s as { seat_type?: string }).seat_type ?? "normal";
+    // 無効席はスタッフ割当を表示しない
+    const staffId = seatType === "disabled" ? null : (assignMap.get(s.id) ?? null);
     const member  = staffId ? memberMap.get(staffId) : null;
     return {
       id:            s.id,
@@ -88,6 +90,7 @@ export default async function SeatingPage() {
       xPct:          s.x_pct,
       yPct:          s.y_pct,
       section:       s.section ?? null,
+      seatType:      seatType as SeatData["seatType"],
       staffId,
       staffName:     member?.name ?? null,
       accountNumber: member?.accountNumber ?? null,

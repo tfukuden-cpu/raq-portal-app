@@ -10,6 +10,7 @@ export type PlanSeat = {
   xPct: number;
   yPct: number;
   section: string | null;
+  seatType: "normal" | "free" | "disabled";
   staffId: string | null;
 };
 
@@ -167,8 +168,31 @@ export default function SeatingPlanClient({
             </div>
           )}
           {seats.map(seat => {
+            const isDisabled = seat.seatType === "disabled";
+            const isFree     = seat.seatType === "free";
             const s = seat.staffId ? staffMap.get(seat.staffId) : null;
-            const isTarget = selectedStaffId !== null && !seat.staffId;
+            const isTarget = !isDisabled && selectedStaffId !== null && !seat.staffId;
+
+            if (isDisabled) {
+              return (
+                <div
+                  key={seat.id}
+                  style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
+                  className="absolute w-[70px] h-[58px] rounded-xl border-2 border-zinc-300 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-800 opacity-40 flex flex-col items-center justify-center overflow-hidden"
+                >
+                  <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: "none" }}>
+                    <defs>
+                      <pattern id={`hatch-p-${seat.id}`} patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                        <line x1="0" y1="0" x2="0" y2="8" stroke="#a1a1aa" strokeWidth="1.5" />
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill={`url(#hatch-p-${seat.id})`} />
+                  </svg>
+                  <span className="relative text-[9px] text-zinc-400 leading-none z-10">{seat.label}</span>
+                  <span className="relative text-[9px] text-zinc-400 leading-none z-10 mt-0.5">無効</span>
+                </div>
+              );
+            }
 
             return (
               <button
@@ -182,6 +206,8 @@ export default function SeatingPlanClient({
                     ? "bg-blue-100 dark:bg-blue-900/50 border-blue-400 dark:border-blue-600 cursor-pointer active:scale-95"
                     : isTarget
                     ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 border-dashed cursor-pointer animate-pulse"
+                    : isFree
+                    ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-700 cursor-pointer"
                     : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-600 cursor-pointer",
                 ].join(" ")}
               >
@@ -197,8 +223,8 @@ export default function SeatingPlanClient({
                     )}
                   </>
                 ) : (
-                  <span className="text-[10px] text-zinc-300 dark:text-zinc-600 mt-0.5">
-                    {isTarget ? "ここへ" : "空席"}
+                  <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-400 dark:text-emerald-600" : "text-zinc-300 dark:text-zinc-600"}`}>
+                    {isTarget ? "ここへ" : isFree ? "FREE" : "空席"}
                   </span>
                 )}
               </button>

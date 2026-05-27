@@ -3,9 +3,13 @@
 import { useState, useRef, useTransition, useId, useEffect } from "react";
 import { saveSeatLayoutAction, saveSeatWallsAction } from "@/app/(portal)/seating/actions";
 
+export type SeatType = "normal" | "free" | "disabled";
+
 export type SeatItem = {
   id?: string; localId: string;
-  label: string; xPct: number; yPct: number; section: string;
+  label: string; xPct: number; yPct: number;
+  section: string;
+  seatType: SeatType;
 };
 export type WallItem = {
   id?: string; localId: string;
@@ -67,12 +71,26 @@ function SeatPopover({
           className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-400" />
       </div>
       <div className="space-y-0.5">
-        <p className="text-[10px] font-semibold text-zinc-400">セクション</p>
-        <select value={seat.section} onChange={e => onUpdate({ section: e.target.value })}
+        <p className="text-[10px] font-semibold text-zinc-400">席タイプ</p>
+        <select value={seat.seatType} onChange={e => {
+          const t = e.target.value as SeatType;
+          onUpdate({ seatType: t, ...(t !== "normal" ? { section: "" } : {}) });
+        }}
           className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-400">
-          {SECTIONS.map(s => <option key={s} value={s}>{s || "（なし）"}</option>)}
+          <option value="normal">通常（セクション指定）</option>
+          <option value="free">フリー席（誰でも可）</option>
+          <option value="disabled">無効席（使用不可）</option>
         </select>
       </div>
+      {seat.seatType === "normal" && (
+        <div className="space-y-0.5">
+          <p className="text-[10px] font-semibold text-zinc-400">セクション</p>
+          <select value={seat.section} onChange={e => onUpdate({ section: e.target.value })}
+            className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-400">
+            {SECTIONS.map(s => <option key={s} value={s}>{s || "（なし）"}</option>)}
+          </select>
+        </div>
+      )}
       <div className="flex gap-1.5 pt-0.5">
         <button onClick={onDuplicate}
           className="flex-1 px-2 py-1.5 text-[11px] font-semibold rounded-lg bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors">複製</button>
@@ -283,7 +301,7 @@ export default function SeatLayoutEditor({
     const localId = `${baseId}-${Date.now()}`;
     const maxNum = seats.reduce((m, s) => { const n = parseInt(s.label); return isNaN(n) ? m : Math.max(m, n); }, 0);
     const { xPct, yPct } = findFreeCell(stepX, stepY);
-    setSeats(prev => [...prev, { localId, label: `${maxNum + 1}`, xPct, yPct, section: "" }]);
+    setSeats(prev => [...prev, { localId, label: `${maxNum + 1}`, xPct, yPct, section: "", seatType: "normal" }]);
     setEditingId(localId);
   }
 
@@ -326,7 +344,7 @@ export default function SeatLayoutEditor({
     startTransition(async () => {
       const [r1, r2] = await Promise.all([
         saveSeatLayoutAction(projectId, seats.map(s => ({
-          id: s.id, label: s.label, xPct: s.xPct, yPct: s.yPct, section: s.section,
+          id: s.id, label: s.label, xPct: s.xPct, yPct: s.yPct, section: s.section, seatType: s.seatType,
         }))),
         saveSeatWallsAction(projectId, walls.map(w => ({
           id: w.id, x1Pct: w.x1Pct, y1Pct: w.y1Pct, x2Pct: w.x2Pct, y2Pct: w.y2Pct,
@@ -380,7 +398,9 @@ export default function SeatLayoutEditor({
             {flash.ok ? "✓ " : "✗ "}{flash.msg}
           </span>
         )}
-        <span className="text-xs text-zinc-400 ml-auto">{seats.length}席 / {walls.length}本の壁</span>
+        <span className="text-xs text-zinc-400 ml-auto">
+          {seats.length}席（うちフリー{seats.filter(s=>s.seatType==="free").length}・無効{seats.filter(s=>s.seatType==="disabled").length}）／ {walls.length}本の壁
+        </span>
       </div>
 
       {/* ── スクロールコンテナ ── */}
@@ -447,34 +467,49 @@ export default function SeatLayoutEditor({
           </svg>
 
           {/* ── 席カード ── */}
-          {seats.map(seat => (
-            <div
-              key={seat.localId}
-              data-seat-id={seat.localId}
-              style={{
-                position: "absolute",
-                left: `${seat.xPct}%`, top: `${seat.yPct}%`,
-                transform: "translate(-50%,-50%)",
-                width:  `calc(${stepX}% - 8px)`,
-                height: `calc(${stepY}% - 8px)`,
-                zIndex: 10,
-                cursor: mode === "wall" ? "crosshair" : "grab",
-              }}
-              className={[
-                "rounded-xl border-2 flex flex-col items-center justify-center transition-shadow",
-                editingId === seat.localId
-                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40 shadow-lg"
-                  : "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 hover:border-zinc-400 shadow-sm",
-              ].join(" ")}
-            >
-              <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200 pointer-events-none leading-tight">
-                {seat.label || "－"}
-              </span>
-              {seat.section && (
-                <span className="text-[9px] text-zinc-400 pointer-events-none leading-tight">{seat.section}</span>
-              )}
-            </div>
-          ))}
+          {seats.map(seat => {
+            const isDisabled = seat.seatType === "disabled";
+            const isFree     = seat.seatType === "free";
+            return (
+              <div
+                key={seat.localId}
+                data-seat-id={seat.localId}
+                style={{
+                  position: "absolute",
+                  left: `${seat.xPct}%`, top: `${seat.yPct}%`,
+                  transform: "translate(-50%,-50%)",
+                  width:  `calc(${stepX}% - 8px)`,
+                  height: `calc(${stepY}% - 8px)`,
+                  zIndex: 10,
+                  cursor: mode === "wall" ? "crosshair" : "grab",
+                }}
+                className={[
+                  "rounded-xl border-2 flex flex-col items-center justify-center transition-shadow overflow-hidden",
+                  editingId === seat.localId
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40 shadow-lg"
+                    : isDisabled
+                    ? "border-zinc-400 dark:border-zinc-500 bg-zinc-200 dark:bg-zinc-700 shadow-sm opacity-60"
+                    : isFree
+                    ? "border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 shadow-sm"
+                    : "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 hover:border-zinc-400 shadow-sm",
+                ].join(" ")}
+              >
+                <span className={[
+                  "text-[10px] font-bold pointer-events-none leading-tight",
+                  isDisabled ? "text-zinc-400 dark:text-zinc-500" : "text-zinc-700 dark:text-zinc-200",
+                ].join(" ")}>
+                  {seat.label || "－"}
+                </span>
+                {isDisabled ? (
+                  <span className="text-[8px] text-zinc-400 pointer-events-none leading-tight">無効</span>
+                ) : isFree ? (
+                  <span className="text-[8px] text-emerald-500 pointer-events-none leading-tight">FREE</span>
+                ) : seat.section ? (
+                  <span className="text-[9px] text-zinc-400 pointer-events-none leading-tight">{seat.section}</span>
+                ) : null}
+              </div>
+            );
+          })}
 
           {/* ── ポップオーバー ── */}
           {editing && (
