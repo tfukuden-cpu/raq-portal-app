@@ -256,6 +256,9 @@ export async function generateShiftDraftAction(
     otherSectionMonthCount = new Map();
 
     for (const e of otherEntries) {
+      // 削除済み（d:true）または空（n:null）のエントリはカウントしない
+      // これらは「旧パターン上書き用の空マーカー」であり実際の割当ではない
+      if (e.d || !e.n) continue;
       const sepIdx = e.k.lastIndexOf("__");
       const staffId = e.k.slice(0, sepIdx);
       const date    = e.k.slice(sepIdx + 2);
