@@ -323,7 +323,7 @@ export default function TrainingSection({ staffId, initialDates, onTrainingAdded
               disabled={isPending || selected.size === 0}
               className="flex-1 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold disabled:opacity-40 hover:bg-blue-700 transition-colors"
             >
-              {isPending ? "保存中…" : `${selected.size}日を追加`}
+              {isPending ? "保存中…" : `保存（${selected.size}日）`}
             </button>
           </div>
         </div>

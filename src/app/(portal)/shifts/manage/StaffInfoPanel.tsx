@@ -58,6 +58,7 @@ export default function StaffInfoPanel({
   availableSections,
   shiftPatternNames,
   staffOffRequests,
+  onDraftCellsChanged,
   onClose,
 }: {
   member: StaffInfoMember;
@@ -65,6 +66,8 @@ export default function StaffInfoPanel({
   availableSections: string[];
   shiftPatternNames: string[];
   staffOffRequests?: StaffOffRequestEntry[];
+  /** シフトドラフトへ即時反映するコールバック（ShiftEditGridのdraftsを更新） */
+  onDraftCellsChanged?: (cells: { staffId: string; date: string; shiftName: string }[]) => void;
   onClose: () => void;
   /** @deprecated kept for compat, no longer used */
   offRequests?: StaffOffRequest[];
@@ -397,10 +400,9 @@ export default function StaffInfoPanel({
                 projectId={projectId}
                 initialEntries={holidayEntries}
                 onDatesAdded={async (dates) => {
-                  await overrideDraftCellsAction(
-                    projectId,
-                    dates.map(d => ({ staffId: member.id, date: d, shiftName: "希望休" })),
-                  );
+                  const cells = dates.map(d => ({ staffId: member.id, date: d, shiftName: "希望休" }));
+                  await overrideDraftCellsAction(projectId, cells);
+                  onDraftCellsChanged?.(cells);
                 }}
               />
             )}
@@ -416,10 +418,9 @@ export default function StaffInfoPanel({
                 staffId={member.id}
                 initialDates={trainingDates}
                 onTrainingAdded={async (entries) => {
-                  await overrideDraftCellsAction(
-                    projectId,
-                    entries.map(e => ({ staffId: member.id, date: e.date, shiftName: e.name ?? "研修" })),
-                  );
+                  const cells = entries.map(e => ({ staffId: member.id, date: e.date, shiftName: e.name ?? "研修" }));
+                  await overrideDraftCellsAction(projectId, cells);
+                  onDraftCellsChanged?.(cells);
                 }}
               />
             )}

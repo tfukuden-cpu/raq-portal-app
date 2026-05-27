@@ -2486,6 +2486,13 @@ export default function ShiftEditGrid({
           availableSections={availableSections}
           shiftPatternNames={shiftPatterns.map(p => p.name).filter(Boolean)}
           staffOffRequests={(offRequests ?? []).filter(r => r.staff_id === staffInfoTarget.id)}
+          onDraftCellsChanged={(cells) => {
+            const next = new Map(drafts);
+            for (const c of cells) {
+              next.set(`${c.staffId}__${c.date}`, { shiftName: c.shiftName, shiftStart: null, shiftEnd: null });
+            }
+            applyEdit(next);
+          }}
           onClose={() => setStaffInfoTarget(null)}
         />
       )}
