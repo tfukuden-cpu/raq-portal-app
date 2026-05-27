@@ -166,6 +166,14 @@ export default async function ManageShiftsPage(props: {
   const startDate = dateKey(new Date(targetYear, targetMonth - 1, 1));
   const endDate   = dateKey(new Date(targetYear, targetMonth,     0));
 
+  // 前月末5日間（連勤確認・月マタギ表示用）
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const prevYear      = targetMonth === 1 ? targetYear - 1 : targetYear;
+  const prevMonthNum  = targetMonth === 1 ? 12 : targetMonth - 1;
+  const prevLastDay   = new Date(targetYear, targetMonth - 1, 0).getDate();
+  const prevMonthEnd  = `${prevYear}-${pad2(prevMonthNum)}-${pad2(prevLastDay)}`;
+  const prevMonthStart5 = `${prevYear}-${pad2(prevMonthNum)}-${pad2(Math.max(1, prevLastDay - 4))}`;
+
   const shiftSelect = () =>
     admin.from("shifts")
       .select("id, staff_id, shift_date, shift_name, shift_start, shift_end, note")
@@ -187,6 +195,7 @@ export default async function ManageShiftsPage(props: {
     { data: offRequestsRaw },
     { data: monthStatusRow },
     { data: trainingsRaw },
+    { data: prevMonthShiftsRaw },
     shiftBatch0,
     shiftBatch1,
     shiftBatch2,
@@ -241,6 +250,12 @@ export default async function ManageShiftsPage(props: {
     admin.from("staff_trainings")
       .select("id, staff_id, training_date")
       .eq("training_type", "onboarding"),
+    // 前月末5日間シフト（連勤確認表示用）
+    admin.from("shifts")
+      .select("staff_id, shift_date, shift_name")
+      .eq("project_id", selectedProjectId)
+      .gte("shift_date", prevMonthStart5)
+      .lte("shift_date", prevMonthEnd),
     shiftSelect().range(0,    999),
     shiftSelect().range(1000, 1999),
     shiftSelect().range(2000, 2999),
@@ -437,6 +452,11 @@ export default async function ManageShiftsPage(props: {
             request_date: r.request_date as string,
             priority:     r.priority as string,
             source:       (r as { source?: string }).source ?? "user",
+          }))}
+          prevMonthShifts={(prevMonthShiftsRaw ?? []).map(r => ({
+            staff_id:   r.staff_id as string,
+            shift_date: r.shift_date as string,
+            shift_name: r.shift_name as string | null,
           }))}
       />
     </main>

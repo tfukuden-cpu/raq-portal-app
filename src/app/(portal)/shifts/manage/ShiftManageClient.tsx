@@ -59,6 +59,7 @@ type Props = {
   isPublished: boolean;
   lockedSections: string[];
   offRequests: OffRequest[];
+  prevMonthShifts?: { staff_id: string; shift_date: string; shift_name: string | null }[];
 };
 
 // ── ShiftEditGridOverlay ────────────────────────────────────────
@@ -66,7 +67,7 @@ type Props = {
 function ShiftEditGridOverlay({
   projectId, targetMonthStr, allDates, shifts, activeMembers, shiftPatterns,
   slotRequirements, changeLogs, activeDraft, draftSavedBy, draftSavedAt,
-  offRequests, isPublished, lockedSections,
+  offRequests, isPublished, lockedSections, prevMonthShifts,
   onSaved, onCancel,
 }: {
   projectId: string; targetMonthStr: string; allDates: string[];
@@ -76,6 +77,7 @@ function ShiftEditGridOverlay({
   draftSavedBy: string | null; draftSavedAt: string | null;
   offRequests: Props["offRequests"]; isPublished: boolean;
   lockedSections: string[];
+  prevMonthShifts?: Props["prevMonthShifts"];
   onSaved: () => void; onCancel: () => void;
 }) {
   useEffect(() => {
@@ -112,6 +114,7 @@ function ShiftEditGridOverlay({
         offRequests={offRequests}
         isPublished={isPublished}
         initialLockedSections={lockedSections}
+        prevMonthShifts={prevMonthShifts}
         onSaved={onSaved}
         onCancel={onCancel}
       />
@@ -130,7 +133,7 @@ export default function ShiftManageClient({
   projectId, targetYear, targetMonth, allDates, defaultDate,
   shifts, activeMembers, shiftPatterns, shiftRequests, slotRequirements,
   changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
-  isPublished, lockedSections, offRequests,
+  isPublished, lockedSections, offRequests, prevMonthShifts,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [mode, setMode] = useState<"list" | "edit">("list");
@@ -209,6 +212,7 @@ export default function ShiftManageClient({
       offRequests={offRequests}
       isPublished={isPublished}
       lockedSections={lockedSections}
+      prevMonthShifts={prevMonthShifts}
       onSaved={handleSaved}
       onCancel={() => setMode("list")}
     />;

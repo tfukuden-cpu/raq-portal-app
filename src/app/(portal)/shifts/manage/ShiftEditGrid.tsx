@@ -100,6 +100,7 @@ interface Props {
   offRequests?: OffRequest[];
   isPublished?: boolean;
   initialLockedSections?: string[];
+  prevMonthShifts?: { staff_id: string; shift_date: string; shift_name: string | null }[];
   onSaved: () => void;
   onCancel: () => void;
 }
@@ -791,6 +792,7 @@ export default function ShiftEditGrid({
   shiftPatterns, slotRequirements, changeLogs,
   initialDraft, draftSavedBy, draftSavedAt,
   offRequests, isPublished, initialLockedSections,
+  prevMonthShifts,
   onSaved, onCancel,
 }: Props) {
   // offRequests マップ: staffId__date → priority
@@ -1428,11 +1430,84 @@ export default function ShiftEditGrid({
     4: { badge: "代休必要", badgeCls: "bg-red-400 text-white",   borderCls: "border-red-200 dark:border-red-700",         desc: "公休・代替休なし" },
   } as const;
   const COL_W = 50;
+  const PREV_COL_W = 36; // 前月列幅（当月より狭め）
   const NAME_W = 100;
   const TOT_W = 52;     // 合計列幅
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
   const SUM_ROW_H = 20; // 20px (充足サマリー行の高さ)
-  const totalW = NAME_W + COL_W * allDates.length + TOT_W;
+
+  // 前月末5日間の日付リスト
+  const prevDates = useMemo(() => {
+    if (!prevMonthShifts || !allDates.length) return [];
+    const firstDate = allDates[0];
+    const result: string[] = [];
+    for (let i = 5; i >= 1; i--) {
+      const d = new Date(firstDate + "T00:00:00Z");
+      d.setUTCDate(d.getUTCDate() - i);
+      result.push(d.toISOString().slice(0, 10));
+    }
+    return result;
+  }, [prevMonthShifts, allDates]);
+
+  // 前月シフトルックアップ: staffId__date → shift_name
+  const prevShiftsByKey = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const s of prevMonthShifts ?? []) {
+      m.set(`${s.staff_id}__${s.shift_date}`, s.shift_name);
+    }
+    return m;
+  }, [prevMonthShifts]);
+
+  // 連勤日数マップ: staffId__date → 当該日を末日とする連続出勤日数
+  const consecutiveMap = useMemo(() => {
+    const working = new Map<string, Set<string>>(); // staffId → 出勤日Set
+
+    function addWorking(staffId: string, date: string, shiftName: string | null) {
+      if (!shiftName || shiftName === "公休" || shiftName === "希望休") return;
+      if (!patternNameSet.has(shiftName)) return;
+      if (!working.has(staffId)) working.set(staffId, new Set());
+      working.get(staffId)!.add(date);
+    }
+
+    // 前月シフト
+    for (const s of prevMonthShifts ?? []) addWorking(s.staff_id, s.shift_date, s.shift_name);
+
+    // 当月確定シフト（ドラフトで上書きされていないもの）
+    for (const s of shifts) {
+      if (drafts.has(`${s.staff_id}__${s.shift_date}`)) continue;
+      addWorking(s.staff_id, s.shift_date, s.shift_name);
+    }
+
+    // ドラフト
+    for (const [key, draftVal] of drafts) {
+      if (!draftVal) continue;
+      const lastIdx = key.lastIndexOf("__");
+      addWorking(key.slice(0, lastIdx), key.slice(lastIdx + 2), draftVal.shiftName);
+    }
+
+    // 当月日付ごとに連続日数を計算
+    const result = new Map<string, number>();
+    for (const [staffId, workDates] of working) {
+      for (const date of allDates) {
+        if (!workDates.has(date)) continue;
+        let count = 1;
+        let d = date;
+        for (;;) {
+          const prev = new Date(d + "T00:00:00Z");
+          prev.setUTCDate(prev.getUTCDate() - 1);
+          const prevStr = prev.toISOString().slice(0, 10);
+          if (!workDates.has(prevStr)) break;
+          count++;
+          d = prevStr;
+          if (count > 31) break;
+        }
+        result.set(`${staffId}__${date}`, count);
+      }
+    }
+    return result;
+  }, [prevMonthShifts, shifts, drafts, patternNameSet, allDates]);
+
+  const totalW = NAME_W + PREV_COL_W * prevDates.length + COL_W * allDates.length + TOT_W;
 
   return (
     <div className="flex flex-col h-full">
@@ -1721,6 +1796,7 @@ export default function ShiftEditGrid({
             style={{ tableLayout: "fixed", width: `${totalW}px`, minWidth: `${totalW}px`, borderSpacing: 0 }}>
             <colgroup>
               <col style={{ width: `${NAME_W}px` }} />
+              {prevDates.map((d) => <col key={`prev-col-${d}`} style={{ width: `${PREV_COL_W}px` }} />)}
               {allDates.map((d) => <col key={d} style={{ width: `${COL_W}px` }} />)}
               <col style={{ width: `${TOT_W}px` }} />
             </colgroup>
@@ -1729,6 +1805,29 @@ export default function ShiftEditGrid({
             <thead>
               <tr>
                 <th className="sticky top-0 left-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-r-2 border-zinc-200 dark:border-zinc-700" />
+                {/* 前月末5日 */}
+                {prevDates.map((date, pi) => {
+                  const day = parseInt(date.slice(8));
+                  const dw = dowLabel(date);
+                  const dn = dowNum(date);
+                  const isSun = dn === 0, isSat = dn === 6;
+                  const isLast = pi === prevDates.length - 1;
+                  return (
+                    <th key={`prev-h-${date}`} className={[
+                      "sticky top-0 z-20 h-11 border-b bg-zinc-100 dark:bg-zinc-800/70",
+                      isLast ? "border-r-2 border-r-zinc-400 dark:border-r-zinc-500" : "border-r border-zinc-300 dark:border-zinc-600",
+                    ].join(" ")}>
+                      <div className="flex flex-col items-center justify-center h-full gap-0">
+                        <span className={`text-[10px] font-medium tabular-nums leading-none ${
+                          isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500"
+                        }`}>{day}</span>
+                        <span className={`text-[8px] leading-none ${
+                          isSun ? "text-red-300" : isSat ? "text-blue-300" : "text-zinc-300 dark:text-zinc-600"
+                        }`}>{dw}</span>
+                      </div>
+                    </th>
+                  );
+                })}
                 {allDates.map((date) => {
                   const day = parseInt(date.slice(8));
                   const dw = dowLabel(date);
@@ -1781,6 +1880,18 @@ export default function ShiftEditGrid({
                         </span>
                       </div>
                     </td>
+                    {/* 前月列（サマリー行は空） */}
+                    {prevDates.map((d, pi) => (
+                      <td key={`prev-sum-${d}`}
+                        className={[
+                          "p-0 bg-zinc-200 dark:bg-zinc-700",
+                          isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                          isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
+                          pi === prevDates.length - 1 ? "border-r-2 border-r-zinc-400 dark:border-r-zinc-500" : "border-r border-r-zinc-300 dark:border-r-zinc-600",
+                        ].join(" ")}
+                        style={{ position: "sticky", top: topOffset, zIndex: 18 }}
+                      />
+                    ))}
                     {/* 日付ごとの過不足 */}
                     {allDates.map((date) => {
                       const assigned = (resolvedGrid.get(`${pattern.name}__${date}`) ?? []).length;
@@ -1893,6 +2004,16 @@ export default function ShiftEditGrid({
                         <span className="text-[10px] font-bold text-violet-700 dark:text-violet-300 leading-none">SV</span>
                       </div>
                     </td>
+                    {/* 前月列（SV行は空） */}
+                    {prevDates.map((d, pi) => (
+                      <td key={`prev-sv-${d}`}
+                        className={[
+                          "p-0 border-t-2 border-b-2 border-t-violet-400 dark:border-t-violet-600 border-b-violet-400 dark:border-b-violet-600 bg-violet-100/60 dark:bg-violet-900/20",
+                          pi === prevDates.length - 1 ? "border-r-2 border-r-zinc-400 dark:border-r-zinc-500" : "border-r border-r-zinc-300 dark:border-r-zinc-600",
+                        ].join(" ")}
+                        style={{ position: "sticky", top: svTopOffset, zIndex: 18 }}
+                      />
+                    ))}
                     {/* 日付セル */}
                     {allDates.map((date) => {
                       const cnt = svCountByDate.get(date) ?? 0;
@@ -1966,7 +2087,7 @@ export default function ShiftEditGrid({
                           </div>
                         </td>
                         {/* 残り列は背景だけ埋める（sticky なし） */}
-                        <td colSpan={allDates.length + 1}
+                        <td colSpan={prevDates.length + allDates.length + 1}
                           className={[
                             "border-b",
                             member.section && lockedSections.has(member.section)
@@ -2009,6 +2130,34 @@ export default function ShiftEditGrid({
                           </div>
                         </div>
                       </td>
+                      {/* 前月末セル（読み取り専用・グレー表示） */}
+                      {prevDates.map((date, pi) => {
+                        const shiftName = prevShiftsByKey.get(`${member.id}__${date}`) ?? null;
+                        const dn = dowNum(date);
+                        const isSun = dn === 0, isSat = dn === 6;
+                        const isLast = pi === prevDates.length - 1;
+                        return (
+                          <td key={`prev-${date}`} className={[
+                            "h-8 align-middle p-0 overflow-hidden",
+                            "bg-zinc-100 dark:bg-zinc-800/60",
+                            isLast ? "border-b border-r-2 border-b-zinc-200 dark:border-b-zinc-700 border-r-zinc-400 dark:border-r-zinc-500"
+                                   : "border-b border-r border-zinc-200 dark:border-zinc-700",
+                          ].join(" ")}>
+                            <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
+                              <span className={[
+                                "text-[10px] leading-none truncate",
+                                !shiftName || shiftName === "公休" || shiftName === "希望休"
+                                  ? "text-zinc-300 dark:text-zinc-600"
+                                  : isSun ? "text-red-400 dark:text-red-500 font-medium"
+                                  : isSat ? "text-blue-400 dark:text-blue-500 font-medium"
+                                  : "text-zinc-500 dark:text-zinc-400 font-medium",
+                              ].join(" ")}>
+                                {shiftName ? shiftName.slice(0, 3) : ""}
+                              </span>
+                            </div>
+                          </td>
+                        );
+                      })}
                       {allDates.map((date) => {
                         const isDeparted = !!member.endDate && date > member.endDate;
                         const cell = resolveCell(member.id, date);
@@ -2020,6 +2169,9 @@ export default function ShiftEditGrid({
                         const isCandidate = selectedShortage?.date === date && candidateStaffIds.has(member.id);
                         // 希望休
                         const offPriority = offRequestMap.get(`${member.id}__${date}`);
+                        // 連勤日数（6以上で警告）
+                        const consecutiveDays = consecutiveMap.get(`${member.id}__${date}`) ?? 0;
+                        const isConsecutiveWarning = consecutiveDays >= 6;
                         if (isDeparted) {
                           return (
                             <td key={date} className={[
@@ -2063,6 +2215,10 @@ export default function ShiftEditGrid({
                                 : "",
                             ].filter(Boolean).join(" ")}
                           >
+                            {/* 6連勤以上インジケーター */}
+                            {isConsecutiveWarning && (
+                              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-orange-400 dark:bg-orange-500 z-10" title={`${consecutiveDays}連勤`} />
+                            )}
                             {/* 希望休ラベル（シフト未配置の場合）→ 黒背景に白文字 */}
                             {offPriority && !shiftName && (
                               <div className="h-full flex items-center justify-center px-0.5">
@@ -2121,6 +2277,14 @@ export default function ShiftEditGrid({
         <span className="flex items-center gap-0.5">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />＝重複
         </span>
+        <span className="flex items-center gap-0.5">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400" />＝6連勤以上
+        </span>
+        {prevDates.length > 0 && (
+          <span className="flex items-center gap-0.5">
+            <span className="inline-block w-4 h-3 rounded bg-zinc-200 dark:bg-zinc-700" />＝前月
+          </span>
+        )}
         {selectedShortage && (
           <span className="flex items-center gap-0.5">
             <span className="inline-block w-2.5 h-2.5 rounded bg-amber-200" />＝不足日候補

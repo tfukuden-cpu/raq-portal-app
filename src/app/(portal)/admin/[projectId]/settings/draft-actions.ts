@@ -97,6 +97,20 @@ function isoWeekKey(dateStr: string): string {
  */
 const MIN_INTERVAL_HOURS = 11;
 
+/** 遅番判定: パターン名に「遅」を含む、または終業時刻が 21:00 以降 */
+function isLateShiftPattern(p: PatternDef): boolean {
+  if (p.name.includes("遅")) return true;
+  if (p.end_time && p.end_time >= "21:00") return true;
+  return false;
+}
+
+/** 早番判定: パターン名に「早」を含む、または始業時刻が 09:30 以前 */
+function isEarlyShiftPattern(p: PatternDef): boolean {
+  if (p.name.includes("早")) return true;
+  if (p.start_time && p.start_time <= "09:30") return true;
+  return false;
+}
+
 function hasAdequateInterval(
   prevEndTime: string | null | undefined,
   nextStartTime: string | null | undefined,
@@ -625,6 +639,8 @@ export async function generateShiftDraftAction(
           // 勤務間インターバル
           const prevPattern = getPrevDayPattern(m.staff_id, date);
           if (!hasAdequateInterval(prevPattern?.end_time, pattern.start_time)) return false;
+          // 遅番の翌日は早番を割り当てない
+          if (prevPattern && isLateShiftPattern(prevPattern) && isEarlyShiftPattern(pattern)) return false;
           return true;
         });
 
@@ -733,10 +749,11 @@ export async function generateShiftDraftAction(
       const maxConsec = (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? 5;
       if (consecutiveDaysBefore(m.staff_id, date) >= maxConsec) continue;
 
-      // インターバルを満たすパターンを選ぶ
+      // インターバルを満たし、かつ遅番翌日の早番でないパターンを選ぶ
       const prevPat = getPrevDayPattern(m.staff_id, date);
       const assignPattern = sortedPatterns.find(p =>
-        hasAdequateInterval(prevPat?.end_time, p.start_time)
+        hasAdequateInterval(prevPat?.end_time, p.start_time) &&
+        !(prevPat && isLateShiftPattern(prevPat) && isEarlyShiftPattern(p))
       );
       if (!assignPattern) continue;
 
