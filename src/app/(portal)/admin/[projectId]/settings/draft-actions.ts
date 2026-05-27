@@ -97,18 +97,27 @@ function isoWeekKey(dateStr: string): string {
  */
 const MIN_INTERVAL_HOURS = 11;
 
-/** 遅番判定: パターン名に「遅」を含む、または終業時刻が 21:00 以降 */
+/** 遅番判定: パターン名に「遅」を含む */
 function isLateShiftPattern(p: PatternDef): boolean {
-  if (p.name.includes("遅")) return true;
-  if (p.end_time && p.end_time >= "21:00") return true;
-  return false;
+  return p.name.includes("遅");
 }
 
-/** 早番判定: パターン名に「早」を含む、または始業時刻が 09:30 以前 */
+/** 早番判定: パターン名に「早」を含む */
 function isEarlyShiftPattern(p: PatternDef): boolean {
-  if (p.name.includes("早")) return true;
-  if (p.start_time && p.start_time <= "09:30") return true;
-  return false;
+  return p.name.includes("早");
+}
+
+/**
+ * パターンリストを早番優先に並び替える
+ * 早番(「早」含む) → 通常 → 遅番(「遅」含む)
+ * 同じグループ内は元の順序を維持
+ */
+function sortPatternsByShiftTime(ps: PatternDef[]): PatternDef[] {
+  return [...ps].sort((a, b) => {
+    const rank = (p: PatternDef) =>
+      isEarlyShiftPattern(p) ? 0 : isLateShiftPattern(p) ? 2 : 1;
+    return rank(a) - rank(b);
+  });
 }
 
 function hasAdequateInterval(
@@ -530,6 +539,10 @@ export async function generateShiftDraftAction(
   // (パターン名__日付) → ドラフトで割り当て済みの人数（O(1)参照用）
   const draftSlotCount = new Map<string, number>();
 
+  // 早番優先順にソート（早番 → 通常 → 遅番）
+  // ラウンドロビン内で早番から処理するため、早番が不足しにくくなる
+  const sortedPatterns = sortPatternsByShiftTime(patterns);
+
   for (let round = 1; round <= maxRound; round++) {
     // ラウンドごとに開始日をずらす（stride=11はすべての月長と互いに素）
     // → スタッフAがラウンドごとに異なる日から始まるため月全体に均等分散する
@@ -556,7 +569,7 @@ export async function generateShiftDraftAction(
         }
       }
 
-      for (const pattern of patterns) {
+      for (const pattern of sortedPatterns) {
         const slotRequired = slotMap.get(`${pattern.name}__${date}`);
         let required: number;
         if (slotRequired !== undefined && slotRequired > 0) {
