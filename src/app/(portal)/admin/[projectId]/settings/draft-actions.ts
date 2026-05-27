@@ -763,8 +763,41 @@ export async function generateShiftDraftAction(
       if (consecutiveDaysBefore(m.staff_id, date) >= maxConsec) continue;
 
       // インターバルを満たし、かつ遅番翌日の早番でないパターンを選ぶ
+      // 必要数に未達のパターン（不足パターン）を優先する：
+      //   早番が不足していれば遅番優先スタッフでも早番に割り当てる
       const prevPat = getPrevDayPattern(m.staff_id, date);
-      const assignPattern = sortedPatterns.find(p =>
+
+      // 不足しているパターンを早番優先順で取得
+      const surplusEarlyFirst = sortPatternsByShiftTime(staffPatterns);
+      const surplusDow = new Date(date + "T00:00:00Z").getUTCDay();
+      const surplusIsWeekend = surplusDow === 0 || surplusDow === 6;
+      const understaffedPatterns = surplusEarlyFirst.filter(p => {
+        const slotRequired = slotMap.get(`${p.name}__${date}`);
+        let req: number;
+        if (slotRequired !== undefined && slotRequired > 0) {
+          req = slotRequired;
+        } else {
+          const pr = surplusIsWeekend
+            ? (p.required_weekend ?? p.required_count ?? 0)
+            : (p.required_weekday ?? p.required_count ?? 0);
+          req = pr;
+        }
+        if (req <= 0) return false;
+        const existCnt = regenPatternNames?.has(p.name) ? 0
+          : (existingShiftRows ?? []).filter(s => s.shift_date === date && s.shift_name === p.name).length;
+        const draftCnt = draftSlotCount.get(`${p.name}__${date}`) ?? 0;
+        return existCnt + draftCnt < req;
+      });
+
+      // 不足パターン優先（早番優先順）→ それ以外は優先シフト順にフォールバック
+      const surplusCandidates = understaffedPatterns.length > 0
+        ? [
+            ...understaffedPatterns,
+            ...sortedPatterns.filter(p => !understaffedPatterns.some(u => u.name === p.name)),
+          ]
+        : sortedPatterns;
+
+      const assignPattern = surplusCandidates.find(p =>
         hasAdequateInterval(prevPat?.end_time, p.start_time) &&
         !(prevPat && isLateShiftPattern(prevPat) && isEarlyShiftPattern(p))
       );
