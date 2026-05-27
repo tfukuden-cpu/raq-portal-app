@@ -85,7 +85,7 @@ export default function SeatingClient({
   const dateLabel = `${parseInt(monthStr)}/${parseInt(dayStr)}`;
 
   return (
-    <div className={embedded ? "bg-zinc-50 dark:bg-zinc-950" : "min-h-screen bg-zinc-50 dark:bg-zinc-950"}>
+    <div className={embedded ? "" : "min-h-screen bg-zinc-50 dark:bg-zinc-950"}>
       {/* ヘッダー（スタンドアロン時のみ） */}
       {!embedded && (
         <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">
@@ -113,7 +113,7 @@ export default function SeatingClient({
       )}
 
       {/* 凡例 */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
+      <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 py-2 ${embedded ? "" : "px-4"}`}>
         {(Object.entries(STATUS_LABEL) as [NonNullable<SeatData["status"]>, string][]).map(([s, label]) => (
           <div key={s} className="flex items-center gap-1">
             <span className={`w-2.5 h-2.5 rounded-sm border-2 ${STATUS_BG[s]}`} />
@@ -124,7 +124,7 @@ export default function SeatingClient({
       </div>
 
       {/* キャンバス */}
-      <div className={embedded ? "px-3 pb-4" : "px-3 pb-28"}>
+      <div className={embedded ? "pb-4" : "px-3 pb-28"}>
         <div
           className="relative w-full bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
           style={{ aspectRatio: "4/3", minHeight: 280 }}

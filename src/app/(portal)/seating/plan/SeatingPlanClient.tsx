@@ -141,7 +141,7 @@ export default function SeatingPlanClient({
   );
 
   return (
-    <div className={embedded ? "bg-zinc-50 dark:bg-zinc-950" : "min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-40"}>
+    <div className={embedded ? "" : "min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-40"}>
       {/* ヘッダー（スタンドアロン時のみ） */}
       {!embedded && (
         <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">
@@ -155,7 +155,7 @@ export default function SeatingPlanClient({
 
       {/* 埋め込み時のコンパクトツールバー */}
       {embedded && (
-        <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1">
+        <div className="flex items-center justify-between gap-2 pt-1 pb-2">
           <p className="text-[11px] text-zinc-400 tabular-nums">{dateLabel}（翌日）</p>
           {actionButtons}
         </div>
@@ -163,19 +163,19 @@ export default function SeatingPlanClient({
 
       {/* 操作ガイド */}
       {selectedStaffId ? (
-        <div className="mx-3 mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800">
+        <div className={`mt-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800 ${embedded ? "" : "mx-3"}`}>
           <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
             {staffMap.get(selectedStaffId)?.name} を選択中 — 席をタップして配置
           </p>
         </div>
       ) : (
-        <p className="text-[11px] text-zinc-400 px-4 pt-2">
+        <p className="text-[11px] text-zinc-400 pt-1">
           スタッフを選択 → 席をタップで配置 ／ 席を直接タップで解除
         </p>
       )}
 
       {/* キャンバス */}
-      <div className="px-3 mt-2">
+      <div className={embedded ? "mt-2" : "px-3 mt-2"}>
         <div
           className="relative w-full bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
           style={{ aspectRatio: "4/3", minHeight: 280 }}
@@ -270,7 +270,7 @@ export default function SeatingPlanClient({
       </div>
 
       {/* スタッフパネル */}
-      <div className="px-3 mt-3 space-y-2">
+      <div className={`mt-3 space-y-2 ${embedded ? "" : "px-3"}`}>
         {/* 未配置 */}
         <div>
           <p className="text-xs font-semibold text-zinc-400 mb-1.5 px-1">
