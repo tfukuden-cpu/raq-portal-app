@@ -750,13 +750,13 @@ function getPatternBg(shiftName: string | null, pattern: Pattern | null): string
   if (!shiftName || shiftName === "公休" || shiftName === "希望休") return "";
   if (!pattern) return "";
   const colors = SECTION_SHIFT_COLORS[pattern.section ?? ""] ?? SECTION_SHIFT_FALLBACK;
-  // 開始時刻で早番/遅番を判定（設定されていればこちらが優先）
+  // パターン名で早番/遅番を判定（優先）
+  if (shiftName.includes("早番")) return colors.early;
+  if (shiftName.includes("遅番")) return colors.late;
+  // 名前に含まれない場合は開始時刻で判定
   const startH = pattern.start_time ? parseInt(pattern.start_time.split(":")[0], 10) : null;
   if (startH !== null && startH < 12) return colors.early;
   if (startH !== null && startH >= 12) return colors.late;
-  // 開始時刻未設定の場合はパターン名で判定
-  if (shiftName.includes("早番")) return colors.early;
-  if (shiftName.includes("遅番")) return colors.late;
   return colors.def;
 }
 
