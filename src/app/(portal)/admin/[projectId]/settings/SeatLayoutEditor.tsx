@@ -2,6 +2,7 @@
 
 import { useState, useRef, useTransition, useId, useEffect } from "react";
 import { saveSeatLayoutAction, saveSeatWallsAction } from "@/app/(portal)/seating/actions";
+import { getSeatBgClass, getSeatBorderClass, getSeatTextClass } from "@/lib/seatColors";
 
 export type SeatType = "normal" | "free" | "disabled";
 
@@ -491,21 +492,27 @@ export default function SeatLayoutEditor({
                     ? "border-zinc-400 dark:border-zinc-500 bg-zinc-200 dark:bg-zinc-700 shadow-sm opacity-60"
                     : isFree
                     ? "border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 shadow-sm"
+                    : seat.section
+                    ? `${getSeatBorderClass(seat.section)} ${getSeatBgClass(seat.section)} shadow-sm`
                     : "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 hover:border-zinc-400 shadow-sm",
                 ].join(" ")}
               >
                 <span className={[
                   "text-[10px] font-bold pointer-events-none leading-tight",
-                  isDisabled ? "text-zinc-400 dark:text-zinc-500" : "text-zinc-700 dark:text-zinc-200",
+                  isDisabled
+                    ? "text-zinc-400 dark:text-zinc-500"
+                    : isFree
+                    ? "text-emerald-800 dark:text-emerald-200"
+                    : getSeatTextClass(seat.section),
                 ].join(" ")}>
                   {seat.label || "－"}
                 </span>
                 {isDisabled ? (
                   <span className="text-[8px] text-zinc-400 pointer-events-none leading-tight">無効</span>
                 ) : isFree ? (
-                  <span className="text-[8px] text-emerald-500 pointer-events-none leading-tight">FREE</span>
+                  <span className="text-[8px] text-emerald-600 pointer-events-none leading-tight">FREE</span>
                 ) : seat.section ? (
-                  <span className="text-[9px] text-zinc-400 pointer-events-none leading-tight">{seat.section}</span>
+                  <span className="text-[9px] opacity-60 pointer-events-none leading-tight">{seat.section}</span>
                 ) : null}
               </div>
             );

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toggleBreakAction } from "./actions";
+import { getSeatBgClass } from "@/lib/seatColors";
 
 export type SeatData = {
   id: string;
@@ -14,6 +15,7 @@ export type SeatData = {
   staffId: string | null;
   staffName: string | null;
   accountNumber: string | null;
+  shiftName: string | null;  // 早番/遅番判定用
   status: "not_arrived" | "working" | "on_break" | "clocked_out" | "absent" | null;
 };
 
@@ -185,6 +187,10 @@ export default function SeatingClient({
                   isPending ? "opacity-60" : "",
                 ].join(" ")}
               >
+                {/* セクション色バー（上部） */}
+                {seat.section && !isFree && (
+                  <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(seat.section, seat.shiftName)}`} />
+                )}
                 <span className="text-[9px] text-zinc-400 leading-none">{seat.label}</span>
                 {seat.staffName ? (
                   <>

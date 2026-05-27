@@ -27,6 +27,7 @@ export default async function SeatingPage() {
     { data: memberRows },
     { data: punchLogs },
     { data: absenceRows },
+    { data: shiftRows },
   ] = await Promise.all([
     admin.from("seats")
       .select("id, label, x_pct, y_pct, section, seat_type")
@@ -45,6 +46,10 @@ export default async function SeatingPage() {
     admin.from("absence_reports")
       .select("staff_id")
       .eq("project_id", projectId).eq("absence_date", today),
+    // 当日シフト名（早番/遅番判定用）
+    admin.from("shifts")
+      .select("staff_id, shift_name")
+      .eq("project_id", projectId).eq("shift_date", today),
   ]);
 
   // メンバーマップ
@@ -76,8 +81,9 @@ export default async function SeatingPage() {
     return "not_arrived";
   }
 
-  // 割当マップ
-  const assignMap = new Map((assignments ?? []).map(a => [a.seat_id, a.staff_id]));
+  // 割当マップ / シフト名マップ（早番/遅番判定用）
+  const assignMap   = new Map((assignments ?? []).map(a => [a.seat_id, a.staff_id]));
+  const shiftNameMap = new Map((shiftRows ?? []).map(r => [r.staff_id as string, r.shift_name as string | null]));
 
   const seatData: SeatData[] = (seats ?? []).map(s => {
     const seatType = (s as { seat_type?: string }).seat_type ?? "normal";
@@ -94,6 +100,7 @@ export default async function SeatingPage() {
       staffId,
       staffName:     member?.name ?? null,
       accountNumber: member?.accountNumber ?? null,
+      shiftName:     staffId ? (shiftNameMap.get(staffId) ?? null) : null,
       status:        staffId ? deriveStatus(staffId) : null,
     };
   });

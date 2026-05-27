@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveSeatAssignmentsAction, autoAssignSeatsAction } from "../actions";
+import { getSeatBgClass, getSeatBorderClass, getSeatTextClass } from "@/lib/seatColors";
 
 export type PlanSeat = {
   id: string;
@@ -19,6 +20,7 @@ export type PlanStaff = {
   name: string;
   accountNumber: string | null;
   section: string | null;
+  shiftName: string | null;  // 早番/遅番判定用
 };
 
 export default function SeatingPlanClient({
@@ -194,6 +196,13 @@ export default function SeatingPlanClient({
               );
             }
 
+            // セクション色の計算
+            const seatSection = seat.section;
+            const assignedShift = s?.shiftName ?? null;
+            const sectionBg     = seatSection ? getSeatBgClass(seatSection, s ? assignedShift : null) : "";
+            const sectionBorder = seatSection ? getSeatBorderClass(seatSection) : "";
+            const sectionText   = seatSection ? getSeatTextClass(seatSection) : "text-zinc-700 dark:text-zinc-200";
+
             return (
               <button
                 key={seat.id}
@@ -202,28 +211,37 @@ export default function SeatingPlanClient({
                 className={[
                   "absolute flex flex-col items-center justify-center gap-px",
                   "w-[70px] h-[58px] rounded-xl border-2 text-center transition-all shadow-sm select-none overflow-hidden",
-                  s
-                    ? "bg-blue-100 dark:bg-blue-900/50 border-blue-400 dark:border-blue-600 cursor-pointer active:scale-95"
-                    : isTarget
+                  isTarget
                     ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 border-dashed cursor-pointer animate-pulse"
                     : isFree
                     ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-700 cursor-pointer"
+                    : seatSection
+                    ? `${sectionBg} ${sectionBorder} cursor-pointer active:scale-95`
+                    : s
+                    ? "bg-zinc-100 dark:bg-zinc-700 border-zinc-400 dark:border-zinc-500 cursor-pointer active:scale-95"
                     : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-600 cursor-pointer",
                 ].join(" ")}
               >
-                <span className="text-[9px] text-zinc-400 leading-none">{seat.label}</span>
+                <span className="text-[9px] text-zinc-500 leading-none">{seat.label}</span>
                 {s ? (
                   <>
-                    <span className="text-[10px] font-mono text-zinc-400 tabular-nums leading-none">{s.accountNumber ?? ""}</span>
-                    <span className="text-[11px] font-bold text-blue-800 dark:text-blue-200 leading-tight px-0.5 w-full truncate text-center">
+                    <span className="text-[10px] font-mono text-zinc-500 tabular-nums leading-none">{s.accountNumber ?? ""}</span>
+                    <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${sectionText}`}>
                       {s.name}
                     </span>
-                    {s.section && (
-                      <span className="text-[9px] text-blue-600 dark:text-blue-400 leading-none">{s.section}</span>
+                    {assignedShift && (
+                      <span className={`text-[9px] leading-none opacity-70 ${sectionText}`}>
+                        {assignedShift.includes("早") ? "早番" : assignedShift.includes("遅") ? "遅番" : ""}
+                      </span>
                     )}
                   </>
                 ) : (
-                  <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-400 dark:text-emerald-600" : "text-zinc-300 dark:text-zinc-600"}`}>
+                  <span className={`text-[10px] mt-0.5 ${
+                    isFree ? "text-emerald-400 dark:text-emerald-600"
+                    : isTarget ? "text-emerald-600"
+                    : seatSection ? "opacity-40 " + sectionText
+                    : "text-zinc-300 dark:text-zinc-600"
+                  }`}>
                     {isTarget ? "ここへ" : isFree ? "FREE" : "空席"}
                   </span>
                 )}

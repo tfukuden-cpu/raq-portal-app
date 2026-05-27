@@ -73,6 +73,10 @@ export default async function SeatingPlanPage() {
 
   // 翌日出勤予定スタッフ
   const assignMap    = new Map((assignments ?? []).map(a => [a.seat_id, a.staff_id]));
+  // staffId → shiftName（早番/遅番判定用）
+  const shiftNameMap = new Map(
+    (shifts ?? []).map(s => [s.staff_id as string, s.shift_name as string | null])
+  );
   const staffOnShift = new Set(
     (shifts ?? [])
       .filter(s => s.shift_name && !OFF_NAMES.includes(s.shift_name))
@@ -102,6 +106,7 @@ export default async function SeatingPlanPage() {
       name:          m?.name          ?? id,
       accountNumber: m?.accountNumber ?? null,
       section:       m?.section       ?? null,
+      shiftName:     shiftNameMap.get(id) ?? null,
     };
   });
 
