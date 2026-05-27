@@ -10,8 +10,6 @@ import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { type TrainingEntry } from "@/components/TrainingSection";
 import TrainingSection from "@/components/TrainingSection";
-import HolidayRequestSection from "@/components/HolidayRequestSection";
-import { type HolidayRequestEntry, fetchHolidayRequestsForStaffAction } from "@/app/(portal)/admin/[projectId]/settings/holiday-request-actions";
 import { fetchTrainingDatesAction } from "@/app/(portal)/admin/[projectId]/settings/training-actions";
 import { updateShiftSettingsAction } from "@/app/(portal)/admin/[projectId]/settings/actions";
 import { overrideDraftCellsAction } from "@/app/(portal)/shifts/actions";
@@ -75,27 +73,21 @@ export default function StaffInfoPanel({
   const router = useRouter();
 
   // ── フェッチ状態 ──────────────────────────────────────────
-  const [trainingDates,   setTrainingDates]   = useState<TrainingEntry[]>([]);
-  const [holidayEntries,  setHolidayEntries]  = useState<HolidayRequestEntry[]>([]);
-  const [fetching,        setFetching]        = useState(true);
+  const [trainingDates, setTrainingDates] = useState<TrainingEntry[]>([]);
+  const [fetching,      setFetching]      = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     // スタッフ切り替え時に即座にリセット（古いデータで誤書き込みを防ぐ）
     setTrainingDates([]);
-    setHolidayEntries([]);
     setFetching(true);
-    Promise.all([
-      fetchTrainingDatesAction(member.id),
-      fetchHolidayRequestsForStaffAction(member.id, projectId),
-    ]).then(([trainings, holidays]) => {
+    fetchTrainingDatesAction(member.id).then(trainings => {
       if (cancelled) return;
       setTrainingDates(trainings);
-      setHolidayEntries(holidays);
       setFetching(false);
     }).catch(() => { if (!cancelled) setFetching(false); });
     return () => { cancelled = true; };
-  }, [member.id, projectId]);
+  }, [member.id]);
 
   // ── シフト設定編集状態 ────────────────────────────────────
   const [editOpen,           setEditOpen]           = useState(false);
@@ -117,16 +109,14 @@ export default function StaffInfoPanel({
   const [applyMsg, setApplyMsg]       = useState<string | null>(null);
   // 追加された変更セルを蓄積（保存ボタン用に最新データへアクセスするためref）
   const trainingRef  = useRef(trainingDates);
-  const holidayRef   = useRef(holidayEntries);
   trainingRef.current = trainingDates;
-  holidayRef.current  = holidayEntries;
 
   function handleApplyToShift() {
     if (!onDraftCellsChanged) return;
     startApplyTrans(async () => {
       const cells: { staffId: string; date: string; shiftName: string }[] = [];
-      for (const h of holidayRef.current)  cells.push({ staffId: member.id, date: h.request_date, shiftName: "希望休" });
-      for (const t of trainingRef.current) cells.push({ staffId: member.id, date: t.training_date, shiftName: t.training_name ?? "研修" });
+      for (const r of staffOffRequests ?? []) cells.push({ staffId: member.id, date: r.request_date, shiftName: "希望休" });
+      for (const t of trainingRef.current)    cells.push({ staffId: member.id, date: t.training_date, shiftName: t.training_name ?? "研修" });
       if (cells.length === 0) { setApplyMsg("反映する設定がありません"); setTimeout(() => setApplyMsg(null), 2000); return; }
       await overrideDraftCellsAction(projectId, cells);
       onDraftCellsChanged(cells);
@@ -414,25 +404,6 @@ export default function StaffInfoPanel({
               </section>
             );
           })()}
-
-          {/* ── 希望休（申請フロー） ─────────────────────────── */}
-          <section>
-            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">希望休</p>
-            {fetching ? (
-              <p className="text-xs text-zinc-400 animate-pulse">読み込み中…</p>
-            ) : (
-              <HolidayRequestSection
-                staffId={member.id}
-                projectId={projectId}
-                initialEntries={holidayEntries}
-                onDatesAdded={async (dates) => {
-                  const cells = dates.map(d => ({ staffId: member.id, date: d, shiftName: "希望休" }));
-                  await overrideDraftCellsAction(projectId, cells);
-                  onDraftCellsChanged?.(cells);
-                }}
-              />
-            )}
-          </section>
 
           {/* ── 研修設定 ─────────────────────────────────────── */}
           <section>
