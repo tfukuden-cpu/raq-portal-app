@@ -1196,14 +1196,25 @@ export default function ShiftEditGrid({
         const regenPatternNames = new Set(
           shiftPatterns.filter(p => p.section === targetSection).map(p => p.name)
         );
+        // 全パターン名セット（研修・公休など「パターン外の特殊シフト」の判定に使用）
+        const allPatternNames = new Set(shiftPatterns.map(p => p.name));
         const merged = new Map(drafts);
         for (const [key, val] of [...merged]) {
           if (val !== null && val.shiftName && regenPatternNames.has(val.shiftName)) {
             merged.delete(key);
           }
+          // 削除済みパターン名のエントリも除去（サーバー側の staleOverride で上書きされる）
+          if (val !== null && val.shiftName && !allPatternNames.has(val.shiftName)) {
+            merged.delete(key);
+          }
         }
         for (const [key, val] of parseDraftEntries(r.draftEntries)) {
-          if (val === null || (val.shiftName && regenPatternNames.has(val.shiftName))) {
+          if (
+            val === null ||                                                   // 削除マーカー
+            !val.shiftName ||                                                 // 空エントリ
+            regenPatternNames.has(val.shiftName) ||                          // 再仮組み対象パターン
+            !allPatternNames.has(val.shiftName)                              // 研修・公休など特殊シフト
+          ) {
             merged.set(key, val);
           }
         }
