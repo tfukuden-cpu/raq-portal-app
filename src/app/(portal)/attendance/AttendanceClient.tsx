@@ -19,7 +19,11 @@ export type MemberRow = {
   departureTime: string | null;
   etaMinutes: number | null;
   absenceReason: string | null;
+  absenceReportedAt: string | null;
+  absenceNextDay: boolean | null;
+  absenceDayAfter: boolean | null;
   lateReason: string | null;
+  lateReportedAt: string | null;
   expectedArrival: string | null;
 };
 
@@ -128,6 +132,7 @@ export default function AttendanceClient({
   );
   const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
   const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string } | null>(null);
+  const [detailMember, setDetailMember] = useState<MemberRow | null>(null);
 
   function handleStatusChange(staffId: string, newStatus: StatusKey) {
     setStatusMenuId(null);
@@ -331,9 +336,21 @@ export default function AttendanceClient({
                                 <button
                                   type="button"
                                   onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name })}
-                                  className="flex-1 min-w-0 text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                  className="flex-1 min-w-0 text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                                 >
-                                  {m.name}
+                                  <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                                    {m.name}
+                                  </span>
+                                  {currentStatus === "absent" && m.absenceReason && (
+                                    <span className="block text-[11px] text-red-500 dark:text-red-400 truncate">
+                                      {m.absenceReason}
+                                    </span>
+                                  )}
+                                  {currentStatus === "late" && m.lateReason && (
+                                    <span className="block text-[11px] text-amber-500 dark:text-amber-400 truncate">
+                                      {m.lateReason}
+                                    </span>
+                                  )}
                                 </button>
                                 {/* ステータスバッジ（タップで変更メニュー） */}
                                 <div className="relative flex-shrink-0">
@@ -359,17 +376,36 @@ export default function AttendanceClient({
                                   {enableDeparture && m.departureTime && !m.clockIn && `出発${fmtTime(m.departureTime)}`}
                                   {currentStatus === "late" && m.expectedArrival && `→${m.expectedArrival.slice(0,5)}`}
                                 </span>
-                                {/* 催促トグルボタン */}
+                                {/* 催促 / 詳細ボタン */}
                                 {canRemind ? (
+                                  <div className="flex-shrink-0 flex items-center gap-1">
+                                    <button
+                                      onClick={() => toggleReminder(m.staffId, "reminder")}
+                                      className={`text-xs font-semibold px-2 py-1 rounded-lg border transition-colors whitespace-nowrap ${
+                                        isSelected
+                                          ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
+                                          : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800"
+                                      }`}
+                                    >
+                                      {isSelected ? "✓ 選択中" : "催促する"}
+                                    </button>
+                                    {currentStatus === "late" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setDetailMember(m)}
+                                        className="text-xs font-semibold px-1.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                                      >
+                                        詳細
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : currentStatus === "absent" ? (
                                   <button
-                                    onClick={() => toggleReminder(m.staffId, "reminder")}
-                                    className={`flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-lg border transition-colors whitespace-nowrap ${
-                                      isSelected
-                                        ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
-                                        : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800"
-                                    }`}
+                                    type="button"
+                                    onClick={() => setDetailMember(m)}
+                                    className="flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap"
                                   >
-                                    {isSelected ? "✓ 選択中" : "催促する"}
+                                    詳細
                                   </button>
                                 ) : (
                                   <div className="w-14 flex-shrink-0" />
@@ -545,6 +581,96 @@ export default function AttendanceClient({
         </div>
       )}
 
+      {/* 欠勤 / 遅刻 詳細モーダル */}
+      {detailMember && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+          onClick={() => setDetailMember(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-zinc-100 dark:border-zinc-800">
+              <div>
+                <p className="font-semibold text-zinc-900 dark:text-zinc-100">{detailMember.name}</p>
+                {detailMember.accountNumber && (
+                  <p className="text-xs font-mono text-zinc-400 mt-0.5">{detailMember.accountNumber}</p>
+                )}
+              </div>
+              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${STATUS_COLOR[detailMember.status]}`}>
+                {STATUS_LABEL[detailMember.status]}
+              </span>
+            </div>
+
+            {/* 内容 */}
+            <div className="px-5 py-4 space-y-3">
+              {/* 欠勤報告 */}
+              {detailMember.status === "absent" && (
+                <>
+                  <DetailRow label="報告時刻">
+                    {detailMember.absenceReportedAt
+                      ? fmtTime(detailMember.absenceReportedAt)
+                      : "—"}
+                  </DetailRow>
+                  <DetailRow label="欠勤理由">
+                    {detailMember.absenceReason || "—"}
+                  </DetailRow>
+                  {detailMember.absenceNextDay !== null && (
+                    <DetailRow label="翌日出勤">
+                      <span className={detailMember.absenceNextDay
+                        ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+                        : "text-red-500 dark:text-red-400 font-semibold"}>
+                        {detailMember.absenceNextDay ? "出勤可" : "欠勤予定"}
+                      </span>
+                    </DetailRow>
+                  )}
+                  {detailMember.absenceDayAfter !== null && (
+                    <DetailRow label="翌々日出勤">
+                      <span className={detailMember.absenceDayAfter
+                        ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+                        : "text-red-500 dark:text-red-400 font-semibold"}>
+                        {detailMember.absenceDayAfter ? "出勤可" : "欠勤予定"}
+                      </span>
+                    </DetailRow>
+                  )}
+                </>
+              )}
+              {/* 遅刻報告 */}
+              {detailMember.status === "late" && (
+                <>
+                  <DetailRow label="報告時刻">
+                    {detailMember.lateReportedAt
+                      ? fmtTime(detailMember.lateReportedAt)
+                      : "—"}
+                  </DetailRow>
+                  <DetailRow label="遅刻理由">
+                    {detailMember.lateReason || "—"}
+                  </DetailRow>
+                  {detailMember.expectedArrival && (
+                    <DetailRow label="到着目安">
+                      {detailMember.expectedArrival.slice(0, 5)}
+                    </DetailRow>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* フッター */}
+            <div className="px-5 pb-5">
+              <button
+                type="button"
+                onClick={() => setDetailMember(null)}
+                className="w-full py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {staffMenu && (
         <StaffPopupMenu
           staffId={staffMenu.staffId}
@@ -554,6 +680,16 @@ export default function AttendanceClient({
         />
       )}
     </main>
+  );
+}
+
+// ── 詳細行コンポーネント ──────────────────────────────────────
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3 text-sm">
+      <span className="flex-shrink-0 w-20 text-zinc-400">{label}</span>
+      <span className="flex-1 text-zinc-800 dark:text-zinc-100 break-all">{children}</span>
+    </div>
   );
 }
 

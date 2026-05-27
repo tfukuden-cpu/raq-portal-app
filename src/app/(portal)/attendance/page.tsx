@@ -27,6 +27,10 @@ type InternalMember = MemberRow & {
   shiftName: string;
   shiftStart: string | null;
   shiftEnd: string | null;
+  absenceReportedAt: string | null;
+  absenceNextDay: boolean | null;
+  absenceDayAfter: boolean | null;
+  lateReportedAt: string | null;
 };
 
 function buildGrouped(members: InternalMember[]): SectionGroup[] {
@@ -60,18 +64,22 @@ function buildGrouped(members: InternalMember[]): SectionGroup[] {
         shiftStart: shiftOrderMap.get(name)![0].shiftStart,
         shiftEnd:   shiftOrderMap.get(name)![0].shiftEnd,
         members:    shiftOrderMap.get(name)!.map(m => ({
-          staffId:       m.staffId,
-          name:          m.name,
-          accountNumber: m.accountNumber,
-          section:       m.section,
-          status:        m.status,
-          clockIn:       m.clockIn,
-          clockOut:      m.clockOut,
-          departureTime: m.departureTime,
-          etaMinutes:    m.etaMinutes,
-          absenceReason: m.absenceReason,
-          lateReason:    m.lateReason,
-          expectedArrival: m.expectedArrival,
+          staffId:           m.staffId,
+          name:              m.name,
+          accountNumber:     m.accountNumber,
+          section:           m.section,
+          status:            m.status,
+          clockIn:           m.clockIn,
+          clockOut:          m.clockOut,
+          departureTime:     m.departureTime,
+          etaMinutes:        m.etaMinutes,
+          absenceReason:     m.absenceReason,
+          absenceReportedAt: m.absenceReportedAt,
+          absenceNextDay:    m.absenceNextDay,
+          absenceDayAfter:   m.absenceDayAfter,
+          lateReason:        m.lateReason,
+          lateReportedAt:    m.lateReportedAt,
+          expectedArrival:   m.expectedArrival,
         })),
       }));
 
@@ -140,11 +148,11 @@ export default async function AttendancePage() {
       .gte("reported_at", todayStart)
       .lte("reported_at", todayEnd),
     admin.from("absence_reports")
-      .select("staff_id, reason")
+      .select("staff_id, reason, created_at, next_day_available, day_after_available, status")
       .eq("project_id", projectId)
       .eq("absence_date", today),
     admin.from("late_reports")
-      .select("staff_id, reason, expected_arrival")
+      .select("staff_id, reason, expected_arrival, created_at, status")
       .eq("project_id", projectId)
       .eq("late_date", today),
     admin.from("shift_patterns")
@@ -230,10 +238,20 @@ export default async function AttendancePage() {
     (departureRows ?? []).map(d => [d.staff_id, { reportedAt: d.reported_at, etaMinutes: d.eta_minutes as number | null }])
   );
   const absenceMap = new Map(
-    (absenceRows ?? []).map(a => [a.staff_id, { reason: a.reason as string | null }])
+    (absenceRows ?? []).map(a => [a.staff_id, {
+      reason:      a.reason as string | null,
+      reportedAt:  a.created_at as string | null,
+      nextDay:     (a as { next_day_available?: boolean | null }).next_day_available ?? null,
+      dayAfter:    (a as { day_after_available?: boolean | null }).day_after_available ?? null,
+      absStatus:   a.status as string | null,
+    }])
   );
   const lateMap = new Map(
-    (lateRows ?? []).map(l => [l.staff_id, { reason: l.reason as string | null, expectedArrival: l.expected_arrival as string | null }])
+    (lateRows ?? []).map(l => [l.staff_id, {
+      reason:          l.reason as string | null,
+      expectedArrival: l.expected_arrival as string | null,
+      reportedAt:      (l as { created_at?: string | null }).created_at ?? null,
+    }])
   );
 
   // 出勤予定 / 本日休み に振り分け
@@ -279,9 +297,13 @@ export default async function AttendancePage() {
       clockOut:       punch?.clockOut ?? null,
       departureTime:  departure?.reportedAt  ?? null,
       etaMinutes:     departure?.etaMinutes  ?? null,
-      absenceReason:  absence?.reason        ?? null,
-      lateReason:     late?.reason           ?? null,
-      expectedArrival: late?.expectedArrival ?? null,
+      absenceReason:     absence?.reason           ?? null,
+      absenceReportedAt: absence?.reportedAt        ?? null,
+      absenceNextDay:    absence?.nextDay            ?? null,
+      absenceDayAfter:   absence?.dayAfter           ?? null,
+      lateReason:        late?.reason               ?? null,
+      expectedArrival:   late?.expectedArrival      ?? null,
+      lateReportedAt:    late?.reportedAt            ?? null,
       shiftName,
       shiftStart:     shift.shift_start ?? pattern?.start ?? null,
       shiftEnd:       shift.shift_end   ?? pattern?.end   ?? null,
