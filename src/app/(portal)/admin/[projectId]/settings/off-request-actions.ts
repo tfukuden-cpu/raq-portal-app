@@ -122,6 +122,70 @@ export async function fetchAppHolidayRequestsAction(
   };
 }
 
+/** スタッフの希望休を全件取得（管理者用・ID付き） */
+export async function fetchOffRequestsForStaffAction(
+  projectId: string,
+  staffId: string,
+): Promise<{ id: string; request_date: string; priority: string }[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("shift_off_requests")
+    .select("id, request_date, priority")
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .order("request_date");
+  return (data ?? []).map(r => ({
+    id: r.id as string,
+    request_date: r.request_date as string,
+    priority: r.priority as string,
+  }));
+}
+
+/** 希望休を1件追加（管理者操作） */
+export async function addOffRequestForStaffAction(
+  projectId: string,
+  staffId: string,
+  requestDate: string,
+  priority: string,
+): Promise<{ success: boolean; message?: string; id?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("shift_off_requests")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .eq("request_date", requestDate)
+    .maybeSingle();
+  if (existing) return { success: false, message: "同じ日付が既に登録されています" };
+
+  const { data, error } = await admin
+    .from("shift_off_requests")
+    .insert({ project_id: projectId, staff_id: staffId, request_date: requestDate, priority, source: "manual" })
+    .select("id")
+    .single();
+
+  if (error) return { success: false, message: error.message };
+  return { success: true, id: data.id as string };
+}
+
+/** 希望休を1件削除（管理者操作・IDで指定） */
+export async function removeOffRequestForStaffAction(
+  id: string,
+): Promise<{ success: boolean; message?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("shift_off_requests").delete().eq("id", id);
+  if (error) return { success: false, message: error.message };
+  return { success: true };
+}
+
 /** スタッフ自身の希望休申請を1件取り下げ */
 export async function withdrawOffRequestAction(
   projectId: string,

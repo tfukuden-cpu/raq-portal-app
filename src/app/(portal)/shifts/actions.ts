@@ -754,6 +754,54 @@ export async function overrideDraftCellsAction(
   return { success: true };
 }
 
+/**
+ * 特定セルをドラフトから削除（希望休取り消し時など）
+ */
+export async function deleteDraftCellsAction(
+  projectId: string,
+  cells: { staffId: string; date: string }[],
+): Promise<{ success: boolean; message?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+  if (cells.length === 0) return { success: true };
+
+  const admin = createAdminClient();
+
+  const byMonth = new Map<string, typeof cells>();
+  for (const cell of cells) {
+    const month = cell.date.slice(0, 7);
+    if (!byMonth.has(month)) byMonth.set(month, []);
+    byMonth.get(month)!.push(cell);
+  }
+
+  for (const [month, monthCells] of byMonth) {
+    const { data } = await admin
+      .from("shift_grid_drafts")
+      .select("draft_data")
+      .eq("project_id", projectId)
+      .eq("target_month", month)
+      .maybeSingle();
+
+    if (!data) continue;
+
+    const existing: GridDraftEntry[] = (data?.draft_data as GridDraftEntry[] | null) ?? [];
+    const draftMap = new Map(existing.map(e => [e.k, e]));
+    for (const cell of monthCells) draftMap.delete(`${cell.staffId}__${cell.date}`);
+
+    const { error } = await admin
+      .from("shift_grid_drafts")
+      .upsert(
+        { project_id: projectId, target_month: month, draft_data: [...draftMap.values()] },
+        { onConflict: "project_id,target_month" },
+      );
+    if (error) return { success: false, message: error.message };
+  }
+
+  revalidatePath("/shifts/manage");
+  return { success: true };
+}
+
 export type CsvImportResult = {
   success: boolean;
   imported: number;

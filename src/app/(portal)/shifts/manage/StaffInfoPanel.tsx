@@ -10,9 +10,11 @@ import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { type TrainingEntry } from "@/components/TrainingSection";
 import TrainingSection from "@/components/TrainingSection";
+import OffRequestSection, { type OffRequestEntry } from "@/components/OffRequestSection";
 import { fetchTrainingDatesAction } from "@/app/(portal)/admin/[projectId]/settings/training-actions";
+import { fetchOffRequestsForStaffAction } from "@/app/(portal)/admin/[projectId]/settings/off-request-actions";
 import { updateShiftSettingsAction } from "@/app/(portal)/admin/[projectId]/settings/actions";
-import { overrideDraftCellsAction } from "@/app/(portal)/shifts/actions";
+import { overrideDraftCellsAction, deleteDraftCellsAction } from "@/app/(portal)/shifts/actions";
 
 export type StaffInfoMember = {
   id: string;
@@ -57,6 +59,7 @@ export default function StaffInfoPanel({
   shiftPatternNames,
   staffOffRequests,
   onDraftCellsChanged,
+  onDraftCellsRemoved,
   onClose,
 }: {
   member: StaffInfoMember;
@@ -66,6 +69,7 @@ export default function StaffInfoPanel({
   staffOffRequests?: StaffOffRequestEntry[];
   /** シフトドラフトへ即時反映するコールバック（ShiftEditGridのdraftsを更新） */
   onDraftCellsChanged?: (cells: { staffId: string; date: string; shiftName: string }[]) => void;
+  onDraftCellsRemoved?: (cells: { staffId: string; date: string }[]) => void;
   onClose: () => void;
   /** @deprecated kept for compat, no longer used */
   offRequests?: StaffOffRequest[];
@@ -73,21 +77,27 @@ export default function StaffInfoPanel({
   const router = useRouter();
 
   // ── フェッチ状態 ──────────────────────────────────────────
-  const [trainingDates, setTrainingDates] = useState<TrainingEntry[]>([]);
-  const [fetching,      setFetching]      = useState(true);
+  const [trainingDates,   setTrainingDates]   = useState<TrainingEntry[]>([]);
+  const [offReqEntries,   setOffReqEntries]   = useState<OffRequestEntry[]>([]);
+  const [fetching,        setFetching]        = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     // スタッフ切り替え時に即座にリセット（古いデータで誤書き込みを防ぐ）
     setTrainingDates([]);
+    setOffReqEntries([]);
     setFetching(true);
-    fetchTrainingDatesAction(member.id).then(trainings => {
+    Promise.all([
+      fetchTrainingDatesAction(member.id),
+      fetchOffRequestsForStaffAction(projectId, member.id),
+    ]).then(([trainings, offReqs]) => {
       if (cancelled) return;
       setTrainingDates(trainings);
+      setOffReqEntries(offReqs);
       setFetching(false);
     }).catch(() => { if (!cancelled) setFetching(false); });
     return () => { cancelled = true; };
-  }, [member.id]);
+  }, [member.id, projectId]);
 
   // ── シフト設定編集状態 ────────────────────────────────────
   const [editOpen,           setEditOpen]           = useState(false);
@@ -107,16 +117,18 @@ export default function StaffInfoPanel({
   // ── シフト一括反映 ────────────────────────────────────────
   const [isApplying, startApplyTrans] = useTransition();
   const [applyMsg, setApplyMsg]       = useState<string | null>(null);
-  // 追加された変更セルを蓄積（保存ボタン用に最新データへアクセスするためref）
+  // 最新データへアクセスするためref（保存ボタン押下時に最新値を参照）
   const trainingRef  = useRef(trainingDates);
+  const offReqRef    = useRef(offReqEntries);
   trainingRef.current = trainingDates;
+  offReqRef.current   = offReqEntries;
 
   function handleApplyToShift() {
     if (!onDraftCellsChanged) return;
     startApplyTrans(async () => {
       const cells: { staffId: string; date: string; shiftName: string }[] = [];
-      for (const r of staffOffRequests ?? []) cells.push({ staffId: member.id, date: r.request_date, shiftName: "希望休" });
-      for (const t of trainingRef.current)    cells.push({ staffId: member.id, date: t.training_date, shiftName: t.training_name ?? "研修" });
+      for (const r of offReqRef.current)   cells.push({ staffId: member.id, date: r.request_date, shiftName: "希望休" });
+      for (const t of trainingRef.current) cells.push({ staffId: member.id, date: t.training_date, shiftName: t.training_name ?? "研修" });
       if (cells.length === 0) { setApplyMsg("反映する設定がありません"); setTimeout(() => setApplyMsg(null), 2000); return; }
       await overrideDraftCellsAction(projectId, cells);
       onDraftCellsChanged(cells);
@@ -362,48 +374,29 @@ export default function StaffInfoPanel({
             )}
           </section>
 
-          {/* ── 希望休（シフト反映分） ───────────────────────── */}
-          {staffOffRequests && staffOffRequests.length > 0 && (() => {
-            const sorted = [...staffOffRequests].sort((a, b) => a.request_date.localeCompare(b.request_date));
-            // 月別グループ化
-            const months = [...new Set(sorted.map(r => r.request_date.slice(0, 7)))];
-            return (
-              <section>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">希望休（シフト反映）</p>
-                <div className="space-y-1.5">
-                  {months.map(ym => {
-                    const [y, m] = ym.split("-");
-                    const entries = sorted.filter(r => r.request_date.startsWith(ym));
-                    return (
-                      <div key={ym}>
-                        <p className="text-[10px] text-zinc-400 mb-1">{y}年{parseInt(m)}月 <span className="tabular-nums">({entries.length}日)</span></p>
-                        <div className="flex flex-wrap gap-1">
-                          {entries.map(r => {
-                            const [, , d] = r.request_date.split("-");
-                            const lbl = OFF_PRIORITY_LABEL[r.priority] ?? r.priority.slice(0, 3);
-                            const isOff = r.priority === "有休" || r.priority === "特別休暇";
-                            return (
-                              <span
-                                key={r.request_date}
-                                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${
-                                  isOff
-                                    ? "bg-zinc-600 text-white"
-                                    : "bg-zinc-800 text-white"
-                                }`}
-                              >
-                                {parseInt(d)}日
-                                <span className="text-[9px] opacity-70 ml-0.5">{lbl}</span>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })()}
+          {/* ── 希望休 ───────────────────────────────────────── */}
+          <section>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">希望休</p>
+            {fetching ? (
+              <p className="text-xs text-zinc-400 animate-pulse">読み込み中…</p>
+            ) : (
+              <OffRequestSection
+                staffId={member.id}
+                projectId={projectId}
+                initialEntries={offReqEntries}
+                onEntryAdded={async (newEntries) => {
+                  const cells = newEntries.map(e => ({ staffId: member.id, date: e.date, shiftName: "希望休" }));
+                  await overrideDraftCellsAction(projectId, cells);
+                  onDraftCellsChanged?.(cells);
+                }}
+                onEntryRemoved={async (date) => {
+                  const cell = [{ staffId: member.id, date }];
+                  await deleteDraftCellsAction(projectId, cell);
+                  onDraftCellsRemoved?.(cell);
+                }}
+              />
+            )}
+          </section>
 
           {/* ── 研修設定 ─────────────────────────────────────── */}
           <section>

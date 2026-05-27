@@ -2494,6 +2494,11 @@ export default function ShiftEditGrid({
             }
             applyEdit(next);
           }}
+          onDraftCellsRemoved={(cells) => {
+            const next = new Map(drafts);
+            for (const c of cells) next.delete(`${c.staffId}__${c.date}`);
+            applyEdit(next);
+          }}
           onClose={() => setStaffInfoTarget(null)}
         />
       )}
