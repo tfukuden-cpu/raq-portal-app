@@ -368,6 +368,14 @@ export async function generateShiftDraftAction(
     trainingDatesByStaff.get(sid)!.add(t.training_date as string);
   }
 
+  // 当月の研修日数（稼働日数カウントに含める）
+  const trainingMonthCount = new Map<string, number>();
+  for (const [sid, dates] of trainingDatesByStaff) {
+    let count = 0;
+    for (const d of dates) if (d >= dateFrom && d <= dateTo) count++;
+    if (count > 0) trainingMonthCount.set(sid, count);
+  }
+
   // セクション再仮組み時: 対象セクションの確定済みシフトは「置き換え対象」なので除外判定しない
   // （すでに確定済みでも再仮組みで上書きできるようにする）
   const regenPatternNames = targetSection
@@ -593,7 +601,8 @@ export async function generateShiftDraftAction(
           if (wdType === "monthly") {
             const current = (draftMonthCount.get(m.staff_id) ?? 0)
               + (existingMonthCount.get(m.staff_id) ?? 0)
-              + (otherSectionMonthCount?.get(m.staff_id) ?? 0);
+              + (otherSectionMonthCount?.get(m.staff_id) ?? 0)
+              + (trainingMonthCount.get(m.staff_id) ?? 0);
             if (current >= wdCount) return false;
           }
           // 週稼働日数上限
@@ -631,10 +640,12 @@ export async function generateShiftDraftAction(
           if (b.score !== a.score) return b.score - a.score;
           const aAssigned = (draftMonthCount.get(a.m.staff_id) ?? 0)
             + (existingMonthCount.get(a.m.staff_id) ?? 0)
-            + (otherSectionMonthCount?.get(a.m.staff_id) ?? 0);
+            + (otherSectionMonthCount?.get(a.m.staff_id) ?? 0)
+            + (trainingMonthCount.get(a.m.staff_id) ?? 0);
           const bAssigned = (draftMonthCount.get(b.m.staff_id) ?? 0)
             + (existingMonthCount.get(b.m.staff_id) ?? 0)
-            + (otherSectionMonthCount?.get(b.m.staff_id) ?? 0);
+            + (otherSectionMonthCount?.get(b.m.staff_id) ?? 0)
+            + (trainingMonthCount.get(b.m.staff_id) ?? 0);
           const aTargetRaw = (a.m as { work_days_count?: number | null }).work_days_count;
           const bTargetRaw = (b.m as { work_days_count?: number | null }).work_days_count;
           const aTarget = (aTargetRaw != null && aTargetRaw > 0) ? aTargetRaw : 21;
@@ -678,7 +689,8 @@ export async function generateShiftDraftAction(
     const getCurrent = () =>
       (draftMonthCount.get(m.staff_id) ?? 0)
       + (existingMonthCount.get(m.staff_id) ?? 0)
-      + (otherSectionMonthCount?.get(m.staff_id) ?? 0);
+      + (otherSectionMonthCount?.get(m.staff_id) ?? 0)
+      + (trainingMonthCount.get(m.staff_id) ?? 0);
 
     if (getCurrent() >= wdCount) continue;
 
