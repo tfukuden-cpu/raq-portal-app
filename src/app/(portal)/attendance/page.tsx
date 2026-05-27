@@ -7,6 +7,8 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceClient from "./AttendanceClient";
 import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry } from "./AttendanceClient";
+import type { SeatData } from "../seating/SeatingClient";
+import type { PlanSeat, PlanStaff } from "../seating/plan/SeatingPlanClient";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -111,6 +113,11 @@ export default async function AttendancePage() {
 
   const admin = createAdminClient();
   const today = tokyoToday();
+  const tomorrow = (() => {
+    const d = new Date(`${today}T00:00:00+09:00`);
+    d.setDate(d.getDate() + 1);
+    return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  })();
   const todayStart = `${today}T00:00:00+09:00`;
   const todayEnd   = `${today}T23:59:59+09:00`;
 
@@ -127,6 +134,10 @@ export default async function AttendancePage() {
     { data: shiftPatterns },
     { data: projectSettings },
     { data: monthStatus },
+    { data: seatRows },
+    { data: todayAssignments },
+    { data: tomorrowAssignments },
+    { data: tomorrowShifts },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -167,6 +178,18 @@ export default async function AttendancePage() {
       .eq("project_id", projectId)
       .eq("year_month", currentMonth)
       .maybeSingle(),
+    admin.from("seats")
+      .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
+      .eq("project_id", projectId).eq("is_active", true),
+    admin.from("seat_assignments")
+      .select("seat_id, staff_id")
+      .eq("project_id", projectId).eq("assignment_date", today),
+    admin.from("seat_assignments")
+      .select("seat_id, staff_id")
+      .eq("project_id", projectId).eq("assignment_date", tomorrow),
+    admin.from("shifts")
+      .select("staff_id, shift_name")
+      .eq("project_id", projectId).eq("shift_date", tomorrow),
   ]);
 
   // シフトパターンの時刻マップ
@@ -312,7 +335,85 @@ export default async function AttendancePage() {
 
   const grouped = buildGrouped(allInternal);
 
-  // 全体サマリー
+  // ── 座席表データ構築 ─────────────────────────────────────
+  // 今日の打刻状況マップ（座席表用：break含む）
+  const absenceIds  = new Set((absenceRows ?? []).map(a => a.staff_id));
+  const latestPunch = new Map<string, string>();
+  const latestBreak = new Map<string, string>();
+  for (const p of punchLogs ?? []) {
+    if (p.punch_type === "clock_in" || p.punch_type === "clock_out") latestPunch.set(p.staff_id, p.punch_type);
+    if (p.punch_type === "break_start" || p.punch_type === "break_end") latestBreak.set(p.staff_id, p.punch_type);
+  }
+  function deriveSeatStatus(sid: string): NonNullable<SeatData["status"]> {
+    if (absenceIds.has(sid)) return "absent";
+    const punch = latestPunch.get(sid);
+    const brk   = latestBreak.get(sid);
+    if (punch === "clock_out") return "clocked_out";
+    if (punch === "clock_in")  return brk === "break_start" ? "on_break" : "working";
+    return "not_arrived";
+  }
+
+  const todayAssignMap  = new Map((todayAssignments ?? []).map(a => [a.seat_id, a.staff_id]));
+  const todayShiftNameMap = new Map((todayShifts ?? []).map(r => [r.staff_id, r.shift_name as string | null]));
+
+  const seatData: SeatData[] = (seatRows ?? []).map(s => {
+    const seatType = (s as { seat_type?: string }).seat_type ?? "normal";
+    const staffId  = seatType === "disabled" ? null : (todayAssignMap.get(s.id) ?? null);
+    const member   = staffId ? memberMap.get(staffId) : null;
+    return {
+      id:            s.id,
+      label:         s.label as string,
+      xPct:          s.x_pct as number,
+      yPct:          s.y_pct as number,
+      section:       (s.section as string | null) ?? null,
+      seatType:      seatType as SeatData["seatType"],
+      shiftSlot:     (s as { shift_slot?: string | null }).shift_slot ?? null,
+      staffId,
+      staffName:     member?.name ?? null,
+      accountNumber: member?.accountNumber ?? null,
+      shiftName:     staffId ? (todayShiftNameMap.get(staffId) ?? null) : null,
+      status:        staffId ? deriveSeatStatus(staffId) : null,
+    };
+  });
+
+  // 翌日座席配置データ
+  const OFF_SHIFT_NAMES_PLAN = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
+  const tomorrowAssignMap  = new Map((tomorrowAssignments ?? []).map(a => [a.seat_id, a.staff_id]));
+  const tomorrowShiftNameMap = new Map((tomorrowShifts ?? []).map(r => [r.staff_id as string, r.shift_name as string | null]));
+  const staffOnTomorrow = new Set(
+    (tomorrowShifts ?? [])
+      .filter(s => s.shift_name && !OFF_SHIFT_NAMES_PLAN.includes(s.shift_name as string))
+      .map(s => s.staff_id as string)
+  );
+  const planTargetIds = staffOnTomorrow.size > 0
+    ? [...staffOnTomorrow]
+    : [...memberMap.keys()];
+
+  const planSeatData: PlanSeat[] = (seatRows ?? []).map(s => ({
+    id:        s.id,
+    label:     s.label as string,
+    xPct:      s.x_pct as number,
+    yPct:      s.y_pct as number,
+    section:   (s.section as string | null) ?? null,
+    seatType:  ((s as { seat_type?: string }).seat_type ?? "normal") as PlanSeat["seatType"],
+    shiftSlot: (s as { shift_slot?: string | null }).shift_slot ?? null,
+    staffId:   (s as { seat_type?: string }).seat_type === "disabled"
+      ? null
+      : (tomorrowAssignMap.get(s.id) ?? null),
+  }));
+
+  const planStaffData: PlanStaff[] = planTargetIds.map(id => {
+    const mem = memberMap.get(id);
+    return {
+      id,
+      name:          mem?.name          ?? id,
+      accountNumber: mem?.accountNumber ?? null,
+      section:       mem?.section       ?? null,
+      shiftName:     tomorrowShiftNameMap.get(id) ?? null,
+    };
+  });
+
+  // ── 全体サマリー ─────────────────────────────────────────
   const total      = allInternal.length;
   const departed   = allInternal.filter(m => m.departureTime || m.clockIn).length;
   const clockedIn  = allInternal.filter(m => m.clockIn).length;
@@ -343,6 +444,11 @@ export default async function AttendancePage() {
       enableDeparture={enableDeparture}
       publishedAt={publishedAt}
       shiftChanges={shiftChanges}
+      myStaffId={staffId}
+      seats={seatData}
+      tomorrow={tomorrow}
+      planSeats={planSeatData}
+      planStaff={planStaffData}
     />
   );
 }

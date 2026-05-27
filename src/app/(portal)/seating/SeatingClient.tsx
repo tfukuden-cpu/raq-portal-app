@@ -45,13 +45,14 @@ const STATUS_LABEL: Record<NonNullable<SeatData["status"]>, string> = {
 };
 
 export default function SeatingClient({
-  projectId, today, seats, isAdmin, myStaffId,
+  projectId, today, seats, isAdmin, myStaffId, embedded = false,
 }: {
   projectId: string;
   today: string;
   seats: SeatData[];
   isAdmin: boolean;
   myStaffId: string;
+  embedded?: boolean;
 }) {
   const [statuses, setStatuses] = useState<Map<string, NonNullable<SeatData["status"]>>>(() => {
     const m = new Map<string, NonNullable<SeatData["status"]>>();
@@ -84,30 +85,32 @@ export default function SeatingClient({
   const dateLabel = `${parseInt(monthStr)}/${parseInt(dayStr)}`;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      {/* ヘッダー */}
-      <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">
-        <div>
-          <h1 className="text-base font-bold text-zinc-800 dark:text-zinc-100">座席表</h1>
-          <p className="text-xs text-zinc-400 tabular-nums">{dateLabel}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <a
-              href="/seating/plan"
-              className="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors"
+    <div className={embedded ? "bg-zinc-50 dark:bg-zinc-950" : "min-h-screen bg-zinc-50 dark:bg-zinc-950"}>
+      {/* ヘッダー（スタンドアロン時のみ） */}
+      {!embedded && (
+        <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">
+          <div>
+            <h1 className="text-base font-bold text-zinc-800 dark:text-zinc-100">座席表</h1>
+            <p className="text-xs text-zinc-400 tabular-nums">{dateLabel}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <a
+                href="/seating/plan"
+                className="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors"
+              >
+                翌日配置
+              </a>
+            )}
+            <button
+              onClick={() => router.refresh()}
+              className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700"
             >
-              翌日配置
-            </a>
-          )}
-          <button
-            onClick={() => router.refresh()}
-            className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700"
-          >
-            更新
-          </button>
+              更新
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 凡例 */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
@@ -121,7 +124,7 @@ export default function SeatingClient({
       </div>
 
       {/* キャンバス */}
-      <div className="px-3 pb-28">
+      <div className={embedded ? "px-3 pb-4" : "px-3 pb-28"}>
         <div
           className="relative w-full bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
           style={{ aspectRatio: "4/3", minHeight: 280 }}

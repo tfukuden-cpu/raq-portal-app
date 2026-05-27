@@ -25,12 +25,13 @@ export type PlanStaff = {
 };
 
 export default function SeatingPlanClient({
-  projectId, date, seats: initialSeats, staff,
+  projectId, date, seats: initialSeats, staff, embedded = false,
 }: {
   projectId: string;
   date: string;
   seats: PlanSeat[];
   staff: PlanStaff[];
+  embedded?: boolean;
 }) {
   const [seats, setSeats] = useState<PlanSeat[]>(initialSeats);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
@@ -108,43 +109,57 @@ export default function SeatingPlanClient({
   }
 
   const [, m, d] = date.split("-");
-  const dateLabel = `${parseInt(m)}/${parseInt(d)}（翌日）`;
+  const dateLabel = `${parseInt(m)}/${parseInt(d)}`;
 
   const unassignedStaff = staff.filter(s => !assignedIds.has(s.id));
   const assignedStaff   = staff.filter(s => assignedIds.has(s.id));
 
+  const actionButtons = (
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={handleClear}
+        disabled={isPending}
+        className="text-xs text-zinc-500 dark:text-zinc-400 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+      >
+        クリア
+      </button>
+      <button
+        onClick={handleAutoAssign}
+        disabled={isPending}
+        className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+      >
+        自動配置
+      </button>
+      <button
+        onClick={handleSave}
+        disabled={isPending}
+        className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+      >
+        {isPending ? "保存中…" : "保存"}
+      </button>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-40">
-      {/* ヘッダー */}
-      <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">
-        <div>
-          <h1 className="text-base font-bold text-zinc-800 dark:text-zinc-100">翌日座席配置</h1>
-          <p className="text-xs text-zinc-400 tabular-nums">{dateLabel}</p>
+    <div className={embedded ? "bg-zinc-50 dark:bg-zinc-950" : "min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-40"}>
+      {/* ヘッダー（スタンドアロン時のみ） */}
+      {!embedded && (
+        <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">
+          <div>
+            <h1 className="text-base font-bold text-zinc-800 dark:text-zinc-100">翌日座席配置</h1>
+            <p className="text-xs text-zinc-400 tabular-nums">{dateLabel}（翌日）</p>
+          </div>
+          {actionButtons}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleClear}
-            disabled={isPending}
-            className="text-xs text-zinc-500 dark:text-zinc-400 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-          >
-            クリア
-          </button>
-          <button
-            onClick={handleAutoAssign}
-            disabled={isPending}
-            className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-colors disabled:opacity-50"
-          >
-            自動配置
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isPending}
-            className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
-          >
-            {isPending ? "保存中…" : "保存"}
-          </button>
+      )}
+
+      {/* 埋め込み時のコンパクトツールバー */}
+      {embedded && (
+        <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1">
+          <p className="text-[11px] text-zinc-400 tabular-nums">{dateLabel}（翌日）</p>
+          {actionButtons}
         </div>
-      </div>
+      )}
 
       {/* 操作ガイド */}
       {selectedStaffId ? (

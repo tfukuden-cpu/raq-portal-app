@@ -22,6 +22,7 @@ export type NavSection = {
 const STAFF_ITEMS: NavItem[] = [
   { href: "/dashboard",  icon: "Home",          label: "ホーム" },
   { href: "/shifts",     icon: "Calendar",      label: "シフト" },
+  { href: "/seating",    icon: "Grid",          label: "座席表" },
   { href: "/record",     icon: "BarChart2",     label: "勤怠実績" },
   { href: "/post",       icon: "PenSquare",     label: "投稿" },
   { href: "/inquiries",  icon: "MessageSquare", label: "問い合わせ" },

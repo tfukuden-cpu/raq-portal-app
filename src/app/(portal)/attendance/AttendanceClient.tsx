@@ -4,6 +4,8 @@ import { ChevronLeftIcon } from "@/components/icons";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
 import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction } from "./actions";
 import type { SendResult } from "./actions";
+import SeatingClient, { type SeatData } from "../seating/SeatingClient";
+import SeatingPlanClient, { type PlanSeat, type PlanStaff } from "../seating/plan/SeatingPlanClient";
 
 // ── 型定義 ────────────────────────────────────────────────
 export type StatusKey = "working" | "clocked_out" | "departed" | "absent" | "late" | "not_departed";
@@ -102,6 +104,11 @@ interface Props {
   enableDeparture: boolean;
   publishedAt: string | null;
   shiftChanges: ShiftChangeEntry[];
+  myStaffId: string;
+  seats: SeatData[];
+  tomorrow: string;
+  planSeats: PlanSeat[];
+  planStaff: PlanStaff[];
 }
 
 type SelectionMode = "reminder" | "request";
@@ -113,8 +120,10 @@ export default function AttendanceClient({
   total, departed, clockedIn, late, absent, notClocked,
   grouped, offMembers, enableDeparture,
   publishedAt, shiftChanges,
+  myStaffId, seats, tomorrow, planSeats, planStaff,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"today" | "changes">("today");
+  const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
+  const [seatingSubTab, setSeatingSubTab] = useState<"current" | "plan">("current");
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
@@ -265,6 +274,16 @@ export default function AttendanceClient({
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab("seating")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === "seating"
+                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            }`}
+          >
+            座席表
+          </button>
         </div>
       </div>
       <div className="max-w-5xl mx-auto px-4 pt-4 pb-32">
@@ -275,6 +294,55 @@ export default function AttendanceClient({
             publishedAt={publishedAt}
             shiftChanges={shiftChanges}
           />
+        )}
+
+        {/* ── 座席表タブ ── */}
+        {activeTab === "seating" && (
+          <div>
+            {/* サブタブ */}
+            <div className="flex gap-1 mb-3">
+              <button
+                onClick={() => setSeatingSubTab("current")}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                  seatingSubTab === "current"
+                    ? "bg-blue-600 text-white"
+                    : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
+                }`}
+              >
+                当日座席
+              </button>
+              <button
+                onClick={() => setSeatingSubTab("plan")}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                  seatingSubTab === "plan"
+                    ? "bg-blue-600 text-white"
+                    : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
+                }`}
+              >
+                翌日配置
+              </button>
+            </div>
+
+            {seatingSubTab === "current" && (
+              <SeatingClient
+                projectId={projectId}
+                today={today}
+                seats={seats}
+                isAdmin={true}
+                myStaffId={myStaffId}
+                embedded={true}
+              />
+            )}
+            {seatingSubTab === "plan" && (
+              <SeatingPlanClient
+                projectId={projectId}
+                date={tomorrow}
+                seats={planSeats}
+                staff={planStaff}
+                embedded={true}
+              />
+            )}
+          </div>
         )}
 
         {/* ── 当日シフトタブ ── */}
