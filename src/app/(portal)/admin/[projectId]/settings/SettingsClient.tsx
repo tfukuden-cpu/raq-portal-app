@@ -4,7 +4,9 @@ import { useState, useTransition, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import LineConnectionSection from "./LineConnectionSection";
 import TrainingSection, { type TrainingDate, type TrainingEntry } from "@/components/TrainingSection";
+import HolidayRequestSection, { type HolidayRequestEntry } from "@/components/HolidayRequestSection";
 import { fetchTrainingDatesAction } from "./training-actions";
+import { fetchHolidayRequestsForStaffAction } from "./holiday-request-actions";
 import {
   updateProjectNameAction,
   saveSheetUrlAction,
@@ -37,7 +39,7 @@ import {
 } from "../../holiday-rule-config";
 import SeatLayoutEditor, { type SeatItem, type WallItem } from "./SeatLayoutEditor";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; compliance: number | null; trainingDates: TrainingEntry[]; desired_wage: number | null };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; compliance: number | null; trainingDates: TrainingEntry[] };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -500,9 +502,9 @@ export function MemberList({
   const [editPreferredShift, setEditPreferredShift] = useState("");
   const [editPreferredSection, setEditPreferredSection] = useState("");
   const [editMaxConsecDays, setEditMaxConsecDays] = useState("");
-  const [editStartDate, setEditStartDate]     = useState("");
-  const [editDesiredWage, setEditDesiredWage] = useState("");
-  const [editTrainingDates, setEditTrainingDates] = useState<TrainingEntry[]>([]);
+  const [editStartDate, setEditStartDate]           = useState("");
+  const [editHolidayRequests, setEditHolidayRequests] = useState<HolidayRequestEntry[]>([]);
+  const [editTrainingDates, setEditTrainingDates]   = useState<TrainingEntry[]>([]);
   const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
   const [departType, setDepartType] = useState<"immediate" | "dated">("immediate");
   const [departDate, setDepartDate] = useState(() =>
@@ -538,12 +540,13 @@ export function MemberList({
     setEditPreferredSection(m.preferred_section ?? "");
     setEditMaxConsecDays(m.max_consecutive_days != null ? String(m.max_consecutive_days) : "");
     setEditStartDate(m.start_date ?? "");
-    setEditDesiredWage(m.desired_wage != null ? String(m.desired_wage) : "");
     setDepartStep("hidden");
     setDepartDate(new Date().toISOString().slice(0, 10));
-    // 研修日を最新データでフェッチ（他画面での変更も反映）
-    setEditTrainingDates(m.trainingDates); // まず既存データをセット
+    // 研修日・希望休を最新データでフェッチ
+    setEditTrainingDates(m.trainingDates);
     fetchTrainingDatesAction(m.staffId).then(dates => setEditTrainingDates(dates));
+    setEditHolidayRequests([]);
+    fetchHolidayRequestsForStaffAction(m.staffId, projectId).then(reqs => setEditHolidayRequests(reqs));
   };
 
   const handleSaveEdit = () => {
@@ -563,7 +566,6 @@ export function MemberList({
     fd.set("preferred_section",    editPreferredSection);
     fd.set("max_consecutive_days", editMaxConsecDays);
     fd.set("start_date",           editStartDate);
-    fd.set("desired_wage",         editDesiredWage);
     start(async () => {
       const r = await updateMemberInfoAction(fd);
       setResult({ ok: r.success, msg: r.message ?? (r.success ? "更新しました" : "エラー") });
@@ -1070,12 +1072,6 @@ export function MemberList({
                         月21日
                       </span>
                     )}
-                    {/* 希望給 */}
-                    {m.desired_wage != null && (
-                      <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex-shrink-0 tabular-nums">
-                        ¥{m.desired_wage.toLocaleString()}/h
-                      </span>
-                    )}
                     {/* 勤怠順守率（過去30日） */}
                     {m.compliance != null && (
                       <span className={[
@@ -1193,21 +1189,6 @@ export function MemberList({
                       )}
                     </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">希望給（時給）</label>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <input
-                        type="number"
-                        value={editDesiredWage}
-                        onChange={e => setEditDesiredWage(e.target.value)}
-                        placeholder="例: 1200"
-                        min={0}
-                        step={10}
-                        className="flex-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      />
-                      <span className="text-xs text-zinc-500 flex-shrink-0">円/時</span>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="border-t border-zinc-100 dark:border-zinc-800" />
@@ -1281,6 +1262,18 @@ export function MemberList({
                 <div className="space-y-2">
                   <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">研修設定</p>
                   <TrainingSection staffId={editId} initialDates={editTrainingDates} />
+                </div>
+
+                <div className="border-t border-zinc-100 dark:border-zinc-800" />
+
+                {/* ── 希望休 ── */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">希望休</p>
+                  <HolidayRequestSection
+                    staffId={editId}
+                    projectId={projectId}
+                    initialEntries={editHolidayRequests}
+                  />
                 </div>
 
                 <div className="border-t border-zinc-100 dark:border-zinc-800" />
