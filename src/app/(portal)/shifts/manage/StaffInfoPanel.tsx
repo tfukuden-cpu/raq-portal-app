@@ -3,8 +3,10 @@
 /**
  * スタッフ情報パネル
  * シフト編集・確認モードでスタッフ名をタップしたときに表示するモーダル
- * セクション・稼働設定・優先・希望休申請一覧を表示する
+ * セクション・稼働設定・優先・希望休申請一覧・導入研修日を表示する
  */
+
+import TrainingSection from "@/components/TrainingSection";
 
 export type StaffInfoMember = {
   id: string;
@@ -18,6 +20,7 @@ export type StaffInfoMember = {
   max_consecutive_days: number | null;
   shift_note: string | null;
   endDate?: string | null;
+  trainingDates?: { id: string; training_date: string }[];
 };
 
 export type StaffOffRequest = {
@@ -201,6 +204,15 @@ export default function StaffInfoPanel({
                 ))}
               </div>
             )}
+          </section>
+
+          {/* 導入研修 */}
+          <section>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-2">導入研修</p>
+            <TrainingSection
+              staffId={member.id}
+              initialDates={member.trainingDates ?? []}
+            />
           </section>
         </div>
 

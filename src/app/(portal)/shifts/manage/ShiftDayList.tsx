@@ -726,6 +726,7 @@ export default function ShiftDayList({
             max_consecutive_days: staffInfoTarget.max_consecutive_days ?? null,
             shift_note:           staffInfoTarget.shift_note ?? null,
             endDate:              staffInfoTarget.endDate,
+            trainingDates:        (staffInfoTarget as { trainingDates?: { id: string; training_date: string }[] }).trainingDates ?? [],
           }}
           offRequests={(offRequests ?? [])
             .filter(r => r.staff_id === staffInfoTarget.id)

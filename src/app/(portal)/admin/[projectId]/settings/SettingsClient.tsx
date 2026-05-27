@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import LineConnectionSection from "./LineConnectionSection";
-import TrainingSection from "./TrainingSection";
+import TrainingSection from "@/components/TrainingSection";
 import {
   updateProjectNameAction,
   saveSheetUrlAction,

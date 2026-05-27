@@ -186,6 +186,7 @@ export default async function ManageShiftsPage(props: {
     { data: draftRow },
     { data: offRequestsRaw },
     { data: monthStatusRow },
+    { data: trainingsRaw },
     shiftBatch0,
     shiftBatch1,
     shiftBatch2,
@@ -237,6 +238,9 @@ export default async function ManageShiftsPage(props: {
       .eq("project_id", selectedProjectId)
       .eq("year_month", `${targetYear}-${String(targetMonth).padStart(2, "0")}`)
       .maybeSingle(),
+    admin.from("staff_trainings")
+      .select("id, staff_id, training_date")
+      .eq("training_type", "onboarding"),
     shiftSelect().range(0,    999),
     shiftSelect().range(1000, 1999),
     shiftSelect().range(2000, 2999),
@@ -256,14 +260,22 @@ export default async function ManageShiftsPage(props: {
     (absenceRows ?? []).map(a => `${a.staff_id}__${a.absence_date}`)
   );
 
+  // 研修日をスタッフIDごとにまとめる
+  const trainingMap = new Map<string, { id: string; training_date: string }[]>();
+  for (const t of (trainingsRaw ?? [])) {
+    if (!trainingMap.has(t.staff_id)) trainingMap.set(t.staff_id, []);
+    trainingMap.get(t.staff_id)!.push({ id: t.id, training_date: t.training_date as string });
+  }
+
   const activeMembers = (members ?? [])
     .map((m) => {
       const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
         { id: string | null; name: string | null; display_name: string | null } | null;
       const sections = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
       const endDate = (m as { end_date?: string | null }).end_date ?? null;
+      const staffId = s?.id ?? m.staff_id;
       return {
-        id:                   s?.id ?? m.staff_id,
+        id:                   staffId,
         name:                 s?.display_name ?? s?.name ?? m.staff_id,
         role:                 m.role ?? "staff",
         section:              m.section ?? null,
@@ -275,6 +287,8 @@ export default async function ManageShiftsPage(props: {
         preferred_section:    (m as { preferred_section?: string | null }).preferred_section ?? null,
         max_consecutive_days: (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? null,
         shift_note:           (m as { shift_note?: string | null }).shift_note ?? null,
+        trainingDates:        (trainingMap.get(staffId) ?? [])
+          .sort((a, b) => a.training_date.localeCompare(b.training_date)),
       };
     })
     .filter((m) => !!m.id)
