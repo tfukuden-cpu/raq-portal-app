@@ -666,6 +666,78 @@ export async function generateShiftDraftAction(
     }
   } // end round-robin
 
+  // ── 余剰配置：稼働日数目標に達していないスタッフを追加配置 ──────────
+  // ラウンドロビンで必要人数を埋めた後、目標稼働日数に届いていないスタッフを
+  // 余剰として追加配置する（月21日設定なら21日になるまで埋める）
+  for (const m of activeMemberRows) {
+    const wdType    = (m as { work_days_type?: string | null }).work_days_type || "monthly";
+    if (wdType !== "monthly") continue;
+    const wdCountRaw = (m as { work_days_count?: number | null }).work_days_count;
+    const wdCount   = (wdCountRaw != null && wdCountRaw > 0) ? wdCountRaw : 21;
+
+    const getCurrent = () =>
+      (draftMonthCount.get(m.staff_id) ?? 0)
+      + (existingMonthCount.get(m.staff_id) ?? 0)
+      + (otherSectionMonthCount?.get(m.staff_id) ?? 0);
+
+    if (getCurrent() >= wdCount) continue;
+
+    // このスタッフが担当できるパターン（セクション一致）
+    const ms = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
+    const effectiveSections = ms.length > 0 ? ms : (m.section ? [m.section] : []);
+    const staffPatterns = patterns.filter(p => !p.section || effectiveSections.includes(p.section));
+    if (staffPatterns.length === 0) continue;
+
+    // 優先シフトに合うパターンを先頭に並べる
+    const ps   = (m as { preferred_shift?: string | null }).preferred_shift;
+    const pSec = (m as { preferred_section?: string | null }).preferred_section;
+    const sortedPatterns = [...staffPatterns].sort((a, b) => {
+      const aScore = (a.name === ps ? 2 : 0) + (a.section === pSec ? 1 : 0);
+      const bScore = (b.name === ps ? 2 : 0) + (b.section === pSec ? 1 : 0);
+      return bScore - aScore;
+    });
+
+    for (const date of allDates) {
+      if (getCurrent() >= wdCount) break;
+
+      // 各種除外チェック
+      const startDate = (m as { start_date?: string | null }).start_date ?? null;
+      if (startDate && date < startDate) continue;
+      const endDate = (m as { end_date?: string | null }).end_date ?? null;
+      if (endDate && date > endDate) continue;
+      if (draftDates.get(m.staff_id)?.has(date)) continue;
+      if (existingMap.has(`${m.staff_id}__${date}`)) continue;
+      if (otherSectionDates?.get(m.staff_id)?.has(date)) continue;
+      if (holidaySet.has(`${m.staff_id}__${date}`)) continue;
+      if (trainingSet.has(`${m.staff_id}__${date}`)) continue;
+
+      // 連勤上限
+      const maxConsec = (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? 5;
+      if (consecutiveDaysBefore(m.staff_id, date) >= maxConsec) continue;
+
+      // インターバルを満たすパターンを選ぶ
+      const prevPat = getPrevDayPattern(m.staff_id, date);
+      const assignPattern = sortedPatterns.find(p =>
+        hasAdequateInterval(prevPat?.end_time, p.start_time)
+      );
+      if (!assignPattern) continue;
+
+      // 配置
+      draft.set(`${m.staff_id}__${date}`, {
+        shiftName:  assignPattern.name,
+        shiftStart: assignPattern.start_time,
+        shiftEnd:   assignPattern.end_time,
+      });
+      draftMonthCount.set(m.staff_id, (draftMonthCount.get(m.staff_id) ?? 0) + 1);
+      if (!draftDates.has(m.staff_id)) draftDates.set(m.staff_id, new Set());
+      draftDates.get(m.staff_id)!.add(date);
+      if (!draftPatternByDate.has(m.staff_id)) draftPatternByDate.set(m.staff_id, new Map());
+      draftPatternByDate.get(m.staff_id)!.set(date, assignPattern.name);
+      const slotKey = `${assignPattern.name}__${date}`;
+      draftSlotCount.set(slotKey, (draftSlotCount.get(slotKey) ?? 0) + 1);
+    }
+  }
+
   if (draft.size === 0) {
     const sec = targetSection ?? "";
     const staffCount = activeMemberRows.length;
