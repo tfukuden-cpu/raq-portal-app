@@ -164,7 +164,7 @@ export async function addOffRequestForStaffAction(
 
   const { data, error } = await admin
     .from("shift_off_requests")
-    .insert({ project_id: projectId, staff_id: staffId, request_date: requestDate, priority, source: "manual" })
+    .insert({ project_id: projectId, staff_id: staffId, request_date: requestDate, priority, source: "app" })
     .select("id")
     .single();
 
