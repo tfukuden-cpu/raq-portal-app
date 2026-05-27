@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-27（v39：座席表にフリー席・無効席追加）
+最終更新：2026-05-27（v40：シフト編集スタッフ情報パネル・希望休CRUD）
 
 ---
 
@@ -107,6 +107,15 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 
 ### 次に優先すべきこと（新しいセッションはここから）
 
+**v40 完了内容**
+- シフト編集グリッドのスタッフ情報パネルに希望休（off_requests）のCRUD機能を追加
+- `OffRequestSection.tsx` 新規作成：カレンダー選択・優先度（希休1〜4）・×削除チップ
+- 追加時→即時ドラフト反映、削除時→即時ドラフトクリア
+- 「設定をシフトに保存・反映」ボタンが完全置換方式に変更（`replaceStaffHolidayDraftAction`）
+  - 削除済み希望休も確実にドラフトから消える（追加のみ→差し替え方式に修正）
+- 追加したアクション：`fetchOffRequestsForStaffAction` / `addOffRequestForStaffAction` / `removeOffRequestForStaffAction` / `deleteDraftCellsAction` / `replaceStaffHolidayDraftAction`
+- shift_off_requests の source チェック制約：`'excel'` か `'app'` のみ（`'manual'` は不可）
+
 **v39 完了内容**
 - 座席表にフリー席・無効席を追加（`seats.seat_type text DEFAULT 'normal'`）
 - `seat_type`: `"normal"`（通常セクション席）/ `"free"`（フリー席・誰でも可）/ `"disabled"`（無効席・使用不可）
@@ -163,7 +172,7 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 - ~~P3-2: スタッフカードタップ→設定・離脱処理~~ ✅ v22完了
 - ~~P3-1: 稼働設定を仮組ロジックに反映~~ ✅ v23完了（稼働日数・連勤上限・優先パターン・優先セクション・前月末連勤引き継ぎ・勤務間インターバル11時間）
 
-**次の優先タスク** → 座席表の残課題 or 新機能
+**次の優先タスク** → ユーザーの要望次第
 
 #### 座席表 残課題メモ（v33時点）
 - 当日座席表・翌日配置画面に壁線を表示（`SeatingClient` / `SeatingPlanClient` への壁データ追加）
@@ -995,6 +1004,7 @@ export default async function Page({
 | 2026-05-27 | v34 | **ナビ刷新・タスクホーム統合・周知問合せ統合** ① ナビをアカウント種別3種（スタッフ/管理者/運用者）に刷新。② 運用者サイドバーの管理セクション見出しを案件ファイルタブ化（クリックで案件切り替え・switchProjectAction新設）。③ タスク管理をナビから削除しホーム画面に統合：管理者・運用者のホームに[ホーム\|タスク]タブ追加、ホームタブ下部に今日の自分のタスクウィジェット（due_date=当日分・チェックで完了）。④ /notices/manage を周知事項と問い合わせのタブ統合ページに改修（CommunicationsManageClient・未返信バッジ）。 |
 | 2026-05-27 | v36 | **当日状況 欠勤/遅刻 詳細モーダル** ① 欠勤スタッフ行（w-14プレースホルダー部分）を「詳細」ボタンに置き換え。② 遅刻スタッフ行の「催促する」ボタン横に「詳細」ボタンを追加。③ 詳細モーダルに報告時刻・理由・翌日/翌々日出勤可否（欠勤）または到着目安（遅刻）を表示。④ absence_reports/late_reportsのクエリにcreated_at・next_day_available等を追加。|
 | 2026-05-27 | v39 | **座席表フリー席・無効席** `seats.seat_type text DEFAULT 'normal'` カラム追加。フリー席（誰でも配置可・緑枠）・無効席（使用不可・ハッチング表示）をSeatLayoutEditorで設定可能に。SeatingClient・SeatingPlanClientにタイプ別表示を追加。autoAssignSeatsActionで無効席除外・フリー席はセクション問わず配置。 |
+| 2026-05-27 | v40 | **シフト編集スタッフ情報パネル・希望休CRUD** OffRequestSection.tsx新設（カレンダー+優先度選択+削除チップ）。追加時→即時ドラフト反映・削除時→即時ドラフトクリア。「設定をシフトに保存・反映」を完全置換方式（replaceStaffHolidayDraftAction）に変更。 |
 | 2026-05-27 | v38 | **仮組み余剰配置改善** 余剰配置ループで不足パターン（早番優先）を先に試みるロジック追加。遅番優先スタッフでも早番スロットが不足していれば早番に割当。 |
 | 2026-05-27 | v37 | **スタッフ詳細設定に希望給追加** `project_members.desired_wage integer` カラム追加。メンバー設定モーダルの基本設定セクションに希望給（円/時）入力欄追加。メンバー一覧カードに¥1,200/h形式バッジ表示（設定済みのみ・アンバー色）。|
 | 2026-05-27 | v35 | **スタッフ設定モーダル再構成・研修設定UI刷新** ① `staff_trainings`に`training_name text`・`start_time time`・`end_time time`カラム追加（Supabase MCP）。② `TrainingSection.tsx`を全面リライト：「研修日を設定」ボタン→展開パネル（導入研修/研修/案件研修/カスタムの4タイプ選択・時間入力・複数日カレンダー選択・登録済みは半透明表示・タイプ別グループ表示+×削除チップ）。③ メンバー編集モーダルを4セクションに再構成（基本設定：氏名/所属会社/ロール/アカウント番号/セクション/アサイン日、シフト設定：稼働日数デフォルト月21日/優先セクション/優先パターン/連勤上限、研修設定：TrainingSection、離脱処理）。④ シフト設定折りたたみを廃止・常時表示化。⑤ 新規スタッフ追加のアサイン日を必須に変更（未入力時「作成して追加」ボタン無効）。⑥ 仮組みロジック（draft-actions.ts）のtrainingEntries生成でtraining_name/start_time/end_timeを使用、validShiftNamesに研修名を動的追加。|
