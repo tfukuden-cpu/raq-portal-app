@@ -2208,7 +2208,7 @@ export default function ShiftEditGrid({
                                 ? "bg-zinc-800 dark:bg-zinc-800"
                                 // 6連勤以上 → 赤
                                 : isConsecutiveWarning && shiftName && patternNameSet.has(shiftName)
-                                ? "bg-red-200 dark:bg-red-900/70"
+                                ? "bg-red-500 dark:bg-red-600"
                                 // シフトパターン → セクション色
                                 : shiftName && patternNameSet.has(shiftName)
                                 ? (getPatternBg(shiftName, patternByName.get(shiftName) ?? null) || (isToday ? "bg-blue-50/40 dark:bg-blue-950/10" : ""))
@@ -2238,6 +2238,8 @@ export default function ShiftEditGrid({
                                     ? "text-amber-800 dark:text-amber-200 font-semibold"
                                     : shiftName === "希望休" || shiftName === "公休"
                                     ? "text-white font-semibold"
+                                    : isConsecutiveWarning
+                                    ? "text-white font-bold"
                                     : isDraftCell
                                     ? "text-blue-700 dark:text-blue-300 font-bold"
                                     : "text-zinc-700 dark:text-zinc-200",
@@ -2277,7 +2279,7 @@ export default function ShiftEditGrid({
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />＝重複
         </span>
         <span className="flex items-center gap-0.5">
-          <span className="inline-block w-4 h-3 rounded bg-red-200 dark:bg-red-900/70" />＝6連勤以上
+          <span className="inline-block w-4 h-3 rounded bg-red-500" />＝6連勤以上
         </span>
         {prevDates.length > 0 && (
           <span className="flex items-center gap-0.5">
