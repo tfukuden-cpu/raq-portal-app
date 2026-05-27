@@ -750,9 +750,13 @@ function getPatternBg(shiftName: string | null, pattern: Pattern | null): string
   if (!shiftName || shiftName === "公休" || shiftName === "希望休") return "";
   if (!pattern) return "";
   const colors = SECTION_SHIFT_COLORS[pattern.section ?? ""] ?? SECTION_SHIFT_FALLBACK;
+  // 開始時刻で早番/遅番を判定（設定されていればこちらが優先）
   const startH = pattern.start_time ? parseInt(pattern.start_time.split(":")[0], 10) : null;
   if (startH !== null && startH < 12) return colors.early;
-  if (startH !== null) return colors.late;
+  if (startH !== null && startH >= 12) return colors.late;
+  // 開始時刻未設定の場合はパターン名で判定
+  if (shiftName.includes("早番")) return colors.early;
+  if (shiftName.includes("遅番")) return colors.late;
   return colors.def;
 }
 
@@ -839,6 +843,8 @@ export default function ShiftEditGrid({
   const [pendingNotify, setPendingNotify] = useState<PendingNotify | null>(null);
   // 充足サマリー行の表示/非表示
   const [showSummaryRows, setShowSummaryRows] = useState(true);
+  // セクションフィルタ（"" = 全員表示）
+  const [filterSection, setFilterSection] = useState<string>("");
   // インラインパターンピッカー
   type PopoverTarget = { staffId: string; date: string; rect: DOMRect };
   const [popover, setPopover] = useState<PopoverTarget | null>(null);
@@ -1278,6 +1284,30 @@ export default function ShiftEditGrid({
     }),
   [activeMembers]);
 
+  // セクションフィルタ適用済みリスト
+  const displayMembers = useMemo(() =>
+    filterSection
+      ? sortedMembersBySection.filter(m => {
+          const secs = m.sections?.length ? m.sections : (m.section ? [m.section] : []);
+          return secs.includes(filterSection);
+        })
+      : sortedMembersBySection,
+  [sortedMembersBySection, filterSection]);
+
+  // フィルタ用セクション一覧（実際にスタッフがいるセクションのみ）
+  const availableSections = useMemo(() => {
+    const s = new Set<string>();
+    for (const m of activeMembers) {
+      const secs = (m as { sections?: string[] }).sections?.length
+        ? (m as { sections?: string[] }).sections!
+        : m.section ? [m.section] : [];
+      for (const sec of secs) if (sec) s.add(sec);
+    }
+    return SECTION_ORDER.filter(sec => s.has(sec)).concat(
+      [...s].filter(sec => !SECTION_ORDER.includes(sec)).sort()
+    );
+  }, [activeMembers]);
+
   // 充足サマリーに表示するパターン（必要人数が設定されているもののみ・SV除外）
   const summaryPatterns = useMemo(() =>
     shiftPatterns.filter(p => {
@@ -1403,7 +1433,8 @@ export default function ShiftEditGrid({
   return (
     <div className="flex flex-col h-full">
       {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 shrink-0">
+      <div className="bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 shrink-0">
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 leading-tight">
             {draftCount > 0 ? `${draftCount}件 変更中` : "シフト編集"}
@@ -1483,6 +1514,37 @@ export default function ShiftEditGrid({
             {isPending ? "確定中…" : "確定"}
           </button>
         </div>
+        </div>
+        {/* ── セクションフィルタ ── */}
+        {availableSections.length > 1 && (
+          <div className="flex items-center gap-1.5 px-3 pb-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            <button
+              onClick={() => setFilterSection("")}
+              className={[
+                "px-2.5 py-1 text-[11px] font-semibold rounded-full border whitespace-nowrap transition-colors shrink-0",
+                filterSection === ""
+                  ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900 border-zinc-700 dark:border-zinc-200"
+                  : "bg-white dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50",
+              ].join(" ")}
+            >
+              全員
+            </button>
+            {availableSections.map(sec => (
+              <button
+                key={sec}
+                onClick={() => setFilterSection(sec === filterSection ? "" : sec)}
+                className={[
+                  "px-2.5 py-1 text-[11px] font-semibold rounded-full border whitespace-nowrap transition-colors shrink-0",
+                  filterSection === sec
+                    ? "bg-zinc-700 dark:bg-zinc-200 text-white dark:text-zinc-900 border-zinc-700 dark:border-zinc-200"
+                    : "bg-white dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50",
+                ].join(" ")}
+              >
+                {sec}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 再仮組み確認モーダル */}
@@ -1864,9 +1926,9 @@ export default function ShiftEditGrid({
               })()}
 
               {/* ── スタッフ軸 ── */}
-              {sortedMembersBySection.map((member, idx) => {
-                const prevSection = idx > 0 ? sortedMembersBySection[idx - 1].section : undefined;
-                const showSectionHeader = member.section !== prevSection;
+              {displayMembers.map((member, idx) => {
+                const prevSection = idx > 0 ? displayMembers[idx - 1].section : undefined;
+                const showSectionHeader = !filterSection && member.section !== prevSection;
                 // 月合計
                 const monthTotal = allDates.filter(d => {
                   const cell = resolveCell(member.id, d);
