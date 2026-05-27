@@ -745,7 +745,7 @@ const SECTION_SHIFT_COLORS: Record<string, { early: string; late: string; def: s
   "SV":       { early: "bg-blue-100 dark:bg-blue-900/50",     late: "bg-blue-300 dark:bg-blue-700/70",     def: "bg-blue-200 dark:bg-blue-800/60" },
   "査定":     { early: "bg-emerald-100 dark:bg-emerald-900/50", late: "bg-emerald-300 dark:bg-emerald-700/70", def: "bg-emerald-200 dark:bg-emerald-800/60" },
   "販売":     { early: "bg-orange-100 dark:bg-orange-900/50",  late: "bg-orange-300 dark:bg-orange-700/70",  def: "bg-orange-200 dark:bg-orange-800/60" },
-  "MOTA":     { early: "bg-amber-100 dark:bg-amber-900/50",    late: "bg-amber-300 dark:bg-amber-700/70",    def: "bg-amber-200 dark:bg-amber-800/60" },
+  "MOTA":     { early: "bg-red-100 dark:bg-red-900/50",       late: "bg-red-300 dark:bg-red-700/70",       def: "bg-red-200 dark:bg-red-800/60" },
   "リメイク": { early: "bg-pink-100 dark:bg-pink-900/50",     late: "bg-pink-300 dark:bg-pink-700/70",     def: "bg-pink-200 dark:bg-pink-800/60" },
   "ローン":   { early: "bg-violet-100 dark:bg-violet-900/50", late: "bg-violet-300 dark:bg-violet-700/70", def: "bg-violet-200 dark:bg-violet-800/60" },
 };
@@ -2244,7 +2244,9 @@ export default function ShiftEditGrid({
                                     ? "text-blue-700 dark:text-blue-300 font-bold"
                                     : "text-zinc-700 dark:text-zinc-200",
                                 ].join(" ")}>
-                                  {shiftName.slice(0, 4)}
+                                  {shiftName === "希望休" && offPriority
+                                    ? (OFF_PRIORITY_LABEL[offPriority] ?? shiftName.slice(0, 4))
+                                    : shiftName.slice(0, 4)}
                                   {hasLog && !isDraftCell && (
                                     <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5" />
                                   )}
@@ -2483,6 +2485,7 @@ export default function ShiftEditGrid({
           projectId={projectId}
           availableSections={availableSections}
           shiftPatternNames={shiftPatterns.map(p => p.name).filter(Boolean)}
+          staffOffRequests={(offRequests ?? []).filter(r => r.staff_id === staffInfoTarget.id)}
           onClose={() => setStaffInfoTarget(null)}
         />
       )}

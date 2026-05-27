@@ -36,17 +36,34 @@ export type StaffOffRequest = {
   source: string;
 };
 
+export type StaffOffRequestEntry = {
+  staff_id: string;
+  request_date: string;
+  priority: string;
+  source?: string;
+};
+
+const OFF_PRIORITY_LABEL: Record<string, string> = {
+  "第一希望休": "希休1",
+  "第二希望休": "希休2",
+  "第三希望休": "希休3",
+  "第四希望休": "希休4",
+  "冠婚葬祭":   "冠婚",
+};
+
 export default function StaffInfoPanel({
   member,
   projectId,
   availableSections,
   shiftPatternNames,
+  staffOffRequests,
   onClose,
 }: {
   member: StaffInfoMember;
   projectId: string;
   availableSections: string[];
   shiftPatternNames: string[];
+  staffOffRequests?: StaffOffRequestEntry[];
   onClose: () => void;
   /** @deprecated kept for compat, no longer used */
   offRequests?: StaffOffRequest[];
@@ -325,7 +342,50 @@ export default function StaffInfoPanel({
             )}
           </section>
 
-          {/* ── 希望休 ──────────────────────────────────────── */}
+          {/* ── 希望休（シフト反映分） ───────────────────────── */}
+          {staffOffRequests && staffOffRequests.length > 0 && (() => {
+            const sorted = [...staffOffRequests].sort((a, b) => a.request_date.localeCompare(b.request_date));
+            // 月別グループ化
+            const months = [...new Set(sorted.map(r => r.request_date.slice(0, 7)))];
+            return (
+              <section>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">希望休（シフト反映）</p>
+                <div className="space-y-1.5">
+                  {months.map(ym => {
+                    const [y, m] = ym.split("-");
+                    const entries = sorted.filter(r => r.request_date.startsWith(ym));
+                    return (
+                      <div key={ym}>
+                        <p className="text-[10px] text-zinc-400 mb-1">{y}年{parseInt(m)}月 <span className="tabular-nums">({entries.length}日)</span></p>
+                        <div className="flex flex-wrap gap-1">
+                          {entries.map(r => {
+                            const [, , d] = r.request_date.split("-");
+                            const lbl = OFF_PRIORITY_LABEL[r.priority] ?? r.priority.slice(0, 3);
+                            const isOff = r.priority === "有休" || r.priority === "特別休暇";
+                            return (
+                              <span
+                                key={r.request_date}
+                                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${
+                                  isOff
+                                    ? "bg-zinc-600 text-white"
+                                    : "bg-zinc-800 text-white"
+                                }`}
+                              >
+                                {parseInt(d)}日
+                                <span className="text-[9px] opacity-70 ml-0.5">{lbl}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })()}
+
+          {/* ── 希望休（申請フロー） ─────────────────────────── */}
           <section>
             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">希望休</p>
             {fetching ? (
