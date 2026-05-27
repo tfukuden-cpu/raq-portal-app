@@ -67,6 +67,7 @@ export default async function MembersPage(props: {
       max_consecutive_days: (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? null,
       end_date:             (m as { end_date?: string | null }).end_date ?? null,
       compliance:           null as number | null,
+      trainingDates:        [] as { id: string; training_date: string }[],
     };
   });
 

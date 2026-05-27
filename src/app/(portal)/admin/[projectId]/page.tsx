@@ -51,6 +51,7 @@ export default async function ProjectDetailPage(props: {
     { data: recentPunches },
     { data: seatsRaw },
     { data: wallsRaw },
+    { data: trainingsRaw },
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
@@ -81,6 +82,10 @@ export default async function ProjectDetailPage(props: {
     createAdminClient().from("seat_walls")
       .select("id, x1_pct, y1_pct, x2_pct, y2_pct")
       .eq("project_id", projectId),
+    // 導入研修日（全案件共通）
+    createAdminClient().from("staff_trainings")
+      .select("id, staff_id, training_date")
+      .eq("training_type", "onboarding"),
   ]);
 
   if (!project) redirect("/admin");
@@ -119,6 +124,13 @@ export default async function ProjectDetailPage(props: {
     target_role: (p as { target_role?: string }).target_role ?? "all",
   }));
 
+  // 研修日をスタッフIDごとにまとめる
+  const trainingMap = new Map<string, { id: string; training_date: string }[]>();
+  for (const t of (trainingsRaw ?? [])) {
+    if (!trainingMap.has(t.staff_id)) trainingMap.set(t.staff_id, []);
+    trainingMap.get(t.staff_id)!.push({ id: t.id, training_date: t.training_date as string });
+  }
+
   const memberList = (members ?? []).map((m) => {
     const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
       { name: string | null; display_name: string | null; company_name: string | null; line_user_id: string | null; account_number: string | null } | null;
@@ -140,6 +152,8 @@ export default async function ProjectDetailPage(props: {
       max_consecutive_days: (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? null,
       end_date:             (m as { end_date?: string | null }).end_date ?? null,
       compliance:           complianceMap.get(m.staff_id) ?? null,
+      trainingDates:        (trainingMap.get(m.staff_id) ?? [])
+        .sort((a, b) => a.training_date.localeCompare(b.training_date)),
     };
   });
 

@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import LineConnectionSection from "./LineConnectionSection";
+import TrainingSection from "./TrainingSection";
 import {
   updateProjectNameAction,
   saveSheetUrlAction,
@@ -35,7 +36,7 @@ import {
 } from "../../holiday-rule-config";
 import SeatLayoutEditor, { type SeatItem, type WallItem } from "./SeatLayoutEditor";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; end_date: string | null; compliance: number | null };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; end_date: string | null; compliance: number | null; trainingDates: { id: string; training_date: string }[] };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -1242,6 +1243,14 @@ export function MemberList({
                     )}
                   </div>
                 )}
+
+                {/* 導入研修 */}
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40 p-3">
+                  <TrainingSection
+                    staffId={editId}
+                    initialDates={editingMember?.trainingDates ?? []}
+                  />
+                </div>
 
                 {/* 離脱処理 */}
                 {departStep === "hidden" ? (
