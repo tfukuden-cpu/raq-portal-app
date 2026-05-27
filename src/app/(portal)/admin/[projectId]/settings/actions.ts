@@ -763,6 +763,46 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   return { success: true, message: "更新しました" };
 }
 
+// ── シフト設定のみ更新（シフト編集モードパネル用） ─────────────────
+
+export async function updateShiftSettingsAction(
+  projectId: string,
+  staffId:   string,
+  params: {
+    sections:           string[];
+    workDaysType:       string;
+    workDaysCount:      number | null;
+    preferredShift:     string | null;
+    preferredSection:   string | null;
+    maxConsecDays:      number | null;
+    shiftNote:          string | null;
+  },
+): Promise<{ success: boolean; message?: string }> {
+  await assertAdmin(projectId);
+
+  const { error } = await adminSupa()
+    .from("project_members")
+    .update({
+      section:              params.sections[0] ?? null,
+      sections:             params.sections,
+      work_days_type:       params.workDaysType || null,
+      work_days_count:      params.workDaysCount,
+      preferred_shift:      params.preferredShift || null,
+      preferred_section:    params.preferredSection || null,
+      max_consecutive_days: params.maxConsecDays,
+      shift_note:           params.shiftNote || null,
+    })
+    .eq("project_id", projectId)
+    .eq("staff_id",   staffId);
+
+  if (error) return { success: false, message: error.message };
+
+  revalidatePath(`/admin/${projectId}`);
+  revalidatePath("/shifts/manage");
+  revalidatePath("/members");
+  return { success: true };
+}
+
 // ── 案件アーカイブ ───────────────────────────────────────
 
 export async function archiveProjectAction(fd: FormData): Promise<void> {

@@ -25,7 +25,7 @@ import {
   type GridDraftEntry,
 } from "../actions";
 import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction } from "./actions";
-import StaffInfoPanel, { type StaffInfoMember, type StaffOffRequest } from "./StaffInfoPanel";
+import StaffInfoPanel, { type StaffInfoMember } from "./StaffInfoPanel";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -2314,13 +2314,10 @@ export default function ShiftEditGrid({
             max_consecutive_days: staffInfoTarget.max_consecutive_days ?? null,
             shift_note:           staffInfoTarget.shift_note ?? null,
             endDate:              staffInfoTarget.endDate,
-            trainingDates:        (staffInfoTarget as { trainingDates?: import("@/components/TrainingSection").TrainingEntry[] }).trainingDates ?? [],
           }}
-          offRequests={(offRequests ?? [])
-            .filter(r => r.staff_id === staffInfoTarget.id)
-            .map(r => ({ request_date: r.request_date, priority: r.priority, source: r.source ?? "user" }))
-          }
           projectId={projectId}
+          availableSections={availableSections}
+          shiftPatternNames={shiftPatterns.map(p => p.name).filter(Boolean)}
           onClose={() => setStaffInfoTarget(null)}
         />
       )}

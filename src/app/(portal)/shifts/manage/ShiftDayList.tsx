@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
-import StaffInfoPanel, { type StaffInfoMember, type StaffOffRequest } from "./StaffInfoPanel";
+import StaffInfoPanel, { type StaffInfoMember } from "./StaffInfoPanel";
 
 const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -89,6 +89,7 @@ const PRIORITY_COLOR: Record<string, string> = {
 export default function ShiftDayList({
   allDates, shifts, activeMembers, shiftPatterns, slotRequirements,
   changeLogs, absenceSet, selectedDate, onDateChange, projectId, offRequests,
+  availableSections, shiftPatternNames,
 }: {
   allDates: string[];
   shifts: Shift[];
@@ -103,6 +104,8 @@ export default function ShiftDayList({
   targetYear: number;
   targetMonth: number;
   offRequests?: { staff_id: string; request_date: string; priority: string; source?: string }[];
+  availableSections?: string[];
+  shiftPatternNames?: string[];
 }) {
   // staff_id__date → priority のマップ
   const offRequestMap = new Map(
@@ -726,13 +729,10 @@ export default function ShiftDayList({
             max_consecutive_days: staffInfoTarget.max_consecutive_days ?? null,
             shift_note:           staffInfoTarget.shift_note ?? null,
             endDate:              staffInfoTarget.endDate,
-            trainingDates:        (staffInfoTarget as { trainingDates?: import("@/components/TrainingSection").TrainingEntry[] }).trainingDates ?? [],
           }}
-          offRequests={(offRequests ?? [])
-            .filter(r => r.staff_id === staffInfoTarget.id)
-            .map(r => ({ request_date: r.request_date, priority: r.priority, source: r.source ?? "user" }))
-          }
           projectId={projectId}
+          availableSections={availableSections ?? []}
+          shiftPatternNames={shiftPatternNames ?? []}
           onClose={() => setStaffInfoTarget(null)}
         />
       )}
