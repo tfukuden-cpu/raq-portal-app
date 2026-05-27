@@ -740,10 +740,23 @@ export async function generateShiftDraftAction(
     d: false,
   }));
   const trainingKeySet = new Set(trainingEntries.map(e => e.k));
-  const newEntries = [
+  const baseEntries = [
     ...regularEntries.filter(e => !trainingKeySet.has(e.k)),
     ...trainingEntries,
   ];
+
+  // 削除済みパターンの確定シフトを空エントリで上書き（グリッドに残表示させない）
+  const baseKeySet = new Set(baseEntries.map(e => e.k));
+  const staleOverrides: GridDraftEntry[] = [];
+  for (const s of (existingShiftRows ?? [])) {
+    if (!s.shift_name) continue;
+    if (validShiftNames.has(s.shift_name as string)) continue; // 有効なパターン → スキップ
+    if (!allActiveMemberIds.has(s.staff_id as string)) continue; // 非アクティブ → スキップ
+    const key = `${s.staff_id as string}__${s.shift_date as string}`;
+    if (baseKeySet.has(key)) continue; // すでに新しいドラフトエントリあり → スキップ
+    staleOverrides.push({ k: key, n: null, s: null, e: null, d: true });
+  }
+  const newEntries = [...baseEntries, ...staleOverrides];
 
   // セクション指定 or スキップセクション指定時: 既存ドラフトと新規エントリをマージ
   let draftEntries = newEntries;
