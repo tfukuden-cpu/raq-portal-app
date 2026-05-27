@@ -745,14 +745,14 @@ const SECTION_SHIFT_COLORS: Record<string, { early: string; late: string; def: s
   "SV":       { early: "bg-blue-100 dark:bg-blue-900/50",     late: "bg-blue-300 dark:bg-blue-700/70",     def: "bg-blue-200 dark:bg-blue-800/60" },
   "査定":     { early: "bg-emerald-100 dark:bg-emerald-900/50", late: "bg-emerald-300 dark:bg-emerald-700/70", def: "bg-emerald-200 dark:bg-emerald-800/60" },
   "販売":     { early: "bg-orange-100 dark:bg-orange-900/50",  late: "bg-orange-300 dark:bg-orange-700/70",  def: "bg-orange-200 dark:bg-orange-800/60" },
-  "MOTA":     { early: "bg-teal-100 dark:bg-teal-900/50",     late: "bg-teal-300 dark:bg-teal-700/70",     def: "bg-teal-200 dark:bg-teal-800/60" },
+  "MOTA":     { early: "bg-amber-100 dark:bg-amber-900/50",    late: "bg-amber-300 dark:bg-amber-700/70",    def: "bg-amber-200 dark:bg-amber-800/60" },
   "リメイク": { early: "bg-pink-100 dark:bg-pink-900/50",     late: "bg-pink-300 dark:bg-pink-700/70",     def: "bg-pink-200 dark:bg-pink-800/60" },
   "ローン":   { early: "bg-violet-100 dark:bg-violet-900/50", late: "bg-violet-300 dark:bg-violet-700/70", def: "bg-violet-200 dark:bg-violet-800/60" },
 };
 const SECTION_SHIFT_FALLBACK = { early: "bg-sky-100 dark:bg-sky-900/50", late: "bg-sky-300 dark:bg-sky-700/70", def: "bg-sky-200 dark:bg-sky-800/60" };
 
 function getPatternBg(shiftName: string | null, pattern: Pattern | null): string {
-  if (!shiftName || shiftName === "公休" || shiftName === "希望休") return "";
+  if (!shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇") return "";
   if (!pattern) return "";
   const colors = SECTION_SHIFT_COLORS[pattern.section ?? ""] ?? SECTION_SHIFT_FALLBACK;
   // パターン名で早番/遅番を判定（優先）
@@ -780,10 +780,10 @@ const OFF_PRIORITY_TEXT: Record<string, string> = {
   "冠婚葬祭":   "text-pink-600 dark:text-pink-400",
 };
 const OFF_PRIORITY_LABEL: Record<string, string> = {
-  "第一希望休": "希望①",
-  "第二希望休": "希望②",
-  "第三希望休": "希望③",
-  "第四希望休": "希望④",
+  "第一希望休": "希休1",
+  "第二希望休": "希休2",
+  "第三希望休": "希休3",
+  "第四希望休": "希休4",
   "冠婚葬祭":   "冠婚",
 };
 
@@ -1463,7 +1463,7 @@ export default function ShiftEditGrid({
     const working = new Map<string, Set<string>>(); // staffId → 出勤日Set
 
     function addWorking(staffId: string, date: string, shiftName: string | null) {
-      if (!shiftName || shiftName === "公休" || shiftName === "希望休") return;
+      if (!shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇") return;
       if (!patternNameSet.has(shiftName)) return;
       if (!working.has(staffId)) working.set(staffId, new Set());
       working.get(staffId)!.add(date);
@@ -2146,7 +2146,7 @@ export default function ShiftEditGrid({
                             <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
                               <span className={[
                                 "text-[10px] leading-none truncate",
-                                !shiftName || shiftName === "公休" || shiftName === "希望休"
+                                !shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇"
                                   ? "text-zinc-300 dark:text-zinc-600"
                                   : isSun ? "text-red-400 dark:text-red-500 font-medium"
                                   : isSat ? "text-blue-400 dark:text-blue-500 font-medium"
@@ -2199,8 +2199,8 @@ export default function ShiftEditGrid({
                                 ? "bg-blue-50 dark:bg-blue-950/30"
                                 : isCandidate
                                 ? "bg-amber-200 dark:bg-amber-800/50 ring-inset ring-1 ring-amber-400"
-                                // 希望休・公休・希望休申請 → 黒ベース
-                                : shiftName === "希望休"
+                                // 希望休・有休・特別休暇・公休・希望休申請 → 黒ベース
+                                : (shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇")
                                 ? "bg-zinc-700 dark:bg-zinc-700"
                                 : shiftName === "公休"
                                 ? "bg-zinc-500 dark:bg-zinc-600"
@@ -2236,7 +2236,7 @@ export default function ShiftEditGrid({
                                     ? "text-blue-600 dark:text-blue-300"
                                     : isCandidate
                                     ? "text-amber-800 dark:text-amber-200 font-semibold"
-                                    : shiftName === "希望休" || shiftName === "公休"
+                                    : (shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇" || shiftName === "公休")
                                     ? "text-white font-semibold"
                                     : isConsecutiveWarning
                                     ? "text-white font-bold"
