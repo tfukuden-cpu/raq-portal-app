@@ -191,21 +191,39 @@ export async function saveSeatLayoutAction(
     await admin.from("seats").delete().in("id", toDelete);
   }
 
-  // upsert
-  const rows = seats.map(s => ({
-    ...(s.id ? { id: s.id } : {}),
-    project_id: projectId,
-    label:      s.label,
-    x_pct:      s.xPct,
-    y_pct:      s.yPct,
-    section:    s.section || null,
-    seat_type:  s.seatType ?? "normal",
-    shift_slot: s.shiftSlot || null,
-    is_active:  true,
-  }));
+  // 新規（id なし）と既存（id あり）を分けて処理
+  // upsert に id なし行を渡すと PostgREST が id:null 扱いして not-null エラーになるため
+  const newSeats      = seats.filter(s => !s.id);
+  const existingSeats = seats.filter(s =>  s.id);
 
-  if (rows.length > 0) {
-    const { error } = await admin.from("seats").upsert(rows, { onConflict: "id" });
+  if (newSeats.length > 0) {
+    const newRows = newSeats.map(s => ({
+      project_id: projectId,
+      label:      s.label,
+      x_pct:      s.xPct,
+      y_pct:      s.yPct,
+      section:    s.section || null,
+      seat_type:  s.seatType ?? "normal",
+      shift_slot: s.shiftSlot || null,
+      is_active:  true,
+    }));
+    const { error } = await admin.from("seats").insert(newRows);
+    if (error) return { success: false, message: error.message };
+  }
+
+  if (existingSeats.length > 0) {
+    const existingRows = existingSeats.map(s => ({
+      id:         s.id!,
+      project_id: projectId,
+      label:      s.label,
+      x_pct:      s.xPct,
+      y_pct:      s.yPct,
+      section:    s.section || null,
+      seat_type:  s.seatType ?? "normal",
+      shift_slot: s.shiftSlot || null,
+      is_active:  true,
+    }));
+    const { error } = await admin.from("seats").upsert(existingRows, { onConflict: "id" });
     if (error) return { success: false, message: error.message };
   }
 
