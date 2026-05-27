@@ -725,6 +725,8 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   const maxConsecRaw     = String(fd.get("max_consecutive_days") ?? "").trim();
   const maxConsecDays    = maxConsecRaw ? (parseInt(maxConsecRaw, 10) || null) : null;
   const startDate        = String(fd.get("start_date") ?? "").trim() || null;
+  const desiredWageRaw   = String(fd.get("desired_wage") ?? "").trim();
+  const desiredWage      = desiredWageRaw ? (parseInt(desiredWageRaw, 10) || null) : null;
 
   if (!name) return { success: false, message: "氏名を入力してください" };
 
@@ -748,6 +750,7 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
       preferred_shift: preferredShift, preferred_section: preferredSection,
       max_consecutive_days: maxConsecDays,
       start_date: startDate,
+      desired_wage: desiredWage,
     })
     .eq("project_id", projectId)
     .eq("staff_id", staffId);
