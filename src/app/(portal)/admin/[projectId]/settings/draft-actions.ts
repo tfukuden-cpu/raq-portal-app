@@ -209,6 +209,13 @@ export async function generateShiftDraftAction(
   // 全パターン定義を保存（仮確定セクション判定で後から参照するため）
   const allPatternDefs = [...patterns];
 
+  // 現在有効なシフト名セット（削除済みパターン名のシフトを上書き可能にするため早期に定義）
+  // ※ allPatternDefs はセクションフィルタ前の全パターンを含む
+  const validShiftNames = new Set<string>([
+    ...allPatternDefs.map(p => p.name),
+    "公休", "希望休", "研修",
+  ]);
+
   // セクション絞り込み: targetSection 指定時はそのセクション所属スタッフのみ対象
   // セクション未設定スタッフは除外（全セクション対応扱いにしない）
   if (targetSection) {
@@ -256,9 +263,9 @@ export async function generateShiftDraftAction(
     otherSectionMonthCount = new Map();
 
     for (const e of otherEntries) {
-      // 削除済み（d:true）または空（n:null）のエントリはカウントしない
-      // これらは「旧パターン上書き用の空マーカー」であり実際の割当ではない
-      if (e.d || !e.n) continue;
+      // 削除済み（d:true）・空（n:null）・削除済みパターン名のエントリはカウントしない
+      // これらは実際の割当ではないため稼働日数・割当日セットに含めない
+      if (e.d || !e.n || !validShiftNames.has(e.n)) continue;
       const sepIdx = e.k.lastIndexOf("__");
       const staffId = e.k.slice(0, sepIdx);
       const date    = e.k.slice(sepIdx + 2);
@@ -366,12 +373,6 @@ export async function generateShiftDraftAction(
   const regenPatternNames = targetSection
     ? new Set(patterns.map(p => p.name))
     : null;
-
-  // 現在有効なシフト名セット（削除済みパターン名の確定シフトは仮組みで上書き可能にする）
-  const validShiftNames = new Set<string>([
-    ...allPatternDefs.map(p => p.name),
-    "公休", "希望休", "研修",
-  ]);
 
   // 既存シフトマップ: "staffId__date" → shiftName
   // targetSection 指定時: 再仮組み対象パターンのシフトはスキップ（上書き対象のため）
