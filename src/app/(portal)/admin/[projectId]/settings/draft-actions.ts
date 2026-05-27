@@ -162,6 +162,7 @@ export async function generateShiftDraftAction(
     { data: holidayRows },
     { data: existingShiftRows },
     { data: prevMonthShiftRows },
+    { data: trainingRows },
   ] = await Promise.all([
     admin.from("project_members")
       .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, end_date")
@@ -187,6 +188,12 @@ export async function generateShiftDraftAction(
       .eq("project_id", projectId)
       .gte("shift_date", prevMonthDateFrom)
       .lte("shift_date", prevMonthDateTo),
+    // 導入研修日（当月分）：研修日はシフト仮組みから除外
+    admin.from("staff_trainings")
+      .select("staff_id, training_date")
+      .eq("training_type", "onboarding")
+      .gte("training_date", dateFrom)
+      .lte("training_date", dateTo),
   ]);
 
   if (!memberRows || memberRows.length === 0) {
@@ -336,6 +343,11 @@ export async function generateShiftDraftAction(
   // 希望休セット: "staffId__date"
   const holidaySet = new Set<string>(
     (holidayRows ?? []).map(h => `${h.staff_id}__${h.request_date}`)
+  );
+
+  // 研修日セット: "staffId__date"（研修日はシフト仮組みから除外）
+  const trainingSet = new Set<string>(
+    (trainingRows ?? []).map(t => `${t.staff_id}__${t.training_date}`)
   );
 
   // セクション再仮組み時: 対象セクションの確定済みシフトは「置き換え対象」なので除外判定しない
@@ -525,8 +537,9 @@ export async function generateShiftDraftAction(
           // 離脱日チェック
           const endDate = (m as { end_date?: string | null }).end_date ?? null;
           if (endDate && date > endDate) return false;
-          // 希望休・同日割当済み
+          // 希望休・研修日・同日割当済み
           if (holidaySet.has(`${m.staff_id}__${date}`)) return false;
+          if (trainingSet.has(`${m.staff_id}__${date}`)) return false;
           if (assignedOnDate.has(m.staff_id)) return false;
           if (existingMap.has(`${m.staff_id}__${date}`)) return false;
           // セクション一致
@@ -629,12 +642,13 @@ export async function generateShiftDraftAction(
     // 診断: 最初の日×最初のパターンで各条件を個別チェック
     const diagDate    = allDates[0] ?? "";
     const diagPattern = patterns[0];
-    const diag = { endDate: 0, holiday: 0, alreadyOn: 0, section: 0, role: 0, monthLimit: 0, consec: 0, interval: 0, pass: 0 };
+    const diag = { endDate: 0, holiday: 0, training: 0, alreadyOn: 0, section: 0, role: 0, monthLimit: 0, consec: 0, interval: 0, pass: 0 };
     const diagWeekKey = isoWeekKey(diagDate);
     for (const m of activeMemberRows) {
       const endDate = (m as { end_date?: string | null }).end_date ?? null;
       if (endDate && diagDate > endDate)                        { diag.endDate++;   continue; }
       if (holidaySet.has(`${m.staff_id}__${diagDate}`))         { diag.holiday++;   continue; }
+      if (trainingSet.has(`${m.staff_id}__${diagDate}`))        { diag.training++;  continue; }
       if (existingMap.has(`${m.staff_id}__${diagDate}`))        { diag.alreadyOn++; continue; }
       if (diagPattern?.section) {
         const ms = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
@@ -657,7 +671,7 @@ export async function generateShiftDraftAction(
       diag.pass++;
     }
     const diagStr = `[診断(${diagDate}/${diagPattern?.name ?? "?"}): `
-      + `終了日=${diag.endDate} 希望休=${diag.holiday} 同日済=${diag.alreadyOn} `
+      + `終了日=${diag.endDate} 希望休=${diag.holiday} 研修日=${diag.training} 同日済=${diag.alreadyOn} `
       + `セクション=${diag.section} ロール=${diag.role} 月上限=${diag.monthLimit} `
       + `連勤=${diag.consec} 間隔=${diag.interval} 通過=${diag.pass}]`;
     return {
