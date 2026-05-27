@@ -802,6 +802,61 @@ export async function deleteDraftCellsAction(
   return { success: true };
 }
 
+/**
+ * 指定月のスタッフの「希望休」ドラフトセルを差し替え
+ * （保存・反映ボタン押下時に呼ぶ — 追加ではなく完全置換）
+ */
+export async function replaceStaffHolidayDraftAction(
+  projectId: string,
+  staffId: string,
+  months: string[],          // "YYYY-MM" — 対象月一覧
+  newDates: string[],        // 新しい希望休の日付一覧
+): Promise<{ success: boolean; message?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+
+  for (const month of months) {
+    const { data } = await admin
+      .from("shift_grid_drafts")
+      .select("draft_data")
+      .eq("project_id", projectId)
+      .eq("target_month", month)
+      .maybeSingle();
+
+    // ドラフトが無い場合は新規作成の可能性もあるので続行
+    const existing: GridDraftEntry[] = (data?.draft_data as GridDraftEntry[] | null) ?? [];
+    const draftMap = new Map(existing.map(e => [e.k, e]));
+
+    // この月のこのスタッフの「希望休」セルを全削除
+    for (const [key, entry] of draftMap) {
+      if (entry.n === "希望休" && key.startsWith(`${staffId}__`)) {
+        draftMap.delete(key);
+      }
+    }
+
+    // 新しい希望休を追加
+    for (const date of newDates) {
+      if (date.slice(0, 7) !== month) continue;
+      const key = `${staffId}__${date}`;
+      draftMap.set(key, { k: key, n: "希望休", s: null, e: null, d: false });
+    }
+
+    const { error } = await admin
+      .from("shift_grid_drafts")
+      .upsert(
+        { project_id: projectId, target_month: month, draft_data: [...draftMap.values()] },
+        { onConflict: "project_id,target_month" },
+      );
+    if (error) return { success: false, message: error.message };
+  }
+
+  revalidatePath("/shifts/manage");
+  return { success: true };
+}
+
 export type CsvImportResult = {
   success: boolean;
   imported: number;

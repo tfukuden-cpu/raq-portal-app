@@ -2499,6 +2499,23 @@ export default function ShiftEditGrid({
             for (const c of cells) next.delete(`${c.staffId}__${c.date}`);
             applyEdit(next);
           }}
+          onSyncHolidays={(staffId, months, newDates) => {
+            const next = new Map(drafts);
+            // 対象月のこのスタッフの「希望休」セルを全削除
+            for (const [key, val] of next) {
+              if (val?.shiftName === "希望休") {
+                const [kStaff, kDate] = key.split("__");
+                if (kStaff === staffId && months.includes(kDate?.slice(0, 7) ?? "")) {
+                  next.delete(key);
+                }
+              }
+            }
+            // 新しい希望休を追加
+            for (const date of newDates) {
+              next.set(`${staffId}__${date}`, { shiftName: "希望休", shiftStart: null, shiftEnd: null });
+            }
+            applyEdit(next);
+          }}
           onClose={() => setStaffInfoTarget(null)}
         />
       )}

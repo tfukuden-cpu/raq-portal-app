@@ -14,7 +14,7 @@ import OffRequestSection, { type OffRequestEntry } from "@/components/OffRequest
 import { fetchTrainingDatesAction } from "@/app/(portal)/admin/[projectId]/settings/training-actions";
 import { fetchOffRequestsForStaffAction } from "@/app/(portal)/admin/[projectId]/settings/off-request-actions";
 import { updateShiftSettingsAction } from "@/app/(portal)/admin/[projectId]/settings/actions";
-import { overrideDraftCellsAction, deleteDraftCellsAction } from "@/app/(portal)/shifts/actions";
+import { overrideDraftCellsAction, deleteDraftCellsAction, replaceStaffHolidayDraftAction } from "@/app/(portal)/shifts/actions";
 
 export type StaffInfoMember = {
   id: string;
@@ -60,6 +60,7 @@ export default function StaffInfoPanel({
   staffOffRequests,
   onDraftCellsChanged,
   onDraftCellsRemoved,
+  onSyncHolidays,
   onClose,
 }: {
   member: StaffInfoMember;
@@ -70,6 +71,8 @@ export default function StaffInfoPanel({
   /** シフトドラフトへ即時反映するコールバック（ShiftEditGridのdraftsを更新） */
   onDraftCellsChanged?: (cells: { staffId: string; date: string; shiftName: string }[]) => void;
   onDraftCellsRemoved?: (cells: { staffId: string; date: string }[]) => void;
+  /** 希望休の完全置換（months の月を全クリア後に newDates を希望休として再設定） */
+  onSyncHolidays?: (staffId: string, months: string[], newDates: string[]) => void;
   onClose: () => void;
   /** @deprecated kept for compat, no longer used */
   offRequests?: StaffOffRequest[];
@@ -86,6 +89,7 @@ export default function StaffInfoPanel({
     // スタッフ切り替え時に即座にリセット（古いデータで誤書き込みを防ぐ）
     setTrainingDates([]);
     setOffReqEntries([]);
+    deletedOffDatesRef.current = new Set();
     setFetching(true);
     Promise.all([
       fetchTrainingDatesAction(member.id),
@@ -123,16 +127,47 @@ export default function StaffInfoPanel({
   trainingRef.current = trainingDates;
   offReqRef.current   = offReqEntries;
 
+  // 今セッションで削除した希望休の日付を追跡（保存時に完全置換するため）
+  const deletedOffDatesRef = useRef<Set<string>>(new Set());
+
   function handleApplyToShift() {
     if (!onDraftCellsChanged) return;
     startApplyTrans(async () => {
-      const cells: { staffId: string; date: string; shiftName: string }[] = [];
-      for (const r of offReqRef.current)   cells.push({ staffId: member.id, date: r.request_date, shiftName: "希望休" });
-      for (const t of trainingRef.current) cells.push({ staffId: member.id, date: t.training_date, shiftName: t.training_name ?? "研修" });
-      if (cells.length === 0) { setApplyMsg("反映する設定がありません"); setTimeout(() => setApplyMsg(null), 2000); return; }
-      await overrideDraftCellsAction(projectId, cells);
-      onDraftCellsChanged(cells);
-      setApplyMsg(`${cells.length}日をシフトに反映しました`);
+      const offEntries  = offReqRef.current;
+      const trainEntries = trainingRef.current;
+
+      // 希望休：差し替え対象月（現在の希望休の月 ＋ 削除した希望休の月）
+      const holidayMonths = [...new Set([
+        ...offEntries.map(r => r.request_date.slice(0, 7)),
+        ...[...deletedOffDatesRef.current].map(d => d.slice(0, 7)),
+      ])];
+
+      const offDates = offEntries.map(r => r.request_date);
+      const trainCells = trainEntries.map(t => ({ staffId: member.id, date: t.training_date, shiftName: t.training_name ?? "研修" }));
+
+      if (holidayMonths.length === 0 && trainCells.length === 0) {
+        setApplyMsg("反映する設定がありません");
+        setTimeout(() => setApplyMsg(null), 2000);
+        return;
+      }
+
+      // 希望休：月単位で完全置換（削除済み分も確実に消える）
+      if (holidayMonths.length > 0) {
+        await replaceStaffHolidayDraftAction(projectId, member.id, holidayMonths, offDates);
+        onSyncHolidays?.(member.id, holidayMonths, offDates);
+      }
+
+      // 研修：追加のみ（既存保持）
+      if (trainCells.length > 0) {
+        await overrideDraftCellsAction(projectId, trainCells);
+        onDraftCellsChanged(trainCells);
+      }
+
+      // 削除追跡をクリア（次回押下時に二重処理しない）
+      deletedOffDatesRef.current = new Set();
+
+      const total = offDates.length + trainCells.length;
+      setApplyMsg(`${total}日をシフトに反映しました`);
       setTimeout(() => setApplyMsg(null), 2500);
     });
   }
@@ -386,10 +421,14 @@ export default function StaffInfoPanel({
                 initialEntries={offReqEntries}
                 onEntryAdded={async (newEntries) => {
                   const cells = newEntries.map(e => ({ staffId: member.id, date: e.date, shiftName: "希望休" }));
+                  // 追加した日付は削除追跡から除外
+                  for (const e of newEntries) deletedOffDatesRef.current.delete(e.date);
                   await overrideDraftCellsAction(projectId, cells);
                   onDraftCellsChanged?.(cells);
                 }}
                 onEntryRemoved={async (date) => {
+                  // 削除した日付を追跡（保存ボタン押下時の完全置換に使う）
+                  deletedOffDatesRef.current.add(date);
                   const cell = [{ staffId: member.id, date }];
                   await deleteDraftCellsAction(projectId, cell);
                   onDraftCellsRemoved?.(cell);
