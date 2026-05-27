@@ -106,10 +106,14 @@ interface Props {
 
 // ── Section compatibility ──────────────────────────────────────
 // パターンにセクション指定がある場合、スタッフも同じセクションでなければ配置不可
-// （セクション未設定スタッフはセクション指定パターンには入れない）
+// sections（複数）と section（単一）の両方を考慮する
 function canAssign(member: Member, pattern: Pattern): boolean {
   if (!pattern.section) return true;
-  return member.section === pattern.section;
+  const secs = (member as { sections?: string[] }).sections;
+  const effectiveSections = (secs && secs.length > 0)
+    ? secs
+    : (member.section ? [member.section] : []);
+  return effectiveSections.includes(pattern.section);
 }
 
 // ── Date helpers ───────────────────────────────────────────────
