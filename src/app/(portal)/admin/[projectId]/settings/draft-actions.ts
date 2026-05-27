@@ -364,12 +364,20 @@ export async function generateShiftDraftAction(
     ? new Set(patterns.map(p => p.name))
     : null;
 
+  // 現在有効なシフト名セット（削除済みパターン名の確定シフトは仮組みで上書き可能にする）
+  const validShiftNames = new Set<string>([
+    ...allPatternDefs.map(p => p.name),
+    "公休", "希望休", "研修",
+  ]);
+
   // 既存シフトマップ: "staffId__date" → shiftName
   // targetSection 指定時: 再仮組み対象パターンのシフトはスキップ（上書き対象のため）
+  // 削除済みパターン名のシフトもスキップ（上書き対象のため）
   const existingMap = new Map<string, string>();
   for (const s of (existingShiftRows ?? [])) {
     if (s.shift_name) {
       if (regenPatternNames?.has(s.shift_name as string)) continue;
+      if (!validShiftNames.has(s.shift_name as string)) continue;
       existingMap.set(`${s.staff_id}__${s.shift_date}`, s.shift_name as string);
     }
   }
@@ -407,6 +415,8 @@ export async function generateShiftDraftAction(
     if (!name || name === "公休" || name === "希望休") continue;
     // 再仮組み対象パターンは稼働カウント・日付セットから除外（上書き対象のため）
     if (regenPatternNames?.has(name)) continue;
+    // 削除済みパターン名のシフトも除外（稼働カウントに含めない）
+    if (!validShiftNames.has(name)) continue;
     if (!existingDateSet.has(s.staff_id)) existingDateSet.set(s.staff_id, new Set());
     existingDateSet.get(s.staff_id)!.add(s.shift_date as string);
     // 当月分のみカウント（月稼働日数上限チェック用）
