@@ -239,9 +239,12 @@ export async function generateShiftDraftAction(
       .map(t => (t as { training_name?: string | null }).training_name ?? "研修")
       .filter(Boolean) as string[]
   );
+  // 休暇系シフト名（仮組みで除外・稼働日数にカウントしない）
+  const OFF_SHIFT_NAMES = ["公休", "有休", "希望休", "休暇", "振替休日", "特別休暇", "代休", "欠勤"];
   const validShiftNames = new Set<string>([
     ...allPatternDefs.map(p => p.name),
-    "公休", "希望休", "研修",
+    ...OFF_SHIFT_NAMES,
+    "研修",
     ...trainingShiftNames,
   ]);
 
@@ -453,7 +456,7 @@ export async function generateShiftDraftAction(
   ];
   for (const s of allExistingRows) {
     const name = s.shift_name as string | null;
-    if (!name || name === "公休" || name === "希望休") continue;
+    if (!name || OFF_SHIFT_NAMES.includes(name)) continue; // 休暇系は稼働日数にカウントしない
     // 再仮組み対象パターンは稼働カウント・日付セットから除外（上書き対象のため）
     if (regenPatternNames?.has(name)) continue;
     // 削除済みパターン名のシフトも除外（稼働カウントに含めない）
