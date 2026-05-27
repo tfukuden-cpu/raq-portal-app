@@ -503,6 +503,7 @@ export function MemberList({
   const [editPreferredSection, setEditPreferredSection] = useState("");
   const [editMaxConsecDays, setEditMaxConsecDays] = useState("");
   const [editStartDate, setEditStartDate]           = useState("");
+  const [shiftSettingsOpen, setShiftSettingsOpen]   = useState(false);
   const [editHolidayRequests, setEditHolidayRequests] = useState<HolidayRequestEntry[]>([]);
   const [editTrainingDates, setEditTrainingDates]   = useState<TrainingEntry[]>([]);
   const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
@@ -540,6 +541,7 @@ export function MemberList({
     setEditPreferredSection(m.preferred_section ?? "");
     setEditMaxConsecDays(m.max_consecutive_days != null ? String(m.max_consecutive_days) : "");
     setEditStartDate(m.start_date ?? "");
+    setShiftSettingsOpen(false);
     setDepartStep("hidden");
     setDepartDate(new Date().toISOString().slice(0, 10));
     // 研修日・希望休を最新データでフェッチ
@@ -1194,66 +1196,77 @@ export function MemberList({
                 <div className="border-t border-zinc-100 dark:border-zinc-800" />
 
                 {/* ── シフト設定 ── */}
-                <div className="space-y-2.5">
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">シフト設定</p>
-                  {/* 稼働日数 */}
-                  <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">稼働日数</label>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly" | "")}
-                        className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300">
-                        <option value="monthly">月</option>
-                        <option value="weekly">週</option>
-                      </select>
-                      <input type="number" value={editWorkDaysCount} onChange={e => setEditWorkDaysCount(e.target.value)}
-                        placeholder="21" min={1} max={31}
-                        className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                      <span className="text-xs text-zinc-500">
-                        日/{editWorkDaysType === "weekly" ? "週" : "月"}
-                      </span>
-                    </div>
-                  </div>
-                  {/* 優先セクション（複数セクション設定時のみ） */}
-                  {editSections.length > 1 && (
-                    <div>
-                      <label className="text-[10px] text-zinc-500 font-semibold">優先セクション</label>
-                      <p className="text-[9px] text-zinc-400 mb-0.5">仮組で複数セクションのどちらを優先するか</p>
-                      <div className="flex flex-wrap gap-1.5 mt-0.5">
-                        <button type="button" onClick={() => setEditPreferredSection("")}
-                          className={["px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors",
-                            !editPreferredSection ? "bg-blue-600 text-white border-blue-600"
-                              : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"].join(" ")}>
-                          未設定
-                        </button>
-                        {editSections.map(s => (
-                          <button key={s} type="button" onClick={() => setEditPreferredSection(s)}
-                            className={["px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors",
-                              editPreferredSection === s ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-300"].join(" ")}>
-                            {s}
-                          </button>
-                        ))}
+                <div className="space-y-0">
+                  <button
+                    type="button"
+                    onClick={() => setShiftSettingsOpen(v => !v)}
+                    className="w-full flex items-center justify-between py-1 group"
+                  >
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">シフト設定</p>
+                    <span className={`text-[10px] text-zinc-400 transition-transform ${shiftSettingsOpen ? "rotate-180" : ""}`}>▾</span>
+                  </button>
+                  {shiftSettingsOpen && (
+                    <div className="space-y-2.5 pt-2">
+                      {/* 稼働日数 */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-semibold">稼働日数</label>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly" | "")}
+                            className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300">
+                            <option value="monthly">月</option>
+                            <option value="weekly">週</option>
+                          </select>
+                          <input type="number" value={editWorkDaysCount} onChange={e => setEditWorkDaysCount(e.target.value)}
+                            placeholder="21" min={1} max={31}
+                            className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                          <span className="text-xs text-zinc-500">
+                            日/{editWorkDaysType === "weekly" ? "週" : "月"}
+                          </span>
+                        </div>
+                      </div>
+                      {/* 優先セクション（複数セクション設定時のみ） */}
+                      {editSections.length > 1 && (
+                        <div>
+                          <label className="text-[10px] text-zinc-500 font-semibold">優先セクション</label>
+                          <p className="text-[9px] text-zinc-400 mb-0.5">仮組で複数セクションのどちらを優先するか</p>
+                          <div className="flex flex-wrap gap-1.5 mt-0.5">
+                            <button type="button" onClick={() => setEditPreferredSection("")}
+                              className={["px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors",
+                                !editPreferredSection ? "bg-blue-600 text-white border-blue-600"
+                                  : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"].join(" ")}>
+                              未設定
+                            </button>
+                            {editSections.map(s => (
+                              <button key={s} type="button" onClick={() => setEditPreferredSection(s)}
+                                className={["px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors",
+                                  editPreferredSection === s ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-300"].join(" ")}>
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* 優先シフトパターン */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-semibold">優先シフトパターン</label>
+                        <select value={editPreferredShift} onChange={e => setEditPreferredShift(e.target.value)}
+                          className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                          <option value="">未設定</option>
+                          {shiftPatternNames.map(n => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* 連勤上限 */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-semibold">連勤上限（日）</label>
+                        <input type="number" value={editMaxConsecDays} onChange={e => setEditMaxConsecDays(e.target.value)}
+                          placeholder="5（デフォルト）" min={1} max={31}
+                          className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                       </div>
                     </div>
                   )}
-                  {/* 優先シフトパターン */}
-                  <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">優先シフトパターン</label>
-                    <select value={editPreferredShift} onChange={e => setEditPreferredShift(e.target.value)}
-                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                      <option value="">未設定</option>
-                      {shiftPatternNames.map(n => (
-                        <option key={n} value={n}>{n}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {/* 連勤上限 */}
-                  <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">連勤上限（日）</label>
-                    <input type="number" value={editMaxConsecDays} onChange={e => setEditMaxConsecDays(e.target.value)}
-                      placeholder="5（デフォルト）" min={1} max={31}
-                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                  </div>
                 </div>
 
                 <div className="border-t border-zinc-100 dark:border-zinc-800" />

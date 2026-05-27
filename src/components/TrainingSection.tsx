@@ -36,10 +36,6 @@ function fmtLabel(entry: TrainingEntry): string {
   return base + name;
 }
 
-function fmtTime(t: string | null) {
-  if (!t) return "";
-  return t.slice(0, 5); // "HH:MM"
-}
 
 export default function TrainingSection({ staffId, initialDates }: Props) {
   const now = new Date();
@@ -52,8 +48,6 @@ export default function TrainingSection({ staffId, initialDates }: Props) {
   const [selected, setSelected]     = useState<Set<string>>(new Set());
   const [trainingName, setTrainingName] = useState("導入研修");
   const [customName, setCustomName] = useState("");
-  const [startTime, setStartTime]   = useState("");
-  const [endTime, setEndTime]       = useState("");
 
   const [error, setError]           = useState<string | null>(null);
   const [isPending, startTrans]     = useTransition();
@@ -95,8 +89,6 @@ export default function TrainingSection({ staffId, initialDates }: Props) {
   function handleSave() {
     if (selected.size === 0) return;
     const finalName = trainingName === "__custom__" ? customName.trim() || null : trainingName || null;
-    const st = startTime || null;
-    const et = endTime   || null;
     setError(null);
 
     startTrans(async () => {
@@ -104,9 +96,9 @@ export default function TrainingSection({ staffId, initialDates }: Props) {
       const newEntries: TrainingEntry[] = [];
       for (const dateStr of dates) {
         if (savedMap.has(dateStr)) continue;
-        const r = await addTrainingDateAction(staffId, dateStr, finalName, st, et);
+        const r = await addTrainingDateAction(staffId, dateStr, finalName, null, null);
         if (r.success && r.id) {
-          newEntries.push({ id: r.id, training_date: dateStr, training_name: finalName, start_time: st, end_time: et });
+          newEntries.push({ id: r.id, training_date: dateStr, training_name: finalName, start_time: null, end_time: null });
         } else if (r.message && r.message !== "同じ日付が既に登録されています") {
           setError(r.message);
           return;
@@ -149,11 +141,6 @@ export default function TrainingSection({ staffId, initialDates }: Props) {
               <div className="flex items-center gap-1.5">
                 {g.name && (
                   <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300">{g.name}</span>
-                )}
-                {(g.startTime || g.endTime) && (
-                  <span className="text-[10px] text-zinc-400 tabular-nums">
-                    {fmtTime(g.startTime)}{g.startTime && g.endTime ? "〜" : ""}{fmtTime(g.endTime)}
-                  </span>
                 )}
                 <span className="text-[10px] text-zinc-400">（{g.entries.length}日）</span>
               </div>
@@ -241,26 +228,6 @@ export default function TrainingSection({ staffId, initialDates }: Props) {
                 className="mt-1.5 w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             )}
-          </div>
-
-          {/* 時間設定 */}
-          <div>
-            <label className="text-[10px] text-zinc-500 font-semibold block mb-1">時間（任意）</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="time"
-                value={startTime}
-                onChange={e => setStartTime(e.target.value)}
-                className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-              <span className="text-xs text-zinc-400">〜</span>
-              <input
-                type="time"
-                value={endTime}
-                onChange={e => setEndTime(e.target.value)}
-                className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
           </div>
 
           {/* カレンダー */}
