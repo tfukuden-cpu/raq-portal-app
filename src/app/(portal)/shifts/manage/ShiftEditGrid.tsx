@@ -2469,6 +2469,7 @@ export default function ShiftEditGrid({
       {/* スタッフ情報パネル */}
       {staffInfoTarget && (
         <StaffInfoPanel
+          key={staffInfoTarget.id}
           member={{
             id:                   staffInfoTarget.id,
             name:                 staffInfoTarget.name,

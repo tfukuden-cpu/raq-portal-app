@@ -81,6 +81,9 @@ export default function StaffInfoPanel({
 
   useEffect(() => {
     let cancelled = false;
+    // スタッフ切り替え時に即座にリセット（古いデータで誤書き込みを防ぐ）
+    setTrainingDates([]);
+    setHolidayEntries([]);
     setFetching(true);
     Promise.all([
       fetchTrainingDatesAction(member.id),
