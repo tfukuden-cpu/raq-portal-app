@@ -188,10 +188,9 @@ export async function generateShiftDraftAction(
       .eq("project_id", projectId)
       .gte("shift_date", prevMonthDateFrom)
       .lte("shift_date", prevMonthDateTo),
-    // 導入研修日（当月分）：研修日はシフト仮組みから除外
+    // 研修日（当月分）：研修日はシフト仮組みから除外
     admin.from("staff_trainings")
-      .select("staff_id, training_date")
-      .eq("training_type", "onboarding")
+      .select("staff_id, training_date, training_name, start_time, end_time")
       .gte("training_date", dateFrom)
       .lte("training_date", dateTo),
   ]);
@@ -211,9 +210,16 @@ export async function generateShiftDraftAction(
 
   // 現在有効なシフト名セット（削除済みパターン名のシフトを上書き可能にするため早期に定義）
   // ※ allPatternDefs はセクションフィルタ前の全パターンを含む
+  // ※ 研修日の training_name も有効名として追加（導入研修・研修・案件研修など）
+  const trainingShiftNames = new Set<string>(
+    (trainingRows ?? [])
+      .map(t => (t as { training_name?: string | null }).training_name ?? "研修")
+      .filter(Boolean) as string[]
+  );
   const validShiftNames = new Set<string>([
     ...allPatternDefs.map(p => p.name),
     "公休", "希望休", "研修",
+    ...trainingShiftNames,
   ]);
 
   // セクション絞り込み: targetSection 指定時はそのセクション所属スタッフのみ対象
@@ -812,9 +818,9 @@ export async function generateShiftDraftAction(
     .filter(t => allActiveMemberIds.has(t.staff_id as string))
     .map(t => ({
       k: `${t.staff_id as string}__${t.training_date as string}`,
-      n: "研修" as string,
-      s: null as string | null,
-      e: null as string | null,
+      n: ((t as { training_name?: string | null }).training_name ?? "研修") as string,
+      s: ((t as { start_time?: string | null }).start_time ?? null) as string | null,
+      e: ((t as { end_time?: string | null }).end_time ?? null) as string | null,
       d: false,
     }));
 

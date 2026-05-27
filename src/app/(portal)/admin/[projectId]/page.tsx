@@ -82,10 +82,9 @@ export default async function ProjectDetailPage(props: {
     createAdminClient().from("seat_walls")
       .select("id, x1_pct, y1_pct, x2_pct, y2_pct")
       .eq("project_id", projectId),
-    // 導入研修日（全案件共通）
+    // 研修日（全案件共通）
     createAdminClient().from("staff_trainings")
-      .select("id, staff_id, training_date")
-      .eq("training_type", "onboarding"),
+      .select("id, staff_id, training_date, training_name, start_time, end_time"),
   ]);
 
   if (!project) redirect("/admin");
@@ -125,10 +124,16 @@ export default async function ProjectDetailPage(props: {
   }));
 
   // 研修日をスタッフIDごとにまとめる
-  const trainingMap = new Map<string, { id: string; training_date: string }[]>();
+  const trainingMap = new Map<string, { id: string; training_date: string; training_name: string | null; start_time: string | null; end_time: string | null }[]>();
   for (const t of (trainingsRaw ?? [])) {
     if (!trainingMap.has(t.staff_id)) trainingMap.set(t.staff_id, []);
-    trainingMap.get(t.staff_id)!.push({ id: t.id, training_date: t.training_date as string });
+    trainingMap.get(t.staff_id)!.push({
+      id:            t.id,
+      training_date: t.training_date as string,
+      training_name: (t as { training_name?: string | null }).training_name ?? null,
+      start_time:    (t as { start_time?: string | null }).start_time ?? null,
+      end_time:      (t as { end_time?: string | null }).end_time ?? null,
+    });
   }
 
   const memberList = (members ?? []).map((m) => {

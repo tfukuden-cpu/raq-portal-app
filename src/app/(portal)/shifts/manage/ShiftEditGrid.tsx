@@ -2314,7 +2314,7 @@ export default function ShiftEditGrid({
             max_consecutive_days: staffInfoTarget.max_consecutive_days ?? null,
             shift_note:           staffInfoTarget.shift_note ?? null,
             endDate:              staffInfoTarget.endDate,
-            trainingDates:        (staffInfoTarget as { trainingDates?: { id: string; training_date: string }[] }).trainingDates ?? [],
+            trainingDates:        (staffInfoTarget as { trainingDates?: import("@/components/TrainingSection").TrainingEntry[] }).trainingDates ?? [],
           }}
           offRequests={(offRequests ?? [])
             .filter(r => r.staff_id === staffInfoTarget.id)

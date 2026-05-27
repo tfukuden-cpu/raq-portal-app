@@ -6,7 +6,7 @@
  * セクション・稼働設定・優先・希望休申請一覧・導入研修日を表示する
  */
 
-import TrainingSection from "@/components/TrainingSection";
+import TrainingSection, { type TrainingEntry } from "@/components/TrainingSection";
 
 export type StaffInfoMember = {
   id: string;
@@ -20,7 +20,7 @@ export type StaffInfoMember = {
   max_consecutive_days: number | null;
   shift_note: string | null;
   endDate?: string | null;
-  trainingDates?: { id: string; training_date: string }[];
+  trainingDates?: TrainingEntry[];
 };
 
 export type StaffOffRequest = {

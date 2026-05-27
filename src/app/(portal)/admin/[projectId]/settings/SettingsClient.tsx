@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import LineConnectionSection from "./LineConnectionSection";
-import TrainingSection, { type TrainingDate } from "@/components/TrainingSection";
+import TrainingSection, { type TrainingDate, type TrainingEntry } from "@/components/TrainingSection";
 import { fetchTrainingDatesAction } from "./training-actions";
 import {
   updateProjectNameAction,
@@ -37,7 +37,7 @@ import {
 } from "../../holiday-rule-config";
 import SeatLayoutEditor, { type SeatItem, type WallItem } from "./SeatLayoutEditor";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; compliance: number | null; trainingDates: TrainingDate[] };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; compliance: number | null; trainingDates: TrainingEntry[] };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -501,8 +501,7 @@ export function MemberList({
   const [editPreferredSection, setEditPreferredSection] = useState("");
   const [editMaxConsecDays, setEditMaxConsecDays] = useState("");
   const [editStartDate, setEditStartDate]     = useState("");
-  const [editTrainingDates, setEditTrainingDates] = useState<TrainingDate[]>([]);
-  const [shiftSettingsOpen, setShiftSettingsOpen] = useState(false);
+  const [editTrainingDates, setEditTrainingDates] = useState<TrainingEntry[]>([]);
   const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
   const [departType, setDepartType] = useState<"immediate" | "dated">("immediate");
   const [departDate, setDepartDate] = useState(() =>
@@ -532,13 +531,12 @@ export function MemberList({
     setEditSectionInput("");
     setEditRole(m.role);
     setEditAccountNumber(m.account_number ?? "");
-    setEditWorkDaysType((m.work_days_type as "monthly" | "weekly" | "") ?? "");
-    setEditWorkDaysCount(m.work_days_count != null ? String(m.work_days_count) : "");
+    setEditWorkDaysType((m.work_days_type as "monthly" | "weekly" | "") || "monthly");
+    setEditWorkDaysCount(m.work_days_count != null ? String(m.work_days_count) : "21");
     setEditPreferredShift(m.preferred_shift ?? "");
     setEditPreferredSection(m.preferred_section ?? "");
     setEditMaxConsecDays(m.max_consecutive_days != null ? String(m.max_consecutive_days) : "");
     setEditStartDate(m.start_date ?? "");
-    setShiftSettingsOpen(!!(m.work_days_type || m.preferred_shift || m.preferred_section || m.max_consecutive_days));
     setDepartStep("hidden");
     setDepartDate(new Date().toISOString().slice(0, 10));
     // 研修日を最新データでフェッチ（他画面での変更も反映）
@@ -922,15 +920,15 @@ export function MemberList({
             </div>
           </div>
           <div>
-            <label className="text-[10px] text-zinc-500 font-semibold">アサイン日（任意）</label>
-            <p className="text-[9px] text-zinc-400 mb-0.5">設定するとこの日以前のシフト仮組みから除外されます</p>
+            <label className="text-[10px] text-zinc-500 font-semibold">アサイン日 *</label>
+            <p className="text-[9px] text-zinc-400 mb-0.5">この日以前のシフト仮組みから除外されます</p>
             <input type="date" value={newAssignDate} onChange={e => setNewAssignDate(e.target.value)}
               className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm mt-0.5" />
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={() => reset()}
               className="flex-1 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500">キャンセル</button>
-            <button type="button" onClick={handleCreateNew} disabled={!newLast || !newFirst || isPending}
+            <button type="button" onClick={handleCreateNew} disabled={!newLast || !newFirst || !newAssignDate || isPending}
               className="flex-1 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold disabled:opacity-40">作成して追加</button>
           </div>
         </div>
@@ -1105,8 +1103,9 @@ export function MemberList({
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEditId(null)}>
             <div className="w-full max-w-lg bg-white dark:bg-zinc-900 rounded-2xl overflow-y-auto max-h-[90dvh]" onClick={e => e.stopPropagation()}>
-              <div className="p-4 space-y-3">
-                <div className="flex items-center gap-1.5 mb-1">
+              <div className="p-4 space-y-4">
+                {/* Header */}
+                <div className="flex items-center gap-1.5">
                   <span className="font-mono text-[11px] text-zinc-400">{editId}</span>
                   <span className="text-[10px] text-zinc-400">を編集中</span>
                   {editingMember?.end_date && (
@@ -1115,184 +1114,156 @@ export function MemberList({
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">氏名 *</label>
-                    <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
-                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">所属会社</label>
-                    <input type="text" value={editCompany} onChange={e => setEditCompany(e.target.value)}
-                      placeholder="任意"
-                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">ロール</label>
-                    <select value={editRole} onChange={e => setEditRole(e.target.value)}
-                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                      <option value="staff">スタッフ</option>
-                      <option value="project_admin">管理者</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-500 font-semibold">セクション（複数選択可）</label>
-                  {availableSections.length > 0 ? (
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {availableSections.map(s => {
-                        const active = editSections.includes(s);
-                        return (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => setEditSections(prev =>
-                              active ? prev.filter(x => x !== s) : [...prev, s]
-                            )}
-                            className={[
-                              "px-2.5 py-1 rounded-full text-xs font-semibold transition-colors border",
-                              active
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-300 dark:hover:border-blue-700",
-                            ].join(" ")}
-                          >
-                            {s}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-[10px] text-zinc-400 mt-1">
-                      シフトタブでパターンを登録するとセクションが選択できます
-                    </p>
-                  )}
-                  {editSections.length > 0 && (
-                    <p className="text-[10px] text-zinc-400 mt-1">
-                      選択中: {editSections.join("・")}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-500 font-semibold">アカウント番号</label>
-                  <input type="text" value={editAccountNumber} onChange={e => setEditAccountNumber(e.target.value)}
-                    placeholder="任意"
-                    className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                </div>
-                {/* ── シフト設定（仮組用）折りたたみ ── */}
-                <button
-                  type="button"
-                  onClick={() => setShiftSettingsOpen(v => !v)}
-                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-700/60 transition-colors"
-                >
-                  <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                    シフト設定（仮組用）
-                    {(editWorkDaysType || editPreferredShift || editPreferredSection || editMaxConsecDays) && (
-                      <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block align-middle" />
-                    )}
-                  </span>
-                  <svg className={`w-3 h-3 text-zinc-400 transition-transform ${shiftSettingsOpen ? "rotate-180" : ""}`}
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
 
-                {shiftSettingsOpen && (
-                  <div className="space-y-2 pl-1">
-                    {/* 稼働日数 */}
+                {/* ── 基本設定 ── */}
+                <div className="space-y-2.5">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">基本設定</p>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] text-zinc-500 font-semibold">稼働日数</label>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly" | "")}
-                          className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300">
-                          <option value="">未設定</option>
-                          <option value="monthly">月</option>
-                          <option value="weekly">週</option>
-                        </select>
-                        {editWorkDaysType && (
-                          <>
-                            <input type="number" value={editWorkDaysCount} onChange={e => setEditWorkDaysCount(e.target.value)}
-                              placeholder="0" min={1} max={31}
-                              className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums" />
-                            <span className="text-xs text-zinc-500">
-                              日/{editWorkDaysType === "monthly" ? "月" : "週"}
-                            </span>
-                          </>
-                        )}
-                      </div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">氏名 *</label>
+                      <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                     </div>
-                    {/* 優先パターン・連勤上限 */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-zinc-500 font-semibold">優先パターン</label>
-                        <select value={editPreferredShift} onChange={e => setEditPreferredShift(e.target.value)}
-                          className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                          <option value="">未設定</option>
-                          {shiftPatternNames.map(n => (
-                            <option key={n} value={n}>{n}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-zinc-500 font-semibold">連勤上限（日）</label>
-                        <input type="number" value={editMaxConsecDays} onChange={e => setEditMaxConsecDays(e.target.value)}
-                          placeholder="5（デフォルト）" min={1} max={31}
-                          className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                      </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">所属会社</label>
+                      <input type="text" value={editCompany} onChange={e => setEditCompany(e.target.value)}
+                        placeholder="任意"
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                     </div>
-                    {/* 優先セクション（複数セクション設定時のみ表示） */}
-                    {editSections.length > 1 && (
-                      <div>
-                        <label className="text-[10px] text-zinc-500 font-semibold">優先セクション</label>
-                        <p className="text-[9px] text-zinc-400 mb-0.5">仮組で複数セクションのどちらを優先するか</p>
-                        <div className="flex flex-wrap gap-1.5 mt-0.5">
-                          <button type="button" onClick={() => setEditPreferredSection("")}
-                            className={["px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors",
-                              !editPreferredSection ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"].join(" ")}>
-                            未設定
-                          </button>
-                          {editSections.map(s => (
-                            <button key={s} type="button" onClick={() => setEditPreferredSection(s)}
-                              className={["px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors",
-                                editPreferredSection === s ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-300"].join(" ")}>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">ロール</label>
+                      <select value={editRole} onChange={e => setEditRole(e.target.value)}
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                        <option value="staff">スタッフ</option>
+                        <option value="project_admin">管理者</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">アカウント番号</label>
+                      <input type="text" value={editAccountNumber} onChange={e => setEditAccountNumber(e.target.value)}
+                        placeholder="任意"
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 font-semibold">セクション（複数選択可）</label>
+                    {availableSections.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {availableSections.map(s => {
+                          const active = editSections.includes(s);
+                          return (
+                            <button key={s} type="button"
+                              onClick={() => setEditSections(prev => active ? prev.filter(x => x !== s) : [...prev, s])}
+                              className={["px-2.5 py-1 rounded-full text-xs font-semibold transition-colors border",
+                                active ? "bg-blue-600 text-white border-blue-600"
+                                  : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-300 dark:hover:border-blue-700",
+                              ].join(" ")}>
                               {s}
                             </button>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
+                    ) : (
+                      <p className="text-[10px] text-zinc-400 mt-1">シフトタブでパターンを登録するとセクションが選択できます</p>
+                    )}
+                    {editSections.length > 0 && (
+                      <p className="text-[10px] text-zinc-400 mt-1">選択中: {editSections.join("・")}</p>
                     )}
                   </div>
-                )}
+                  <div>
+                    <label className="text-[10px] text-zinc-500 font-semibold">アサイン日（参加日）</label>
+                    <p className="text-[9px] text-zinc-400 mb-0.5">設定するとこの日以前のシフト仮組みから除外されます</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <input type="date" value={editStartDate} onChange={e => setEditStartDate(e.target.value)}
+                        className="flex-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                      {editStartDate && (
+                        <button type="button" onClick={() => setEditStartDate("")}
+                          className="text-[10px] text-zinc-400 hover:text-zinc-600 flex-shrink-0">クリア</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                {/* アサイン日 */}
-                <div>
-                  <label className="text-[10px] text-zinc-500 font-semibold">アサイン日（参加日）</label>
-                  <p className="text-[9px] text-zinc-400 mb-0.5">設定するとこの日以前のシフト仮組みから除外されます</p>
-                  <input
-                    type="date"
-                    value={editStartDate}
-                    onChange={e => setEditStartDate(e.target.value)}
-                    className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                  {editStartDate && (
-                    <button type="button" onClick={() => setEditStartDate("")}
-                      className="text-[10px] text-zinc-400 hover:text-zinc-600 mt-0.5">クリア</button>
+                <div className="border-t border-zinc-100 dark:border-zinc-800" />
+
+                {/* ── シフト設定 ── */}
+                <div className="space-y-2.5">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">シフト設定</p>
+                  {/* 稼働日数 */}
+                  <div>
+                    <label className="text-[10px] text-zinc-500 font-semibold">稼働日数</label>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly" | "")}
+                        className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300">
+                        <option value="monthly">月</option>
+                        <option value="weekly">週</option>
+                      </select>
+                      <input type="number" value={editWorkDaysCount} onChange={e => setEditWorkDaysCount(e.target.value)}
+                        placeholder="21" min={1} max={31}
+                        className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                      <span className="text-xs text-zinc-500">
+                        日/{editWorkDaysType === "weekly" ? "週" : "月"}
+                      </span>
+                    </div>
+                  </div>
+                  {/* 優先セクション（複数セクション設定時のみ） */}
+                  {editSections.length > 1 && (
+                    <div>
+                      <label className="text-[10px] text-zinc-500 font-semibold">優先セクション</label>
+                      <p className="text-[9px] text-zinc-400 mb-0.5">仮組で複数セクションのどちらを優先するか</p>
+                      <div className="flex flex-wrap gap-1.5 mt-0.5">
+                        <button type="button" onClick={() => setEditPreferredSection("")}
+                          className={["px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors",
+                            !editPreferredSection ? "bg-blue-600 text-white border-blue-600"
+                              : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"].join(" ")}>
+                          未設定
+                        </button>
+                        {editSections.map(s => (
+                          <button key={s} type="button" onClick={() => setEditPreferredSection(s)}
+                            className={["px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors",
+                              editPreferredSection === s ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-300"].join(" ")}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
+                  {/* 優先シフトパターン */}
+                  <div>
+                    <label className="text-[10px] text-zinc-500 font-semibold">優先シフトパターン</label>
+                    <select value={editPreferredShift} onChange={e => setEditPreferredShift(e.target.value)}
+                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                      <option value="">未設定</option>
+                      {shiftPatternNames.map(n => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* 連勤上限 */}
+                  <div>
+                    <label className="text-[10px] text-zinc-500 font-semibold">連勤上限（日）</label>
+                    <input type="number" value={editMaxConsecDays} onChange={e => setEditMaxConsecDays(e.target.value)}
+                      placeholder="5（デフォルト）" min={1} max={31}
+                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                  </div>
                 </div>
 
-                {/* 導入研修 */}
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40 p-3">
-                  <TrainingSection
-                    staffId={editId}
-                    initialDates={editTrainingDates}
-                  />
+                <div className="border-t border-zinc-100 dark:border-zinc-800" />
+
+                {/* ── 研修設定 ── */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">研修設定</p>
+                  <TrainingSection staffId={editId} initialDates={editTrainingDates} />
                 </div>
 
-                {/* 離脱処理 */}
+                <div className="border-t border-zinc-100 dark:border-zinc-800" />
+
+                {/* ── 離脱処理 ── */}
                 {departStep === "hidden" ? (
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={() => {
                       setDepartType("immediate");
                       setDepartDate(new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }));
@@ -1305,59 +1276,36 @@ export function MemberList({
                 ) : (
                   <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50/40 dark:bg-red-950/20 p-3 space-y-3">
                     <p className="text-xs font-semibold text-red-600 dark:text-red-400">離脱処理</p>
-
-                    {/* 即日 / 期日を指定 */}
                     <div className="space-y-2">
                       <label className="flex items-center gap-2.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="departType"
-                          checked={departType === "immediate"}
-                          onChange={() => setDepartType("immediate")}
-                          className="w-4 h-4 accent-red-500"
-                        />
+                        <input type="radio" name="departType" checked={departType === "immediate"}
+                          onChange={() => setDepartType("immediate")} className="w-4 h-4 accent-red-500" />
                         <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
                           即日（本日 {new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "long", day: "numeric" })} 付けで離脱）
                         </span>
                       </label>
-
                       <label className="flex items-center gap-2.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="departType"
-                          checked={departType === "dated"}
-                          onChange={() => setDepartType("dated")}
-                          className="w-4 h-4 accent-red-500"
-                        />
+                        <input type="radio" name="departType" checked={departType === "dated"}
+                          onChange={() => setDepartType("dated")} className="w-4 h-4 accent-red-500" />
                         <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">期日を指定</span>
                       </label>
-
                       {departType === "dated" && (
                         <div className="ml-6 space-y-1">
                           <label className="text-[10px] text-zinc-500 font-semibold">最終出勤日（この日までシフトを保持）</label>
-                          <input
-                            type="date"
-                            value={departDate}
-                            onChange={e => setDepartDate(e.target.value)}
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                          />
+                          <input type="date" value={departDate} onChange={e => setDepartDate(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20" />
                         </div>
                       )}
                     </div>
-
                     <p className="text-[10px] text-zinc-400">
-                      {departType === "immediate"
-                        ? "本日以降のシフトが削除されます"
-                        : "指定日の翌日以降のシフトが削除されます"}
+                      {departType === "immediate" ? "本日以降のシフトが削除されます" : "指定日の翌日以降のシフトが削除されます"}
                     </p>
-
                     <div className="flex gap-2">
                       <button type="button" onClick={() => setDepartStep("hidden")}
                         className="flex-1 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                         戻る
                       </button>
-                      <button
-                        type="button"
+                      <button type="button"
                         disabled={isPending || (departType === "dated" && !departDate)}
                         onClick={() => {
                           if (!editId) return;

@@ -68,7 +68,7 @@ export default async function MembersPage(props: {
       start_date:           (m as { start_date?: string | null }).start_date ?? null,
       end_date:             (m as { end_date?: string | null }).end_date ?? null,
       compliance:           null as number | null,
-      trainingDates:        [] as { id: string; training_date: string }[],
+      trainingDates:        [] as { id: string; training_date: string; training_name: string | null; start_time: string | null; end_time: string | null }[],
     };
   });
 
