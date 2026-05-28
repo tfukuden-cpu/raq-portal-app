@@ -204,10 +204,8 @@ export default function ShiftManageClient({
     });
   }
 
-  // Excel出力（選択日のシフトをアカウント番号順に出力）
-  async function handleExportExcel() {
-    const XLSX = await import("xlsx");
-
+  // CSV出力（選択日のシフトをアカウント番号順に出力・Excelで開ける）
+  function handleExportExcel() {
     // 選択日のシフトを取得
     const dateShifts = shifts.filter(s => s.shift_date === selectedDate);
     const shiftMap = new Map(dateShifts.map(s => [s.staff_id, s]));
@@ -219,6 +217,7 @@ export default function ShiftManageClient({
       return na - nb;
     });
 
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const header = ["アカウント番号", "氏名", "日付", "シフト名", "セクション（シフト）"];
     const rows = sorted.map(m => {
       const shift = shiftMap.get(m.id);
@@ -228,12 +227,15 @@ export default function ShiftManageClient({
       return [m.accountNumber ?? "", m.name, selectedDate, shiftName, sectionShift];
     });
 
-    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-    // 列幅を自動調整
-    ws["!cols"] = [{ wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 20 }, { wch: 20 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "シフト");
-    XLSX.writeFile(wb, `シフト_${selectedDate}.xlsx`);
+    const csv = [header, ...rows].map(r => r.map(c => esc(String(c))).join(",")).join("\r\n");
+    // BOM付きUTF-8でExcelが文字化けしないように
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `シフト_${selectedDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   if (mode === "edit") {
