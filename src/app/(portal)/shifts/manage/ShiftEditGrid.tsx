@@ -1292,8 +1292,12 @@ export default function ShiftEditGrid({
   };
   const sortedMembersBySection = useMemo(() => {
     if (sortByAccountLocal) {
-      // 番号順モード：セクション無視・全員アカウント番号昇順（未設定は末尾）
+      // 番号順モード：SV を上部固定（名前順）、SV以外をアカウント番号昇順
       return [...activeMembers].sort((a, b) => {
+        const aIsSV = a.section === "SV";
+        const bIsSV = b.section === "SV";
+        if (aIsSV !== bIsSV) return aIsSV ? -1 : 1;
+        if (aIsSV) return a.name.localeCompare(b.name, "ja");
         const na = getAccNumGrid(a.accountNumber);
         const nb = getAccNumGrid(b.accountNumber);
         return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
@@ -2090,7 +2094,9 @@ export default function ShiftEditGrid({
               {/* ── スタッフ軸 ── */}
               {displayMembers.map((member, idx) => {
                 const prevSection = idx > 0 ? displayMembers[idx - 1].section : undefined;
-                const showSectionHeader = !filterSection && !sortByAccountLocal && member.section !== prevSection;
+                // 番号順モード：SV のヘッダーのみ表示、SV以外は非表示
+                const showSectionHeader = !filterSection && member.section !== prevSection
+                  && (!sortByAccountLocal || member.section === "SV");
                 // 月合計
                 const monthTotal = allDates.filter(d => {
                   const cell = resolveCell(member.id, d);

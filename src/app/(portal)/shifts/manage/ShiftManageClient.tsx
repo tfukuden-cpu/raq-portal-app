@@ -162,9 +162,13 @@ export default function ShiftManageClient({
   const [exportSectionsSel, setExportSectionsSel] = useState<string[]>([]);
   const [sortByAccount, setSortByAccount] = useState(false);
 
-  // ソート（デフォルト: セクション順＋番号順、トグル時: 全員番号順）
+  // ソート（デフォルト: セクション順、トグル時: SV固定上部＋SV以外番号順）
   const activeMembers = sortByAccount
     ? [...activeMembersRaw].sort((a, b) => {
+        const aIsSV = a.section === "SV";
+        const bIsSV = b.section === "SV";
+        if (aIsSV !== bIsSV) return aIsSV ? -1 : 1;
+        if (aIsSV) return a.name.localeCompare(b.name, "ja"); // SV は名前順
         const na = getAccNum(a.accountNumber);
         const nb = getAccNum(b.accountNumber);
         return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
