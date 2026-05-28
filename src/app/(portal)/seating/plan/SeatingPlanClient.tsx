@@ -310,7 +310,7 @@ export default function SeatingPlanClient({
                   isDropOver  ? "ring-2 ring-blue-500 ring-offset-1 scale-105" : "",
                   isTarget
                     ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 border-dashed cursor-pointer animate-pulse"
-                    : isFree
+                    : (isFree && !s)
                     ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-700 cursor-pointer"
                     : seatSection
                     ? `${sectionBg} ${sectionBorder} cursor-pointer active:scale-95`

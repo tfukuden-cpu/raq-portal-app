@@ -97,6 +97,15 @@ export async function autoAssignSeatsAction(
   const admin = createAdminClient();
 
   const OFF_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
+  const KNOWN_SECTIONS = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク"];
+
+  /** シフト名の先頭でセクションを解決（"MOTA_遅番_A" → "MOTA"） */
+  function parseSection(shiftName: string, fallback: string): string {
+    for (const sec of KNOWN_SECTIONS) {
+      if (shiftName.startsWith(sec)) return sec;
+    }
+    return fallback;
+  }
 
   const [{ data: seats }, { data: shifts }, { data: members }] = await Promise.all([
     admin.from("seats").select("id, section, seat_type").eq("project_id", projectId).eq("is_active", true),
@@ -109,11 +118,14 @@ export async function autoAssignSeatsAction(
       .eq("project_id", projectId),
   ]);
 
-  // 当日出勤予定スタッフ
-  const sectionMap = new Map((members ?? []).map(m => [m.staff_id, m.section ?? ""]));
+  // 当日出勤予定スタッフ（シフト名からセクション解決）
+  const memberSectionMap = new Map((members ?? []).map(m => [m.staff_id, m.section ?? ""]));
   const workingStaff = (shifts ?? [])
-    .filter(s => s.shift_name && !OFF_NAMES.includes(s.shift_name))
-    .map(s => ({ staffId: s.staff_id, section: sectionMap.get(s.staff_id) ?? "" }));
+    .filter(s => s.shift_name && !OFF_NAMES.includes(s.shift_name as string))
+    .map(s => ({
+      staffId:  s.staff_id as string,
+      section:  parseSection(s.shift_name as string, memberSectionMap.get(s.staff_id) ?? ""),
+    }));
 
   // 既存配置を起点にする
   const assignments: { seatId: string; staffId: string }[] = [...existingAssignments];
@@ -123,12 +135,14 @@ export async function autoAssignSeatsAction(
   // 無効席は配置対象外
   const activeSeats = (seats ?? []).filter(s => (s as { seat_type?: string }).seat_type !== "disabled");
   // まだ配置されていない席・スタッフだけ対象
-  const emptySeats    = activeSeats.filter(s => !usedSeats.has(s.id));
-  const pendingStaff  = workingStaff.filter(s => !usedStaff.has(s.staffId));
+  const emptySeats   = activeSeats.filter(s => !usedSeats.has(s.id));
+  const pendingStaff = workingStaff.filter(s => !usedStaff.has(s.staffId));
 
-  // パス1: セクション一致（通常席）
+  // パス1: セクション指定席 → 同セクションのスタッフのみ配置
+  //        セクション一致スタッフがいなければ空席のまま（他セクションは入れない）
   for (const seat of emptySeats) {
-    if (!seat.section || (seat as { seat_type?: string }).seat_type === "free") continue;
+    const seatType = (seat as { seat_type?: string }).seat_type;
+    if (!seat.section || seatType === "free") continue;
     const match = pendingStaff.find(s => !usedStaff.has(s.staffId) && s.section === seat.section);
     if (match) {
       assignments.push({ seatId: seat.id, staffId: match.staffId });
@@ -137,11 +151,16 @@ export async function autoAssignSeatsAction(
     }
   }
 
-  // パス2: フリー席・セクション未指定席 → 余ったスタッフを順番に
-  const remainSeats  = emptySeats.filter(s => !usedSeats.has(s.id));
-  const remainStaff  = pendingStaff.filter(s => !usedStaff.has(s.staffId));
-  for (let i = 0; i < Math.min(remainSeats.length, remainStaff.length); i++) {
-    assignments.push({ seatId: remainSeats[i].id, staffId: remainStaff[i].staffId });
+  // パス2: フリー席・セクション未指定席のみ → パス1で配置できなかったスタッフを順番に
+  //        セクション指定席はスキップ（他セクションスタッフを入れない）
+  const freeOrNoSection = emptySeats.filter(s => {
+    if (usedSeats.has(s.id)) return false;
+    const seatType = (s as { seat_type?: string }).seat_type;
+    return seatType === "free" || !s.section;
+  });
+  const overflow = pendingStaff.filter(s => !usedStaff.has(s.staffId));
+  for (let i = 0; i < Math.min(freeOrNoSection.length, overflow.length); i++) {
+    assignments.push({ seatId: freeOrNoSection[i].id, staffId: overflow[i].staffId });
   }
 
   return { success: true, assignments };
