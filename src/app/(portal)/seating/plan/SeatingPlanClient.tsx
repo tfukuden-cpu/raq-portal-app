@@ -296,7 +296,7 @@ export default function SeatingPlanClient({
               <button
                 key={seat.id}
                 onClick={() => handleSeatClick(seat)}
-                draggable={!isFree && !!s}
+                draggable={!!s}
                 onDragStart={e => handleDragStart(e, seat.id)}
                 onDragOver={e => handleDragOver(e, seat.id)}
                 onDragLeave={handleDragLeave}
