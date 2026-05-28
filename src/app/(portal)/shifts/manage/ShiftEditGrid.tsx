@@ -1028,10 +1028,12 @@ export default function ShiftEditGrid({
   }, [shiftPatterns, lockedSections, drafts]);
 
   // 仮確定トグル
+  // 仮確定時は現在のdraftをDBに同時保存する（再仮組み時の除外保護を確実にするため）
   function handleToggleLock(sectionName: string, lock: boolean) {
     setLockError(null);
     startLockTransition(async () => {
-      const r = await setSectionLockedAction(projectId, targetMonth, sectionName, lock);
+      const currentEntries = serializeDrafts();
+      const r = await setSectionLockedAction(projectId, targetMonth, sectionName, lock, currentEntries);
       if (r.success) {
         setLockedSections(prev => {
           const next = new Set(prev);
@@ -2234,14 +2236,17 @@ export default function ShiftEditGrid({
                             </td>
                           );
                         }
+                        const isCellLocked = !!(member.section && lockedSections.has(member.section));
                         return (
                           <td key={date}
                             onClick={(e) => {
+                              if (isCellLocked) return; // 仮確定セクションは編集不可
                               setPopover({ staffId: member.id, date, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() });
                             }}
                             className={[
                               "border-b border-r border-zinc-100 dark:border-zinc-800",
-                              "h-8 align-middle p-0 cursor-pointer overflow-hidden transition-colors relative",
+                              "h-8 align-middle p-0 overflow-hidden transition-colors relative",
+                              isCellLocked ? "cursor-default" : "cursor-pointer",
                               // フォーカス行 + 候補 → 青強調
                               isFocusedRow && isCandidate
                                 ? "bg-blue-300 dark:bg-blue-700/60 ring-inset ring-2 ring-blue-400"

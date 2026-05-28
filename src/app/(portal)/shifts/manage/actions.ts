@@ -10,6 +10,7 @@ import {
   DEFAULT_NOTIFY_MESSAGES,
 } from "@/app/(portal)/admin/[projectId]/settings/notify-config";
 import { resolveMessage } from "@/lib/notify";
+import type { GridDraftEntry } from "@/app/(portal)/shifts/actions";
 
 export type ActionResult = { success: boolean; message?: string };
 
@@ -372,18 +373,21 @@ export async function publishShiftsAction(
 
 /**
  * セクション仮確定のON/OFFを切り替える
+ * draftEntries を渡すと draft_data も同時保存（再仮組みの保護を確実にするため）
  */
 export async function setSectionLockedAction(
   projectId: string,
   targetMonth: string,
   sectionName: string,
   locked: boolean,
+  draftEntries?: GridDraftEntry[],
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: "ログインしてください" };
 
   const admin = createAdminClient();
+  const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
 
   // 現在の locked_sections を取得
   const { data: draftRow } = await admin
@@ -398,12 +402,34 @@ export async function setSectionLockedAction(
     ? [...new Set([...current, sectionName])]
     : current.filter((s: string) => s !== sectionName);
 
-  const { error } = await admin
-    .from("shift_grid_drafts")
-    .upsert(
-      { project_id: projectId, target_month: targetMonth, locked_sections: updated },
-      { onConflict: "project_id,target_month" },
-    );
+  // draft_data も同時保存：再仮組み時の「仮確定スタッフ除外」が確実に機能するようにする
+  // draftEntries が渡された場合は draft_data も同時更新、そうでなければ locked_sections のみ更新
+  let upsertError: { message: string } | null = null;
+  if (draftEntries !== undefined) {
+    const { error } = await admin
+      .from("shift_grid_drafts")
+      .upsert(
+        {
+          project_id:      projectId,
+          target_month:    targetMonth,
+          locked_sections: updated,
+          draft_data:      draftEntries,
+          saved_by:        myStaffId,
+          saved_at:        new Date().toISOString(),
+        },
+        { onConflict: "project_id,target_month" },
+      );
+    upsertError = error;
+  } else {
+    const { error } = await admin
+      .from("shift_grid_drafts")
+      .upsert(
+        { project_id: projectId, target_month: targetMonth, locked_sections: updated },
+        { onConflict: "project_id,target_month" },
+      );
+    upsertError = error;
+  }
+  const error = upsertError;
 
   if (error) return { success: false, message: error.message };
 
