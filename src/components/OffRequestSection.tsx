@@ -59,6 +59,9 @@ export default function OffRequestSection({
 
   const savedMap = new Map(entries.map(e => [e.request_date, e]));
 
+  const thisMonth = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }).slice(0, 7);
+  const [showPast, setShowPast] = useState(false);
+
   function prevMonth() {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
     else setViewMonth(m => m - 1);
@@ -126,8 +129,10 @@ export default function OffRequestSection({
     ...Array.from({ length: lastDay }, (_, i) => i + 1),
   ];
 
-  // 月別グループ化
-  const monthKeys = [...new Set(entries.map(e => e.request_date.slice(0, 7)))].sort();
+  // 月別グループ化（デフォルトは当月以降のみ）
+  const allMonthKeys = [...new Set(entries.map(e => e.request_date.slice(0, 7)))].sort();
+  const hasPast = allMonthKeys.some(ym => ym < thisMonth);
+  const monthKeys = showPast ? allMonthKeys : allMonthKeys.filter(ym => ym >= thisMonth);
 
   return (
     <div className="space-y-2">
@@ -170,6 +175,17 @@ export default function OffRequestSection({
             );
           })}
         </div>
+      )}
+
+      {/* 過去分の表示切替 */}
+      {hasPast && !panelOpen && (
+        <button
+          type="button"
+          onClick={() => setShowPast(v => !v)}
+          className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline"
+        >
+          {showPast ? "過去分を非表示" : "過去分も表示"}
+        </button>
       )}
 
       {/* 希望休を追加ボタン */}
