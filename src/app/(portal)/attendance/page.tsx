@@ -7,6 +7,7 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceClient from "./AttendanceClient";
 import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry, ChurnRiskAlert } from "./AttendanceClient";
+import type { SeatData, WallData, StaffInfo } from "../seating/SeatingClient";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -127,6 +128,9 @@ export default async function AttendancePage() {
     { data: shiftPatterns },
     { data: projectSettings },
     { data: monthStatus },
+    { data: seatRows },
+    { data: assignmentRows },
+    { data: wallRows },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -167,6 +171,15 @@ export default async function AttendancePage() {
       .eq("project_id", projectId)
       .eq("year_month", currentMonth)
       .maybeSingle(),
+    admin.from("seats")
+      .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
+      .eq("project_id", projectId).eq("is_active", true),
+    admin.from("seat_assignments")
+      .select("seat_id, staff_id")
+      .eq("project_id", projectId).eq("assignment_date", today),
+    admin.from("seat_walls")
+      .select("x1_pct, y1_pct, x2_pct, y2_pct")
+      .eq("project_id", projectId),
   ]);
 
   // シフトパターンの時刻マップ
@@ -358,6 +371,71 @@ export default async function AttendancePage() {
 
   const grouped = buildGrouped(allInternal);
 
+  // ── 座席データ ─────────────────────────────────────────
+  const seatAssignMap = new Map((assignmentRows ?? []).map(a => [a.seat_id, a.staff_id]));
+  const seatShiftMap  = new Map((todayShifts ?? []).map(s => [s.staff_id, s.shift_name as string | null]));
+
+  // 打刻ステータス計算（座席用）
+  const seatAbsenceIds = new Set((absenceRows ?? []).map(a => a.staff_id));
+  const seatLatestPunch = new Map<string, string>();
+  const seatLatestBreak = new Map<string, string>();
+  for (const p of punchLogs ?? []) {
+    if (p.punch_type === "clock_in" || p.punch_type === "clock_out") seatLatestPunch.set(p.staff_id, p.punch_type);
+    if (p.punch_type === "break_start" || p.punch_type === "break_end") seatLatestBreak.set(p.staff_id, p.punch_type);
+  }
+  function deriveSeatStatus(sId: string): NonNullable<SeatData["status"]> {
+    if (seatAbsenceIds.has(sId)) return "absent";
+    const punch = seatLatestPunch.get(sId);
+    const brk   = seatLatestBreak.get(sId);
+    if (punch === "clock_out") return "clocked_out";
+    if (punch === "clock_in")  return brk === "break_start" ? "on_break" : "working";
+    return "not_arrived";
+  }
+
+  const seatData: SeatData[] = (seatRows ?? []).map(s => {
+    const seatType = (s as { seat_type?: string }).seat_type ?? "normal";
+    const sId  = seatType === "disabled" ? null : (seatAssignMap.get(s.id) ?? null);
+    const mInfo = sId ? memberMap.get(sId) : null;
+    return {
+      id:            s.id,
+      label:         s.label,
+      xPct:          s.x_pct,
+      yPct:          s.y_pct,
+      section:       s.section ?? null,
+      seatType:      seatType as SeatData["seatType"],
+      shiftSlot:     (s as { shift_slot?: string | null }).shift_slot ?? null,
+      staffId:       sId,
+      staffName:     mInfo?.name ?? null,
+      accountNumber: mInfo?.accountNumber ?? null,
+      shiftName:     sId ? (seatShiftMap.get(sId) ?? null) : null,
+      status:        sId ? deriveSeatStatus(sId) : null,
+    };
+  });
+
+  const wallData: WallData[] = (wallRows ?? []).map(w => ({
+    x1Pct: w.x1_pct as number, y1Pct: w.y1_pct as number,
+    x2Pct: w.x2_pct as number, y2Pct: w.y2_pct as number,
+  }));
+
+  const OFF_NAMES_SEAT = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
+  const todayShiftStaffIds = new Set(
+    (todayShifts ?? [])
+      .filter(r => r.shift_name && !OFF_NAMES_SEAT.includes(r.shift_name as string))
+      .map(r => r.staff_id)
+  );
+  const seatStaffList: StaffInfo[] = (memberRows ?? [])
+    .filter(m => todayShiftStaffIds.size === 0 || todayShiftStaffIds.has(m.staff_id))
+    .map(m => {
+      const info = memberMap.get(m.staff_id);
+      return {
+        id:            m.staff_id,
+        name:          info?.name ?? m.staff_id,
+        accountNumber: info?.accountNumber ?? null,
+        section:       info?.section ?? null,
+        shiftName:     seatShiftMap.get(m.staff_id) ?? null,
+      };
+    });
+
   // ── 全体サマリー ─────────────────────────────────────────
   const total      = allInternal.length;
   const departed   = allInternal.filter(m => m.departureTime || m.clockIn).length;
@@ -391,6 +469,9 @@ export default async function AttendancePage() {
       shiftChanges={shiftChanges}
       myStaffId={staffId}
       churnRiskAlerts={churnRiskAlerts}
+      seatData={seatData}
+      wallData={wallData}
+      seatStaffList={seatStaffList}
     />
   );
 }

@@ -3,6 +3,7 @@ import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
 import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction, toggleChurnRiskAction } from "./actions";
 import type { SendResult } from "./actions";
+import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/app/(portal)/seating/SeatingClient";
 
 // ── 型定義 ────────────────────────────────────────────────
 export type StatusKey = "working" | "clocked_out" | "departed" | "absent" | "late" | "not_departed";
@@ -110,6 +111,9 @@ interface Props {
   shiftChanges: ShiftChangeEntry[];
   myStaffId: string;
   churnRiskAlerts?: ChurnRiskAlert[];
+  seatData: SeatData[];
+  wallData: WallData[];
+  seatStaffList: StaffInfo[];
 }
 
 type SelectionMode = "reminder" | "request";
@@ -122,8 +126,9 @@ export default function AttendanceClient({
   grouped, offMembers, enableDeparture,
   publishedAt, shiftChanges,
   myStaffId, churnRiskAlerts,
+  seatData, wallData, seatStaffList,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"today" | "changes">("today");
+  const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
@@ -296,6 +301,16 @@ export default function AttendanceClient({
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab("seating")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === "seating"
+                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            }`}
+          >
+            座席表
+          </button>
         </div>
       </div>
       <div className="max-w-5xl mx-auto px-4 pt-4 pb-32">
@@ -305,6 +320,20 @@ export default function AttendanceClient({
           <ShiftChangesTab
             publishedAt={publishedAt}
             shiftChanges={shiftChanges}
+          />
+        )}
+
+        {/* ── 座席表タブ ── */}
+        {activeTab === "seating" && (
+          <SeatingClient
+            projectId={projectId}
+            today={today}
+            seats={seatData}
+            walls={wallData}
+            isAdmin={true}
+            myStaffId={myStaffId}
+            staffList={seatStaffList}
+            embedded
           />
         )}
 
