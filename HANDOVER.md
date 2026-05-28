@@ -121,10 +121,11 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
   - `churnRiskOverrides` Map state を ShiftEditGrid に追加
   - StaffInfoPanel に `onChurnRiskChanged` コールバック追加、toggle 成功時に親の override を更新
   - 離脱リスク変更後にページリロードなしでグリッドに即反映
-- **当日状況に座席表タブ復活**
+- **当日状況に座席表タブ復活（当日座席・翌日配置のサブタブ付き）**
   - v45で削除した座席表タブを「座席表」として復活（3つ目のタブ）
-  - `attendance/page.tsx`：seats・seat_assignments・seat_walls を再度並列フェッチ・処理して AttendanceClient に渡す
-  - `AttendanceClient.tsx`：`seatData`・`wallData`・`seatStaffList` Props 追加、タブ追加、`SeatingClient embedded` で描画
+  - タブ内に「当日座席」「翌日配置」サブタブを配置
+  - `attendance/page.tsx`：seats・当日/翌日 seat_assignments・seat_walls・翌日 shifts を並列フェッチし SeatData/PlanSeat/PlanStaff を生成
+  - `AttendanceClient.tsx`：Props 追加、サブタブ UI、`SeatingClient embedded`・`SeatingPlanClient embedded` で描画
 - **スタッフナビから座席表を削除**
   - `layout.tsx` の STAFF_ITEMS から `/seating`（座席表）を削除
   - 座席表は当日状況ページ（管理者・運用者）から参照。スタッフ向け独立ページは不要
