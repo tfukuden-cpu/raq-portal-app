@@ -42,6 +42,7 @@ type Member = {
   work_days_type?: string | null; work_days_count?: number | null;
   preferred_shift?: string | null; preferred_section?: string | null;
   max_consecutive_days?: number | null; shift_note?: string | null;
+  accountNumber?: string | null;
 };
 type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
@@ -1281,11 +1282,22 @@ export default function ShiftEditGrid({
     const idx = SECTION_ORDER.indexOf(s ?? "");
     return idx === -1 ? SECTION_ORDER.length : idx;
   };
+  const getAccNumGrid = (acc: string | null | undefined): number => {
+    if (!acc) return Infinity;
+    const m = acc.match(/(\d+)/);
+    return m ? parseInt(m[1]) : Infinity;
+  };
   const sortedMembersBySection = useMemo(() =>
     [...activeMembers].sort((a, b) => {
       const ra = sectionRank(a.section);
       const rb = sectionRank(b.section);
       if (ra !== rb) return ra - rb;
+      // SV は名前順、その他はアカウント番号順（未設定は末尾）
+      if (a.section !== "SV") {
+        const na = getAccNumGrid(a.accountNumber);
+        const nb = getAccNumGrid(b.accountNumber);
+        if (na !== nb) return na - nb;
+      }
       return a.name.localeCompare(b.name, "ja");
     }),
   [activeMembers]);
@@ -2122,11 +2134,18 @@ export default function ShiftEditGrid({
                             ].join(" ")}>
                               {member.name}
                             </span>
-                            {member.endDate && (
-                              <span className="text-[9px] text-amber-500 dark:text-amber-400 tabular-nums leading-none">
-                                〜{member.endDate.slice(5).replace("-", "/")}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1">
+                              {member.accountNumber && (
+                                <span className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums leading-none">
+                                  {member.accountNumber}
+                                </span>
+                              )}
+                              {member.endDate && (
+                                <span className="text-[9px] text-amber-500 dark:text-amber-400 tabular-nums leading-none">
+                                  〜{member.endDate.slice(5).replace("-", "/")}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
