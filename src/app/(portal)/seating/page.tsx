@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
-import SeatingClient, { type SeatData, type WallData } from "./SeatingClient";
+import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "./SeatingClient";
 
 function tokyoToday() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -117,6 +117,27 @@ export default async function SeatingPage() {
     y2Pct: w.y2_pct as number,
   }));
 
+  // 席替えモード用：当日シフトあり（公休除く）のスタッフ一覧
+  const OFF_NAMES_SEATING = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
+  const todayShiftStaffIds = new Set(
+    (shiftRows ?? [])
+      .filter(r => r.shift_name && !OFF_NAMES_SEATING.includes(r.shift_name as string))
+      .map(r => r.staff_id as string)
+  );
+  const staffList: StaffInfo[] = (memberRows ?? [])
+    .filter(m => todayShiftStaffIds.size === 0 || todayShiftStaffIds.has(m.staff_id))
+    .map(m => {
+      const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+        { display_name?: string | null; name?: string | null; account_number?: string | null } | null;
+      return {
+        id:            m.staff_id,
+        name:          s?.display_name ?? s?.name ?? m.staff_id,
+        accountNumber: (s?.account_number as string | null | undefined) ?? null,
+        section:       (m as { section?: string | null }).section ?? null,
+        shiftName:     shiftNameMap.get(m.staff_id) ?? null,
+      };
+    });
+
   const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const [{ data: myMembership }, { data: myStaff }] = await Promise.all([
     supabase.from("project_members").select("role").eq("staff_id", myStaffId).eq("project_id", projectId).maybeSingle(),
@@ -135,6 +156,7 @@ export default async function SeatingPage() {
       walls={wallData}
       isAdmin={isAdmin}
       myStaffId={myStaffId}
+      staffList={staffList}
     />
   );
 }

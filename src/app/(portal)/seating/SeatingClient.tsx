@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { toggleBreakAction } from "./actions";
+import { toggleBreakAction, saveSeatAssignmentsAction } from "./actions";
 import { getSeatBgClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 import { createClient } from "@/lib/supabase/client";
 
@@ -23,9 +23,17 @@ export type SeatData = {
   staffId: string | null;
   staffName: string | null;
   accountNumber: string | null;
-  shiftSlot: string | null;  // 席のシフト帯設定（早番/遅番）
-  shiftName: string | null;  // 配置スタッフの実際のシフト名（優先）
+  shiftSlot: string | null;
+  shiftName: string | null;
   status: "not_arrived" | "working" | "on_break" | "clocked_out" | "absent" | null;
+};
+
+export type StaffInfo = {
+  id: string;
+  name: string;
+  accountNumber: string | null;
+  section: string | null;
+  shiftName: string | null;
 };
 
 const STATUS_BG: Record<NonNullable<SeatData["status"]>, string> = {
@@ -52,8 +60,16 @@ const STATUS_LABEL: Record<NonNullable<SeatData["status"]>, string> = {
   absent:      "欠勤",
 };
 
+const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "リメイク", "ローン"];
+function accNum(s: string | null | undefined): number {
+  if (!s) return Infinity;
+  const m = s.match(/(\d+)/);
+  return m ? parseInt(m[1]) : Infinity;
+}
+
 export default function SeatingClient({
-  projectId, today, seats, walls = [], isAdmin, myStaffId, embedded = false,
+  projectId, today, seats, walls = [], isAdmin, myStaffId,
+  staffList = [], embedded = false,
 }: {
   projectId: string;
   today: string;
@@ -61,6 +77,7 @@ export default function SeatingClient({
   walls?: WallData[];
   isAdmin: boolean;
   myStaffId: string;
+  staffList?: StaffInfo[];
   embedded?: boolean;
 }) {
   const [statuses, setStatuses] = useState<Map<string, NonNullable<SeatData["status"]>>>(() => {
@@ -72,7 +89,90 @@ export default function SeatingClient({
   const [toast, setToast] = useState<string | null>(null);
   const router = useRouter();
 
-  // ── Supabase Realtime：punch_logs の INSERT をリッスン ────────
+  // ── 席替えモード ──────────────────────────────────────────
+  // draftMap: seatId → staffId(string) | null(空席)
+  // undefined = 変更なし（元の割当を使用）
+  const [editMode, setEditMode] = useState(false);
+  const [draftMap, setDraftMap] = useState<Map<string, string | null>>(new Map());
+  const [pickSeatId, setPickSeatId] = useState<string | null>(null);
+  const [staffSearch, setStaffSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  function enterEditMode() {
+    setDraftMap(new Map());
+    setEditMode(true);
+  }
+  function cancelEditMode() {
+    setEditMode(false);
+    setDraftMap(new Map());
+    setPickSeatId(null);
+  }
+
+  // ドラフト適用後の有効な staffId を返す
+  function effectiveStaffId(seatId: string, original: string | null): string | null {
+    return draftMap.has(seatId) ? (draftMap.get(seatId) ?? null) : original;
+  }
+
+  // あるスタッフが現在どの席に入っているか（ドラフト込み）
+  const assignedSeatBySf = useMemo<Map<string, string>>(() => {
+    const m = new Map<string, string>();
+    for (const s of seats) {
+      const sfId = effectiveStaffId(s.id, s.staffId);
+      if (sfId) m.set(sfId, s.id);
+    }
+    return m;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seats, draftMap]);
+
+  // ソート済みスタッフリスト
+  const sortedStaff = useMemo(() => [...staffList].sort((a, b) => {
+    const ra = SECTION_ORDER.indexOf(a.section ?? "");
+    const rb = SECTION_ORDER.indexOf(b.section ?? "");
+    const ria = ra < 0 ? SECTION_ORDER.length : ra;
+    const rib = rb < 0 ? SECTION_ORDER.length : rb;
+    if (ria !== rib) return ria - rib;
+    const na = accNum(a.accountNumber);
+    const nb = accNum(b.accountNumber);
+    return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
+  }), [staffList]);
+
+  const filteredStaff = staffSearch
+    ? sortedStaff.filter(s => s.name.includes(staffSearch) || (s.accountNumber ?? "").includes(staffSearch))
+    : sortedStaff;
+
+  // スタッフ名マップ（id → name）
+  const staffNameMap = useMemo(() => new Map(staffList.map(s => [s.id, s])), [staffList]);
+
+  useEffect(() => {
+    if (pickSeatId !== null) {
+      setStaffSearch("");
+      setTimeout(() => searchRef.current?.focus(), 100);
+    }
+  }, [pickSeatId]);
+
+  // 保存
+  function handleSave() {
+    startTransition(async () => {
+      const assignments: { seatId: string; staffId: string }[] = [];
+      for (const s of seats) {
+        if (s.seatType === "disabled") continue;
+        const sfId = effectiveStaffId(s.id, s.staffId);
+        if (sfId) assignments.push({ seatId: s.id, staffId: sfId });
+      }
+      const res = await saveSeatAssignmentsAction(projectId, today, assignments);
+      if (res.success) {
+        setToast("席替えを保存しました");
+        setEditMode(false);
+        setDraftMap(new Map());
+        router.refresh();
+      } else {
+        setToast(`⚠️ ${res.message}`);
+      }
+      setTimeout(() => setToast(null), 2500);
+    });
+  }
+
+  // Realtime
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -97,18 +197,15 @@ export default function SeatingClient({
         });
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [projectId]);
 
+  // 通常モードのタップ（休憩トグル）
   function handleTap(seat: SeatData) {
     if (!seat.staffId) return;
     const status = statuses.get(seat.staffId) ?? seat.status;
-    // 出勤中 or 休憩中のみトグル可
     if (status !== "working" && status !== "on_break") return;
-    // 自分の席 or 管理者のみ
     if (!isAdmin && seat.staffId !== myStaffId) return;
-
     startTransition(async () => {
       const res = await toggleBreakAction(projectId, seat.staffId!);
       if (res.success && res.newStatus) {
@@ -124,7 +221,8 @@ export default function SeatingClient({
 
   return (
     <div className={embedded ? "" : "min-h-screen bg-zinc-50 dark:bg-zinc-950"}>
-      {/* ヘッダー（スタンドアロン時のみ） */}
+
+      {/* ヘッダー */}
       {!embedded && (
         <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">
           <div>
@@ -132,39 +230,83 @@ export default function SeatingClient({
             <p className="text-xs text-zinc-400 tabular-nums">{dateLabel}</p>
           </div>
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <a
-                href="/seating/plan"
-                className="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors"
-              >
-                翌日配置
-              </a>
+            {isAdmin && !editMode && (
+              <>
+                <button
+                  onClick={enterEditMode}
+                  className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-colors"
+                >
+                  席替え
+                </button>
+                <a
+                  href="/seating/plan"
+                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors"
+                >
+                  翌日配置
+                </a>
+              </>
             )}
-            <button
-              onClick={() => router.refresh()}
-              className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700"
-            >
-              更新
-            </button>
+            {editMode ? (
+              <>
+                <button
+                  onClick={handleSave}
+                  disabled={isPending}
+                  className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isPending ? "保存中…" : "保存"}
+                </button>
+                <button
+                  onClick={cancelEditMode}
+                  disabled={isPending}
+                  className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700"
+                >
+                  キャンセル
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => router.refresh()}
+                className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700"
+              >
+                更新
+              </button>
+            )}
           </div>
         </div>
       )}
 
+      {/* 席替えモードバナー */}
+      {editMode && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+            席替えモード：席をタップしてスタッフを付け替えてください
+          </p>
+        </div>
+      )}
+
       {/* 凡例 */}
-      <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 py-2 ${embedded ? "" : "px-4"}`}>
-        {(Object.entries(STATUS_LABEL) as [NonNullable<SeatData["status"]>, string][]).map(([s, label]) => (
-          <div key={s} className="flex items-center gap-1">
-            <span className={`w-2.5 h-2.5 rounded-sm border-2 ${STATUS_BG[s]}`} />
-            <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</span>
-          </div>
-        ))}
-        <span className="text-[11px] text-zinc-400">・タップで休憩切替</span>
-      </div>
+      {!editMode && (
+        <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 py-2 ${embedded ? "" : "px-4"}`}>
+          {(Object.entries(STATUS_LABEL) as [NonNullable<SeatData["status"]>, string][]).map(([s, label]) => (
+            <div key={s} className="flex items-center gap-1">
+              <span className={`w-2.5 h-2.5 rounded-sm border-2 ${STATUS_BG[s]}`} />
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</span>
+            </div>
+          ))}
+          <span className="text-[11px] text-zinc-400">・タップで休憩切替</span>
+        </div>
+      )}
 
       {/* キャンバス */}
       <div className={`overflow-x-auto ${embedded ? "px-3 pb-4" : "px-3 pb-28"}`}>
         <div
-          className="relative bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
+          className={[
+            "relative bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden",
+            editMode
+              ? "border-amber-300 dark:border-amber-700"
+              : "border-zinc-200 dark:border-zinc-800",
+          ].join(" ")}
           style={{ width: "max(100%, 1800px)", aspectRatio: "3/2" }}
         >
           {seats.length === 0 && (
@@ -182,13 +324,10 @@ export default function SeatingClient({
           {walls.length > 0 && (
             <svg className="absolute inset-0 w-full h-full pointer-events-none">
               {walls.map((w, i) => (
-                <line
-                  key={i}
+                <line key={i}
                   x1={`${w.x1Pct}%`} y1={`${w.y1Pct}%`}
                   x2={`${w.x2Pct}%`} y2={`${w.y2Pct}%`}
-                  stroke="#71717a"
-                  strokeWidth="2"
-                  strokeLinecap="round"
+                  stroke="#71717a" strokeWidth="2" strokeLinecap="round"
                 />
               ))}
             </svg>
@@ -197,23 +336,35 @@ export default function SeatingClient({
           {seats.map(seat => {
             const isDisabled = seat.seatType === "disabled";
             const isFree     = seat.seatType === "free";
+
+            // 席替えモードではドラフトを優先
+            const sfId = editMode
+              ? effectiveStaffId(seat.id, seat.staffId)
+              : seat.staffId;
+            const sfInfo = sfId ? staffNameMap.get(sfId) : null;
+            const sfName = sfId ? (sfInfo?.name ?? seat.staffName ?? sfId) : null;
+            const sfAcc  = sfId ? (sfInfo?.accountNumber ?? seat.accountNumber ?? null) : null;
+            const sfShift = sfId ? (sfInfo?.shiftName ?? seat.shiftName ?? null) : seat.shiftName;
+
             const status = (!isDisabled && seat.staffId)
               ? (statuses.get(seat.staffId) ?? seat.status ?? "not_arrived")
               : null;
-            const tappable =
+
+            const tappableBreak =
+              !editMode &&
               !isDisabled &&
               seat.staffId &&
               (status === "working" || status === "on_break") &&
               (isAdmin || seat.staffId === myStaffId);
 
+            const tappableEdit = editMode && !isDisabled;
+
             if (isDisabled) {
               return (
-                <div
-                  key={seat.id}
+                <div key={seat.id}
                   style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
                   className="absolute w-[70px] h-[58px] rounded-xl border-2 border-zinc-300 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-800 opacity-50 flex flex-col items-center justify-center overflow-hidden"
                 >
-                  {/* ハッチング */}
                   <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: "none" }}>
                     <defs>
                       <pattern id={`hatch-${seat.id}`} patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
@@ -228,52 +379,64 @@ export default function SeatingClient({
               );
             }
 
+            const isPickTarget = pickSeatId === seat.id;
+            const effectiveSection = resolveShiftSection(sfShift, seat.section);
+            const sectionLabel = formatSectionShift(effectiveSection, sfShift ?? seat.shiftSlot);
+
             return (
               <button
                 key={seat.id}
-                onClick={() => handleTap(seat)}
-                disabled={isPending || !tappable}
+                onClick={() => {
+                  if (tappableEdit) {
+                    setPickSeatId(seat.id);
+                  } else {
+                    handleTap(seat);
+                  }
+                }}
+                disabled={isPending || (!tappableBreak && !tappableEdit)}
                 style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
                 className={[
                   "absolute flex flex-col items-center justify-center gap-px",
                   "w-[70px] h-[58px] rounded-xl border-2 text-center transition-all shadow-sm select-none overflow-hidden",
-                  status ? STATUS_BG[status]
+                  // 通常モードの色
+                  !editMode && (status ? STATUS_BG[status]
                     : isFree
                     ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-700"
-                    : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700",
-                  tappable ? "cursor-pointer active:scale-95" : "cursor-default",
+                    : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700"),
+                  // 席替えモードの色
+                  editMode && (isPickTarget
+                    ? "bg-amber-100 dark:bg-amber-900/60 border-amber-400 dark:border-amber-500 scale-105 z-10"
+                    : sfId
+                    ? "bg-white dark:bg-zinc-800 border-amber-200 dark:border-amber-800"
+                    : "bg-zinc-50 dark:bg-zinc-800 border-dashed border-amber-200 dark:border-amber-800"),
+                  (tappableBreak || tappableEdit) ? "cursor-pointer active:scale-95" : "cursor-default",
                   isPending ? "opacity-60" : "",
                 ].join(" ")}
               >
-                {/* セクション色バー（上部）：シフト名からセクション解決 → 色決定 */}
-                {!isFree && (() => {
-                  const effectiveSection = resolveShiftSection(seat.shiftName, seat.section);
-                  return effectiveSection ? (
-                    <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(effectiveSection, seat.shiftName ?? seat.shiftSlot)}`} />
-                  ) : null;
-                })()}
+                {/* セクション色バー */}
+                {!isFree && effectiveSection && (
+                  <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(effectiveSection, sfShift ?? seat.shiftSlot)}`} />
+                )}
+
                 <span className="text-[9px] text-zinc-400 leading-none">{seat.label}</span>
-                {seat.staffName ? (
+
+                {sfName ? (
                   <>
                     <span className="text-[10px] font-mono text-zinc-400 tabular-nums leading-none">
-                      {seat.accountNumber ?? ""}
+                      {sfAcc ?? ""}
                     </span>
-                    <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${status ? STATUS_TEXT[status] : ""}`}>
-                      {seat.staffName}
+                    <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${!editMode && status ? STATUS_TEXT[status] : "text-zinc-700 dark:text-zinc-200"}`}>
+                      {sfName}
                     </span>
-                    {(() => {
-                      const effectiveSection = resolveShiftSection(seat.shiftName, seat.section);
-                      const label = formatSectionShift(effectiveSection, seat.shiftName ?? seat.shiftSlot);
-                      return label ? (
-                        <span className="text-[9px] leading-none text-zinc-500 dark:text-zinc-400 truncate px-0.5 w-full text-center">
-                          {label}
-                        </span>
-                      ) : null;
-                    })()}
+                    {sectionLabel ? (
+                      <span className="text-[9px] leading-none text-zinc-500 dark:text-zinc-400 truncate px-0.5 w-full text-center">
+                        {sectionLabel}
+                      </span>
+                    ) : null}
                   </>
                 ) : (
-                  <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-400 dark:text-emerald-600" : "text-zinc-300 dark:text-zinc-600"}`}>
-                    {isFree ? "FREE" : "空席"}
+                  <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-400 dark:text-emerald-600" : editMode ? "text-amber-400" : "text-zinc-300 dark:text-zinc-600"}`}>
+                    {isFree ? "FREE" : editMode ? "タップで配置" : "空席"}
                   </span>
                 )}
               </button>
@@ -288,6 +451,123 @@ export default function SeatingClient({
           {toast}
         </div>
       )}
+
+      {/* ── スタッフ選択ピッカー（席替えモード） ──────────────── */}
+      {pickSeatId !== null && (() => {
+        const pickedSeat = seats.find(s => s.id === pickSeatId);
+        const currentSfId = effectiveStaffId(pickSeatId, pickedSeat?.staffId ?? null);
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center"
+            onClick={() => setPickSeatId(null)}
+          >
+            <div
+              className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-2xl border border-zinc-200 dark:border-zinc-700 shadow-2xl flex flex-col max-h-[70vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* ピッカーヘッダー */}
+              <div className="px-4 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
+                <p className="text-xs text-zinc-400 mb-0.5">席 {pickedSeat?.label}</p>
+                <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">
+                  誰を配置しますか？
+                </p>
+                <input
+                  ref={searchRef}
+                  type="search"
+                  placeholder="名前・番号で検索…"
+                  value={staffSearch}
+                  onChange={e => setStaffSearch(e.target.value)}
+                  className="mt-2 w-full text-sm bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 dark:text-zinc-100"
+                />
+              </div>
+
+              {/* スタッフリスト */}
+              <ul className="overflow-y-auto flex-1 divide-y divide-zinc-100 dark:divide-zinc-800">
+                {/* 空席にする */}
+                <li>
+                  <button
+                    onClick={() => {
+                      setDraftMap(prev => new Map(prev).set(pickSeatId, null));
+                      setPickSeatId(null);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    <span className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-400 text-xs flex-shrink-0">
+                      ✕
+                    </span>
+                    <span className="text-sm text-zinc-500 dark:text-zinc-400">空席にする</span>
+                  </button>
+                </li>
+
+                {filteredStaff.map(s => {
+                  const isCurrentSeat = currentSfId === s.id;
+                  const elsewhereId   = assignedSeatBySf.get(s.id);
+                  const elsewhereLabel = elsewhereId && elsewhereId !== pickSeatId
+                    ? seats.find(se => se.id === elsewhereId)?.label
+                    : null;
+
+                  return (
+                    <li key={s.id}>
+                      <button
+                        onClick={() => {
+                          // 別の席に既に配置されているなら、そちらを空席に
+                          setDraftMap(prev => {
+                            const next = new Map(prev);
+                            if (elsewhereId && elsewhereId !== pickSeatId) {
+                              next.set(elsewhereId, null);
+                            }
+                            next.set(pickSeatId, s.id);
+                            return next;
+                          });
+                          setPickSeatId(null);
+                        }}
+                        className={[
+                          "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
+                          isCurrentSeat
+                            ? "bg-amber-50 dark:bg-amber-950/30"
+                            : "hover:bg-zinc-50 dark:hover:bg-zinc-800",
+                        ].join(" ")}
+                      >
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${isCurrentSeat ? "bg-amber-500" : "bg-zinc-400 dark:bg-zinc-600"}`}>
+                          {s.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-semibold leading-tight truncate ${isCurrentSeat ? "text-amber-700 dark:text-amber-300" : "text-zinc-800 dark:text-zinc-100"}`}>
+                            {s.name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {s.accountNumber && (
+                              <span className="text-[11px] text-zinc-400 tabular-nums">{s.accountNumber}</span>
+                            )}
+                            {s.section && (
+                              <span className="text-[11px] text-zinc-400">{s.section}</span>
+                            )}
+                          </div>
+                        </div>
+                        {isCurrentSeat && (
+                          <span className="text-[10px] text-amber-500 font-semibold flex-shrink-0">現在の席</span>
+                        )}
+                        {elsewhereLabel && !isCurrentSeat && (
+                          <span className="text-[10px] text-zinc-400 flex-shrink-0">
+                            席{elsewhereLabel}に配置中
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+
+                {filteredStaff.length === 0 && (
+                  <li className="px-4 py-6 text-center text-sm text-zinc-400">
+                    該当するスタッフがいません
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
