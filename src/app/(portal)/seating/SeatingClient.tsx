@@ -135,7 +135,7 @@ export default function SeatingClient({
       <div className={`overflow-x-auto ${embedded ? "px-3 pb-4" : "px-3 pb-28"}`}>
         <div
           className="relative bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
-          style={{ width: "max(100%, 900px)", aspectRatio: "4/3" }}
+          style={{ width: "max(100%, 1800px)", aspectRatio: "3/2" }}
         >
           {seats.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
