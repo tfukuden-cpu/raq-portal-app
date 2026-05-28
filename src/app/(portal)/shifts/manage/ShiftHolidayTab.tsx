@@ -9,7 +9,7 @@ import type { HolidayRuleInput } from "@/app/(portal)/admin/holiday-rule-config"
 function Collapsible({
   title,
   sub,
-  defaultOpen = true,
+  defaultOpen = false,
   children,
 }: {
   title: string;
@@ -53,27 +53,21 @@ export default function ShiftHolidayTab({
   initialRules: HolidayRuleInput[];
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
 
-      {/* 1. 希望休ルール（折り畳み） */}
+      {/* 1. 希望休設定（メイン：月別テーブル） */}
+      <ShiftOffRequestSection projectId={projectId} />
+
+      {/* 2. 希望休ルール（折り畳み） */}
       <Collapsible
         title="希望休ルール"
-        sub="締切日・上限日数などを設定します"
-        defaultOpen={true}
+        sub="締切日・上限日数などを設定"
+        defaultOpen={false}
       >
         <HolidayRulesList projectId={projectId} initialRules={initialRules} />
       </Collapsible>
 
-      {/* 2. 希望休一覧（折り畳み・月ナビ付き） */}
-      <Collapsible
-        title="希望休一覧"
-        sub="スタッフの申請状況を月別に確認"
-        defaultOpen={true}
-      >
-        <ShiftOffRequestSection projectId={projectId} />
-      </Collapsible>
-
-      {/* 3. インポート（折り畳み・デフォルト閉じ） */}
+      {/* 3. Excelインポート（折り畳み） */}
       <Collapsible
         title="Excelインポート"
         sub="GoogleフォームのExcelから取り込み"

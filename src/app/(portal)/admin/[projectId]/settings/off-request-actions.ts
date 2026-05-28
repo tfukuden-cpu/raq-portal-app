@@ -7,6 +7,7 @@ export type OffRequestRow = {
   id: string;
   staff_id: string;
   staff_name: string;
+  account_number: string | null;
   request_date: string;
   priority: string;
   submitted_at: string | null;
@@ -41,27 +42,30 @@ export async function fetchOffRequestsAction(
 
   if (error) return { success: false, message: error.message };
 
-  // スタッフ名を取得
+  // スタッフ名・アカウント番号を取得
   const staffIds = [...new Set((data ?? []).map(r => r.staff_id))];
-  const nameMap = new Map<string, string>();
+  const nameMap    = new Map<string, string>();
+  const accountMap = new Map<string, string | null>();
   if (staffIds.length > 0) {
     const { data: staffsRaw } = await admin
       .from("staffs")
-      .select("id, name, display_name")
+      .select("id, name, display_name, account_number")
       .in("id", staffIds);
     for (const s of staffsRaw ?? []) {
       nameMap.set(s.id, (s.display_name ?? s.name ?? s.id) as string);
+      accountMap.set(s.id, (s.account_number as string | null) ?? null);
     }
   }
 
   const rows: OffRequestRow[] = (data ?? []).map(r => ({
-    id:           r.id,
-    staff_id:     r.staff_id,
-    staff_name:   nameMap.get(r.staff_id) ?? r.staff_id,
-    request_date: r.request_date as string,
-    priority:     r.priority as string,
-    submitted_at: r.submitted_at as string | null,
-    source:       (r.source as string | null) ?? "excel",
+    id:             r.id,
+    staff_id:       r.staff_id,
+    staff_name:     nameMap.get(r.staff_id) ?? r.staff_id,
+    account_number: accountMap.get(r.staff_id) ?? null,
+    request_date:   r.request_date as string,
+    priority:       r.priority as string,
+    submitted_at:   r.submitted_at as string | null,
+    source:         (r.source as string | null) ?? "excel",
   }));
 
   return { success: true, rows };
