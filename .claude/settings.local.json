@@ -86,7 +86,10 @@
       "Bash(python make_diff.py)",
       "Bash(python make_diff2.py)",
       "Bash(python make_detail.py)",
-      "Bash(findstr /i \"SUPABASE\")"
+      "Bash(findstr /i \"SUPABASE\")",
+      "Bash(npm list *)",
+      "Bash(npx xlsx *)",
+      "Bash(grep -v \"//\")"
     ]
   }
 }

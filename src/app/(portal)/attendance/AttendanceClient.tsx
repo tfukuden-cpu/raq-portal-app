@@ -24,6 +24,13 @@ export type MemberRow = {
   lateReason: string | null;
   lateReportedAt: string | null;
   expectedArrival: string | null;
+  churnRisk?: boolean;
+};
+
+export type ChurnRiskAlert = {
+  staffId: string;
+  staffName: string;
+  consecutiveDays: number;
 };
 
 export type ShiftGroup = {
@@ -102,6 +109,7 @@ interface Props {
   publishedAt: string | null;
   shiftChanges: ShiftChangeEntry[];
   myStaffId: string;
+  churnRiskAlerts?: ChurnRiskAlert[];
 }
 
 type SelectionMode = "reminder" | "request";
@@ -113,7 +121,7 @@ export default function AttendanceClient({
   total, departed, clockedIn, late, absent, notClocked,
   grouped, offMembers, enableDeparture,
   publishedAt, shiftChanges,
-  myStaffId,
+  myStaffId, churnRiskAlerts,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"today" | "changes">("today");
   // 催促・依頼の選択（トグル式）
@@ -278,6 +286,22 @@ export default function AttendanceClient({
           />
         )}
 
+        {/* ── 離脱リスク候補アラート ── */}
+        {activeTab === "today" && (churnRiskAlerts?.length ?? 0) > 0 && (
+          <div className="mb-3 px-4 py-3 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+            <p className="text-xs font-bold text-red-700 dark:text-red-300 mb-1.5">⚠ 離脱リスク候補</p>
+            <div className="space-y-1">
+              {churnRiskAlerts!.map(a => (
+                <p key={a.staffId} className="text-xs text-red-600 dark:text-red-400">
+                  <span className="font-semibold">{a.staffName}</span>
+                  <span className="ml-1 text-red-400">— {a.consecutiveDays}日連続欠勤</span>
+                </p>
+              ))}
+            </div>
+            <p className="text-[10px] text-red-400 mt-2">スタッフ設定で「離脱リスク」フラグをONにしてください</p>
+          </div>
+        )}
+
         {/* ── 当日シフトタブ ── */}
         {activeTab === "today" && grouped.length === 0 ? (
           <p className="text-sm text-zinc-400 text-center py-10">本日の出勤予定者はいません</p>
@@ -339,8 +363,15 @@ export default function AttendanceClient({
                                   onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name })}
                                   className="flex-1 min-w-0 text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                                 >
-                                  <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                                    {m.name}
+                                  <span className="flex items-center gap-1.5 truncate">
+                                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                                      {m.name}
+                                    </span>
+                                    {m.churnRisk && (
+                                      <span className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 leading-none">
+                                        離脱リスク
+                                      </span>
+                                    )}
                                   </span>
                                   {currentStatus === "absent" && m.absenceReason && (
                                     <span className="block text-[11px] text-red-500 dark:text-red-400 truncate">

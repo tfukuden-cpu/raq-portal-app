@@ -727,6 +727,7 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   const startDate        = String(fd.get("start_date") ?? "").trim() || null;
   const desiredWageRaw   = String(fd.get("desired_wage") ?? "").trim();
   const desiredWage      = desiredWageRaw ? (parseInt(desiredWageRaw, 10) || null) : null;
+  const churnRisk        = fd.get("churn_risk") === "true";
 
   if (!name) return { success: false, message: "氏名を入力してください" };
 
@@ -751,6 +752,7 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
       max_consecutive_days: maxConsecDays,
       start_date: startDate,
       desired_wage: desiredWage,
+      churn_risk: churnRisk,
     })
     .eq("project_id", projectId)
     .eq("staff_id", staffId);

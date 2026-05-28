@@ -42,7 +42,7 @@ type Member = {
   work_days_type?: string | null; work_days_count?: number | null;
   preferred_shift?: string | null; preferred_section?: string | null;
   max_consecutive_days?: number | null; shift_note?: string | null;
-  accountNumber?: string | null;
+  accountNumber?: string | null; churn_risk?: boolean;
 };
 type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
@@ -927,6 +927,18 @@ export default function ShiftEditGrid({
     return m;
   }, [changeLogs]);
 
+  // 離脱リスクスタッフIDセット（充足カウントから除外）
+  const churnRiskStaffIds = useMemo(
+    () => new Set(activeMembers.filter(m => m.churn_risk).map(m => m.id)),
+    [activeMembers]
+  );
+
+  // 充足カウント（離脱リスクスタッフを除いた実効人数）
+  function getEffectiveCount(patternName: string, date: string): number {
+    return (resolvedGrid.get(`${patternName}__${date}`) ?? [])
+      .filter(id => !churnRiskStaffIds.has(id)).length;
+  }
+
   function getRequired(patternName: string, date: string): number {
     const k = `${patternName}__${date}`;
     if (slotReqMap.has(k)) return slotReqMap.get(k)!;
@@ -1001,7 +1013,7 @@ export default function ShiftEditGrid({
     const list: { patternName: string; date: string; assigned: number; required: number }[] = [];
     for (const p of shiftPatterns) {
       for (const date of allDates) {
-        const assigned = (resolvedGrid.get(`${p.name}__${date}`) ?? []).length;
+        const assigned = getEffectiveCount(p.name, date);
         const required = getRequired(p.name, date);
         if (required > 0 && assigned < required) {
           list.push({ patternName: p.name, date, assigned, required });
@@ -1009,7 +1021,8 @@ export default function ShiftEditGrid({
       }
     }
     return list.sort((a, b) => a.date.localeCompare(b.date));
-  }, [resolvedGrid, allDates, shiftPatterns, slotReqMap]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedGrid, allDates, shiftPatterns, slotReqMap, churnRiskStaffIds]);
 
   // ── セクション仮確定ステータス ─────────────────────────────────
   // 'none' = 未着手, 'draft' = ドラフト済, 'staff_locked' = 人確定, 'slot_locked' = 枠確定
@@ -2020,7 +2033,7 @@ export default function ShiftEditGrid({
                     ))}
                     {/* 日付ごとの過不足 */}
                     {allDates.map((date) => {
-                      const assigned = (resolvedGrid.get(`${pattern.name}__${date}`) ?? []).length;
+                      const assigned = getEffectiveCount(pattern.name, date);
                       const required = getRequired(pattern.name, date);
                       const net = required - assigned; // 正=不足、負=余剰
                       const isToday = date === todayJST;
@@ -2067,7 +2080,7 @@ export default function ShiftEditGrid({
                     })}
                     {/* 合計セル */}
                     {(() => {
-                      const totalAssigned   = allDates.reduce((s, d) => s + (resolvedGrid.get(`${pattern.name}__${d}`) ?? []).length, 0);
+                      const totalAssigned   = allDates.reduce((s, d) => s + getEffectiveCount(pattern.name, d), 0);
                       const totalRequired   = allDates.reduce((s, d) => s + getRequired(pattern.name, d), 0);
                       const totalNet        = totalRequired - totalAssigned;
                       let totDisplay: string;
@@ -2250,10 +2263,15 @@ export default function ShiftEditGrid({
                             ].join(" ")}>
                               {member.name}
                             </span>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap">
                               {member.accountNumber && (
                                 <span className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums leading-none">
                                   {member.accountNumber}
+                                </span>
+                              )}
+                              {member.churn_risk && (
+                                <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none shrink-0">
+                                  離脱
                                 </span>
                               )}
                               {member.endDate && (

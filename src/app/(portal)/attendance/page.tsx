@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceClient from "./AttendanceClient";
-import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry } from "./AttendanceClient";
+import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry, ChurnRiskAlert } from "./AttendanceClient";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -130,7 +130,7 @@ export default async function AttendancePage() {
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
-      .select("staff_id, section, staffs(id, name, display_name, account_number)")
+      .select("staff_id, section, churn_risk, staffs(id, name, display_name, account_number)")
       .eq("project_id", projectId),
     admin.from("shifts")
       .select("staff_id, shift_name, shift_start, shift_end")
@@ -191,6 +191,51 @@ export default async function AttendancePage() {
       accountNumber: (s?.account_number as string | null | undefined) ?? null,
     });
   }
+
+  // 離脱リスクフラグ付きスタッフIDセット
+  const churnRiskStaffIds = new Set(
+    (memberRows ?? [])
+      .filter(m => (m as { churn_risk?: boolean }).churn_risk === true)
+      .map(m => m.staff_id)
+  );
+
+  // 連続欠勤3日以上の検知（過去14日間）
+  const last14Start = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 13);
+    return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  })();
+  const { data: recentAbsencesRaw } = await admin
+    .from("absence_reports")
+    .select("staff_id, absence_date")
+    .eq("project_id", projectId)
+    .gte("absence_date", last14Start)
+    .lte("absence_date", today);
+
+  const absencesByStaff = new Map<string, string[]>();
+  for (const a of recentAbsencesRaw ?? []) {
+    if (!absencesByStaff.has(a.staff_id)) absencesByStaff.set(a.staff_id, []);
+    absencesByStaff.get(a.staff_id)!.push(a.absence_date as string);
+  }
+
+  const churnRiskAlerts: ChurnRiskAlert[] = [];
+  for (const [staffId, dates] of absencesByStaff) {
+    const sorted = [...dates].sort().reverse(); // 新しい日付順
+    let streak = 1;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = new Date(sorted[i - 1] + "T12:00:00+09:00").getTime();
+      const curr = new Date(sorted[i]     + "T12:00:00+09:00").getTime();
+      if (prev - curr === 24 * 60 * 60 * 1000) { streak++; } else { break; }
+    }
+    if (streak >= 3) {
+      churnRiskAlerts.push({
+        staffId,
+        staffName: memberMap.get(staffId)?.name ?? staffId,
+        consecutiveDays: streak,
+      });
+    }
+  }
+  churnRiskAlerts.sort((a, b) => b.consecutiveDays - a.consecutiveDays);
 
   // 展開後変更ログ
   const publishedAt = (monthStatus as { published_at: string | null } | null)?.published_at ?? null;
@@ -304,6 +349,7 @@ export default async function AttendancePage() {
       lateReason:        late?.reason               ?? null,
       expectedArrival:   late?.expectedArrival      ?? null,
       lateReportedAt:    late?.reportedAt            ?? null,
+      churnRisk:         churnRiskStaffIds.has(shift.staff_id),
       shiftName,
       shiftStart:     shift.shift_start ?? pattern?.start ?? null,
       shiftEnd:       shift.shift_end   ?? pattern?.end   ?? null,
@@ -344,6 +390,7 @@ export default async function AttendancePage() {
       publishedAt={publishedAt}
       shiftChanges={shiftChanges}
       myStaffId={staffId}
+      churnRiskAlerts={churnRiskAlerts}
     />
   );
 }

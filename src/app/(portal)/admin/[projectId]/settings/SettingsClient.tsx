@@ -39,7 +39,7 @@ import {
 } from "../../holiday-rule-config";
 import SeatLayoutEditor, { type SeatItem, type WallItem } from "./SeatLayoutEditor";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; compliance: number | null; trainingDates: TrainingEntry[] };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; churn_risk: boolean; compliance: number | null; trainingDates: TrainingEntry[] };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -507,6 +507,7 @@ export function MemberList({
   const [editHolidayRequests, setEditHolidayRequests] = useState<HolidayRequestEntry[]>([]);
   const [editTrainingDates, setEditTrainingDates]   = useState<TrainingEntry[]>([]);
   const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
+  const [editChurnRisk, setEditChurnRisk] = useState(false);
   const [departType, setDepartType] = useState<"immediate" | "dated">("immediate");
   const [departDate, setDepartDate] = useState(() =>
     new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }),
@@ -541,6 +542,7 @@ export function MemberList({
     setEditPreferredSection(m.preferred_section ?? "");
     setEditMaxConsecDays(m.max_consecutive_days != null ? String(m.max_consecutive_days) : "");
     setEditStartDate(m.start_date ?? "");
+    setEditChurnRisk(m.churn_risk ?? false);
     setShiftSettingsOpen(false);
     setDepartStep("hidden");
     setDepartDate(new Date().toISOString().slice(0, 10));
@@ -568,6 +570,7 @@ export function MemberList({
     fd.set("preferred_section",    editPreferredSection);
     fd.set("max_consecutive_days", editMaxConsecDays);
     fd.set("start_date",           editStartDate);
+    fd.set("churn_risk",           editChurnRisk ? "true" : "false");
     start(async () => {
       const r = await updateMemberInfoAction(fd);
       setResult({ ok: r.success, msg: r.message ?? (r.success ? "更新しました" : "エラー") });
@@ -1287,6 +1290,29 @@ export function MemberList({
                     projectId={projectId}
                     initialEntries={editHolidayRequests}
                   />
+                </div>
+
+                <div className="border-t border-zinc-100 dark:border-zinc-800" />
+
+                {/* ── 離脱リスク ── */}
+                <div className="flex items-center justify-between gap-3 py-0.5">
+                  <div>
+                    <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">離脱リスク</p>
+                    <p className="text-[10px] text-zinc-400 leading-snug">ONにすると充足カウントから除外されます</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditChurnRisk(v => !v)}
+                    className={[
+                      "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+                      editChurnRisk ? "bg-red-500" : "bg-zinc-300 dark:bg-zinc-600",
+                    ].join(" ")}
+                  >
+                    <span className={[
+                      "inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform",
+                      editChurnRisk ? "translate-x-4" : "translate-x-0.5",
+                    ].join(" ")} />
+                  </button>
                 </div>
 
                 <div className="border-t border-zinc-100 dark:border-zinc-800" />
