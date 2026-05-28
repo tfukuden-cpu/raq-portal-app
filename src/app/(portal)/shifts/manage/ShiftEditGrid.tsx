@@ -1717,16 +1717,13 @@ export default function ShiftEditGrid({
                   {sectionOptions.map(section => {
                     const st = sectionDraftStatus.get(section) ?? "none";
                     const isStaffLocked = st === "staff_locked";
-                    const isSlotLocked  = st === "slot_locked";
-                    const isLocked = isStaffLocked || isSlotLocked;
+                    const isLocked = isStaffLocked;
                     const isSelected = regenSection === section;
                     return (
                       <div key={section} className={[
                         "rounded-2xl border transition-all overflow-hidden",
-                        isStaffLocked
+                        isLocked
                           ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20"
-                          : isSlotLocked
-                          ? "border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20"
                           : isSelected
                           ? "border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/20"
                           : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800",
@@ -1740,15 +1737,9 @@ export default function ShiftEditGrid({
                             className="flex items-center gap-2.5 flex-1 min-w-0 text-left disabled:cursor-default"
                           >
                             {/* ステータスアイコン */}
-                            {isStaffLocked ? (
+                            {isLocked ? (
                               <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center shrink-0">
                                 <svg viewBox="0 0 10 10" className="w-3 h-3 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                  <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              </span>
-                            ) : isSlotLocked ? (
-                              <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 flex items-center justify-center shrink-0">
-                                <svg viewBox="0 0 10 10" className="w-3 h-3 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2.5">
                                   <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                               </span>
@@ -1763,54 +1754,34 @@ export default function ShiftEditGrid({
                             <div className="flex items-baseline gap-2 min-w-0">
                               <span className={[
                                 "text-sm font-bold truncate",
-                                isStaffLocked ? "text-emerald-700 dark:text-emerald-300"
-                                : isSlotLocked ? "text-indigo-700 dark:text-indigo-300"
-                                : "text-zinc-800 dark:text-zinc-100",
+                                isLocked
+                                  ? "text-emerald-700 dark:text-emerald-300"
+                                  : "text-zinc-800 dark:text-zinc-100",
                               ].join(" ")}>{section}</span>
                               <span className={[
                                 "text-[10px] font-semibold shrink-0",
-                                isStaffLocked ? "text-emerald-600 dark:text-emerald-400"
-                                : isSlotLocked ? "text-indigo-600 dark:text-indigo-400"
+                                isLocked ? "text-emerald-600 dark:text-emerald-400"
                                 : st === "draft" ? "text-blue-500 dark:text-blue-400"
                                 : "text-zinc-400",
                               ].join(" ")}>
-                                {isStaffLocked ? "人確定済" : isSlotLocked ? "枠確定済" : st === "draft" ? "ドラフト済" : "未着手"}
+                                {isLocked ? "仮確定済" : st === "draft" ? "ドラフト済" : "未着手"}
                               </span>
                             </div>
                           </button>
 
-                          {/* 仮確定ボタン群 */}
-                          {isLocked ? (
-                            <button
-                              onClick={() => handleToggleLock(section, "none")}
-                              disabled={isRegenerating || isLocking}
-                              className={[
-                                "shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40",
-                                isStaffLocked
-                                  ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200"
-                                  : "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200",
-                              ].join(" ")}
-                            >
-                              解除
-                            </button>
-                          ) : (
-                            <div className="flex gap-1 shrink-0">
-                              <button
-                                onClick={() => handleToggleLock(section, "slot")}
-                                disabled={isRegenerating || isLocking}
-                                className="px-2 py-1 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800"
-                              >
-                                枠確定
-                              </button>
-                              <button
-                                onClick={() => handleToggleLock(section, "staff")}
-                                disabled={isRegenerating || isLocking}
-                                className="px-2 py-1 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
-                              >
-                                人確定
-                              </button>
-                            </div>
-                          )}
+                          {/* 仮確定トグル */}
+                          <button
+                            onClick={() => handleToggleLock(section, isLocked ? "none" : "staff")}
+                            disabled={isRegenerating || isLocking}
+                            className={[
+                              "shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40",
+                              isLocked
+                                ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200"
+                                : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600",
+                            ].join(" ")}
+                          >
+                            {isLocked ? "解除" : "仮確定"}
+                          </button>
                         </div>
                       </div>
                     );
@@ -2158,12 +2129,9 @@ export default function ShiftEditGrid({
                         {/* 名前列だけ sticky にして横スクロール時も固定 */}
                         {(() => {
                           const secName = member.section;
-                          const isSecStaffLocked = !!(secName && staffLockedSections.has(secName));
-                          const isSecSlotLocked  = !!(secName && slotLockedSections.has(secName));
-                          const headerBg = isSecStaffLocked
+                          const isSecLocked = !!(secName && staffLockedSections.has(secName));
+                          const headerBg = isSecLocked
                             ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
-                            : isSecSlotLocked
-                            ? "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800"
                             : "bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700";
                           return (
                             <>
@@ -2172,20 +2140,12 @@ export default function ShiftEditGrid({
                                   <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tracking-wide uppercase">
                                     {secName ?? "セクション未設定"}
                                   </span>
-                                  {isSecStaffLocked && (
+                                  {isSecLocked && (
                                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
                                       <svg viewBox="0 0 10 10" className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="2">
                                         <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
                                       </svg>
-                                      人確定
-                                    </span>
-                                  )}
-                                  {isSecSlotLocked && (
-                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold">
-                                      <svg viewBox="0 0 10 10" className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
-                                      枠確定
+                                      仮確定
                                     </span>
                                   )}
                                 </div>
