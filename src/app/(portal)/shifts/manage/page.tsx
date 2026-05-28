@@ -10,6 +10,7 @@ import ShiftManageClient from "./ShiftManageClient";
 import ShiftSettingsTab from "./ShiftSettingsTab";
 import ShiftHolidayTab from "./ShiftHolidayTab";
 import ShiftTrainingTab, { type TrainingMember } from "./ShiftTrainingTab";
+import { fetchTrainingSessionsAction } from "./training-session-actions";
 import type { ChangeLog } from "./ShiftEditGrid";
 import type { GridDraftEntry } from "../actions";
 import HeaderHeightSetter from "./HeaderHeightSetter";
@@ -191,35 +192,18 @@ export default async function ManageShiftsPage(props: {
   if (tab === "training") {
     const targetMonthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
 
-    const [{ data: membersRaw }, { data: trainingsRaw }] = await Promise.all([
-      admin.from("project_members")
-        .select("staff_id, section, staffs(id, name, display_name, account_number)")
-        .eq("project_id", selectedProjectId),
-      admin.from("staff_trainings")
-        .select("id, staff_id, training_date, training_name, start_time, end_time")
-        .eq("training_type", "onboarding")
-        .order("training_date"),
-    ]);
-
-    // training をスタッフIDごとにまとめる
-    const trainingMap = new Map<string, import("@/components/TrainingSection").TrainingEntry[]>();
-    for (const t of trainingsRaw ?? []) {
-      const sid = t.staff_id as string;
-      if (!trainingMap.has(sid)) trainingMap.set(sid, []);
-      trainingMap.get(sid)!.push({
-        id:            t.id as string,
-        training_date: t.training_date as string,
-        training_name: (t as { training_name?: string | null }).training_name ?? null,
-        start_time:    (t as { start_time?: string | null }).start_time ?? null,
-        end_time:      (t as { end_time?: string | null }).end_time ?? null,
-      });
-    }
-
-    function getAccNum(acc: string | null | undefined): number {
+    function getAccNumLocal(acc: string | null | undefined): number {
       if (!acc) return Infinity;
       const m = acc.match(/(\d+)/);
       return m ? parseInt(m[1]) : Infinity;
     }
+
+    const [{ data: membersRaw }, initialSessions] = await Promise.all([
+      admin.from("project_members")
+        .select("staff_id, section, staffs(id, name, display_name, account_number)")
+        .eq("project_id", selectedProjectId),
+      fetchTrainingSessionsAction(selectedProjectId),
+    ]);
 
     const trainingMembers: TrainingMember[] = (membersRaw ?? [])
       .map(m => {
@@ -231,13 +215,12 @@ export default async function ManageShiftsPage(props: {
           name:          (s?.display_name ?? s?.name ?? m.staff_id) as string,
           accountNumber: (s?.account_number ?? null) as string | null,
           section:       m.section ?? null,
-          trainings:     trainingMap.get(staffId) ?? [],
         };
       })
       .filter(m => !!m.id)
       .sort((a, b) => {
-        const na = getAccNum(a.accountNumber);
-        const nb = getAccNum(b.accountNumber);
+        const na = getAccNumLocal(a.accountNumber);
+        const nb = getAccNumLocal(b.accountNumber);
         return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
       });
 
@@ -256,6 +239,7 @@ export default async function ManageShiftsPage(props: {
           <ShiftTrainingTab
             projectId={selectedProjectId}
             members={trainingMembers}
+            initialSessions={initialSessions}
             targetMonth={targetMonthStr}
           />
         </div>
