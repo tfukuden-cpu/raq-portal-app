@@ -8,9 +8,12 @@ type Props = {
   year: number;
   month: number;
   isPublished?: boolean;
+  /** グループ内に埋め込む場合 true → 角丸なし */
+  flat?: boolean;
 };
 
-export default function PublishButton({ projectId, year, month, isPublished }: Props) {
+export default function PublishButton({ projectId, year, month, isPublished, flat }: Props) {
+  const rounding = flat ? "rounded-none" : "rounded-lg";
   const [result, setResult]  = useState<{ sent: number; noLine: string[] } | null>(null);
   const [error, setError]    = useState<string | null>(null);
   const [isPending, start]   = useTransition();
@@ -40,7 +43,7 @@ export default function PublishButton({ projectId, year, month, isPublished }: P
           type="button"
           onClick={() => { setShowConfirm(true); setResult(null); setError(null); }}
           disabled={isPending}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-zinc-500 dark:text-zinc-400 transition-colors"
+          className={`flex items-center gap-1.5 px-3 py-1.5 ${rounding} text-xs font-semibold bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-zinc-500 dark:text-zinc-400 transition-colors`}
           title="展開済み（再展開する場合はクリック）"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -96,7 +99,7 @@ export default function PublishButton({ projectId, year, month, isPublished }: P
         type="button"
         onClick={() => { setShowConfirm(true); setResult(null); setError(null); }}
         disabled={isPending}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-400 text-white transition-colors"
+        className={`flex items-center gap-1.5 px-3 py-1.5 ${rounding} text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-400 text-white transition-colors`}
       >
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

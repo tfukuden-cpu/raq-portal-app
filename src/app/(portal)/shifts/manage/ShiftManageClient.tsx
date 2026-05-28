@@ -148,6 +148,10 @@ export default function ShiftManageClient({
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [showRegenModal, setShowRegenModal] = useState(false);
   const [regenError, setRegenError] = useState<string | null>(null);
+  const [exportSection, setExportSection] = useState("");
+
+  // シフトパターンから使用中セクション一覧
+  const exportSections = [...new Set(shiftPatterns.map(p => p.section).filter((s): s is string => !!s))];
   // 実際にグリッドへ渡すドラフト（新規 = null、続きから = initialDraft）
   const [activeDraft, setActiveDraft] = useState<GridDraftEntry[] | null>(null);
   const [isClearing, startClear] = useTransition();
@@ -206,16 +210,24 @@ export default function ShiftManageClient({
 
   // CSV出力（選択日のシフトをアカウント番号順に出力・Excelで開ける）
   function handleExportExcel() {
-    // 選択日のシフトを取得
     const dateShifts = shifts.filter(s => s.shift_date === selectedDate);
     const shiftMap = new Map(dateShifts.map(s => [s.staff_id, s]));
 
     // アカウント番号で数値昇順ソート、未設定は末尾
-    const sorted = [...activeMembers].sort((a, b) => {
+    let sorted = [...activeMembers].sort((a, b) => {
       const na = parseInt(a.accountNumber ?? "") || Infinity;
       const nb = parseInt(b.accountNumber ?? "") || Infinity;
       return na - nb;
     });
+
+    // セクションフィルタ
+    if (exportSection) {
+      sorted = sorted.filter(m => {
+        const shift = shiftMap.get(m.id);
+        const resolved = resolveShiftSection(shift?.shift_name ?? null, m.section);
+        return resolved === exportSection;
+      });
+    }
 
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const header = ["アカウント番号", "氏名", "日付", "シフト名", "セクション（シフト）"];
@@ -233,7 +245,8 @@ export default function ShiftManageClient({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `シフト_${selectedDate}.csv`;
+    const suffix = exportSection ? `_${exportSection}` : "";
+    a.download = `シフト_${selectedDate}${suffix}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -354,37 +367,26 @@ export default function ShiftManageClient({
         </div>
       )}
 
-      {/* ツールバー：月選択・シフト展開・Excel出力・再仮組み・シフト編集 */}
-      <div className="px-4 mb-2 flex flex-wrap items-center gap-2">
-        {/* 月ナビゲーション */}
+      {/* ツールバー */}
+      <div className="px-4 mb-2 flex flex-wrap items-center gap-3">
+        {/* 月ナビゲーション（大きめ） */}
         <div className="flex items-center gap-0.5">
           <a
             href={`${monthNavBase}${prevMonth.year}&month=${prevMonth.month}`}
             className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
+            <ChevronLeftIcon className="w-5 h-5 text-zinc-500" />
           </a>
-          <span className="text-sm font-semibold tabular-nums w-[4.5rem] text-center text-zinc-900 dark:text-zinc-100">
+          <span className="text-lg font-bold tabular-nums w-28 text-center text-zinc-900 dark:text-zinc-100">
             {targetYear}/{String(targetMonth).padStart(2, "0")}
           </span>
           <a
             href={`${monthNavBase}${nextMonth.year}&month=${nextMonth.month}`}
             className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
+            <ChevronRightIcon className="w-5 h-5 text-zinc-500" />
           </a>
         </div>
-
-        {/* シフト展開ボタン */}
-        <PublishButton projectId={projectId} year={targetYear} month={targetMonth} isPublished={isPublished} />
-
-        {/* Excel出力 */}
-        <button
-          onClick={handleExportExcel}
-          className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors border border-emerald-200 dark:border-emerald-700"
-        >
-          Excel出力
-        </button>
 
         {/* 下書きインジケーター */}
         {hasDraft && (
@@ -394,18 +396,41 @@ export default function ShiftManageClient({
           </span>
         )}
 
-        <div className="flex items-center gap-2 ml-auto">
-          {!isPublished && (
-            <button
-              onClick={() => { setRegenError(null); setShowRegenModal(true); }}
-              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors border border-zinc-200 dark:border-zinc-700"
-            >
-              再仮組み
-            </button>
-          )}
+        {/* まとめたボタン群：シフト展開 ／ セクション▼ Excel出力 ／ シフト編集 */}
+        <div className="flex items-stretch ml-auto rounded-xl border border-zinc-200 dark:border-zinc-700 divide-x divide-zinc-200 dark:divide-zinc-700 overflow-hidden text-xs font-semibold">
+          {/* シフト展開（flat=true で角丸なし・グループに馴染む） */}
+          <PublishButton
+            projectId={projectId}
+            year={targetYear}
+            month={targetMonth}
+            isPublished={isPublished}
+            flat
+          />
+
+          {/* セクション選択 */}
+          <select
+            value={exportSection}
+            onChange={e => setExportSection(e.target.value)}
+            className="px-2 py-1.5 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 focus:outline-none text-xs border-r border-zinc-200 dark:border-zinc-700"
+          >
+            <option value="">全員</option>
+            {exportSections.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+
+          {/* Excel出力 */}
+          <button
+            onClick={handleExportExcel}
+            className="px-3 py-1.5 bg-white dark:bg-zinc-900 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+          >
+            Excel出力
+          </button>
+
+          {/* シフト編集 */}
           <button
             onClick={handleClickEdit}
-            className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors border border-blue-200 dark:border-blue-800"
+            className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
           >
             シフト編集
           </button>
