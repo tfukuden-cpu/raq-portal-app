@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import AttendanceClient from "./AttendanceClient";
 import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry, ChurnRiskAlert } from "./AttendanceClient";
 import type { SeatData, WallData, StaffInfo } from "../seating/SeatingClient";
+import type { PlanSeat, PlanStaff } from "../seating/plan/SeatingPlanClient";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -112,6 +113,11 @@ export default async function AttendancePage() {
 
   const admin = createAdminClient();
   const today = tokyoToday();
+  const tomorrow = (() => {
+    const d = new Date(today + "T00:00:00+09:00");
+    d.setDate(d.getDate() + 1);
+    return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  })();
   const todayStart = `${today}T00:00:00+09:00`;
   const todayEnd   = `${today}T23:59:59+09:00`;
 
@@ -131,6 +137,8 @@ export default async function AttendancePage() {
     { data: seatRows },
     { data: assignmentRows },
     { data: wallRows },
+    { data: tomorrowAssignmentRows },
+    { data: tomorrowShiftRows },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -180,6 +188,12 @@ export default async function AttendancePage() {
     admin.from("seat_walls")
       .select("x1_pct, y1_pct, x2_pct, y2_pct")
       .eq("project_id", projectId),
+    admin.from("seat_assignments")
+      .select("seat_id, staff_id")
+      .eq("project_id", projectId).eq("assignment_date", tomorrow),
+    admin.from("shifts")
+      .select("staff_id, shift_name")
+      .eq("project_id", projectId).eq("shift_date", tomorrow),
   ]);
 
   // シフトパターンの時刻マップ
@@ -436,6 +450,45 @@ export default async function AttendancePage() {
       };
     });
 
+  // ── 翌日配置データ ─────────────────────────────────────────
+  const OFF_NAMES_PLAN = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
+  const tomorrowAssignMap   = new Map((tomorrowAssignmentRows ?? []).map(a => [a.seat_id, a.staff_id]));
+  const tomorrowShiftNameMap = new Map(
+    (tomorrowShiftRows ?? []).map(r => [r.staff_id as string, r.shift_name as string | null])
+  );
+  const tomorrowOnShift = new Set(
+    (tomorrowShiftRows ?? [])
+      .filter(r => r.shift_name && !OFF_NAMES_PLAN.includes(r.shift_name as string))
+      .map(r => r.staff_id as string)
+  );
+  const tomorrowTargetIds = tomorrowOnShift.size > 0
+    ? [...tomorrowOnShift]
+    : [...memberMap.keys()];
+
+  const planSeatData: PlanSeat[] = (seatRows ?? []).map(s => ({
+    id:        s.id,
+    label:     s.label,
+    xPct:      s.x_pct,
+    yPct:      s.y_pct,
+    section:   s.section ?? null,
+    seatType:  ((s as { seat_type?: string }).seat_type ?? "normal") as PlanSeat["seatType"],
+    shiftSlot: (s as { shift_slot?: string | null }).shift_slot ?? null,
+    staffId:   (s as { seat_type?: string }).seat_type === "disabled"
+      ? null
+      : (tomorrowAssignMap.get(s.id) ?? null),
+  }));
+
+  const planStaffData: PlanStaff[] = tomorrowTargetIds.map(id => {
+    const m = memberMap.get(id);
+    return {
+      id,
+      name:          m?.name          ?? id,
+      accountNumber: m?.accountNumber ?? null,
+      section:       m?.section       ?? null,
+      shiftName:     tomorrowShiftNameMap.get(id) ?? null,
+    };
+  });
+
   // ── 全体サマリー ─────────────────────────────────────────
   const total      = allInternal.length;
   const departed   = allInternal.filter(m => m.departureTime || m.clockIn).length;
@@ -472,6 +525,9 @@ export default async function AttendancePage() {
       seatData={seatData}
       wallData={wallData}
       seatStaffList={seatStaffList}
+      tomorrow={tomorrow}
+      planSeatData={planSeatData}
+      planStaffData={planStaffData}
     />
   );
 }

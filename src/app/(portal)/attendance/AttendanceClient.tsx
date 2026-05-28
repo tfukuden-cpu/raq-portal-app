@@ -4,6 +4,7 @@ import StaffPopupMenu from "@/components/StaffPopupMenu";
 import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction, toggleChurnRiskAction } from "./actions";
 import type { SendResult } from "./actions";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/app/(portal)/seating/SeatingClient";
+import SeatingPlanClient, { type PlanSeat, type PlanStaff } from "@/app/(portal)/seating/plan/SeatingPlanClient";
 
 // ── 型定義 ────────────────────────────────────────────────
 export type StatusKey = "working" | "clocked_out" | "departed" | "absent" | "late" | "not_departed";
@@ -114,6 +115,9 @@ interface Props {
   seatData: SeatData[];
   wallData: WallData[];
   seatStaffList: StaffInfo[];
+  tomorrow: string;
+  planSeatData: PlanSeat[];
+  planStaffData: PlanStaff[];
 }
 
 type SelectionMode = "reminder" | "request";
@@ -127,8 +131,10 @@ export default function AttendanceClient({
   publishedAt, shiftChanges,
   myStaffId, churnRiskAlerts,
   seatData, wallData, seatStaffList,
+  tomorrow, planSeatData, planStaffData,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
+  const [seatSubTab, setSeatSubTab] = useState<"today" | "tomorrow">("today");
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
@@ -325,16 +331,53 @@ export default function AttendanceClient({
 
         {/* ── 座席表タブ ── */}
         {activeTab === "seating" && (
-          <SeatingClient
-            projectId={projectId}
-            today={today}
-            seats={seatData}
-            walls={wallData}
-            isAdmin={true}
-            myStaffId={myStaffId}
-            staffList={seatStaffList}
-            embedded
-          />
+          <div>
+            {/* サブタブ */}
+            <div className="flex gap-1 mb-3">
+              <button
+                onClick={() => setSeatSubTab("today")}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                  seatSubTab === "today"
+                    ? "bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900"
+                    : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
+                }`}
+              >
+                当日座席
+              </button>
+              <button
+                onClick={() => setSeatSubTab("tomorrow")}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                  seatSubTab === "tomorrow"
+                    ? "bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900"
+                    : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
+                }`}
+              >
+                翌日配置
+              </button>
+            </div>
+            {seatSubTab === "today" && (
+              <SeatingClient
+                projectId={projectId}
+                today={today}
+                seats={seatData}
+                walls={wallData}
+                isAdmin={true}
+                myStaffId={myStaffId}
+                staffList={seatStaffList}
+                embedded
+              />
+            )}
+            {seatSubTab === "tomorrow" && (
+              <SeatingPlanClient
+                projectId={projectId}
+                date={tomorrow}
+                seats={planSeatData}
+                staff={planStaffData}
+                walls={wallData}
+                embedded
+              />
+            )}
+          </div>
         )}
 
         {/* ── 離脱リスク候補アラート ── */}
