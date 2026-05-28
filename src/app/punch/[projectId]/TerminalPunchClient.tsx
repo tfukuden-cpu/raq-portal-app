@@ -180,6 +180,30 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   const hasSeatData = seats.length > 0;
   const [activeTab, setActiveTab] = useState<"seat" | "name">(hasSeatData ? "seat" : "name");
 
+  // ── 30秒ポーリング：他の人の打刻を反映 ───────────────────────
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/punch/${projectId}/statuses`);
+        if (!res.ok) return;
+        const data: {
+          staffId: string;
+          clockedIn: boolean;
+          clockedOut: boolean;
+          onBreak: boolean;
+          isAbsent: boolean;
+        }[] = await res.json();
+        setLocalMembers(prev => prev.map(m => {
+          const s = data.find(d => d.staffId === m.staffId);
+          if (!s) return m;
+          return { ...m, clockedIn: s.clockedIn, clockedOut: s.clockedOut, onBreak: s.onBreak, isAbsent: s.isAbsent };
+        }));
+      } catch { /* ネットワークエラーは無視 */ }
+    };
+    const id = setInterval(poll, 30_000);
+    return () => clearInterval(id);
+  }, [projectId]);
+
   // memberMap: staffId → TerminalMember（最新状態）
   const memberMap = useMemo(() => {
     const m = new Map<string, TerminalMember>();

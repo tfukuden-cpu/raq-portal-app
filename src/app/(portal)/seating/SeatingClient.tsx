@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toggleBreakAction } from "./actions";
 import { getSeatBgClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
+import { createClient } from "@/lib/supabase/client";
 
 export type WallData = {
   x1Pct: number;
@@ -70,6 +71,35 @@ export default function SeatingClient({
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<string | null>(null);
   const router = useRouter();
+
+  // ── Supabase Realtime：punch_logs の INSERT をリッスン ────────
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`seating:punch:${projectId}`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .on("postgres_changes" as any, {
+        event: "INSERT",
+        schema: "public",
+        table: "punch_logs",
+        filter: `project_id=eq.${projectId}`,
+      }, (payload: { new: Record<string, string> }) => {
+        const staffId   = payload.new["staff_id"];
+        const punchType = payload.new["punch_type"];
+        if (!staffId || !punchType) return;
+        setStatuses(prev => {
+          const next = new Map(prev);
+          if (punchType === "clock_in")    next.set(staffId, "working");
+          if (punchType === "clock_out")   next.set(staffId, "clocked_out");
+          if (punchType === "break_start") next.set(staffId, "on_break");
+          if (punchType === "break_end")   next.set(staffId, "working");
+          return next;
+        });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [projectId]);
 
   function handleTap(seat: SeatData) {
     if (!seat.staffId) return;
