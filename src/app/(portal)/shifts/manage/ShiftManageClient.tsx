@@ -247,14 +247,15 @@ export default function ShiftManageClient({
     }
 
     // ── セルの表示値を求めるヘルパー ─────────────────────────
-    // シフト名がセクション名で始まる場合のみ "セクション（早/遅番）" 形式で出力。
-    // 公休・有休・研修などはシフト名をそのまま表示（memberSection へのフォールバックなし）
+    // ・公休・有休・研修・希望休・未アポコールなど、セクション名で解決できないシフトは空白
+    // ・セクションフィルタが有効な場合、選択セクション以外のシフトも空白
     function cellValue(staffId: string, date: string): string {
       const shiftName = effectiveMap.get(staffId)?.get(date) ?? null;
       if (!shiftName) return "";
       const sec = resolveShiftSection(shiftName, null); // fallback なし
-      if (sec) return formatSectionShift(sec, shiftName);
-      return shiftName; // 公休・有休・研修など
+      if (!sec) return ""; // 公休・研修・希望休・未アポコールなど → 空白
+      if (exportSectionsSel.length > 0 && !exportSectionsSel.includes(sec)) return ""; // フィルタ外セクション → 空白
+      return formatSectionShift(sec, shiftName);
     }
 
     // ── ヘッダー2行（アカウント番号列 + 名前列 + 日付列）──────
