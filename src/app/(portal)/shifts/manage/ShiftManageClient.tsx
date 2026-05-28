@@ -136,13 +136,27 @@ function fmtAt(iso: string): string {
   });
 }
 
+// アカウント番号文字列から数値を抽出（"ASS 28" → 28、未設定 → Infinity）
+function getAccNum(acc: string | null | undefined): number {
+  if (!acc) return Infinity;
+  const m = acc.match(/(\d+)/);
+  return m ? parseInt(m[1]) : Infinity;
+}
+
 export default function ShiftManageClient({
   projectId, targetYear, targetMonth, allDates, defaultDate,
-  shifts, activeMembers, shiftPatterns, shiftRequests, slotRequirements,
+  shifts, activeMembers: activeMembersRaw, shiftPatterns, shiftRequests, slotRequirements,
   changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
   isPublished, lockedSections, offRequests, prevMonthShifts,
   monthNavBase, prevMonth, nextMonth,
 }: Props) {
+  // アカウント番号昇順でソート（番号なしは末尾）
+  const activeMembers = [...activeMembersRaw].sort((a, b) => {
+    const na = getAccNum(a.accountNumber);
+    const nb = getAccNum(b.accountNumber);
+    return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
+  });
+
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [showDraftModal, setShowDraftModal] = useState(false);
@@ -254,47 +268,38 @@ export default function ShiftManageClient({
       DAY_JP[new Date(`${d}T12:00:00+09:00`).getDay()]
     )];
 
-    // ── アカウント番号から数値を抽出（"ASS 28" → 28、"28" → 28）
-    const getAccNum = (acc: string | null | undefined): number => {
-      if (!acc) return -1;
-      const m = acc.match(/(\d+)/);
-      return m ? parseInt(m[1]) : -1;
-    };
-
-    // ── 数値キー → メンバー のマップを構築
+    // ── 数値キー → メンバー のマップを構築（番号あり）
     const accMap = new Map<number, typeof activeMembers[0]>();
     for (const m of activeMembers) {
       const n = getAccNum(m.accountNumber);
-      if (n > 0) accMap.set(n, m);
+      if (n !== Infinity) accMap.set(n, m);
     }
-    const maxAcc = Math.max(
-      160,
-      ...[...accMap.keys()],
-    );
+    const maxAcc = Math.max(160, ...[...accMap.keys()]);
 
     // ── セクションフィルタ対象メンバーIDセット（空=全員）
     const sectionIds = exportSectionsSel.length > 0
       ? new Set(activeMembers.filter(m => m.section !== null && exportSectionsSel.includes(m.section)).map(m => m.id))
       : null;
 
-    // ── データ行：01〜maxAcc を昇順で必ず出力
+    // ── データ行①：ASS 01〜maxAcc を昇順で必ず出力
     const dataRows: string[][] = [];
     for (let i = 1; i <= maxAcc; i++) {
       const m = accMap.get(i);
-      // アカウント番号ラベル：常に "ASS XX" 形式
       const accLabel = `ASS ${String(i).padStart(2, "0")}`;
       const nameLabel = m?.name ?? "";
 
       if (!m || (sectionIds && !sectionIds.has(m.id))) {
-        // 該当メンバーなし or セクション外 → 空行（名前も空）
         dataRows.push([accLabel, "", ...allDates.map(() => "")]);
       } else {
-        dataRows.push([
-          accLabel,
-          nameLabel,
-          ...allDates.map(date => cellValue(m.id, date)),
-        ]);
+        dataRows.push([accLabel, nameLabel, ...allDates.map(date => cellValue(m.id, date))]);
       }
+    }
+
+    // ── データ行②：アカウント番号未設定メンバーを末尾に追加
+    const noAccMembers = activeMembers.filter(m => getAccNum(m.accountNumber) === Infinity);
+    for (const m of noAccMembers) {
+      if (sectionIds && !sectionIds.has(m.id)) continue;
+      dataRows.push(["", m.name, ...allDates.map(date => cellValue(m.id, date))]);
     }
 
     const csv = [header1, header2, ...dataRows]
