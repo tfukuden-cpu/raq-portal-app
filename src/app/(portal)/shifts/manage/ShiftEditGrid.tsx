@@ -851,6 +851,8 @@ export default function ShiftEditGrid({
   const [pendingNotify, setPendingNotify] = useState<PendingNotify | null>(null);
   // 充足サマリー行の表示/非表示
   const [showSummaryRows, setShowSummaryRows] = useState(true);
+  // 並び順：番号順 or セクション順（props の初期値を引き継ぐ）
+  const [sortByAccountLocal, setSortByAccountLocal] = useState(sortByAccount ?? false);
   // セクションフィルタ（"" = 全員表示）
   const [filterSection, setFilterSection] = useState<string>("");
   // インラインパターンピッカー
@@ -1289,7 +1291,7 @@ export default function ShiftEditGrid({
     return m ? parseInt(m[1]) : Infinity;
   };
   const sortedMembersBySection = useMemo(() => {
-    if (sortByAccount) {
+    if (sortByAccountLocal) {
       // 番号順モード：セクション無視・全員アカウント番号昇順（未設定は末尾）
       return [...activeMembers].sort((a, b) => {
         const na = getAccNumGrid(a.accountNumber);
@@ -1309,7 +1311,7 @@ export default function ShiftEditGrid({
       }
       return a.name.localeCompare(b.name, "ja");
     });
-  }, [activeMembers, sortByAccount]);
+  }, [activeMembers, sortByAccountLocal]);
 
   // セクションフィルタ適用済みリスト
   const displayMembers = useMemo(() =>
@@ -1556,6 +1558,20 @@ export default function ShiftEditGrid({
             ].join(" ")}
           >
             充足
+          </button>
+          {/* 並び順トグル */}
+          <button
+            type="button"
+            onClick={() => setSortByAccountLocal(v => !v)}
+            title={sortByAccountLocal ? "番号順（クリックでセクション順に戻す）" : "セクション順（クリックで番号順に切替）"}
+            className={[
+              "px-2 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors",
+              sortByAccountLocal
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50",
+            ].join(" ")}
+          >
+            {sortByAccountLocal ? "番号順" : "セクション順"}
           </button>
           {/* セパレーター */}
           <span className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
@@ -2074,7 +2090,7 @@ export default function ShiftEditGrid({
               {/* ── スタッフ軸 ── */}
               {displayMembers.map((member, idx) => {
                 const prevSection = idx > 0 ? displayMembers[idx - 1].section : undefined;
-                const showSectionHeader = !filterSection && !sortByAccount && member.section !== prevSection;
+                const showSectionHeader = !filterSection && !sortByAccountLocal && member.section !== prevSection;
                 // 月合計
                 const monthTotal = allDates.filter(d => {
                   const cell = resolveCell(member.id, d);
