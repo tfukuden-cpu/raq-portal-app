@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-28（v43：シフト管理Excel出力改善・アカウント番号表示・並び順トグル）
+最終更新：2026-05-28（v45：当日状況から座席表タブ削除）
 
 ---
 
@@ -99,13 +99,33 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | **LINE連携必須化・なりすまし防止・LINEブロック検知** | ✅ 完成（v27） |
 | **欠勤経過報告・シフト展開通知・変更ログ表示** | ✅ 完成（v27） |
 | **確定後変更タブ（当日状況）** | ✅ 完成（v31） |
-| **座席表（当日・翌日配置・レイアウト設定）** | ✅ 完成（v32）／当日状況タブ統合（v41） |
+| **座席表（当日・翌日配置・レイアウト設定）** | ✅ 完成（v32）／専用ページ（/seating）に集約（v45で当日状況タブは削除） |
 | **座席エディタ強化（壁描画・パン・グリッドスナップ0.5刻み・複製・重なり防止）** | ✅ 完成（v33） |
 | **座席フリー席・無効席対応** | ✅ 完成（v39） |
 | スタッフ向け勤怠実績PDF出力 | ➖ 不要（決定） |
 | アバターシステム | 🔄 設計済み・パーツ未実装（低優先） |
 
 ### 次に優先すべきこと（新しいセッションはここから）
+
+**v45 完了内容**
+- **当日状況から座席表タブを削除** `/attendance` の「座席表」タブ（当日座席・翌日配置のサブタブ）を完全除去
+- 座席表は `/seating` 専用ページで確認・席替えができるため、当日状況ページへの埋め込みは不要と判断
+- `AttendanceClient.tsx` から SeatingClient・SeatingPlanClient のインポート・Props・描画コードをすべて削除
+- `attendance/page.tsx` から seats・seat_assignments・seat_walls・tomorrowShifts の並列フェッチを削除（サーバー負荷軽減）
+- タブは「当日シフト」「確定後変更」の2つのみに整理
+
+**v44 完了内容**
+- **打刻ページ：座席表UI追加** `/punch/[projectId]` に「座席表で打刻」「名前で打刻」のタブ切り替えを追加
+- **座席タップ打刻** スタッフが自分の席をタップして出勤・退勤・休憩入り・休憩終了を打刻できる
+- **座席ステータス色分け** 未出勤/勤務中/休憩中/退勤済/欠勤をステータスに応じて色分け表示
+- **30秒ポーリング** 打刻端末は認証不要なため Realtime の代わりに `/api/punch/[projectId]/statuses` を30秒ごとにポーリングしてステータス更新
+- **API route 新設** `GET /api/punch/[projectId]/statuses` — adminClient でその日の全スタッフのステータスを返す（認証不要）
+- **席替えモード** 管理者が `/seating` の「席替え」ボタンをタップしてその場で今日の席割りを変更・保存できる
+- **自動配置ボタン** 席替えモードに「自動配置」ボタンを追加（`autoAssignSeatsAction` を再利用）
+- **Supabase Realtime** `/seating` ページで `punch_logs` の INSERT をリアルタイム購読し、座席ステータスを即時更新（`alter publication supabase_realtime add table punch_logs` 適用済み）
+- **terminalBreakAction 追加** `actions.ts` に認証不要・adminClient の休憩打刻アクションを追加
+- **TerminalMember 型拡張** `onBreak`, `isAbsent`, `section`, `accountNumber`, `hasShiftToday` フィールドを追加
+- **変更ファイル** `src/app/punch/[projectId]/actions.ts`・`page.tsx`・`TerminalPunchClient.tsx`・`src/app/(portal)/seating/SeatingClient.tsx`・`seating/page.tsx`・`src/app/api/punch/[projectId]/statuses/route.ts`（新規）
 
 **v43 完了内容**
 - **Excel出力：列順変更** 名前 → アカウント番号 → 日付… の順に変更
@@ -1044,6 +1064,8 @@ export default async function Page({
 | 2026-05-27 | v36 | **当日状況 欠勤/遅刻 詳細モーダル** ① 欠勤スタッフ行（w-14プレースホルダー部分）を「詳細」ボタンに置き換え。② 遅刻スタッフ行の「催促する」ボタン横に「詳細」ボタンを追加。③ 詳細モーダルに報告時刻・理由・翌日/翌々日出勤可否（欠勤）または到着目安（遅刻）を表示。④ absence_reports/late_reportsのクエリにcreated_at・next_day_available等を追加。|
 | 2026-05-27 | v39 | **座席表フリー席・無効席** `seats.seat_type text DEFAULT 'normal'` カラム追加。フリー席（誰でも配置可・緑枠）・無効席（使用不可・ハッチング表示）をSeatLayoutEditorで設定可能に。SeatingClient・SeatingPlanClientにタイプ別表示を追加。autoAssignSeatsActionで無効席除外・フリー席はセクション問わず配置。 |
 | 2026-05-28 | v42 | **座席表改善・シフト管理UI刷新** 壁SVG表示（SeatingClient/SeatingPlanClient/AttendanceClient）・キャンバス1800px統一・水平スクロール対応。翌日配置：DnDカード入替・席ラベル削除・シフト名プレフィックスでセクション色解決・フリー席ドラッグ可・自動配置ロジック（セクション席は同セクションのみ、フリー席に余剰スタッフ、既存配置保持）。seatColors.ts：resolveShiftSection/formatSectionShift追加。シフト管理ツールバーに月ナビ・シフト展開・Excel出力を統合。Excel出力はアカウント番号順ソート・xlsxライブラリ。 |
+| 2026-05-28 | v45 | **当日状況から座席表タブ削除** `/attendance` の「座席表」タブ（当日座席・翌日配置）を完全除去。座席表は `/seating` 専用ページに集約。AttendanceClient から SeatingClient/SeatingPlanClient 関連コードをすべて削除。page.tsx から seats/seat_assignments/seat_walls/tomorrowShifts のフェッチも削除。 |
+| 2026-05-28 | v44 | **打刻ページ座席表統合・席替えモード・Realtime** `/punch/[projectId]` に「座席表で打刻」「名前で打刻」タブ切り替えを追加。席タップで出勤/退勤/休憩入り/休憩終了を打刻可能。ステータス色分け（未出勤/勤務中/休憩中/退勤済/欠勤）。打刻端末は30秒ポーリング（/api/punch/[projectId]/statuses 新設）。/seating に Realtime 対応（punch_logs INSERT で即時更新、supabase_realtime publication 追加）。管理者向け「席替え」ボタンを /seating に追加（その場で今日の座席を変更・自動配置も可能）。terminalBreakAction（認証不要・adminClient）追加。TerminalMember 型に onBreak/isAbsent/section/accountNumber/hasShiftToday を追加。 |
 | 2026-05-28 | v43 | **シフト管理Excel出力改善・アカウント番号表示・並び順トグル** Excel列順を名前→番号→日付に変更・番号形式をASS 01統一・番号なしメンバーを末尾追加・公休/研修/非セクションシフトを空白化・括弧を半角化。ShiftEditGridにアカウント番号サブテキスト表示。並び順トグルボタンをシフト管理ツールバー＋編集グリッドツールバー両方に追加（番号順モード：SV固定上部・SV以外フラット番号順）。 |
 | 2026-05-27 | v40 | **シフト編集スタッフ情報パネル・希望休CRUD** OffRequestSection.tsx新設（カレンダー+優先度選択+削除チップ）。追加時→即時ドラフト反映・削除時→即時ドラフトクリア。「設定をシフトに保存・反映」を完全置換方式（replaceStaffHolidayDraftAction）に変更。 |
 | 2026-05-27 | v38 | **仮組み余剰配置改善** 余剰配置ループで不足パターン（早番優先）を先に試みるロジック追加。遅番優先スタッフでも早番スロットが不足していれば早番に割当。 |
