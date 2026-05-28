@@ -67,6 +67,7 @@ export default function StaffInfoPanel({
   onDraftCellsChanged,
   onDraftCellsRemoved,
   onSyncHolidays,
+  onChurnRiskChanged,
   onClose,
   targetYM,
 }: {
@@ -80,6 +81,8 @@ export default function StaffInfoPanel({
   onDraftCellsRemoved?: (cells: { staffId: string; date: string }[]) => void;
   /** 希望休の完全置換（months の月を全クリア後に newDates を希望休として再設定） */
   onSyncHolidays?: (staffId: string, months: string[], newDates: string[]) => void;
+  /** 離脱リスクトグル変更時のコールバック */
+  onChurnRiskChanged?: (staffId: string, value: boolean, since: string | null) => void;
   onClose: () => void;
   /** 表示する月（YYYY-MM）。シフト管理画面の表示月と連動させる */
   targetYM?: string;
@@ -159,6 +162,10 @@ export default function StaffInfoPanel({
         setChurnRisk(!newValue); // 失敗時ロールバック
         setChurnMsg("保存できませんでした");
       } else {
+        const since = newValue
+          ? new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" })
+          : null;
+        onChurnRiskChanged?.(member.id, newValue, since);
         setChurnMsg(newValue ? "離脱リスクをONにしました" : "離脱リスクを解除しました");
       }
       setTimeout(() => setChurnMsg(null), 2500);
@@ -528,7 +535,7 @@ export default function StaffInfoPanel({
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                  {churnRisk ? "離脱リスクあり" : "通常カウント対象"}
+                  {churnRisk ? "離脱リスクあり" : "離脱リスクなし"}
                 </p>
               </div>
               <button

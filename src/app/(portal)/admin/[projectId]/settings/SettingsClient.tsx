@@ -1041,6 +1041,11 @@ export function MemberList({
                       <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0">{m.account_number}</span>
                     )}
                     <span className="text-[10px] text-zinc-400 font-mono flex-shrink-0">{m.staffId}</span>
+                    {m.churn_risk && !isDeparted && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 font-semibold flex-shrink-0">
+                        離脱リスク
+                      </span>
+                    )}
                     {isDeparted && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 font-semibold flex-shrink-0">
                         離脱済 {m.end_date}
@@ -1299,7 +1304,7 @@ export function MemberList({
                 <div className="flex items-center justify-between gap-3 py-0.5">
                   <div>
                     <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">離脱リスク</p>
-                    <p className="text-[10px] text-zinc-400 leading-snug">ONにすると充足カウントから除外されます</p>
+                    <p className="text-[10px] text-zinc-400 leading-snug">ONにすると充足カウント除外・グリッドに赤枠表示</p>
                   </div>
                   <button
                     type="button"

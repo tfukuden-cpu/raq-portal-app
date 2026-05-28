@@ -874,6 +874,8 @@ export default function ShiftEditGrid({
   const [selectedShortage, setSelectedShortage] = useState<{ date: string; patternName: string } | null>(null);
   // スタッフ情報パネル
   const [staffInfoTarget, setStaffInfoTarget] = useState<Member | null>(null);
+  // 離脱リスクのローカルオーバーライド（トグル直後のライブ反映用）
+  const [churnRiskOverrides, setChurnRiskOverrides] = useState<Map<string, { churn_risk: boolean; churn_risk_since: string | null }>>(new Map());
   // 候補スタッフ選択（行フォーカス）
   const [focusedCandidateId, setFocusedCandidateId] = useState<string | null>(null);
   const staffRowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
@@ -928,16 +930,19 @@ export default function ShiftEditGrid({
     return m;
   }, [changeLogs]);
 
-  // 離脱リスクスタッフ: staffId → churn_risk_since (フラグが立っているものだけ)
+  // 離脱リスクスタッフ: staffId → churn_risk_since (フラグが立っているものだけ、オーバーライド込み)
   const churnRiskSinceMap = useMemo(
     () => {
       const map = new Map<string, string | null>();
       for (const m of activeMembers) {
-        if (m.churn_risk) map.set(m.id, m.churn_risk_since ?? null);
+        const ov = churnRiskOverrides.get(m.id);
+        const risk  = ov !== undefined ? ov.churn_risk  : (m.churn_risk ?? false);
+        const since = ov !== undefined ? ov.churn_risk_since : (m.churn_risk_since ?? null);
+        if (risk) map.set(m.id, since);
       }
       return map;
     },
-    [activeMembers]
+    [activeMembers, churnRiskOverrides]
   );
 
   // 充足カウント（離脱リスク & フラグ設定日以降のシフト日は除外）
@@ -2207,6 +2212,9 @@ export default function ShiftEditGrid({
                 // 番号順モード：SV のヘッダーのみ表示、SV以外は非表示
                 const showSectionHeader = !filterSection && member.section !== prevSection
                   && (!sortByAccountLocal || member.section === "SV");
+                // 離脱リスク（行レベル）オーバーライド込み
+                const _rowChurnOv = churnRiskOverrides.get(member.id);
+                const effChurnRisk = _rowChurnOv !== undefined ? _rowChurnOv.churn_risk : (member.churn_risk ?? false);
                 // 月合計
                 const monthTotal = allDates.filter(d => {
                   const cell = resolveCell(member.id, d);
@@ -2260,7 +2268,7 @@ export default function ShiftEditGrid({
                         "sticky left-0 z-10 border-b border-r-2 border-zinc-200 dark:border-zinc-700 align-middle h-8 transition-colors cursor-pointer",
                         isFocusedRow
                           ? "bg-blue-100 dark:bg-blue-900/40"
-                          : member.churn_risk
+                          : effChurnRisk
                           ? "bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40"
                           : "bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-800/60",
                       ].join(" ")}
@@ -2283,7 +2291,7 @@ export default function ShiftEditGrid({
                                   {member.accountNumber}
                                 </span>
                               )}
-                              {member.churn_risk && (
+                              {effChurnRisk && (
                                 <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none shrink-0">
                                   離脱
                                 </span>
@@ -2332,9 +2340,12 @@ export default function ShiftEditGrid({
                         const isDraftCell = drafts.has(`${member.id}__${date}`);
                         const isToday = date === todayJST;
                         const hasLog = (changeLogMap.get(`${member.id}__${date}`)?.length ?? 0) > 0;
-                        // 離脱リスクフラグ: churn_risk=true かつ since以降の日付
-                        const isChurnRiskCell = !!member.churn_risk &&
-                          (member.churn_risk_since ? date >= member.churn_risk_since : true);
+                        // 離脱リスクフラグ: オーバーライド込み
+                        const _churnOv = churnRiskOverrides.get(member.id);
+                        const _effChurnRisk  = _churnOv !== undefined ? _churnOv.churn_risk  : (member.churn_risk ?? false);
+                        const _effChurnSince = _churnOv !== undefined ? _churnOv.churn_risk_since : (member.churn_risk_since ?? null);
+                        const isChurnRiskCell = _effChurnRisk &&
+                          (_effChurnSince ? date >= _effChurnSince : true);
                         // 候補ハイライト: 選択不足セルの日付 かつ 候補スタッフ
                         const isCandidate = selectedShortage?.date === date && candidateStaffIds.has(member.id);
                         // 希望休
@@ -2699,6 +2710,13 @@ export default function ShiftEditGrid({
               next.set(`${staffId}__${date}`, { shiftName: "希望休", shiftStart: null, shiftEnd: null });
             }
             applyEdit(next);
+          }}
+          onChurnRiskChanged={(staffId, value, since) => {
+            setChurnRiskOverrides(prev => {
+              const next = new Map(prev);
+              next.set(staffId, { churn_risk: value, churn_risk_since: since });
+              return next;
+            });
           }}
           onClose={() => setStaffInfoTarget(null)}
         />
