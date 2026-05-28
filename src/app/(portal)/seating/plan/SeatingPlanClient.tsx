@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveSeatAssignmentsAction, autoAssignSeatsAction } from "../actions";
-import { getSeatBgClass, getSeatBorderClass, getSeatTextClass } from "@/lib/seatColors";
+import { getSeatBgClass, getSeatBorderClass, getSeatTextClass, formatSectionShift } from "@/lib/seatColors";
 
 export type WallData = {
   x1Pct: number;
@@ -322,11 +322,14 @@ export default function SeatingPlanClient({
                     <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${sectionText}`}>
                       {s.name}
                     </span>
-                    {assignedShift && (
-                      <span className={`text-[9px] leading-none opacity-70 ${sectionText}`}>
-                        {assignedShift.includes("早") ? "早番" : assignedShift.includes("遅") ? "遅番" : ""}
-                      </span>
-                    )}
+                    {(() => {
+                      const label = formatSectionShift(seatSection, assignedShift ?? seat.shiftSlot);
+                      return label ? (
+                        <span className={`text-[9px] leading-none opacity-80 truncate px-0.5 w-full text-center ${sectionText}`}>
+                          {label}
+                        </span>
+                      ) : null;
+                    })()}
                   </>
                 ) : (
                   <span className={`text-[10px] mt-0.5 ${

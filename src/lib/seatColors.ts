@@ -58,3 +58,20 @@ export function getSeatTextClass(section: string | null | undefined): string {
   const c = SEAT_SECTION_COLORS[section] ?? SEAT_SECTION_FALLBACK;
   return c.text;
 }
+
+/**
+ * 「セクション（シフト）」形式のラベルを返す
+ * 早番/遅番がない場合はセクション名のみ
+ * 例: formatSectionShift("査定", "査定_早番_A") → "査定（早番）"
+ *     formatSectionShift("SV", null)            → "SV"
+ */
+export function formatSectionShift(
+  section: string | null | undefined,
+  shiftName: string | null | undefined,
+): string {
+  if (!section) return "";
+  const shift = shiftName?.includes("早") ? "早番"
+              : shiftName?.includes("遅") ? "遅番"
+              : null;
+  return shift ? `${section}（${shift}）` : section;
+}

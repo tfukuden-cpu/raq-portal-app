@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toggleBreakAction } from "./actions";
-import { getSeatBgClass } from "@/lib/seatColors";
+import { getSeatBgClass, formatSectionShift } from "@/lib/seatColors";
 
 export type WallData = {
   x1Pct: number;
@@ -228,11 +228,14 @@ export default function SeatingClient({
                     <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${status ? STATUS_TEXT[status] : ""}`}>
                       {seat.staffName}
                     </span>
-                    {status && (
-                      <span className={`text-[9px] leading-none ${STATUS_TEXT[status]}`}>
-                        {STATUS_LABEL[status]}
-                      </span>
-                    )}
+                    {(() => {
+                      const label = formatSectionShift(seat.section, seat.shiftName ?? seat.shiftSlot);
+                      return label ? (
+                        <span className="text-[9px] leading-none text-zinc-500 dark:text-zinc-400 truncate px-0.5 w-full text-center">
+                          {label}
+                        </span>
+                      ) : null;
+                    })()}
                   </>
                 ) : (
                   <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-400 dark:text-emerald-600" : "text-zinc-300 dark:text-zinc-600"}`}>
