@@ -215,54 +215,82 @@ export default function ShiftManageClient({
     });
   }
 
-  // CSV出力（当月全日付を列方向・スタッフを行方向・Excelで開ける）
+  // CSV出力（当月全日付を列方向・アカウント番号01-160を行方向）
   function handleExportExcel() {
-    // スタッフ×日付→シフト名のマップ
-    const staffShiftMap = new Map<string, Map<string, string>>();
+    // ── シフトデータ確定 ──────────────────────────────────────
+    // 展開済み → shifts（DB確定値）、仮保存あり → draft を DB にオーバーレイ
+    const effectiveMap = new Map<string, Map<string, string | null>>();
     for (const s of shifts) {
-      if (!staffShiftMap.has(s.staff_id)) staffShiftMap.set(s.staff_id, new Map());
-      if (s.shift_name) staffShiftMap.get(s.staff_id)!.set(s.shift_date, s.shift_name);
+      if (!effectiveMap.has(s.staff_id)) effectiveMap.set(s.staff_id, new Map());
+      effectiveMap.get(s.staff_id)!.set(s.shift_date, s.shift_name);
+    }
+    if (initialDraft && !isPublished) {
+      for (const entry of initialDraft) {
+        const [staffId, date] = entry.k.split("__");
+        if (!effectiveMap.has(staffId)) effectiveMap.set(staffId, new Map());
+        effectiveMap.get(staffId)!.set(date, entry.d ? null : entry.n);
+      }
     }
 
-    // アカウント番号で数値昇順ソート、未設定は末尾
-    let sorted = [...activeMembers].sort((a, b) => {
-      const na = parseInt(a.accountNumber ?? "") || Infinity;
-      const nb = parseInt(b.accountNumber ?? "") || Infinity;
-      return na - nb;
-    });
-
-    // セクションフィルタ（メンバーのsectionで絞り込み、空=全員）
-    if (exportSectionsSel.length > 0) {
-      sorted = sorted.filter(m => m.section !== null && exportSectionsSel.includes(m.section));
+    // ── セルの表示値を求めるヘルパー ─────────────────────────
+    function cellValue(staffId: string, memberSection: string | null, date: string): string {
+      const shiftName = effectiveMap.get(staffId)?.get(date) ?? null;
+      if (!shiftName) return "";
+      const sec = resolveShiftSection(shiftName, memberSection);
+      return formatSectionShift(sec, shiftName);
     }
 
-    const DAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+    // ── ヘッダー2行 ─────────────────────────────────────────
+    const DAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-
-    // ヘッダー行1：ASS番号列 + 日付（M/D形式）
     const header1 = ["", ...allDates.map(d => {
       const [, m, day] = d.split("-");
       return `${parseInt(m)}/${parseInt(day)}`;
     })];
+    const header2 = ["", ...allDates.map(d =>
+      DAY_JP[new Date(`${d}T12:00:00+09:00`).getDay()]
+    )];
 
-    // ヘッダー行2：空白 + 曜日
-    const header2 = ["", ...allDates.map(d => {
-      // タイムゾーンずれを防ぐためT12:00を使う
-      return DAY_LABELS[new Date(`${d}T12:00:00+09:00`).getDay()];
-    })];
+    // ── データ行 ─────────────────────────────────────────────
+    let dataRows: string[][];
 
-    // データ行：アカウント番号 + 各日付のセクション（シフト）
-    const rows = sorted.map(m => {
-      const memberShifts = staffShiftMap.get(m.id) ?? new Map<string, string>();
-      const cols = allDates.map(date => {
-        const shiftName = memberShifts.get(date) ?? "";
-        const section = resolveShiftSection(shiftName || null, m.section);
-        return formatSectionShift(section, shiftName || null);
-      });
-      return [m.accountNumber ?? "", ...cols];
-    });
+    if (exportSectionsSel.length > 0) {
+      // セクション絞り込み：対象メンバーのみ・アカウント番号昇順
+      const filtered = activeMembers
+        .filter(m => m.section !== null && exportSectionsSel.includes(m.section))
+        .sort((a, b) => (parseInt(a.accountNumber ?? "") || Infinity) - (parseInt(b.accountNumber ?? "") || Infinity));
 
-    const csv = [header1, header2, ...rows]
+      dataRows = filtered.map(m => [
+        m.accountNumber ?? "",
+        ...allDates.map(date => cellValue(m.id, m.section, date)),
+      ]);
+    } else {
+      // 全員：アカウント番号 01〜160 を必ず出力（空行含む）
+      const accMap = new Map<number, typeof activeMembers[0]>();
+      for (const m of activeMembers) {
+        const n = parseInt(m.accountNumber ?? "");
+        if (!isNaN(n) && n > 0) accMap.set(n, m);
+      }
+      const maxAcc = Math.max(
+        160,
+        ...activeMembers.map(m => parseInt(m.accountNumber ?? "0") || 0)
+      );
+      dataRows = [];
+      for (let i = 1; i <= maxAcc; i++) {
+        const m = accMap.get(i);
+        const accLabel = String(i).padStart(2, "0");
+        if (!m) {
+          dataRows.push([accLabel, ...allDates.map(() => "")]);
+        } else {
+          dataRows.push([
+            m.accountNumber ?? accLabel,
+            ...allDates.map(date => cellValue(m.id, m.section, date)),
+          ]);
+        }
+      }
+    }
+
+    const csv = [header1, header2, ...dataRows]
       .map(r => r.map(c => esc(String(c))).join(","))
       .join("\r\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
