@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { toggleBreakAction, saveSeatAssignmentsAction } from "./actions";
+import { toggleBreakAction, saveSeatAssignmentsAction, autoAssignSeatsAction } from "./actions";
 import { getSeatBgClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 import { createClient } from "@/lib/supabase/client";
 
@@ -150,6 +150,30 @@ export default function SeatingClient({
     }
   }, [pickSeatId]);
 
+  // 自動配置（当日）
+  function handleAutoAssign() {
+    if (!window.confirm("現在の配置をクリアして自動配置し直しますか？")) return;
+    startTransition(async () => {
+      const res = await autoAssignSeatsAction(projectId, today, []);
+      if (res.success && res.assignments) {
+        // 全席を一旦空席にしてから自動配置結果を適用
+        const next = new Map<string, string | null>();
+        for (const s of seats) {
+          if (s.seatType !== "disabled") next.set(s.id, null);
+        }
+        for (const a of res.assignments) {
+          next.set(a.seatId, a.staffId);
+        }
+        setDraftMap(next);
+        setToast(`自動配置完了（${res.assignments.length}名）`);
+        setTimeout(() => setToast(null), 2500);
+      } else {
+        setToast(`⚠️ ${res.message ?? "自動配置に失敗しました"}`);
+        setTimeout(() => setToast(null), 2500);
+      }
+    });
+  }
+
   // 保存
   function handleSave() {
     startTransition(async () => {
@@ -248,6 +272,13 @@ export default function SeatingClient({
             )}
             {editMode ? (
               <>
+                <button
+                  onClick={handleAutoAssign}
+                  disabled={isPending}
+                  className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                >
+                  自動配置
+                </button>
                 <button
                   onClick={handleSave}
                   disabled={isPending}
