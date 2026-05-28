@@ -7,6 +7,9 @@ import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
 import ShiftEditGrid, { type ChangeLog } from "./ShiftEditGrid";
 import { clearGridDraftAction, type GridDraftEntry } from "../actions";
 import { regenerateShiftDraftAction } from "./actions";
+import PublishButton from "./PublishButton";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
+import { resolveShiftSection, formatSectionShift } from "@/lib/seatColors";
 
 type Shift = {
   id: string;
@@ -22,6 +25,7 @@ type Member = {
   work_days_type: string | null; work_days_count: number | null;
   preferred_shift: string | null; preferred_section: string | null;
   max_consecutive_days: number | null; shift_note: string | null;
+  accountNumber?: string | null;
 };
 type Pattern = {
   name: string;
@@ -60,6 +64,9 @@ type Props = {
   lockedSections: string[];
   offRequests: OffRequest[];
   prevMonthShifts?: { staff_id: string; shift_date: string; shift_name: string | null }[];
+  monthNavBase: string;
+  prevMonth: { year: number; month: number };
+  nextMonth: { year: number; month: number };
 };
 
 // ── ShiftEditGridOverlay ────────────────────────────────────────
@@ -134,6 +141,7 @@ export default function ShiftManageClient({
   shifts, activeMembers, shiftPatterns, shiftRequests, slotRequirements,
   changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
   isPublished, lockedSections, offRequests, prevMonthShifts,
+  monthNavBase, prevMonth, nextMonth,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [mode, setMode] = useState<"list" | "edit">("list");
@@ -194,6 +202,38 @@ export default function ShiftManageClient({
       setShowRegenModal(false);
       router.refresh();
     });
+  }
+
+  // Excel出力（選択日のシフトをアカウント番号順に出力）
+  async function handleExportExcel() {
+    const XLSX = await import("xlsx");
+
+    // 選択日のシフトを取得
+    const dateShifts = shifts.filter(s => s.shift_date === selectedDate);
+    const shiftMap = new Map(dateShifts.map(s => [s.staff_id, s]));
+
+    // アカウント番号で数値昇順ソート、未設定は末尾
+    const sorted = [...activeMembers].sort((a, b) => {
+      const na = parseInt(a.accountNumber ?? "") || Infinity;
+      const nb = parseInt(b.accountNumber ?? "") || Infinity;
+      return na - nb;
+    });
+
+    const header = ["アカウント番号", "氏名", "日付", "シフト名", "セクション（シフト）"];
+    const rows = sorted.map(m => {
+      const shift = shiftMap.get(m.id);
+      const shiftName = shift?.shift_name ?? "";
+      const section = resolveShiftSection(shiftName || null, m.section);
+      const sectionShift = formatSectionShift(section, shiftName || null);
+      return [m.accountNumber ?? "", m.name, selectedDate, shiftName, sectionShift];
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    // 列幅を自動調整
+    ws["!cols"] = [{ wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 20 }, { wch: 20 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "シフト");
+    XLSX.writeFile(wb, `シフト_${selectedDate}.xlsx`);
   }
 
   if (mode === "edit") {
@@ -312,14 +352,46 @@ export default function ShiftManageClient({
         </div>
       )}
 
-      <div className="px-4 flex items-center justify-between mb-2 gap-2">
-        {/* 下書きインジケーター（あれば） */}
+      {/* ツールバー：月選択・シフト展開・Excel出力・再仮組み・シフト編集 */}
+      <div className="px-4 mb-2 flex flex-wrap items-center gap-2">
+        {/* 月ナビゲーション */}
+        <div className="flex items-center gap-0.5">
+          <a
+            href={`${monthNavBase}${prevMonth.year}&month=${prevMonth.month}`}
+            className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
+          </a>
+          <span className="text-sm font-semibold tabular-nums w-[4.5rem] text-center text-zinc-900 dark:text-zinc-100">
+            {targetYear}/{String(targetMonth).padStart(2, "0")}
+          </span>
+          <a
+            href={`${monthNavBase}${nextMonth.year}&month=${nextMonth.month}`}
+            className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
+          </a>
+        </div>
+
+        {/* シフト展開ボタン */}
+        <PublishButton projectId={projectId} year={targetYear} month={targetMonth} isPublished={isPublished} />
+
+        {/* Excel出力 */}
+        <button
+          onClick={handleExportExcel}
+          className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors border border-emerald-200 dark:border-emerald-700"
+        >
+          Excel出力
+        </button>
+
+        {/* 下書きインジケーター */}
         {hasDraft && (
           <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
             <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
             下書きあり
           </span>
         )}
+
         <div className="flex items-center gap-2 ml-auto">
           {!isPublished && (
             <button

@@ -11,9 +11,7 @@ import ShiftSettingsTab from "./ShiftSettingsTab";
 import ShiftHolidayTab from "./ShiftHolidayTab";
 import type { ChangeLog } from "./ShiftEditGrid";
 import type { GridDraftEntry } from "../actions";
-import PublishButton from "./PublishButton";
 import HeaderHeightSetter from "./HeaderHeightSetter";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
 type Tab = "shift" | "settings" | "holiday";
 
@@ -203,7 +201,7 @@ export default async function ManageShiftsPage(props: {
     shiftBatch4,
   ] = await Promise.all([
     admin.from("project_members")
-      .select("staff_id, role, section, sections, end_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, staffs(id, name, display_name)")
+      .select("staff_id, role, section, sections, end_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, staffs(id, name, display_name, account_number)")
       .eq("project_id", selectedProjectId),
     admin.from("shift_patterns")
       .select("name, required_count, required_weekday, required_weekend, section, start_time, end_time")
@@ -285,7 +283,7 @@ export default async function ManageShiftsPage(props: {
   const activeMembers = (members ?? [])
     .map((m) => {
       const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
-        { id: string | null; name: string | null; display_name: string | null } | null;
+        { id: string | null; name: string | null; display_name: string | null; account_number?: string | null } | null;
       const sections = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
       const endDate = (m as { end_date?: string | null }).end_date ?? null;
       const staffId = s?.id ?? m.staff_id;
@@ -302,6 +300,7 @@ export default async function ManageShiftsPage(props: {
         preferred_section:    (m as { preferred_section?: string | null }).preferred_section ?? null,
         max_consecutive_days: (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? null,
         shift_note:           (m as { shift_note?: string | null }).shift_note ?? null,
+        accountNumber:        s?.account_number ?? null,
         trainingDates:        (trainingMap.get(staffId) ?? [])
           .sort((a, b) => a.training_date.localeCompare(b.training_date)),
       };
@@ -312,6 +311,7 @@ export default async function ManageShiftsPage(props: {
       work_days_type: string | null; work_days_count: number | null;
       preferred_shift: string | null; preferred_section: string | null;
       max_consecutive_days: number | null; shift_note: string | null;
+      accountNumber: string | null;
     }[];
 
   const staffNameMap = new Map(activeMembers.map(m => [m.id, m.name]));
@@ -397,32 +397,11 @@ export default async function ManageShiftsPage(props: {
 
       <HeaderHeightSetter id="shift-manage-header" className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 pt-5 space-y-2">
-          <div className="flex items-end justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-                シフト管理
-              </h1>
-              <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5 font-semibold">{project?.name}</p>
-            </div>
-
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex items-center gap-2">
-                <PublishButton projectId={selectedProjectId} year={targetYear} month={targetMonth} isPublished={isPublished} />
-              </div>
-              <div className="flex items-center gap-1">
-                <a href={`${monthNavBase}${prevMonth.year}&month=${prevMonth.month}`}
-                  className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-                  <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
-                </a>
-                <span className="text-sm font-semibold tabular-nums w-20 text-center text-zinc-900 dark:text-zinc-100">
-                  {targetYear}/{String(targetMonth).padStart(2, "0")}
-                </span>
-                <a href={`${monthNavBase}${nextMonth.year}&month=${nextMonth.month}`}
-                  className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-                  <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
-                </a>
-              </div>
-            </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              シフト管理
+            </h1>
+            <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5 font-semibold">{project?.name}</p>
           </div>
 
           <TabBar tab={tab} tabUrl={tabUrl} />
@@ -458,6 +437,9 @@ export default async function ManageShiftsPage(props: {
             shift_date: r.shift_date as string,
             shift_name: r.shift_name as string | null,
           }))}
+          monthNavBase={monthNavBase}
+          prevMonth={prevMonth}
+          nextMonth={nextMonth}
       />
     </main>
   );
