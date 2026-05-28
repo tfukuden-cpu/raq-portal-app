@@ -148,6 +148,7 @@ export default function ShiftManageClient({
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [showRegenModal, setShowRegenModal] = useState(false);
   const [regenError, setRegenError] = useState<string | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [exportSection, setExportSection] = useState("");
 
   // シフトパターンから使用中セクション一覧
@@ -249,6 +250,7 @@ export default function ShiftManageClient({
     a.download = `シフト_${selectedDate}${suffix}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    setShowExportModal(false);
   }
 
   if (mode === "edit") {
@@ -275,6 +277,63 @@ export default function ShiftManageClient({
 
   return (
     <div className="max-w-5xl mx-auto pb-24 pt-3">
+      {/* Excel出力 セクション選択モーダル */}
+      {showExportModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
+          onClick={() => setShowExportModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xs px-5 pt-5 space-y-4"
+            style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px))" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div>
+              <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Excel出力</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">{selectedDate} のシフト</p>
+            </div>
+
+            {/* ラジオボタン一覧 */}
+            <div className="space-y-2">
+              {[{ value: "", label: "全員" }, ...exportSections.map(s => ({ value: s, label: s }))].map(opt => (
+                <label
+                  key={opt.value}
+                  className={[
+                    "flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors select-none",
+                    exportSection === opt.value
+                      ? "border-emerald-400 dark:border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30"
+                      : "border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800",
+                  ].join(" ")}
+                >
+                  <input
+                    type="radio"
+                    name="exportSection"
+                    value={opt.value}
+                    checked={exportSection === opt.value}
+                    onChange={() => setExportSection(opt.value)}
+                    className="accent-emerald-500 w-4 h-4"
+                  />
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{opt.label}</span>
+                </label>
+              ))}
+            </div>
+
+            <button
+              onClick={handleExportExcel}
+              className="w-full py-3 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+            >
+              出力する
+            </button>
+            <button
+              onClick={() => setShowExportModal(false)}
+              className="w-full py-2 rounded-xl text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 再仮組確認モーダル */}
       {showRegenModal && (
         <div
@@ -407,21 +466,9 @@ export default function ShiftManageClient({
             flat
           />
 
-          {/* セクション選択 */}
-          <select
-            value={exportSection}
-            onChange={e => setExportSection(e.target.value)}
-            className="px-2 py-1.5 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 focus:outline-none text-xs border-r border-zinc-200 dark:border-zinc-700"
-          >
-            <option value="">全員</option>
-            {exportSections.map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-
           {/* Excel出力 */}
           <button
-            onClick={handleExportExcel}
+            onClick={() => setShowExportModal(true)}
             className="px-3 py-1.5 bg-white dark:bg-zinc-900 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
           >
             Excel出力
