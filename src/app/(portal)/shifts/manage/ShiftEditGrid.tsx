@@ -2330,6 +2330,9 @@ export default function ShiftEditGrid({
                         const isDraftCell = drafts.has(`${member.id}__${date}`);
                         const isToday = date === todayJST;
                         const hasLog = (changeLogMap.get(`${member.id}__${date}`)?.length ?? 0) > 0;
+                        // 離脱リスクフラグ: churn_risk=true かつ since以降の日付
+                        const isChurnRiskCell = !!member.churn_risk &&
+                          (member.churn_risk_since ? date >= member.churn_risk_since : true);
                         // 候補ハイライト: 選択不足セルの日付 かつ 候補スタッフ
                         const isCandidate = selectedShortage?.date === date && candidateStaffIds.has(member.id);
                         // 希望休
@@ -2391,6 +2394,9 @@ export default function ShiftEditGrid({
                                 </span>
                               </div>
                             )}
+                            {isChurnRiskCell && (
+                              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-orange-400 opacity-90 pointer-events-none" title="離脱リスク" />
+                            )}
                             {shiftName && (
                               <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
                                 <span className={[
@@ -2444,6 +2450,9 @@ export default function ShiftEditGrid({
         </span>
         <span className="flex items-center gap-0.5">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />＝重複
+        </span>
+        <span className="flex items-center gap-0.5">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400" />＝離脱リスク
         </span>
         <span className="flex items-center gap-0.5">
           <span className="inline-block w-4 h-3 rounded bg-red-500" />＝6連勤以上

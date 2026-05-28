@@ -528,7 +528,7 @@ export default function StaffInfoPanel({
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                  {churnRisk ? "充足カウントから除外中" : "通常カウント対象"}
+                  {churnRisk ? "離脱リスクあり" : "通常カウント対象"}
                 </p>
               </div>
               <button
