@@ -24,7 +24,7 @@ import {
   type BulkDeleteItem,
   type GridDraftEntry,
 } from "../actions";
-import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction } from "./actions";
+import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction, acquireEditLockAction, heartbeatEditLockAction, releaseEditLockAction } from "./actions";
 import StaffInfoPanel, { type StaffInfoMember } from "./StaffInfoPanel";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -102,6 +102,7 @@ interface Props {
   isPublished?: boolean;
   initialLockedSections?: string[];
   initialSlotLockedSections?: string[];
+  initialEditLock?: { lockedByName: string; lockedAt: string } | null;
   prevMonthShifts?: { staff_id: string; shift_date: string; shift_name: string | null }[];
   sortByAccount?: boolean;
   onSaved: () => void;
@@ -795,6 +796,7 @@ export default function ShiftEditGrid({
   shiftPatterns, slotRequirements, changeLogs,
   initialDraft, draftSavedBy, draftSavedAt,
   offRequests, isPublished, initialLockedSections, initialSlotLockedSections,
+  initialEditLock,
   prevMonthShifts, sortByAccount,
   onSaved, onCancel,
 }: Props) {
@@ -844,6 +846,11 @@ export default function ShiftEditGrid({
   );
   const [isLocking, startLockTransition] = useTransition();
   const [lockError, setLockError] = useState<string | null>(null);
+  // 同時編集ロック
+  const [editLock, setEditLock] = useState<{ lockedByName: string; lockedAt: string } | null>(
+    initialEditLock ?? null
+  );
+  const [isLockedByOther, setIsLockedByOther] = useState(!!initialEditLock);
   // undo/redo スタック（個別セル編集・再仮組みを追跡）
   const MAX_UNDO = 50;
   const [undoStack, setUndoStack] = useState<Array<Map<string, DraftCell>>>([]);
@@ -1464,6 +1471,50 @@ export default function ShiftEditGrid({
     [shortageCandidates],
   );
 
+  // ── 編集ロック取得・ハートビート・解放 ───────────────────────────
+  useEffect(() => {
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let released = false;
+
+    async function acquire() {
+      const r = await acquireEditLockAction(projectId, targetMonth);
+      if (!r.success) return;
+      if (r.acquired) {
+        setIsLockedByOther(false);
+        setEditLock(null);
+        // ハートビート：3分ごとに editing_at を更新
+        heartbeatTimer = setInterval(() => {
+          heartbeatEditLockAction(projectId, targetMonth);
+        }, 3 * 60 * 1000);
+      } else if (r.lockedByName) {
+        setIsLockedByOther(true);
+        setEditLock({ lockedByName: r.lockedByName, lockedAt: r.lockedAt ?? "" });
+      }
+    }
+
+    acquire();
+
+    return () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (!released) {
+        released = true;
+        releaseEditLockAction(projectId, targetMonth);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, targetMonth]);
+
+  /** ロックを強制取得（相手のロックが stale になっていれば取れる） */
+  async function handleForceTakeOver() {
+    const r = await acquireEditLockAction(projectId, targetMonth);
+    if (r.acquired) {
+      setIsLockedByOther(false);
+      setEditLock(null);
+    } else if (r.lockedByName) {
+      setEditLock({ lockedByName: r.lockedByName, lockedAt: r.lockedAt ?? "" });
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────
   const draftCount = drafts.size;
   const hasChanges = draftCount > 0;
@@ -1628,7 +1679,7 @@ export default function ShiftEditGrid({
           {!isPublished && (
             <button
               onClick={() => { setRegenError(null); setLockError(null); setRegenDone(null); setRegenSection(""); setShowRegenConfirm(true); }}
-              disabled={isPending || isSavingDraft || isRegenerating}
+              disabled={isPending || isSavingDraft || isRegenerating || isLockedByOther}
               className="relative px-2.5 py-1.5 text-xs font-semibold rounded-lg text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-700 hover:bg-orange-100 disabled:opacity-40 transition-colors"
             >
               再仮組み
@@ -1643,11 +1694,11 @@ export default function ShiftEditGrid({
             className="px-2 py-1.5 text-xs font-semibold rounded-lg text-zinc-500 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
             閉じる
           </button>
-          <button onClick={handleSaveDraft} disabled={isPending || isSavingDraft}
+          <button onClick={handleSaveDraft} disabled={isPending || isSavingDraft || isLockedByOther}
             className="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 hover:bg-amber-200 disabled:opacity-40 transition-colors">
             {isSavingDraft ? "保存中…" : "仮保存"}
           </button>
-          <button onClick={handleCommit} disabled={isPending || isSavingDraft || !hasChanges}
+          <button onClick={handleCommit} disabled={isPending || isSavingDraft || !hasChanges || isLockedByOther}
             className="px-3 py-1.5 text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 transition-colors">
             {isPending ? "確定中…" : "確定"}
           </button>
@@ -1835,6 +1886,21 @@ export default function ShiftEditGrid({
           </div>
         );
       })()}
+
+      {/* ── 同時編集ロックバナー ── */}
+      {isLockedByOther && editLock && (
+        <div className="px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between gap-2 shrink-0">
+          <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+            {editLock.lockedByName} が編集中です（{fmtAt(editLock.lockedAt)}〜）— 保存・再仮組みは無効です
+          </span>
+          <button
+            onClick={handleForceTakeOver}
+            className="shrink-0 px-2 py-1 rounded-lg text-[11px] font-bold bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
+          >
+            引き継ぐ
+          </button>
+        </div>
+      )}
 
       {/* 保存エラーバナー（保存失敗時のみ） */}
       {saveError && (

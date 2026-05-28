@@ -231,7 +231,7 @@ export default async function ManageShiftsPage(props: {
       .gte("absence_date", startDate)
       .lte("absence_date", endDate),
     admin.from("shift_grid_drafts")
-      .select("draft_data, saved_by, saved_at, locked_sections, slot_locked_sections")
+      .select("draft_data, saved_by, saved_at, locked_sections, slot_locked_sections, editing_by, editing_at")
       .eq("project_id", selectedProjectId)
       .eq("target_month", `${targetYear}-${String(targetMonth).padStart(2, "0")}`)
       .maybeSingle(),
@@ -373,6 +373,18 @@ export default async function ManageShiftsPage(props: {
   const lockedSections     = (draftRow?.locked_sections      as string[] | null) ?? [];
   const slotLockedSections = (draftRow?.slot_locked_sections as string[] | null) ?? [];
 
+  // 同時編集ロック：5分 TTL で別ユーザーがロック中かどうかを初期値として渡す
+  const EDIT_LOCK_TTL_MS = 5 * 60 * 1000;
+  const editingBy = (draftRow?.editing_by as string | null) ?? null;
+  const editingAt = (draftRow?.editing_at as string | null) ?? null;
+  const lockIsStale = editingAt
+    ? (Date.now() - new Date(editingAt).getTime()) > EDIT_LOCK_TTL_MS
+    : true;
+  const initialEditLock =
+    editingBy && editingBy !== myStaffId && !lockIsStale
+      ? { lockedByName: staffNameMap2.get(editingBy) ?? editingBy, lockedAt: editingAt! }
+      : null;
+
   const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
   const allDates = Array.from({ length: daysInMonth }, (_, i) =>
     dateKey(new Date(targetYear, targetMonth - 1, i + 1))
@@ -428,6 +440,7 @@ export default async function ManageShiftsPage(props: {
           isPublished={isPublished}
           lockedSections={lockedSections}
           slotLockedSections={slotLockedSections}
+          initialEditLock={initialEditLock}
           offRequests={(offRequestsRaw ?? []).map(r => ({
             staff_id:     r.staff_id as string,
             request_date: r.request_date as string,

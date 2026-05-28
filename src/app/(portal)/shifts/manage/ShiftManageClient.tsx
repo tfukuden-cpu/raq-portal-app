@@ -63,6 +63,7 @@ type Props = {
   isPublished: boolean;
   lockedSections: string[];
   slotLockedSections: string[];
+  initialEditLock?: { lockedByName: string; lockedAt: string } | null;
   offRequests: OffRequest[];
   prevMonthShifts?: { staff_id: string; shift_date: string; shift_name: string | null }[];
   monthNavBase: string;
@@ -75,7 +76,8 @@ type Props = {
 function ShiftEditGridOverlay({
   projectId, targetMonthStr, allDates, shifts, activeMembers, shiftPatterns,
   slotRequirements, changeLogs, activeDraft, draftSavedBy, draftSavedAt,
-  offRequests, isPublished, lockedSections, slotLockedSections, prevMonthShifts, sortByAccount,
+  offRequests, isPublished, lockedSections, slotLockedSections, initialEditLock,
+  prevMonthShifts, sortByAccount,
   onSaved, onCancel,
 }: {
   projectId: string; targetMonthStr: string; allDates: string[];
@@ -84,7 +86,8 @@ function ShiftEditGridOverlay({
   changeLogs: Props["changeLogs"]; activeDraft: GridDraftEntry[] | null;
   draftSavedBy: string | null; draftSavedAt: string | null;
   offRequests: Props["offRequests"]; isPublished: boolean;
-  lockedSections: string[]; slotLockedSections: string[]; sortByAccount?: boolean;
+  lockedSections: string[]; slotLockedSections: string[];
+  initialEditLock?: Props["initialEditLock"]; sortByAccount?: boolean;
   prevMonthShifts?: Props["prevMonthShifts"];
   onSaved: () => void; onCancel: () => void;
 }) {
@@ -123,6 +126,7 @@ function ShiftEditGridOverlay({
         isPublished={isPublished}
         initialLockedSections={lockedSections}
         initialSlotLockedSections={slotLockedSections}
+        initialEditLock={initialEditLock}
         prevMonthShifts={prevMonthShifts}
         sortByAccount={sortByAccount}
         onSaved={onSaved}
@@ -152,7 +156,7 @@ export default function ShiftManageClient({
   projectId, targetYear, targetMonth, allDates, defaultDate,
   shifts, activeMembers: activeMembersRaw, shiftPatterns, shiftRequests, slotRequirements,
   changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
-  isPublished, lockedSections, slotLockedSections, offRequests, prevMonthShifts,
+  isPublished, lockedSections, slotLockedSections, initialEditLock, offRequests, prevMonthShifts,
   monthNavBase, prevMonth, nextMonth,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
@@ -356,6 +360,7 @@ export default function ShiftManageClient({
       isPublished={isPublished}
       lockedSections={lockedSections}
       slotLockedSections={slotLockedSections}
+      initialEditLock={initialEditLock}
       prevMonthShifts={prevMonthShifts}
       sortByAccount={sortByAccount}
       onSaved={handleSaved}

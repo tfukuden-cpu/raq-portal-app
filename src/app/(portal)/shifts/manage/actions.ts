@@ -429,6 +429,126 @@ export async function setSectionLockedAction(
   return { success: true };
 }
 
+// ── 編集ロック（同時編集防止） ────────────────────────────────────
+// TTL = 5分。ハートビートで延長。stale になったら誰でも取得可能。
+
+const EDIT_LOCK_TTL_MS = 5 * 60 * 1000; // 5分
+
+export type AcquireLockResult = {
+  success: boolean;
+  acquired: boolean;         // true = ロック取得成功
+  lockedByName?: string;     // 他ユーザーが保持中の場合の表示名
+  lockedAt?: string;         // 保持中の場合のタイムスタンプ
+  message?: string;
+};
+
+/**
+ * 編集ロックを取得する。
+ * - 誰も保持していない → 取得成功
+ * - 自分が保持している → 再取得成功（ハートビート更新）
+ * - 他ユーザーが保持中（5分以内）→ 取得失敗
+ * - 他ユーザーのロックが stale（5分超）→ 強制取得成功
+ */
+export async function acquireEditLockAction(
+  projectId: string,
+  targetMonth: string,
+): Promise<AcquireLockResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, acquired: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+  const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+  const now = new Date();
+
+  // 現在のロック状態を取得
+  const { data: row } = await admin
+    .from("shift_grid_drafts")
+    .select("editing_by, editing_at")
+    .eq("project_id", projectId)
+    .eq("target_month", targetMonth)
+    .maybeSingle();
+
+  const currentEditor = row?.editing_by as string | null;
+  const editingAt = row?.editing_at ? new Date(row.editing_at as string) : null;
+  const isStale = !editingAt || (now.getTime() - editingAt.getTime()) > EDIT_LOCK_TTL_MS;
+
+  // 他ユーザーが新鮮なロックを保持中
+  if (currentEditor && currentEditor !== myStaffId && !isStale) {
+    // 表示名を取得
+    const { data: staffData } = await admin
+      .from("staffs")
+      .select("display_name, name")
+      .eq("id", currentEditor)
+      .maybeSingle();
+    const lockedByName = (staffData as { display_name?: string | null; name?: string | null } | null)?.display_name
+      ?? (staffData as { display_name?: string | null; name?: string | null } | null)?.name
+      ?? currentEditor;
+    return {
+      success: true,
+      acquired: false,
+      lockedByName,
+      lockedAt: row?.editing_at as string,
+    };
+  }
+
+  // ロック取得（upsert）
+  const { error } = await admin
+    .from("shift_grid_drafts")
+    .upsert(
+      { project_id: projectId, target_month: targetMonth, editing_by: myStaffId, editing_at: now.toISOString() },
+      { onConflict: "project_id,target_month" },
+    );
+
+  if (error) return { success: false, acquired: false, message: error.message };
+  return { success: true, acquired: true };
+}
+
+/** ハートビート：ロックの有効期限を延長する（3分ごとに呼ぶ） */
+export async function heartbeatEditLockAction(
+  projectId: string,
+  targetMonth: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false };
+
+  const admin = createAdminClient();
+  const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+
+  const { error } = await admin
+    .from("shift_grid_drafts")
+    .update({ editing_at: new Date().toISOString() })
+    .eq("project_id", projectId)
+    .eq("target_month", targetMonth)
+    .eq("editing_by", myStaffId);
+
+  return { success: !error };
+}
+
+/** ロックを解放する（編集終了・閉じるボタン押下時） */
+export async function releaseEditLockAction(
+  projectId: string,
+  targetMonth: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false };
+
+  const admin = createAdminClient();
+  const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+
+  // 自分のロックのみ解放
+  const { error } = await admin
+    .from("shift_grid_drafts")
+    .update({ editing_by: null, editing_at: null })
+    .eq("project_id", projectId)
+    .eq("target_month", targetMonth)
+    .eq("editing_by", myStaffId);
+
+  return { success: !error };
+}
+
 /**
  * 再仮組：シフトパターンを自動取得して仮組みを生成する
  * （展開前の管理画面から「再仮組」ボタン用）
