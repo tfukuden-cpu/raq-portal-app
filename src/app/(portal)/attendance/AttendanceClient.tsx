@@ -377,7 +377,7 @@ export default function AttendanceClient({
                                 className={`flex items-center gap-2 px-3 py-2 transition-colors ${isSelected ? "bg-blue-50 dark:bg-blue-950/20" : ""}`}
                               >
                                 {/* アカウント番号 */}
-                                <span className="w-10 text-xs font-mono text-zinc-400 tabular-nums flex-shrink-0 truncate">
+                                <span className="w-16 text-xs font-mono text-zinc-400 tabular-nums flex-shrink-0 truncate" title={m.accountNumber ?? ""}>
                                   {m.accountNumber ?? ""}
                                 </span>
                                 {/* 名前 */}
@@ -497,7 +497,7 @@ export default function AttendanceClient({
                     key={m.staffId}
                     className={`flex items-center gap-2 px-3 py-2 transition-colors ${isSelected ? "bg-amber-50 dark:bg-amber-950/20" : ""}`}
                   >
-                    <span className="w-10 text-xs font-mono text-zinc-400 tabular-nums flex-shrink-0 truncate">
+                    <span className="w-16 text-xs font-mono text-zinc-400 tabular-nums flex-shrink-0 truncate" title={m.accountNumber ?? ""}>
                       {m.accountNumber ?? ""}
                     </span>
                     <button
