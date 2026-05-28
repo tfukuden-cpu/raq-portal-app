@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { toggleBreakAction } from "./actions";
 import { getSeatBgClass } from "@/lib/seatColors";
 
+export type WallData = {
+  x1Pct: number;
+  y1Pct: number;
+  x2Pct: number;
+  y2Pct: number;
+};
+
 export type SeatData = {
   id: string;
   label: string;
@@ -45,11 +52,12 @@ const STATUS_LABEL: Record<NonNullable<SeatData["status"]>, string> = {
 };
 
 export default function SeatingClient({
-  projectId, today, seats, isAdmin, myStaffId, embedded = false,
+  projectId, today, seats, walls = [], isAdmin, myStaffId, embedded = false,
 }: {
   projectId: string;
   today: string;
   seats: SeatData[];
+  walls?: WallData[];
   isAdmin: boolean;
   myStaffId: string;
   embedded?: boolean;
@@ -138,6 +146,22 @@ export default function SeatingClient({
                 </a>
               )}
             </div>
+          )}
+
+          {/* 壁 */}
+          {walls.length > 0 && (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none">
+              {walls.map((w, i) => (
+                <line
+                  key={i}
+                  x1={`${w.x1Pct}%`} y1={`${w.y1Pct}%`}
+                  x2={`${w.x2Pct}%`} y2={`${w.y2Pct}%`}
+                  stroke="#71717a"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              ))}
+            </svg>
           )}
 
           {seats.map(seat => {

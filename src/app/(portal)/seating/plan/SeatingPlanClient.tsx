@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { saveSeatAssignmentsAction, autoAssignSeatsAction } from "../actions";
 import { getSeatBgClass, getSeatBorderClass, getSeatTextClass } from "@/lib/seatColors";
 
+export type WallData = {
+  x1Pct: number;
+  y1Pct: number;
+  x2Pct: number;
+  y2Pct: number;
+};
+
 export type PlanSeat = {
   id: string;
   label: string;
@@ -25,12 +32,13 @@ export type PlanStaff = {
 };
 
 export default function SeatingPlanClient({
-  projectId, date, seats: initialSeats, staff, embedded = false,
+  projectId, date, seats: initialSeats, staff, walls = [], embedded = false,
 }: {
   projectId: string;
   date: string;
   seats: PlanSeat[];
   staff: PlanStaff[];
+  walls?: WallData[];
   embedded?: boolean;
 }) {
   const [seats, setSeats] = useState<PlanSeat[]>(initialSeats);
@@ -185,6 +193,23 @@ export default function SeatingPlanClient({
               <p className="text-sm text-zinc-400">座席が設定されていません</p>
             </div>
           )}
+
+          {/* 壁 */}
+          {walls.length > 0 && (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none">
+              {walls.map((w, i) => (
+                <line
+                  key={i}
+                  x1={`${w.x1Pct}%`} y1={`${w.y1Pct}%`}
+                  x2={`${w.x2Pct}%`} y2={`${w.y2Pct}%`}
+                  stroke="#71717a"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              ))}
+            </svg>
+          )}
+
           {seats.map(seat => {
             const isDisabled = seat.seatType === "disabled";
             const isFree     = seat.seatType === "free";

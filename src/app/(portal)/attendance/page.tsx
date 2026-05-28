@@ -7,7 +7,7 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceClient from "./AttendanceClient";
 import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry } from "./AttendanceClient";
-import type { SeatData } from "../seating/SeatingClient";
+import type { SeatData, WallData } from "../seating/SeatingClient";
 import type { PlanSeat, PlanStaff } from "../seating/plan/SeatingPlanClient";
 
 function tokyoToday(): string {
@@ -138,6 +138,7 @@ export default async function AttendancePage() {
     { data: todayAssignments },
     { data: tomorrowAssignments },
     { data: tomorrowShifts },
+    { data: wallRows },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -190,6 +191,9 @@ export default async function AttendancePage() {
     admin.from("shifts")
       .select("staff_id, shift_name")
       .eq("project_id", projectId).eq("shift_date", tomorrow),
+    admin.from("seat_walls")
+      .select("x1_pct, y1_pct, x2_pct, y2_pct")
+      .eq("project_id", projectId),
   ]);
 
   // シフトパターンの時刻マップ
@@ -413,6 +417,13 @@ export default async function AttendancePage() {
     };
   });
 
+  const wallData: WallData[] = (wallRows ?? []).map(w => ({
+    x1Pct: w.x1_pct as number,
+    y1Pct: w.y1_pct as number,
+    x2Pct: w.x2_pct as number,
+    y2Pct: w.y2_pct as number,
+  }));
+
   // ── 全体サマリー ─────────────────────────────────────────
   const total      = allInternal.length;
   const departed   = allInternal.filter(m => m.departureTime || m.clockIn).length;
@@ -446,6 +457,7 @@ export default async function AttendancePage() {
       shiftChanges={shiftChanges}
       myStaffId={staffId}
       seats={seatData}
+      walls={wallData}
       tomorrow={tomorrow}
       planSeats={planSeatData}
       planStaff={planStaffData}

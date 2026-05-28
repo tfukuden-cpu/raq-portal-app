@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
-import SeatingPlanClient, { type PlanSeat, type PlanStaff } from "./SeatingPlanClient";
+import SeatingPlanClient, { type PlanSeat, type PlanStaff, type WallData } from "./SeatingPlanClient";
 
 function tokyoToday() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -43,6 +43,7 @@ export default async function SeatingPlanPage() {
     { data: assignments },
     { data: memberRows },
     { data: shifts },
+    { data: wallRows },
   ] = await Promise.all([
     admin.from("seats")
       .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
@@ -56,6 +57,9 @@ export default async function SeatingPlanPage() {
     admin.from("shifts")
       .select("staff_id, shift_name")
       .eq("project_id", projectId).eq("shift_date", tomorrow),
+    admin.from("seat_walls")
+      .select("x1_pct, y1_pct, x2_pct, y2_pct")
+      .eq("project_id", projectId),
   ]);
 
   // メンバーマップ
@@ -111,12 +115,20 @@ export default async function SeatingPlanPage() {
     };
   });
 
+  const wallData: WallData[] = (wallRows ?? []).map(w => ({
+    x1Pct: w.x1_pct as number,
+    y1Pct: w.y1_pct as number,
+    x2Pct: w.x2_pct as number,
+    y2Pct: w.y2_pct as number,
+  }));
+
   return (
     <SeatingPlanClient
       projectId={projectId}
       date={tomorrow}
       seats={planSeats}
       staff={planStaff}
+      walls={wallData}
     />
   );
 }

@@ -4,7 +4,7 @@ import { ChevronLeftIcon } from "@/components/icons";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
 import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction } from "./actions";
 import type { SendResult } from "./actions";
-import SeatingClient, { type SeatData } from "../seating/SeatingClient";
+import SeatingClient, { type SeatData, type WallData } from "../seating/SeatingClient";
 import SeatingPlanClient, { type PlanSeat, type PlanStaff } from "../seating/plan/SeatingPlanClient";
 
 // ── 型定義 ────────────────────────────────────────────────
@@ -106,6 +106,7 @@ interface Props {
   shiftChanges: ShiftChangeEntry[];
   myStaffId: string;
   seats: SeatData[];
+  walls: WallData[];
   tomorrow: string;
   planSeats: PlanSeat[];
   planStaff: PlanStaff[];
@@ -120,7 +121,7 @@ export default function AttendanceClient({
   total, departed, clockedIn, late, absent, notClocked,
   grouped, offMembers, enableDeparture,
   publishedAt, shiftChanges,
-  myStaffId, seats, tomorrow, planSeats, planStaff,
+  myStaffId, seats, walls, tomorrow, planSeats, planStaff,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
   const [seatingSubTab, setSeatingSubTab] = useState<"current" | "plan">("current");
@@ -330,6 +331,7 @@ export default function AttendanceClient({
                   projectId={projectId}
                   today={today}
                   seats={seats}
+                  walls={walls}
                   isAdmin={true}
                   myStaffId={myStaffId}
                   embedded={true}
@@ -343,6 +345,7 @@ export default function AttendanceClient({
                   date={tomorrow}
                   seats={planSeats}
                   staff={planStaff}
+                  walls={walls}
                   embedded={true}
                 />
               </div>
