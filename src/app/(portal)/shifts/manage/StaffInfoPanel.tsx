@@ -14,6 +14,7 @@ import OffRequestSection, { type OffRequestEntry } from "@/components/OffRequest
 import { fetchTrainingDatesAction } from "@/app/(portal)/admin/[projectId]/settings/training-actions";
 import { fetchOffRequestsForStaffAction } from "@/app/(portal)/admin/[projectId]/settings/off-request-actions";
 import { updateShiftSettingsAction } from "@/app/(portal)/admin/[projectId]/settings/actions";
+import { toggleChurnRiskAction } from "@/app/(portal)/attendance/actions";
 import { overrideDraftCellsAction, deleteDraftCellsAction, replaceStaffHolidayDraftAction } from "@/app/(portal)/shifts/actions";
 
 export type StaffInfoMember = {
@@ -28,6 +29,7 @@ export type StaffInfoMember = {
   max_consecutive_days: number | null;
   shift_note: string | null;
   endDate?: string | null;
+  churn_risk?: boolean;
 };
 
 // kept for backward compat — callers may still pass this but it's no longer displayed
@@ -117,6 +119,26 @@ export default function StaffInfoPanel({
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isPending, startTrans]   = useTransition();
+
+  // ── 離脱リスクトグル ──────────────────────────────────────
+  const [churnRisk,        setChurnRisk]        = useState(member.churn_risk ?? false);
+  const [isChurnPending,   startChurnTrans]      = useTransition();
+  const [churnMsg,         setChurnMsg]          = useState<string | null>(null);
+
+  function handleChurnRiskToggle() {
+    const newValue = !churnRisk;
+    setChurnRisk(newValue); // 楽観的更新
+    startChurnTrans(async () => {
+      const res = await toggleChurnRiskAction(projectId, member.id, newValue);
+      if (!res.ok) {
+        setChurnRisk(!newValue); // 失敗時ロールバック
+        setChurnMsg("保存できませんでした");
+      } else {
+        setChurnMsg(newValue ? "離脱リスクをONにしました" : "離脱リスクを解除しました");
+      }
+      setTimeout(() => setChurnMsg(null), 2500);
+    });
+  }
 
   // ── シフト一括反映 ────────────────────────────────────────
   const [isApplying, startApplyTrans] = useTransition();
@@ -283,6 +305,33 @@ export default function StaffInfoPanel({
                   <Row label="退職予定日">
                     <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold tabular-nums">{member.endDate}</span>
                   </Row>
+                )}
+                {/* 離脱リスクトグル */}
+                <div className="flex items-center justify-between gap-2 py-1 mt-1 border-t border-zinc-100 dark:border-zinc-800 pt-2">
+                  <div>
+                    <span className="text-[11px] text-zinc-400">離脱リスク</span>
+                    {churnRisk && (
+                      <span className="ml-1.5 text-[9px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none">ON</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleChurnRiskToggle}
+                    disabled={isChurnPending}
+                    title={churnRisk ? "離脱リスクを解除" : "離脱リスクをONにする"}
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                      churnRisk ? "bg-red-500" : "bg-zinc-300 dark:bg-zinc-600"
+                    }`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                      churnRisk ? "translate-x-4" : "translate-x-0.5"
+                    }`} />
+                  </button>
+                </div>
+                {churnMsg && (
+                  <p className={`text-[10px] font-semibold mt-0.5 ${churnRisk || churnMsg.includes("解除") ? "text-zinc-400" : "text-red-500"}`}>
+                    {churnMsg}
+                  </p>
                 )}
               </div>
             ) : (

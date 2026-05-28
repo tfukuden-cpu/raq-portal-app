@@ -2646,6 +2646,7 @@ export default function ShiftEditGrid({
             max_consecutive_days: staffInfoTarget.max_consecutive_days ?? null,
             shift_note:           staffInfoTarget.shift_note ?? null,
             endDate:              staffInfoTarget.endDate,
+            churn_risk:           staffInfoTarget.churn_risk ?? false,
           }}
           projectId={projectId}
           availableSections={availableSections}
