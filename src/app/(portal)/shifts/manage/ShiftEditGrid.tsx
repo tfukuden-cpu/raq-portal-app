@@ -2260,6 +2260,8 @@ export default function ShiftEditGrid({
                         "sticky left-0 z-10 border-b border-r-2 border-zinc-200 dark:border-zinc-700 align-middle h-8 transition-colors cursor-pointer",
                         isFocusedRow
                           ? "bg-blue-100 dark:bg-blue-900/40"
+                          : member.churn_risk
+                          ? "bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40"
                           : "bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-800/60",
                       ].join(" ")}
                       onClick={() => setStaffInfoTarget(member)}
@@ -2360,6 +2362,8 @@ export default function ShiftEditGrid({
                             className={[
                               "border-b border-r border-zinc-100 dark:border-zinc-800",
                               "h-8 align-middle p-0 overflow-hidden transition-colors relative cursor-pointer",
+                              // 離脱リスク → 赤枠
+                              isChurnRiskCell ? "ring-inset ring-1 ring-red-400 dark:ring-red-500" : "",
                               // フォーカス行 + 候補 → 青強調
                               isFocusedRow && isCandidate
                                 ? "bg-blue-300 dark:bg-blue-700/60 ring-inset ring-2 ring-blue-400"
@@ -2394,11 +2398,8 @@ export default function ShiftEditGrid({
                                 </span>
                               </div>
                             )}
-                            {isChurnRiskCell && (
-                              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-orange-400 opacity-90 pointer-events-none" title="離脱リスク" />
-                            )}
                             {shiftName && (
-                              <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
+                              <div className="h-full flex flex-col items-center justify-center overflow-hidden px-0.5">
                                 <span className={[
                                   "text-[11px] leading-none font-medium text-center truncate w-full block",
                                   isFocusedRow && isCandidate
@@ -2422,6 +2423,9 @@ export default function ShiftEditGrid({
                                     <span className="inline-block w-1 h-1 rounded-full bg-amber-400 align-top ml-0.5" />
                                   )}
                                 </span>
+                                {isChurnRiskCell && (
+                                  <span className="text-[7px] leading-none font-bold text-red-500 dark:text-red-400 whitespace-nowrap mt-0.5">【離脱リスク】</span>
+                                )}
                               </div>
                             )}
                           </td>
@@ -2452,10 +2456,10 @@ export default function ShiftEditGrid({
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />＝重複
         </span>
         <span className="flex items-center gap-0.5">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400" />＝離脱リスク
-        </span>
-        <span className="flex items-center gap-0.5">
           <span className="inline-block w-4 h-3 rounded bg-red-500" />＝6連勤以上
+        </span>
+        <span className="flex items-center gap-0.5 text-red-500 dark:text-red-400">
+          <span className="inline-block w-3 h-3 rounded border border-red-400 mr-0.5" />離脱リスク
         </span>
         {prevDates.length > 0 && (
           <span className="flex items-center gap-0.5">
