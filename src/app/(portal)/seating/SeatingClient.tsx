@@ -306,6 +306,44 @@ export default function SeatingClient({
         </div>
       )}
 
+      {/* 埋め込み時の管理ツールバー（isAdmin のみ） */}
+      {embedded && isAdmin && (
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          {!editMode ? (
+            <button
+              onClick={enterEditMode}
+              className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-colors"
+            >
+              席替え
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleAutoAssign}
+                disabled={isPending}
+                className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+              >
+                自動配置
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isPending}
+                className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isPending ? "保存中…" : "保存"}
+              </button>
+              <button
+                onClick={cancelEditMode}
+                disabled={isPending}
+                className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700"
+              >
+                キャンセル
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* 席替えモードバナー */}
       {editMode && (
         <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center gap-2">

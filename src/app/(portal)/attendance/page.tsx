@@ -7,7 +7,7 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceClient from "./AttendanceClient";
 import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry } from "./AttendanceClient";
-import type { SeatData, WallData } from "../seating/SeatingClient";
+import type { SeatData, WallData, StaffInfo } from "../seating/SeatingClient";
 import type { PlanSeat, PlanStaff } from "../seating/plan/SeatingPlanClient";
 
 function tokyoToday(): string {
@@ -424,6 +424,28 @@ export default async function AttendancePage() {
     y2Pct: w.y2_pct as number,
   }));
 
+  // 当日座席表の席替え用スタッフリスト（当日シフトあり・公休除く）
+  const OFF_NAMES_SEAT = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
+  const todayWorkingIds = new Set(
+    (todayShifts ?? [])
+      .filter(s => s.shift_name && !OFF_NAMES_SEAT.includes(s.shift_name as string))
+      .map(s => s.staff_id as string)
+  );
+  const staffListData: StaffInfo[] = (memberRows ?? [])
+    .filter(m => todayWorkingIds.size === 0 || todayWorkingIds.has(m.staff_id))
+    .map(m => {
+      const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as {
+        display_name?: string | null; name?: string | null; account_number?: string | null;
+      } | null;
+      return {
+        id:            m.staff_id,
+        name:          s?.display_name ?? s?.name ?? m.staff_id,
+        accountNumber: (s?.account_number as string | null | undefined) ?? null,
+        section:       (m as { section?: string | null }).section ?? null,
+        shiftName:     (todayShiftNameMap as Map<string, string | null>).get(m.staff_id) ?? null,
+      };
+    });
+
   // ── 全体サマリー ─────────────────────────────────────────
   const total      = allInternal.length;
   const departed   = allInternal.filter(m => m.departureTime || m.clockIn).length;
@@ -458,6 +480,7 @@ export default async function AttendancePage() {
       myStaffId={staffId}
       seats={seatData}
       walls={wallData}
+      staffList={staffListData}
       tomorrow={tomorrow}
       planSeats={planSeatData}
       planStaff={planStaffData}
