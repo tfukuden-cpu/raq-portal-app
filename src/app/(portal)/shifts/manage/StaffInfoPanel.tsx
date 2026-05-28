@@ -68,6 +68,7 @@ export default function StaffInfoPanel({
   onDraftCellsRemoved,
   onSyncHolidays,
   onClose,
+  targetYM,
 }: {
   member: StaffInfoMember;
   projectId: string;
@@ -80,6 +81,8 @@ export default function StaffInfoPanel({
   /** 希望休の完全置換（months の月を全クリア後に newDates を希望休として再設定） */
   onSyncHolidays?: (staffId: string, months: string[], newDates: string[]) => void;
   onClose: () => void;
+  /** 表示する月（YYYY-MM）。シフト管理画面の表示月と連動させる */
+  targetYM?: string;
   /** @deprecated kept for compat, no longer used */
   offRequests?: StaffOffRequest[];
 }) {
@@ -482,6 +485,7 @@ export default function StaffInfoPanel({
                 staffId={member.id}
                 projectId={projectId}
                 initialEntries={offReqEntries}
+                targetYM={targetYM}
                 onEntryAdded={async (newEntries) => {
                   const cells = newEntries.map(e => ({ staffId: member.id, date: e.date, shiftName: "希望休" }));
                   // 追加した日付は削除追跡から除外

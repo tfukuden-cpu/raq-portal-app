@@ -38,12 +38,14 @@ interface Props {
   staffId: string;
   projectId: string;
   initialEntries: OffRequestEntry[];
+  /** 表示する月を YYYY-MM 形式で指定。省略時は端末の当月（東京時間）を使用 */
+  targetYM?: string;
   onEntryAdded?: (entries: { date: string; priority: string }[]) => void;
   onEntryRemoved?: (date: string) => void;
 }
 
 export default function OffRequestSection({
-  staffId, projectId, initialEntries, onEntryAdded, onEntryRemoved,
+  staffId, projectId, initialEntries, targetYM, onEntryAdded, onEntryRemoved,
 }: Props) {
   const now = new Date();
   const [entries, setEntries]     = useState<OffRequestEntry[]>(initialEntries);
@@ -59,7 +61,7 @@ export default function OffRequestSection({
 
   const savedMap = new Map(entries.map(e => [e.request_date, e]));
 
-  const thisMonth = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }).slice(0, 7);
+  const thisMonth = targetYM ?? new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }).slice(0, 7);
 
   function prevMonth() {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }

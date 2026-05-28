@@ -2656,6 +2656,7 @@ export default function ShiftEditGrid({
           projectId={projectId}
           availableSections={availableSections}
           shiftPatternNames={shiftPatterns.map(p => p.name).filter(Boolean)}
+          targetYM={targetMonth}
           staffOffRequests={(offRequests ?? []).filter(r => r.staff_id === staffInfoTarget.id)}
           onDraftCellsChanged={(cells) => {
             const next = new Map(drafts);
