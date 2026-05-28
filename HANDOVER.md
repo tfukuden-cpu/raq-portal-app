@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-28（v45：当日状況から座席表タブ削除）
+最終更新：2026-05-28（v46：仮確定単一化・同時編集ロック完成）
 
 ---
 
@@ -106,6 +106,19 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | アバターシステム | 🔄 設計済み・パーツ未実装（低優先） |
 
 ### 次に優先すべきこと（新しいセッションはここから）
+
+**v46 完了内容**
+- **仮確定を単一種類に統一** 枠確定（slot）の廃止。仮確定＝人確定（スタッフ固定・再仮組み時に他セクションから使用不可）の1種類のみ
+  - 当初は「枠確定（スロット数固定）」「人確定（スタッフ固定）」の2種類で実装したが、枠確定の場合に他セクションへ移ったスタッフの代替補填が自動化できないため廃止
+  - `slot_locked_sections text[]` カラムはDBに残存するが使用しない
+- **シフトグリッド同時編集ロック機能** 複数アカウントで同時に編集した際の仮保存競合を防ぐ
+  - `shift_grid_drafts` に `editing_by text`, `editing_at timestamptz` カラム追加
+  - 編集画面を開くと自動的にロック取得を試みる（TTL: 5分）
+  - 他のユーザーが編集中（ロック保持かつ5分以内）: 警告バナー表示、仮保存/再仮組み/確定ボタンを無効化
+  - ハートビート: 3分ごとに `editing_at` を更新（タブが開いている間はロックを保持）
+  - ロック切れ（5分以上ハートビートなし）: 自動的に取得可能になる（強制引き継ぎ）
+  - 閉じる・確定時: ロックを自動解放
+  - 「引き継ぐ」ボタン: ロック切れ時や手動引き継ぎ時に使用可
 
 **v45 完了内容**
 - **当日状況から座席表タブを削除** `/attendance` の「座席表」タブ（当日座席・翌日配置のサブタブ）を完全除去
@@ -375,7 +388,11 @@ shift_slot_requirements（日別必要人数） ← ★v20新設
 shift_grid_drafts（グリッド仮保存） ← ★v20新設
   project_id, target_month (YYYY-MM),
   draft_data jsonb,  ← GridDraftEntry[] の配列
-  saved_by, saved_at
+  saved_by, saved_at,
+  locked_sections text[],      ← 仮確定セクション（人確定）
+  slot_locked_sections text[], ← 枠確定（v46廃止・カラムのみ残存）
+  editing_by text,             ← ★v46: 現在編集中のスタッフID（null=未編集）
+  editing_at timestamptz       ← ★v46: 最終ハートビート時刻（5分TTL）
   unique(project_id, target_month)
   ※ 編集中の差分をそのまま保存。次回ロード時に続きから編集可能
 
@@ -1064,6 +1081,7 @@ export default async function Page({
 | 2026-05-27 | v36 | **当日状況 欠勤/遅刻 詳細モーダル** ① 欠勤スタッフ行（w-14プレースホルダー部分）を「詳細」ボタンに置き換え。② 遅刻スタッフ行の「催促する」ボタン横に「詳細」ボタンを追加。③ 詳細モーダルに報告時刻・理由・翌日/翌々日出勤可否（欠勤）または到着目安（遅刻）を表示。④ absence_reports/late_reportsのクエリにcreated_at・next_day_available等を追加。|
 | 2026-05-27 | v39 | **座席表フリー席・無効席** `seats.seat_type text DEFAULT 'normal'` カラム追加。フリー席（誰でも配置可・緑枠）・無効席（使用不可・ハッチング表示）をSeatLayoutEditorで設定可能に。SeatingClient・SeatingPlanClientにタイプ別表示を追加。autoAssignSeatsActionで無効席除外・フリー席はセクション問わず配置。 |
 | 2026-05-28 | v42 | **座席表改善・シフト管理UI刷新** 壁SVG表示（SeatingClient/SeatingPlanClient/AttendanceClient）・キャンバス1800px統一・水平スクロール対応。翌日配置：DnDカード入替・席ラベル削除・シフト名プレフィックスでセクション色解決・フリー席ドラッグ可・自動配置ロジック（セクション席は同セクションのみ、フリー席に余剰スタッフ、既存配置保持）。seatColors.ts：resolveShiftSection/formatSectionShift追加。シフト管理ツールバーに月ナビ・シフト展開・Excel出力を統合。Excel出力はアカウント番号順ソート・xlsxライブラリ。 |
+| 2026-05-28 | v46 | **仮確定単一化・同時編集ロック** 枠確定（slot_locked_sections）廃止・仮確定は人確定1種類のみ。shift_grid_drafts に editing_by/editing_at カラム追加、グリッド編集モード開幕時に排他ロック取得（TTL5分・3分ハートビート）。他ユーザー編集中は保存/再仮組み/確定ボタン無効＋警告バナー表示。ロック切れ時は自動取得または「引き継ぐ」ボタンで手動引き継ぎ可。 |
 | 2026-05-28 | v45 | **当日状況から座席表タブ削除** `/attendance` の「座席表」タブ（当日座席・翌日配置）を完全除去。座席表は `/seating` 専用ページに集約。AttendanceClient から SeatingClient/SeatingPlanClient 関連コードをすべて削除。page.tsx から seats/seat_assignments/seat_walls/tomorrowShifts のフェッチも削除。 |
 | 2026-05-28 | v44 | **打刻ページ座席表統合・席替えモード・Realtime** `/punch/[projectId]` に「座席表で打刻」「名前で打刻」タブ切り替えを追加。席タップで出勤/退勤/休憩入り/休憩終了を打刻可能。ステータス色分け（未出勤/勤務中/休憩中/退勤済/欠勤）。打刻端末は30秒ポーリング（/api/punch/[projectId]/statuses 新設）。/seating に Realtime 対応（punch_logs INSERT で即時更新、supabase_realtime publication 追加）。管理者向け「席替え」ボタンを /seating に追加（その場で今日の座席を変更・自動配置も可能）。terminalBreakAction（認証不要・adminClient）追加。TerminalMember 型に onBreak/isAbsent/section/accountNumber/hasShiftToday を追加。 |
 | 2026-05-28 | v43 | **シフト管理Excel出力改善・アカウント番号表示・並び順トグル** Excel列順を名前→番号→日付に変更・番号形式をASS 01統一・番号なしメンバーを末尾追加・公休/研修/非セクションシフトを空白化・括弧を半角化。ShiftEditGridにアカウント番号サブテキスト表示。並び順トグルボタンをシフト管理ツールバー＋編集グリッドツールバー両方に追加（番号順モード：SV固定上部・SV以外フラット番号順）。 |
