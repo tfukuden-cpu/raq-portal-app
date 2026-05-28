@@ -74,7 +74,7 @@ type Props = {
 function ShiftEditGridOverlay({
   projectId, targetMonthStr, allDates, shifts, activeMembers, shiftPatterns,
   slotRequirements, changeLogs, activeDraft, draftSavedBy, draftSavedAt,
-  offRequests, isPublished, lockedSections, prevMonthShifts,
+  offRequests, isPublished, lockedSections, prevMonthShifts, sortByAccount,
   onSaved, onCancel,
 }: {
   projectId: string; targetMonthStr: string; allDates: string[];
@@ -83,7 +83,7 @@ function ShiftEditGridOverlay({
   changeLogs: Props["changeLogs"]; activeDraft: GridDraftEntry[] | null;
   draftSavedBy: string | null; draftSavedAt: string | null;
   offRequests: Props["offRequests"]; isPublished: boolean;
-  lockedSections: string[];
+  lockedSections: string[]; sortByAccount?: boolean;
   prevMonthShifts?: Props["prevMonthShifts"];
   onSaved: () => void; onCancel: () => void;
 }) {
@@ -122,6 +122,7 @@ function ShiftEditGridOverlay({
         isPublished={isPublished}
         initialLockedSections={lockedSections}
         prevMonthShifts={prevMonthShifts}
+        sortByAccount={sortByAccount}
         onSaved={onSaved}
         onCancel={onCancel}
       />
@@ -143,6 +144,8 @@ function getAccNum(acc: string | null | undefined): number {
   return m ? parseInt(m[1]) : Infinity;
 }
 
+const SECTION_ORDER_LIST = ["SV", "査定", "販売", "MOTA", "リメイク", "ローン"];
+
 export default function ShiftManageClient({
   projectId, targetYear, targetMonth, allDates, defaultDate,
   shifts, activeMembers: activeMembersRaw, shiftPatterns, shiftRequests, slotRequirements,
@@ -150,13 +153,6 @@ export default function ShiftManageClient({
   isPublished, lockedSections, offRequests, prevMonthShifts,
   monthNavBase, prevMonth, nextMonth,
 }: Props) {
-  // アカウント番号昇順でソート（番号なしは末尾）
-  const activeMembers = [...activeMembersRaw].sort((a, b) => {
-    const na = getAccNum(a.accountNumber);
-    const nb = getAccNum(b.accountNumber);
-    return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
-  });
-
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [showDraftModal, setShowDraftModal] = useState(false);
@@ -164,6 +160,25 @@ export default function ShiftManageClient({
   const [regenError, setRegenError] = useState<string | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportSectionsSel, setExportSectionsSel] = useState<string[]>([]);
+  const [sortByAccount, setSortByAccount] = useState(false);
+
+  // ソート（デフォルト: セクション順＋番号順、トグル時: 全員番号順）
+  const activeMembers = sortByAccount
+    ? [...activeMembersRaw].sort((a, b) => {
+        const na = getAccNum(a.accountNumber);
+        const nb = getAccNum(b.accountNumber);
+        return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
+      })
+    : [...activeMembersRaw].sort((a, b) => {
+        const ra = SECTION_ORDER_LIST.indexOf(a.section ?? "");
+        const rb = SECTION_ORDER_LIST.indexOf(b.section ?? "");
+        const ria = ra === -1 ? SECTION_ORDER_LIST.length : ra;
+        const rib = rb === -1 ? SECTION_ORDER_LIST.length : rb;
+        if (ria !== rib) return ria - rib;
+        const na = getAccNum(a.accountNumber);
+        const nb = getAccNum(b.accountNumber);
+        return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
+      });
 
   // シフトパターンから使用中セクション一覧
   const exportSections = [...new Set(shiftPatterns.map(p => p.section).filter((s): s is string => !!s))];
@@ -335,6 +350,7 @@ export default function ShiftManageClient({
       isPublished={isPublished}
       lockedSections={lockedSections}
       prevMonthShifts={prevMonthShifts}
+      sortByAccount={sortByAccount}
       onSaved={handleSaved}
       onCancel={() => setMode("list")}
     />;
@@ -527,7 +543,25 @@ export default function ShiftManageClient({
           </span>
         )}
 
-        {/* まとめたボタン群：シフト展開 ／ セクション▼ Excel出力 ／ シフト編集 */}
+        {/* 並び順トグル */}
+        <button
+          type="button"
+          onClick={() => setSortByAccount(v => !v)}
+          className={[
+            "flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-colors",
+            sortByAccount
+              ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300"
+              : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800",
+          ].join(" ")}
+          title={sortByAccount ? "番号順（クリックでセクション順に戻す）" : "セクション順（クリックで番号順に切替）"}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h12M3 17h6" />
+          </svg>
+          {sortByAccount ? "番号順" : "セクション順"}
+        </button>
+
+        {/* まとめたボタン群：シフト展開 ／ Excel出力 ／ シフト編集 */}
         <div className="flex items-stretch ml-auto rounded-xl border border-zinc-200 dark:border-zinc-700 divide-x divide-zinc-200 dark:divide-zinc-700 overflow-hidden text-xs font-semibold">
           {/* シフト展開（flat=true で角丸なし・グループに馴染む） */}
           <PublishButton

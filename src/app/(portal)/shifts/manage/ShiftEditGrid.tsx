@@ -102,6 +102,7 @@ interface Props {
   isPublished?: boolean;
   initialLockedSections?: string[];
   prevMonthShifts?: { staff_id: string; shift_date: string; shift_name: string | null }[];
+  sortByAccount?: boolean;
   onSaved: () => void;
   onCancel: () => void;
 }
@@ -793,7 +794,7 @@ export default function ShiftEditGrid({
   shiftPatterns, slotRequirements, changeLogs,
   initialDraft, draftSavedBy, draftSavedAt,
   offRequests, isPublished, initialLockedSections,
-  prevMonthShifts,
+  prevMonthShifts, sortByAccount,
   onSaved, onCancel,
 }: Props) {
   // offRequests マップ: staffId__date → priority
@@ -1287,20 +1288,28 @@ export default function ShiftEditGrid({
     const m = acc.match(/(\d+)/);
     return m ? parseInt(m[1]) : Infinity;
   };
-  const sortedMembersBySection = useMemo(() =>
-    [...activeMembers].sort((a, b) => {
+  const sortedMembersBySection = useMemo(() => {
+    if (sortByAccount) {
+      // 番号順モード：セクション無視・全員アカウント番号昇順（未設定は末尾）
+      return [...activeMembers].sort((a, b) => {
+        const na = getAccNumGrid(a.accountNumber);
+        const nb = getAccNumGrid(b.accountNumber);
+        return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
+      });
+    }
+    // デフォルト：セクション順 → SVは名前順・その他はアカウント番号順
+    return [...activeMembers].sort((a, b) => {
       const ra = sectionRank(a.section);
       const rb = sectionRank(b.section);
       if (ra !== rb) return ra - rb;
-      // SV は名前順、その他はアカウント番号順（未設定は末尾）
       if (a.section !== "SV") {
         const na = getAccNumGrid(a.accountNumber);
         const nb = getAccNumGrid(b.accountNumber);
         if (na !== nb) return na - nb;
       }
       return a.name.localeCompare(b.name, "ja");
-    }),
-  [activeMembers]);
+    });
+  }, [activeMembers, sortByAccount]);
 
   // セクションフィルタ適用済みリスト
   const displayMembers = useMemo(() =>
@@ -2065,7 +2074,7 @@ export default function ShiftEditGrid({
               {/* ── スタッフ軸 ── */}
               {displayMembers.map((member, idx) => {
                 const prevSection = idx > 0 ? displayMembers[idx - 1].section : undefined;
-                const showSectionHeader = !filterSection && member.section !== prevSection;
+                const showSectionHeader = !filterSection && !sortByAccount && member.section !== prevSection;
                 // 月合計
                 const monthTotal = allDates.filter(d => {
                   const cell = resolveCell(member.id, d);
