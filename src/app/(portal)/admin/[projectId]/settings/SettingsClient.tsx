@@ -543,7 +543,7 @@ export function MemberList({
     setEditMaxConsecDays(m.max_consecutive_days != null ? String(m.max_consecutive_days) : "");
     setEditStartDate(m.start_date ?? "");
     setEditChurnRisk(m.churn_risk ?? false);
-    setShiftSettingsOpen(false);
+    setShiftSettingsOpen(true);
     setDepartStep("hidden");
     setDepartDate(new Date().toISOString().slice(0, 10));
     // 研修日・希望休を最新データでフェッチ
@@ -1158,31 +1158,6 @@ export function MemberList({
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] text-zinc-500 font-semibold">セクション（複数選択可）</label>
-                    {availableSections.length > 0 ? (
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {availableSections.map(s => {
-                          const active = editSections.includes(s);
-                          return (
-                            <button key={s} type="button"
-                              onClick={() => setEditSections(prev => active ? prev.filter(x => x !== s) : [...prev, s])}
-                              className={["px-2.5 py-1 rounded-full text-xs font-semibold transition-colors border",
-                                active ? "bg-blue-600 text-white border-blue-600"
-                                  : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-300 dark:hover:border-blue-700",
-                              ].join(" ")}>
-                              {s}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-zinc-400 mt-1">シフトタブでパターンを登録するとセクションが選択できます</p>
-                    )}
-                    {editSections.length > 0 && (
-                      <p className="text-[10px] text-zinc-400 mt-1">選択中: {editSections.join("・")}</p>
-                    )}
-                  </div>
-                  <div>
                     <label className="text-[10px] text-zinc-500 font-semibold">アサイン日（参加日）</label>
                     <p className="text-[9px] text-zinc-400 mb-0.5">設定するとこの日以前のシフト仮組みから除外されます</p>
                     <div className="flex items-center gap-2 mt-0.5">
@@ -1210,6 +1185,32 @@ export function MemberList({
                   </button>
                   {shiftSettingsOpen && (
                     <div className="space-y-2.5 pt-2">
+                      {/* セクション */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 font-semibold">セクション（複数選択可）</label>
+                        {availableSections.length > 0 ? (
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {availableSections.map(s => {
+                              const active = editSections.includes(s);
+                              return (
+                                <button key={s} type="button"
+                                  onClick={() => setEditSections(prev => active ? prev.filter(x => x !== s) : [...prev, s])}
+                                  className={["px-2.5 py-1 rounded-full text-xs font-semibold transition-colors border",
+                                    active ? "bg-blue-600 text-white border-blue-600"
+                                      : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-blue-300 dark:hover:border-blue-700",
+                                  ].join(" ")}>
+                                  {s}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-zinc-400 mt-1">シフトタブでパターンを登録するとセクションが選択できます</p>
+                        )}
+                        {editSections.length > 0 && (
+                          <p className="text-[10px] text-zinc-400 mt-1">選択中: {editSections.join("・")}</p>
+                        )}
+                      </div>
                       {/* 稼働日数 */}
                       <div>
                         <label className="text-[10px] text-zinc-500 font-semibold">稼働日数</label>

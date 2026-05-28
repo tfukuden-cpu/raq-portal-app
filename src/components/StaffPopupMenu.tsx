@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { departStaffAction } from "@/app/(portal)/admin/[projectId]/settings/actions";
+import { getStaffDetailsAction, type StaffDetails } from "@/app/(portal)/attendance/actions";
 
 type Props = {
   staffId: string;
@@ -22,6 +23,18 @@ export default function StaffPopupMenu({ staffId, staffName, projectId, onClose,
   const [isChurnRiskPending, setIsChurnRiskPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [churnRiskError, setChurnRiskError] = useState<string | null>(null);
+
+  const [staffDetails, setStaffDetails] = useState<StaffDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingDetails(true);
+    getStaffDetailsAction(projectId, staffId).then(d => {
+      if (!cancelled) { setStaffDetails(d); setLoadingDetails(false); }
+    }).catch(() => { if (!cancelled) setLoadingDetails(false); });
+    return () => { cancelled = true; };
+  }, [projectId, staffId]);
 
   function handleDepart() {
     setError(null);
@@ -65,6 +78,56 @@ export default function StaffPopupMenu({ staffId, staffName, projectId, onClose,
             <div className="px-4 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800">
               <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wide">スタッフ</p>
               <p className="text-base font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">{staffName}</p>
+            </div>
+
+            {/* 基本設定・シフト設定 表示 */}
+            <div className="px-4 py-3 space-y-4 border-b border-zinc-100 dark:border-zinc-800">
+              {loadingDetails ? (
+                <p className="text-xs text-zinc-400 animate-pulse">読み込み中…</p>
+              ) : staffDetails ? (
+                <>
+                  {/* 基本設定 */}
+                  <div>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">基本設定</p>
+                    <div className="space-y-0.5">
+                      {staffDetails.company_name && (
+                        <DetailRow label="所属会社" value={staffDetails.company_name} />
+                      )}
+                      <DetailRow label="ロール" value={staffDetails.role === "project_admin" ? "管理者" : "スタッフ"} />
+                      {staffDetails.account_number && (
+                        <DetailRow label="アカウント番号" value={staffDetails.account_number} mono />
+                      )}
+                      {staffDetails.start_date && (
+                        <DetailRow label="アサイン日" value={staffDetails.start_date} />
+                      )}
+                    </div>
+                  </div>
+                  {/* シフト設定 */}
+                  <div>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">シフト設定</p>
+                    <div className="space-y-0.5">
+                      {staffDetails.sections.length > 0 && (
+                        <DetailRow label="セクション" value={staffDetails.sections.join("・")} />
+                      )}
+                      {(staffDetails.work_days_type || staffDetails.work_days_count != null) && (
+                        <DetailRow
+                          label="稼働日数"
+                          value={`${staffDetails.work_days_type === "weekly" ? "週" : "月"}${staffDetails.work_days_count ?? "?"}日`}
+                        />
+                      )}
+                      {staffDetails.preferred_shift && (
+                        <DetailRow label="優先シフト" value={staffDetails.preferred_shift} />
+                      )}
+                      {staffDetails.preferred_section && (
+                        <DetailRow label="優先セクション" value={staffDetails.preferred_section} />
+                      )}
+                      {staffDetails.max_consecutive_days != null && (
+                        <DetailRow label="連勤上限" value={`${staffDetails.max_consecutive_days}日`} />
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : null}
             </div>
 
             {/* メニュー */}
@@ -230,6 +293,15 @@ export default function StaffPopupMenu({ staffId, staffName, projectId, onClose,
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-[10px] text-zinc-400 w-24 shrink-0">{label}</span>
+      <span className={`text-xs text-zinc-700 dark:text-zinc-200 flex-1 truncate ${mono ? "font-mono tabular-nums" : ""}`}>{value}</span>
     </div>
   );
 }

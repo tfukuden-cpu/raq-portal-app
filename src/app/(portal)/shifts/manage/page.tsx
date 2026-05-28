@@ -201,7 +201,7 @@ export default async function ManageShiftsPage(props: {
     shiftBatch4,
   ] = await Promise.all([
     admin.from("project_members")
-      .select("staff_id, role, section, sections, end_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, churn_risk, churn_risk_since, staffs(id, name, display_name, account_number)")
+      .select("staff_id, role, section, sections, end_date, start_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, churn_risk, churn_risk_since, staffs(id, name, display_name, account_number, company_name)")
       .eq("project_id", selectedProjectId),
     admin.from("shift_patterns")
       .select("name, required_count, required_weekday, required_weekend, section, start_time, end_time")
@@ -283,7 +283,7 @@ export default async function ManageShiftsPage(props: {
   const activeMembers = (members ?? [])
     .map((m) => {
       const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
-        { id: string | null; name: string | null; display_name: string | null; account_number?: string | null } | null;
+        { id: string | null; name: string | null; display_name: string | null; account_number?: string | null; company_name?: string | null } | null;
       const sections = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
       const endDate = (m as { end_date?: string | null }).end_date ?? null;
       const staffId = s?.id ?? m.staff_id;
@@ -303,6 +303,8 @@ export default async function ManageShiftsPage(props: {
         churn_risk:           (m as { churn_risk?: boolean | null }).churn_risk ?? false,
         churn_risk_since:     (m as { churn_risk_since?: string | null }).churn_risk_since ?? null,
         accountNumber:        s?.account_number ?? null,
+        company_name:         s?.company_name ?? null,
+        start_date:           (m as { start_date?: string | null }).start_date ?? null,
         trainingDates:        (trainingMap.get(staffId) ?? [])
           .sort((a, b) => a.training_date.localeCompare(b.training_date)),
       };
@@ -313,7 +315,7 @@ export default async function ManageShiftsPage(props: {
       work_days_type: string | null; work_days_count: number | null;
       preferred_shift: string | null; preferred_section: string | null;
       max_consecutive_days: number | null; shift_note: string | null;
-      accountNumber: string | null;
+      accountNumber: string | null; company_name: string | null; start_date: string | null;
     }[];
 
   const staffNameMap = new Map(activeMembers.map(m => [m.id, m.name]));

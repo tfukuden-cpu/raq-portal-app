@@ -13,7 +13,7 @@ import TrainingSection from "@/components/TrainingSection";
 import OffRequestSection, { type OffRequestEntry } from "@/components/OffRequestSection";
 import { fetchTrainingDatesAction } from "@/app/(portal)/admin/[projectId]/settings/training-actions";
 import { fetchOffRequestsForStaffAction } from "@/app/(portal)/admin/[projectId]/settings/off-request-actions";
-import { updateShiftSettingsAction } from "@/app/(portal)/admin/[projectId]/settings/actions";
+import { updateShiftSettingsAction, departStaffAction } from "@/app/(portal)/admin/[projectId]/settings/actions";
 import { toggleChurnRiskAction } from "@/app/(portal)/attendance/actions";
 import { overrideDraftCellsAction, deleteDraftCellsAction, replaceStaffHolidayDraftAction } from "@/app/(portal)/shifts/actions";
 
@@ -30,6 +30,10 @@ export type StaffInfoMember = {
   shift_note: string | null;
   endDate?: string | null;
   churn_risk?: boolean;
+  company_name?: string | null;
+  role?: string | null;
+  account_number?: string | null;
+  start_date?: string | null;
 };
 
 // kept for backward compat — callers may still pass this but it's no longer displayed
@@ -124,6 +128,24 @@ export default function StaffInfoPanel({
   const [churnRisk,        setChurnRisk]        = useState(member.churn_risk ?? false);
   const [isChurnPending,   startChurnTrans]      = useTransition();
   const [churnMsg,         setChurnMsg]          = useState<string | null>(null);
+
+  const [departStep,    setDepartStep]    = useState<"hidden" | "input">("hidden");
+  const [departDate,    setDepartDate]    = useState(() => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }));
+  const [departError,   setDepartError]   = useState<string | null>(null);
+  const [isDeparting,   startDepartTrans] = useTransition();
+
+  function handleDepart() {
+    setDepartError(null);
+    startDepartTrans(async () => {
+      const r = await departStaffAction(projectId, member.id, departDate);
+      if (r.success) {
+        router.refresh();
+        onClose();
+      } else {
+        setDepartError(r.message ?? "エラーが発生しました");
+      }
+    });
+  }
 
   function handleChurnRiskToggle() {
     const newValue = !churnRisk;
@@ -246,10 +268,29 @@ export default function StaffInfoPanel({
 
         <div className="overflow-y-auto flex-1 px-4 py-3 space-y-4">
 
+          {/* ── 基本設定（表示のみ） ─────────────────────────── */}
+          {(member.company_name || member.role || member.account_number || member.start_date) && (
+            <section>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">基本設定</p>
+              <div className="space-y-1">
+                {member.company_name && <Row label="所属会社"><span className="text-xs text-zinc-700 dark:text-zinc-200">{member.company_name}</span></Row>}
+                {member.role && (
+                  <Row label="ロール">
+                    <span className="text-xs px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-semibold">
+                      {member.role === "project_admin" ? "管理者" : "スタッフ"}
+                    </span>
+                  </Row>
+                )}
+                {member.account_number && <Row label="アカウント番号"><span className="text-xs font-mono tabular-nums text-zinc-700 dark:text-zinc-200">{member.account_number}</span></Row>}
+                {member.start_date && <Row label="アサイン日"><span className="text-xs tabular-nums text-zinc-700 dark:text-zinc-200">{member.start_date}</span></Row>}
+              </div>
+            </section>
+          )}
+
           {/* ── 基本設定（表示） ─────────────────────────── */}
           <section>
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">基本設定</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">シフト設定</p>
               <button
                 type="button"
                 onClick={() => { setEditOpen(v => !v); setSaveError(null); }}
@@ -305,33 +346,6 @@ export default function StaffInfoPanel({
                   <Row label="退職予定日">
                     <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold tabular-nums">{member.endDate}</span>
                   </Row>
-                )}
-                {/* 離脱リスクトグル */}
-                <div className="flex items-center justify-between gap-2 py-1 mt-1 border-t border-zinc-100 dark:border-zinc-800 pt-2">
-                  <div>
-                    <span className="text-[11px] text-zinc-400">離脱リスク</span>
-                    {churnRisk && (
-                      <span className="ml-1.5 text-[9px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none">ON</span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleChurnRiskToggle}
-                    disabled={isChurnPending}
-                    title={churnRisk ? "離脱リスクを解除" : "離脱リスクをONにする"}
-                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-                      churnRisk ? "bg-red-500" : "bg-zinc-300 dark:bg-zinc-600"
-                    }`}
-                  >
-                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                      churnRisk ? "translate-x-4" : "translate-x-0.5"
-                    }`} />
-                  </button>
-                </div>
-                {churnMsg && (
-                  <p className={`text-[10px] font-semibold mt-0.5 ${churnRisk || churnMsg.includes("解除") ? "text-zinc-400" : "text-red-500"}`}>
-                    {churnMsg}
-                  </p>
                 )}
               </div>
             ) : (
@@ -501,6 +515,74 @@ export default function StaffInfoPanel({
                   onDraftCellsChanged?.(cells);
                 }}
               />
+            )}
+          </section>
+
+          {/* ── 離脱リスク ─────────────────────────────────── */}
+          <section>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">離脱リスク</p>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-300">
+                  {churnRisk ? "充足カウントから除外中" : "通常カウント対象"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleChurnRiskToggle}
+                disabled={isChurnPending}
+                title={churnRisk ? "離脱リスクを解除" : "離脱リスクをONにする"}
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                  churnRisk ? "bg-red-500" : "bg-zinc-300 dark:bg-zinc-600"
+                }`}
+              >
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                  churnRisk ? "translate-x-4" : "translate-x-0.5"
+                }`} />
+              </button>
+            </div>
+            {churnMsg && (
+              <p className="text-[10px] text-zinc-400 mt-1">{churnMsg}</p>
+            )}
+          </section>
+
+          {/* ── 離脱処理 ─────────────────────────────────── */}
+          <section>
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">離脱処理</p>
+            {departStep === "hidden" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setDepartDate(new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }));
+                  setDepartStep("input");
+                }}
+                className="text-xs text-red-500 hover:text-red-600 dark:text-red-400 font-semibold"
+              >
+                離脱処理を行う…
+              </button>
+            ) : (
+              <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50/40 dark:bg-red-950/20 p-3 space-y-3">
+                <div>
+                  <label className="text-[10px] text-zinc-500 font-semibold block mb-1">最終出勤日（この日までシフトを保持）</label>
+                  <input
+                    type="date"
+                    value={departDate}
+                    onChange={e => setDepartDate(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                  />
+                </div>
+                {departError && <p className="text-[10px] text-red-500">{departError}</p>}
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => { setDepartStep("hidden"); setDepartError(null); }}
+                    className="flex-1 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                    キャンセル
+                  </button>
+                  <button type="button" onClick={handleDepart} disabled={isDeparting || !departDate}
+                    className="flex-1 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold disabled:opacity-40 transition-colors">
+                    {isDeparting ? "処理中…" : "離脱を確定"}
+                  </button>
+                </div>
+              </div>
             )}
           </section>
 

@@ -43,6 +43,7 @@ type Member = {
   preferred_shift?: string | null; preferred_section?: string | null;
   max_consecutive_days?: number | null; shift_note?: string | null;
   accountNumber?: string | null; churn_risk?: boolean; churn_risk_since?: string | null;
+  company_name?: string | null; role?: string | null; start_date?: string | null;
 };
 type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
@@ -2647,6 +2648,10 @@ export default function ShiftEditGrid({
             shift_note:           staffInfoTarget.shift_note ?? null,
             endDate:              staffInfoTarget.endDate,
             churn_risk:           staffInfoTarget.churn_risk ?? false,
+            company_name:         staffInfoTarget.company_name ?? null,
+            role:                 staffInfoTarget.role ?? null,
+            start_date:           staffInfoTarget.start_date ?? null,
+            account_number:       staffInfoTarget.accountNumber ?? null,
           }}
           projectId={projectId}
           availableSections={availableSections}

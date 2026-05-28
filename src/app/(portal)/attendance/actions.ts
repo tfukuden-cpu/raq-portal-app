@@ -183,6 +183,49 @@ export async function toggleChurnRiskAction(
   return { ok: true };
 }
 
+export type StaffDetails = {
+  company_name: string | null;
+  role: string;
+  account_number: string | null;
+  start_date: string | null;
+  work_days_type: string | null;
+  work_days_count: number | null;
+  preferred_shift: string | null;
+  preferred_section: string | null;
+  max_consecutive_days: number | null;
+  sections: string[];
+};
+
+/** スタッフ詳細情報を取得（StaffPopupMenuの表示用） */
+export async function getStaffDetailsAction(
+  projectId: string,
+  staffId: string,
+): Promise<StaffDetails | null> {
+  await requireAdmin(projectId);
+  const admin = createAdminClient();
+  const { data } = await admin.from("project_members")
+    .select("role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, staffs(company_name, account_number)")
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .maybeSingle();
+  if (!data) return null;
+  const s = (Array.isArray(data.staffs) ? data.staffs[0] : data.staffs) as
+    { company_name: string | null; account_number: string | null } | null;
+  const sections = ((data as { sections?: string[] | null }).sections ?? []).filter(Boolean) as string[];
+  return {
+    company_name:         s?.company_name ?? null,
+    role:                 (data.role as string) ?? "staff",
+    account_number:       s?.account_number ?? null,
+    start_date:           (data as { start_date?: string | null }).start_date ?? null,
+    work_days_type:       (data as { work_days_type?: string | null }).work_days_type ?? null,
+    work_days_count:      (data as { work_days_count?: number | null }).work_days_count ?? null,
+    preferred_shift:      (data as { preferred_shift?: string | null }).preferred_shift ?? null,
+    preferred_section:    (data as { preferred_section?: string | null }).preferred_section ?? null,
+    max_consecutive_days: (data as { max_consecutive_days?: number | null }).max_consecutive_days ?? null,
+    sections,
+  };
+}
+
 /** 公休スタッフへ出勤依頼LINE一括送信 */
 export async function sendBulkWorkRequestAction(
   projectId: string,
