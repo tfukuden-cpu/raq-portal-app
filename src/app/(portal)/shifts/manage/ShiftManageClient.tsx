@@ -263,7 +263,7 @@ export default function ShiftManageClient({
     const header1 = ["", "", ...allDates.map(d => {
       const [, m, day] = d.split("-");
       return `${parseInt(m)}/${parseInt(day)}`;
-    })];
+    })];  // 列順: 名前 | アカウント番号 | 日付…
     const header2 = ["", "", ...allDates.map(d =>
       DAY_JP[new Date(`${d}T12:00:00+09:00`).getDay()]
     )];
@@ -289,9 +289,9 @@ export default function ShiftManageClient({
       const nameLabel = m?.name ?? "";
 
       if (!m || (sectionIds && !sectionIds.has(m.id))) {
-        dataRows.push([accLabel, "", ...allDates.map(() => "")]);
+        dataRows.push(["", accLabel, ...allDates.map(() => "")]);
       } else {
-        dataRows.push([accLabel, nameLabel, ...allDates.map(date => cellValue(m.id, date))]);
+        dataRows.push([nameLabel, accLabel, ...allDates.map(date => cellValue(m.id, date))]);
       }
     }
 
@@ -299,7 +299,7 @@ export default function ShiftManageClient({
     const noAccMembers = activeMembers.filter(m => getAccNum(m.accountNumber) === Infinity);
     for (const m of noAccMembers) {
       if (sectionIds && !sectionIds.has(m.id)) continue;
-      dataRows.push(["", m.name, ...allDates.map(date => cellValue(m.id, date))]);
+      dataRows.push([m.name, "", ...allDates.map(date => cellValue(m.id, date))]);
     }
 
     const csv = [header1, header2, ...dataRows]
