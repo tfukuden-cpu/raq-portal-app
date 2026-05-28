@@ -372,14 +372,15 @@ export async function publishShiftsAction(
 }
 
 /**
- * セクション仮確定のON/OFFを切り替える
+ * セクション仮確定の種別を設定する
+ * lockType: 'none' = 解除, 'slot' = 枠確定（人の入替OK）, 'staff' = 人確定（人を固定）
  * draftEntries を渡すと draft_data も同時保存（再仮組みの保護を確実にするため）
  */
 export async function setSectionLockedAction(
   projectId: string,
   targetMonth: string,
   sectionName: string,
-  locked: boolean,
+  lockType: "none" | "slot" | "staff",
   draftEntries?: GridDraftEntry[],
 ): Promise<ActionResult> {
   const supabase = await createClient();
@@ -389,47 +390,38 @@ export async function setSectionLockedAction(
   const admin = createAdminClient();
   const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
 
-  // 現在の locked_sections を取得
+  // 現在の両ロック状態を取得
   const { data: draftRow } = await admin
     .from("shift_grid_drafts")
-    .select("locked_sections")
+    .select("locked_sections, slot_locked_sections")
     .eq("project_id", projectId)
     .eq("target_month", targetMonth)
     .maybeSingle();
 
-  const current = (draftRow?.locked_sections as string[] | null) ?? [];
-  const updated = locked
-    ? [...new Set([...current, sectionName])]
-    : current.filter((s: string) => s !== sectionName);
+  const currentStaff = (draftRow?.locked_sections       as string[] | null) ?? [];
+  const currentSlot  = (draftRow?.slot_locked_sections  as string[] | null) ?? [];
 
-  // draft_data も同時保存：再仮組み時の「仮確定スタッフ除外」が確実に機能するようにする
-  // draftEntries が渡された場合は draft_data も同時更新、そうでなければ locked_sections のみ更新
-  let upsertError: { message: string } | null = null;
-  if (draftEntries !== undefined) {
-    const { error } = await admin
-      .from("shift_grid_drafts")
-      .upsert(
-        {
-          project_id:      projectId,
-          target_month:    targetMonth,
-          locked_sections: updated,
-          draft_data:      draftEntries,
-          saved_by:        myStaffId,
-          saved_at:        new Date().toISOString(),
-        },
-        { onConflict: "project_id,target_month" },
-      );
-    upsertError = error;
-  } else {
-    const { error } = await admin
-      .from("shift_grid_drafts")
-      .upsert(
-        { project_id: projectId, target_month: targetMonth, locked_sections: updated },
-        { onConflict: "project_id,target_month" },
-      );
-    upsertError = error;
-  }
-  const error = upsertError;
+  // 一度両方から除去してから、新しいタイプに追加
+  const updatedStaff = currentStaff.filter((s: string) => s !== sectionName);
+  const updatedSlot  = currentSlot.filter((s:  string) => s !== sectionName);
+  if (lockType === "staff") updatedStaff.push(sectionName);
+  if (lockType === "slot")  updatedSlot.push(sectionName);
+
+  const baseUpsert = {
+    project_id:           projectId,
+    target_month:         targetMonth,
+    locked_sections:      updatedStaff,
+    slot_locked_sections: updatedSlot,
+  };
+
+  // draft_data も同時保存（仮確定スタッフ除外の保護が確実に機能するようにする）
+  const upsertPayload = draftEntries !== undefined
+    ? { ...baseUpsert, draft_data: draftEntries, saved_by: myStaffId, saved_at: new Date().toISOString() }
+    : baseUpsert;
+
+  const { error } = await admin
+    .from("shift_grid_drafts")
+    .upsert(upsertPayload, { onConflict: "project_id,target_month" });
 
   if (error) return { success: false, message: error.message };
 

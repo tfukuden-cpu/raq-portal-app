@@ -62,6 +62,7 @@ type Props = {
   draftSavedAt: string | null;
   isPublished: boolean;
   lockedSections: string[];
+  slotLockedSections: string[];
   offRequests: OffRequest[];
   prevMonthShifts?: { staff_id: string; shift_date: string; shift_name: string | null }[];
   monthNavBase: string;
@@ -74,7 +75,7 @@ type Props = {
 function ShiftEditGridOverlay({
   projectId, targetMonthStr, allDates, shifts, activeMembers, shiftPatterns,
   slotRequirements, changeLogs, activeDraft, draftSavedBy, draftSavedAt,
-  offRequests, isPublished, lockedSections, prevMonthShifts, sortByAccount,
+  offRequests, isPublished, lockedSections, slotLockedSections, prevMonthShifts, sortByAccount,
   onSaved, onCancel,
 }: {
   projectId: string; targetMonthStr: string; allDates: string[];
@@ -83,7 +84,7 @@ function ShiftEditGridOverlay({
   changeLogs: Props["changeLogs"]; activeDraft: GridDraftEntry[] | null;
   draftSavedBy: string | null; draftSavedAt: string | null;
   offRequests: Props["offRequests"]; isPublished: boolean;
-  lockedSections: string[]; sortByAccount?: boolean;
+  lockedSections: string[]; slotLockedSections: string[]; sortByAccount?: boolean;
   prevMonthShifts?: Props["prevMonthShifts"];
   onSaved: () => void; onCancel: () => void;
 }) {
@@ -121,6 +122,7 @@ function ShiftEditGridOverlay({
         offRequests={offRequests}
         isPublished={isPublished}
         initialLockedSections={lockedSections}
+        initialSlotLockedSections={slotLockedSections}
         prevMonthShifts={prevMonthShifts}
         sortByAccount={sortByAccount}
         onSaved={onSaved}
@@ -150,7 +152,7 @@ export default function ShiftManageClient({
   projectId, targetYear, targetMonth, allDates, defaultDate,
   shifts, activeMembers: activeMembersRaw, shiftPatterns, shiftRequests, slotRequirements,
   changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
-  isPublished, lockedSections, offRequests, prevMonthShifts,
+  isPublished, lockedSections, slotLockedSections, offRequests, prevMonthShifts,
   monthNavBase, prevMonth, nextMonth,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
@@ -237,8 +239,8 @@ export default function ShiftManageClient({
   function handleRegen() {
     setRegenError(null);
     startRegen(async () => {
-      // 仮確定済みセクションはスキップ（解除するまで保持）
-      const r = await regenerateShiftDraftAction(projectId, targetYear, targetMonth, undefined, undefined, lockedSections);
+      // 仮確定済みセクションはスキップ（人確定・枠確定両方）
+      const r = await regenerateShiftDraftAction(projectId, targetYear, targetMonth, undefined, undefined, [...lockedSections, ...slotLockedSections]);
       if (!r.success) {
         setRegenError(r.message ?? "仮組み生成に失敗しました");
         return;
@@ -353,6 +355,7 @@ export default function ShiftManageClient({
       offRequests={offRequests}
       isPublished={isPublished}
       lockedSections={lockedSections}
+      slotLockedSections={slotLockedSections}
       prevMonthShifts={prevMonthShifts}
       sortByAccount={sortByAccount}
       onSaved={handleSaved}

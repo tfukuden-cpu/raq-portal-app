@@ -280,13 +280,15 @@ export async function generateShiftDraftAction(
   if (targetSection) {
     const { data: currentDraft } = await admin
       .from("shift_grid_drafts")
-      .select("draft_data, locked_sections")
+      .select("draft_data, locked_sections, slot_locked_sections")
       .eq("project_id", projectId)
       .eq("target_month", monthStr)
       .maybeSingle();
 
     storedDraftEntries = (currentDraft?.draft_data as DraftEntry[] | null) ?? [];
-    const lockedSectionsFromDB = (currentDraft?.locked_sections as string[] | null) ?? [];
+    // 人確定（staff lock）: 該当セクションの人は他セクション再仮組みで使わない
+    const staffLockedSections = (currentDraft?.locked_sections      as string[] | null) ?? [];
+    // 枠確定（slot lock）:  該当セクションの人は他セクション再仮組みでも使ってよい（入替OK）
 
     const targetPNames = new Set(patterns.map(p => p.name));
     const otherEntries = storedDraftEntries.filter(e => !targetPNames.has(e.n));
@@ -309,26 +311,24 @@ export async function generateShiftDraftAction(
       }
     }
 
-    // ── 仮確定セクションのスタッフを候補から完全除外 ──────────────
-    // 仮確定セクションにいる人は「人を奪う」ことになるため、再仮組み対象外にする
-    if (lockedSectionsFromDB.length > 0) {
-      // 仮確定セクションのパターン名セット（全パターン定義から逆引き）
-      const lockedPatternNames = new Set(
+    // ── 人確定セクションのスタッフを候補から完全除外 ──────────────
+    // 人確定（locked_sections）にいる人は他セクションで使わない
+    // ※ 枠確定（slot_locked_sections）の人は入替OK なので除外しない
+    if (staffLockedSections.length > 0) {
+      const staffLockedPatternNames = new Set(
         allPatternDefs
-          .filter(p => p.section && lockedSectionsFromDB.includes(p.section))
+          .filter(p => p.section && staffLockedSections.includes(p.section))
           .map(p => p.name)
       );
 
-      // 仮確定セクションのドラフトエントリに登場するスタッフIDを収集
       const lockedStaffIds = new Set<string>();
       for (const e of storedDraftEntries) {
-        if (lockedPatternNames.has(e.n)) {
+        if (staffLockedPatternNames.has(e.n)) {
           const si = e.k.lastIndexOf("__");
           lockedStaffIds.add(e.k.slice(0, si));
         }
       }
 
-      // そのスタッフを候補から除外（同日保護だけでなく月全体で使わない）
       if (lockedStaffIds.size > 0) {
         activeMemberRows = activeMemberRows.filter(m => !lockedStaffIds.has(m.staff_id));
       }

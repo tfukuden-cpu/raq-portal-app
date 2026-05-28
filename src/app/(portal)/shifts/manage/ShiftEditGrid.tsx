@@ -101,6 +101,7 @@ interface Props {
   offRequests?: OffRequest[];
   isPublished?: boolean;
   initialLockedSections?: string[];
+  initialSlotLockedSections?: string[];
   prevMonthShifts?: { staff_id: string; shift_date: string; shift_name: string | null }[];
   sortByAccount?: boolean;
   onSaved: () => void;
@@ -793,7 +794,7 @@ export default function ShiftEditGrid({
   projectId, targetMonth, allDates, shifts, activeMembers,
   shiftPatterns, slotRequirements, changeLogs,
   initialDraft, draftSavedBy, draftSavedAt,
-  offRequests, isPublished, initialLockedSections,
+  offRequests, isPublished, initialLockedSections, initialSlotLockedSections,
   prevMonthShifts, sortByAccount,
   onSaved, onCancel,
 }: Props) {
@@ -834,9 +835,12 @@ export default function ShiftEditGrid({
   const [regenError, setRegenError] = useState<string | null>(null);
   const [regenDone, setRegenDone] = useState<number | null>(null); // 完了後の割当数
   const [regenSection, setRegenSection] = useState<string>(""); // "" = 全セクション
-  // 仮確定セクション管理
-  const [lockedSections, setLockedSections] = useState<Set<string>>(
+  // 仮確定セクション管理（人確定・枠確定の2種類）
+  const [staffLockedSections, setStaffLockedSections] = useState<Set<string>>(
     () => new Set(initialLockedSections ?? [])
+  );
+  const [slotLockedSections, setSlotLockedSections] = useState<Set<string>>(
+    () => new Set(initialSlotLockedSections ?? [])
   );
   const [isLocking, startLockTransition] = useTransition();
   const [lockError, setLockError] = useState<string | null>(null);
@@ -1001,15 +1005,19 @@ export default function ShiftEditGrid({
   }, [resolvedGrid, allDates, shiftPatterns, slotReqMap]);
 
   // ── セクション仮確定ステータス ─────────────────────────────────
-  // 'none' = 未着手, 'draft' = ドラフト済, 'locked' = 仮確定
+  // 'none' = 未着手, 'draft' = ドラフト済, 'staff_locked' = 人確定, 'slot_locked' = 枠確定
   const sectionDraftStatus = useMemo(() => {
-    const status = new Map<string, "none" | "draft" | "locked">();
+    const status = new Map<string, "none" | "draft" | "staff_locked" | "slot_locked">();
     const sections = [...new Set(
       shiftPatterns.map(p => p.section).filter((s): s is string => !!s)
     )];
     for (const section of sections) {
-      if (lockedSections.has(section)) {
-        status.set(section, "locked");
+      if (staffLockedSections.has(section)) {
+        status.set(section, "staff_locked");
+        continue;
+      }
+      if (slotLockedSections.has(section)) {
+        status.set(section, "slot_locked");
         continue;
       }
       const sectionPatternNames = new Set(
@@ -1025,20 +1033,26 @@ export default function ShiftEditGrid({
       status.set(section, hasDraft ? "draft" : "none");
     }
     return status;
-  }, [shiftPatterns, lockedSections, drafts]);
+  }, [shiftPatterns, staffLockedSections, slotLockedSections, drafts]);
 
-  // 仮確定トグル
-  // 仮確定時は現在のdraftをDBに同時保存する（再仮組み時の除外保護を確実にするため）
-  function handleToggleLock(sectionName: string, lock: boolean) {
+  // 仮確定トグル（枠確定 / 人確定 / 解除）
+  // 確定時は現在のdraftをDBに同時保存する（再仮組み時の除外保護を確実にするため）
+  function handleToggleLock(sectionName: string, lockType: "none" | "slot" | "staff") {
     setLockError(null);
     startLockTransition(async () => {
       const currentEntries = serializeDrafts();
-      const r = await setSectionLockedAction(projectId, targetMonth, sectionName, lock, currentEntries);
+      const r = await setSectionLockedAction(projectId, targetMonth, sectionName, lockType, currentEntries);
       if (r.success) {
-        setLockedSections(prev => {
+        setStaffLockedSections(prev => {
           const next = new Set(prev);
-          if (lock) next.add(sectionName);
-          else next.delete(sectionName);
+          next.delete(sectionName);
+          if (lockType === "staff") next.add(sectionName);
+          return next;
+        });
+        setSlotLockedSections(prev => {
+          const next = new Set(prev);
+          next.delete(sectionName);
+          if (lockType === "slot") next.add(sectionName);
           return next;
         });
       } else {
@@ -1182,8 +1196,9 @@ export default function ShiftEditGrid({
       const [y, m] = targetMonth.split("-").map(Number);
       // noSave=true: DBへ書き込まず、返ってきたエントリのみグリッドに反映
       // 全体再仮組みかつ overrideLocked でない場合はロック済みセクションをサーバー側でもスキップ
-      const skipForServer = (!targetSection && !overrideLocked && lockedSections.size > 0)
-        ? [...lockedSections] : undefined;
+      const allLockedForSkip = new Set([...staffLockedSections, ...slotLockedSections]);
+      const skipForServer = (!targetSection && !overrideLocked && allLockedForSkip.size > 0)
+        ? [...allLockedForSkip] : undefined;
       const r = await regenerateShiftDraftAction(projectId, y, m, targetSection || undefined, true, skipForServer);
       if (!r.success) {
         setRegenError(r.message ?? "再仮組みに失敗しました");
@@ -1240,9 +1255,10 @@ export default function ShiftEditGrid({
       } else {
         const parsed = parseDraftEntries(r.draftEntries);
         // ロック済みセクションのエントリをクライアント側でも保持
-        if (!overrideLocked && lockedSections.size > 0) {
+        const allLocked = new Set([...staffLockedSections, ...slotLockedSections]);
+        if (!overrideLocked && allLocked.size > 0) {
           const lockedPatterns = new Set(
-            shiftPatterns.filter(p => p.section && lockedSections.has(p.section)).map(p => p.name)
+            shiftPatterns.filter(p => p.section && allLocked.has(p.section)).map(p => p.name)
           );
           const merged = new Map(parsed);
           for (const [key, val] of drafts) {
@@ -1616,9 +1632,9 @@ export default function ShiftEditGrid({
               className="relative px-2.5 py-1.5 text-xs font-semibold rounded-lg text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-700 hover:bg-orange-100 disabled:opacity-40 transition-colors"
             >
               再仮組み
-              {lockedSections.size > 0 && (
+              {(staffLockedSections.size + slotLockedSections.size) > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center tabular-nums">
-                  {lockedSections.size}
+                  {staffLockedSections.size + slotLockedSections.size}
                 </span>
               )}
             </button>
@@ -1700,13 +1716,17 @@ export default function ShiftEditGrid({
                 <div className="overflow-y-auto flex-1 px-3 py-3 space-y-1.5">
                   {sectionOptions.map(section => {
                     const st = sectionDraftStatus.get(section) ?? "none";
-                    const isLocked = st === "locked";
+                    const isStaffLocked = st === "staff_locked";
+                    const isSlotLocked  = st === "slot_locked";
+                    const isLocked = isStaffLocked || isSlotLocked;
                     const isSelected = regenSection === section;
                     return (
                       <div key={section} className={[
                         "rounded-2xl border transition-all overflow-hidden",
-                        isLocked
+                        isStaffLocked
                           ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20"
+                          : isSlotLocked
+                          ? "border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20"
                           : isSelected
                           ? "border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/20"
                           : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800",
@@ -1720,9 +1740,15 @@ export default function ShiftEditGrid({
                             className="flex items-center gap-2.5 flex-1 min-w-0 text-left disabled:cursor-default"
                           >
                             {/* ステータスアイコン */}
-                            {isLocked ? (
+                            {isStaffLocked ? (
                               <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center shrink-0">
                                 <svg viewBox="0 0 10 10" className="w-3 h-3 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </span>
+                            ) : isSlotLocked ? (
+                              <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 flex items-center justify-center shrink-0">
+                                <svg viewBox="0 0 10 10" className="w-3 h-3 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2.5">
                                   <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                               </span>
@@ -1737,34 +1763,54 @@ export default function ShiftEditGrid({
                             <div className="flex items-baseline gap-2 min-w-0">
                               <span className={[
                                 "text-sm font-bold truncate",
-                                isLocked
-                                  ? "text-emerald-700 dark:text-emerald-300"
-                                  : "text-zinc-800 dark:text-zinc-100",
+                                isStaffLocked ? "text-emerald-700 dark:text-emerald-300"
+                                : isSlotLocked ? "text-indigo-700 dark:text-indigo-300"
+                                : "text-zinc-800 dark:text-zinc-100",
                               ].join(" ")}>{section}</span>
                               <span className={[
                                 "text-[10px] font-semibold shrink-0",
-                                st === "locked" ? "text-emerald-600 dark:text-emerald-400"
+                                isStaffLocked ? "text-emerald-600 dark:text-emerald-400"
+                                : isSlotLocked ? "text-indigo-600 dark:text-indigo-400"
                                 : st === "draft" ? "text-blue-500 dark:text-blue-400"
                                 : "text-zinc-400",
                               ].join(" ")}>
-                                {st === "locked" ? "仮確定済" : st === "draft" ? "ドラフト済" : "未着手"}
+                                {isStaffLocked ? "人確定済" : isSlotLocked ? "枠確定済" : st === "draft" ? "ドラフト済" : "未着手"}
                               </span>
                             </div>
                           </button>
 
-                          {/* 仮確定トグル */}
-                          <button
-                            onClick={() => handleToggleLock(section, !isLocked)}
-                            disabled={isRegenerating || isLocking}
-                            className={[
-                              "shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40",
-                              isLocked
-                                ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200"
-                                : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600",
-                            ].join(" ")}
-                          >
-                            {isLocked ? "解除" : "仮確定"}
-                          </button>
+                          {/* 仮確定ボタン群 */}
+                          {isLocked ? (
+                            <button
+                              onClick={() => handleToggleLock(section, "none")}
+                              disabled={isRegenerating || isLocking}
+                              className={[
+                                "shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40",
+                                isStaffLocked
+                                  ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200"
+                                  : "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200",
+                              ].join(" ")}
+                            >
+                              解除
+                            </button>
+                          ) : (
+                            <div className="flex gap-1 shrink-0">
+                              <button
+                                onClick={() => handleToggleLock(section, "slot")}
+                                disabled={isRegenerating || isLocking}
+                                className="px-2 py-1 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800"
+                              >
+                                枠確定
+                              </button>
+                              <button
+                                onClick={() => handleToggleLock(section, "staff")}
+                                disabled={isRegenerating || isLocking}
+                                className="px-2 py-1 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
+                              >
+                                人確定
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -1793,8 +1839,8 @@ export default function ShiftEditGrid({
                         ? "生成中…"
                         : regenSection
                         ? `「${regenSection}」を再仮組み`
-                        : lockedSections.size > 0
-                        ? `再仮組み（仮確定${lockedSections.size}件はスキップ）`
+                        : (staffLockedSections.size + slotLockedSections.size) > 0
+                        ? `再仮組み（仮確定${staffLockedSections.size + slotLockedSections.size}件はスキップ）`
                         : "全セクションを再仮組み"}
                     </button>
                     <button
@@ -2110,35 +2156,46 @@ export default function ShiftEditGrid({
                     {showSectionHeader && (
                       <tr>
                         {/* 名前列だけ sticky にして横スクロール時も固定 */}
-                        <td
-                          className={[
-                            "sticky left-0 z-10 px-2 py-0.5 border-b",
-                            member.section && lockedSections.has(member.section)
-                              ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
-                              : "bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700",
-                          ].join(" ")}>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tracking-wide uppercase">
-                              {member.section ?? "セクション未設定"}
-                            </span>
-                            {member.section && lockedSections.has(member.section) && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
-                                <svg viewBox="0 0 10 10" className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                仮確定
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        {/* 残り列は背景だけ埋める（sticky なし） */}
-                        <td colSpan={prevDates.length + allDates.length + 1}
-                          className={[
-                            "border-b",
-                            member.section && lockedSections.has(member.section)
-                              ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
-                              : "bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700",
-                          ].join(" ")} />
+                        {(() => {
+                          const secName = member.section;
+                          const isSecStaffLocked = !!(secName && staffLockedSections.has(secName));
+                          const isSecSlotLocked  = !!(secName && slotLockedSections.has(secName));
+                          const headerBg = isSecStaffLocked
+                            ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                            : isSecSlotLocked
+                            ? "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800"
+                            : "bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700";
+                          return (
+                            <>
+                              <td className={["sticky left-0 z-10 px-2 py-0.5 border-b", headerBg].join(" ")}>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tracking-wide uppercase">
+                                    {secName ?? "セクション未設定"}
+                                  </span>
+                                  {isSecStaffLocked && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
+                                      <svg viewBox="0 0 10 10" className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                      人確定
+                                    </span>
+                                  )}
+                                  {isSecSlotLocked && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold">
+                                      <svg viewBox="0 0 10 10" className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M1.5 5l2.5 2.5 4.5-4" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                      枠確定
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              {/* 残り列は背景だけ埋める（sticky なし） */}
+                              <td colSpan={prevDates.length + allDates.length + 1}
+                                className={["border-b", headerBg].join(" ")} />
+                            </>
+                          );
+                        })()}
                       </tr>
                     )}
                     <tr
@@ -2236,17 +2293,14 @@ export default function ShiftEditGrid({
                             </td>
                           );
                         }
-                        const isCellLocked = !!(member.section && lockedSections.has(member.section));
                         return (
                           <td key={date}
                             onClick={(e) => {
-                              if (isCellLocked) return; // 仮確定セクションは編集不可
                               setPopover({ staffId: member.id, date, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() });
                             }}
                             className={[
                               "border-b border-r border-zinc-100 dark:border-zinc-800",
-                              "h-8 align-middle p-0 overflow-hidden transition-colors relative",
-                              isCellLocked ? "cursor-default" : "cursor-pointer",
+                              "h-8 align-middle p-0 overflow-hidden transition-colors relative cursor-pointer",
                               // フォーカス行 + 候補 → 青強調
                               isFocusedRow && isCandidate
                                 ? "bg-blue-300 dark:bg-blue-700/60 ring-inset ring-2 ring-blue-400"
