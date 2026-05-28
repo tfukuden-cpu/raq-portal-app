@@ -5,12 +5,16 @@ import ShiftOffRequestSection from "@/app/(portal)/admin/[projectId]/settings/Sh
 import { HolidayRulesList } from "@/app/(portal)/admin/[projectId]/settings/SettingsClient";
 import type { HolidayRuleInput } from "@/app/(portal)/admin/holiday-rule-config";
 
+type Member = { id: string; name: string; accountNumber: string | null };
+
 export default function ShiftHolidayTab({
   projectId,
   initialRules,
+  members = [],
 }: {
   projectId: string;
   initialRules: HolidayRuleInput[];
+  members?: Member[];
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
 
@@ -20,6 +24,7 @@ export default function ShiftHolidayTab({
       {/* 希望休一覧（テーブル） ＋ ヘッダー右に「希望休設定」ボタン */}
       <ShiftOffRequestSection
         projectId={projectId}
+        members={members}
         onRulesClick={() => setRulesOpen(o => !o)}
         rulesOpen={rulesOpen}
       />

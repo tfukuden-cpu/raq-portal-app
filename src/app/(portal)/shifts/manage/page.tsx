@@ -131,16 +131,38 @@ export default async function ManageShiftsPage(props: {
 
   // ── 希望休設定タブ ──
   if (tab === "holiday") {
-    const { data: holidayRulesRaw } = await admin
-      .from("holiday_rules")
-      .select("rule_type, value")
-      .eq("project_id", selectedProjectId)
-      .order("sort_order");
+    const [{ data: holidayRulesRaw }, { data: membersRaw }] = await Promise.all([
+      admin.from("holiday_rules")
+        .select("rule_type, value")
+        .eq("project_id", selectedProjectId)
+        .order("sort_order"),
+      admin.from("project_members")
+        .select("staff_id, staffs(id, name, display_name, account_number)")
+        .eq("project_id", selectedProjectId),
+    ]);
 
     const holidayRules = (holidayRulesRaw ?? []).map(r => ({
       rule_type: r.rule_type as string,
       value:     String(r.value),
     }));
+
+    const holidayMembers = (membersRaw ?? [])
+      .map(m => {
+        const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+          { id?: string | null; name?: string | null; display_name?: string | null; account_number?: string | null } | null;
+        return {
+          id:            (s?.id ?? m.staff_id) as string,
+          name:          (s?.display_name ?? s?.name ?? m.staff_id) as string,
+          accountNumber: (s?.account_number ?? null) as string | null,
+        };
+      })
+      .filter(m => !!m.id)
+      .sort((a, b) => {
+        if (a.accountNumber && b.accountNumber) return a.accountNumber.localeCompare(b.accountNumber, "ja");
+        if (a.accountNumber) return -1;
+        if (b.accountNumber) return 1;
+        return a.name.localeCompare(b.name, "ja");
+      });
 
     return (
       <main className="bg-white dark:bg-zinc-950 max-w-5xl mx-auto pb-24">
@@ -154,7 +176,11 @@ export default async function ManageShiftsPage(props: {
           <TabBar tab={tab} tabUrl={tabUrl} />
         </HeaderHeightSetter>
         <div className="px-4 pt-6 pb-8">
-          <ShiftHolidayTab projectId={selectedProjectId} initialRules={holidayRules} />
+          <ShiftHolidayTab
+            projectId={selectedProjectId}
+            initialRules={holidayRules}
+            members={holidayMembers}
+          />
         </div>
       </main>
     );

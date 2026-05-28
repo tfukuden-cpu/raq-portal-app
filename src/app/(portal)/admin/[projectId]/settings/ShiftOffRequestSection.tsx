@@ -3,9 +3,12 @@
 import { useState, useTransition, useEffect } from "react";
 import {
   fetchOffRequestsAction,
+  fetchOffRequestsForStaffAction,
   type OffRequestRow,
 } from "./off-request-actions";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
+import OffRequestSection from "@/components/OffRequestSection";
+import type { OffRequestEntry } from "@/components/OffRequestSection";
 
 const PRIORITY_SHORT: Record<string, string> = {
   "第一希望休": "希休1",
@@ -27,6 +30,8 @@ function fmtDay(d: string) {
   return `${parseInt(d.slice(8, 10))}日`;
 }
 
+type Member = { id: string; name: string; accountNumber: string | null };
+
 type GroupedEntry = {
   staffId:       string;
   staffName:     string;
@@ -34,14 +39,23 @@ type GroupedEntry = {
   dates: { date: string; priority: string }[];
 };
 
+type EditingStaff = {
+  id: string;
+  name: string;
+  accountNumber: string | null;
+  initialEntries: OffRequestEntry[];
+};
+
 export default function ShiftOffRequestSection({
   projectId,
   onRulesClick,
   rulesOpen = false,
+  members = [],
 }: {
   projectId: string;
   onRulesClick?: () => void;
   rulesOpen?: boolean;
+  members?: Member[];
 }) {
   const now = new Date();
   const [year,  setYear]  = useState(now.getFullYear());
@@ -51,6 +65,12 @@ export default function ShiftOffRequestSection({
   const [error,  setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [isFetching, startFetch] = useTransition();
+
+  // ピッカー & 編集モーダル
+  const [pickerOpen,    setPickerOpen]    = useState(false);
+  const [pickerSearch,  setPickerSearch]  = useState("");
+  const [editingStaff,  setEditingStaff]  = useState<EditingStaff | null>(null);
+  const [isLoadingEntries, startLoadEntries] = useTransition();
 
   // マウント時・月変更時に自動取得
   useEffect(() => {
@@ -72,6 +92,16 @@ export default function ShiftOffRequestSection({
   function nextMonth() {
     if (month === 12) { setYear(y => y + 1); setMonth(1); }
     else setMonth(m => m + 1);
+  }
+
+  function refetch() {
+    setRows(null);
+    setError(null);
+    startFetch(async () => {
+      const r = await fetchOffRequestsAction(projectId, year, month);
+      if (r.success) setRows(r.rows ?? []);
+      else setError(r.message ?? "取得失敗");
+    });
   }
 
   // スタッフ別グループ化 → アカウント番号順 → 名前順
@@ -105,10 +135,55 @@ export default function ShiftOffRequestSection({
       });
   })();
 
+  // ピッカーのメンバーフィルタ
+  const filteredMembers = (() => {
+    const q = pickerSearch.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter(m =>
+      m.name.toLowerCase().includes(q) ||
+      (m.accountNumber ?? "").toLowerCase().includes(q)
+    );
+  })();
+
+  const targetYM = `${year}-${String(month).padStart(2, "0")}`;
+
+  function openEditorForMember(member: Member) {
+    setPickerOpen(false);
+    setPickerSearch("");
+    startLoadEntries(async () => {
+      const entries = await fetchOffRequestsForStaffAction(projectId, member.id);
+      setEditingStaff({
+        id:             member.id,
+        name:           member.name,
+        accountNumber:  member.accountNumber,
+        initialEntries: entries,
+      });
+    });
+  }
+
+  function openEditorForRow(g: GroupedEntry) {
+    startLoadEntries(async () => {
+      const entries = await fetchOffRequestsForStaffAction(projectId, g.staffId);
+      setEditingStaff({
+        id:             g.staffId,
+        name:           g.staffName,
+        accountNumber:  g.accountNumber,
+        initialEntries: entries,
+      });
+    });
+  }
+
+  function handleEditorClose() {
+    setEditingStaff(null);
+    refetch();
+  }
+
+  const hasMembers = members.length > 0;
+
   return (
     <div className="space-y-3">
 
-      {/* ── ヘッダー：月ナビ + タイトル + 件数 ── */}
+      {/* ── ヘッダー：月ナビ ＋ ボタン群 ── */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1">
           <button
@@ -131,24 +206,42 @@ export default function ShiftOffRequestSection({
             <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
           </button>
         </div>
-        {onRulesClick && (
-          <button
-            type="button"
-            onClick={onRulesClick}
-            className={[
-              "flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-colors shrink-0",
-              rulesOpen
-                ? "bg-zinc-700 text-white border-zinc-700"
-                : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800",
-            ].join(" ")}
-          >
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            希望休設定
-          </button>
-        )}
+
+        <div className="flex items-center gap-2">
+          {/* ＋ 追加ボタン */}
+          {hasMembers && (
+            <button
+              type="button"
+              onClick={() => { setPickerOpen(true); setPickerSearch(""); }}
+              className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shrink-0"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              追加
+            </button>
+          )}
+
+          {/* 希望休設定ボタン */}
+          {onRulesClick && (
+            <button
+              type="button"
+              onClick={onRulesClick}
+              className={[
+                "flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-colors shrink-0",
+                rulesOpen
+                  ? "bg-zinc-700 text-white border-zinc-700"
+                  : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800",
+              ].join(" ")}
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              希望休設定
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── 氏名検索 ── */}
@@ -179,6 +272,7 @@ export default function ShiftOffRequestSection({
             <span className="flex-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
               希望休内容
             </span>
+            {hasMembers && <span className="w-6 shrink-0" />}
           </div>
 
           {grouped.length === 0 ? (
@@ -212,12 +306,141 @@ export default function ShiftOffRequestSection({
                         </span>
                       ))}
                   </div>
+                  {/* 編集ボタン */}
+                  {hasMembers && (
+                    <button
+                      type="button"
+                      onClick={() => openEditorForRow(g)}
+                      disabled={isLoadingEntries}
+                      title="希望休を編集"
+                      className="w-6 h-6 shrink-0 flex items-center justify-center rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors disabled:opacity-40 mt-0.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
       )}
+
+      {/* ── スタッフ選択ピッカーモーダル ── */}
+      {pickerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+          onClick={() => setPickerOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden max-h-[70vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
+              <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">スタッフを選択</p>
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {/* 検索 */}
+            <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
+              <input
+                type="search"
+                placeholder="氏名・アカウント番号で検索…"
+                value={pickerSearch}
+                onChange={e => setPickerSearch(e.target.value)}
+                autoFocus
+                className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-400/50"
+              />
+            </div>
+            {/* メンバーリスト */}
+            <div className="overflow-y-auto flex-1">
+              {filteredMembers.length === 0 ? (
+                <p className="text-xs text-zinc-400 py-8 text-center">一致するスタッフがいません</p>
+              ) : (
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {filteredMembers.map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => openEditorForMember(m)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-left"
+                    >
+                      <span className="w-16 shrink-0 text-xs font-mono text-zinc-400 tabular-nums truncate">
+                        {m.accountNumber ?? "—"}
+                      </span>
+                      <span className="flex-1 text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate">
+                        {m.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 希望休編集モーダル ── */}
+      {(!!editingStaff || isLoadingEntries) && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+          onClick={isLoadingEntries ? undefined : handleEditorClose}
+        >
+          <div
+            className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {isLoadingEntries && !editingStaff ? (
+              <div className="flex items-center justify-center py-16">
+                <p className="text-xs text-zinc-400 animate-pulse">読み込み中…</p>
+              </div>
+            ) : editingStaff && (
+              <>
+                {/* ヘッダー */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
+                  <div>
+                    <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">{editingStaff.name}</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {editingStaff.accountNumber && (
+                        <span className="font-mono mr-1.5">{editingStaff.accountNumber}</span>
+                      )}
+                      {year}年{month}月の希望休
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleEditorClose}
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                {/* コンテンツ */}
+                <div className="overflow-y-auto px-5 py-4">
+                  <OffRequestSection
+                    staffId={editingStaff.id}
+                    projectId={projectId}
+                    initialEntries={editingStaff.initialEntries}
+                    targetYM={targetYM}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
