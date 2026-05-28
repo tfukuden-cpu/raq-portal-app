@@ -4,7 +4,11 @@
  */
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
-import TerminalPunchClient, { type TerminalMember } from "./TerminalPunchClient";
+import TerminalPunchClient, {
+  type TerminalMember,
+  type TerminalSeat,
+  type TerminalWall,
+} from "./TerminalPunchClient";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -31,16 +35,20 @@ export default async function PunchPage({
 
   if (!project) notFound();
 
-  // 並列取得：メンバー・当日シフト・打刻ログ・当月同意済みスタッフ
+  // 並列取得
   const [
     { data: memberRows },
     { data: todayShifts },
     { data: punchLogs },
     { data: consentRows },
+    { data: seatRows },
+    { data: assignmentRows },
+    { data: wallRows },
+    { data: absenceRows },
   ] = await Promise.all([
     admin
       .from("project_members")
-      .select("staff_id, staffs(id, name, display_name)")
+      .select("staff_id, section, staffs(id, name, display_name, account_number)")
       .eq("project_id", projectId),
     admin
       .from("shifts")
@@ -59,25 +67,56 @@ export default async function PunchPage({
       .select("staff_id")
       .eq("project_id", projectId)
       .eq("consent_month", currentMonth),
+    admin
+      .from("seats")
+      .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
+      .eq("project_id", projectId)
+      .eq("is_active", true),
+    admin
+      .from("seat_assignments")
+      .select("seat_id, staff_id")
+      .eq("project_id", projectId)
+      .eq("assignment_date", today),
+    admin
+      .from("seat_walls")
+      .select("x1_pct, y1_pct, x2_pct, y2_pct")
+      .eq("project_id", projectId),
+    admin
+      .from("absence_reports")
+      .select("staff_id")
+      .eq("project_id", projectId)
+      .eq("absence_date", today),
   ]);
 
   // 当月同意済みスタッフセット
   const consentedIds = new Set((consentRows ?? []).map(c => c.staff_id));
 
-  // 打刻マップ
-  const punchMap = new Map<string, { clockedIn: boolean; clockedOut: boolean }>();
+  // 欠勤セット
+  const absenceIds = new Set((absenceRows ?? []).map(a => a.staff_id));
+
+  // 打刻マップ（clock_in/out + 最終 break 状態）
+  const punchMap = new Map<string, {
+    clockedIn: boolean;
+    clockedOut: boolean;
+    lastBreak: string | null;
+  }>();
   for (const p of punchLogs ?? []) {
     if (!punchMap.has(p.staff_id)) {
-      punchMap.set(p.staff_id, { clockedIn: false, clockedOut: false });
+      punchMap.set(p.staff_id, { clockedIn: false, clockedOut: false, lastBreak: null });
     }
     const e = punchMap.get(p.staff_id)!;
     if (p.punch_type === "clock_in")  e.clockedIn  = true;
     if (p.punch_type === "clock_out") e.clockedOut = true;
+    if (p.punch_type === "break_start" || p.punch_type === "break_end") e.lastBreak = p.punch_type;
   }
 
   // シフトマップ（公休系除く）
   const OFF_SHIFTS = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤"];
-  const shiftMap = new Map<string, { shiftName: string; shiftStart: string | null; shiftEnd: string | null }>();
+  const shiftMap = new Map<string, {
+    shiftName: string;
+    shiftStart: string | null;
+    shiftEnd: string | null;
+  }>();
   for (const s of todayShifts ?? []) {
     if (!OFF_SHIFTS.includes(s.shift_name ?? "")) {
       shiftMap.set(s.staff_id, {
@@ -88,30 +127,34 @@ export default async function PunchPage({
     }
   }
 
-  // TerminalMember 配列を組み立て（当日シフトあり・公休除く）
+  // TerminalMember 配列（全プロジェクトメンバー）
   const members: TerminalMember[] = [];
 
   for (const m of memberRows ?? []) {
     const staffId = m.staff_id;
-    const shift = shiftMap.get(staffId);
-    if (!shift) continue;
-
     const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as {
       display_name?: string | null;
       name?: string | null;
+      account_number?: string | null;
     } | null;
-    const name = s?.display_name ?? s?.name ?? staffId;
-    const punch = punchMap.get(staffId) ?? { clockedIn: false, clockedOut: false };
+    const name  = s?.display_name ?? s?.name ?? staffId;
+    const shift = shiftMap.get(staffId);
+    const punch = punchMap.get(staffId) ?? { clockedIn: false, clockedOut: false, lastBreak: null };
 
     members.push({
       staffId,
       name,
-      shiftName:   shift.shiftName  || null,
-      shiftStart:  shift.shiftStart || null,
-      shiftEnd:    shift.shiftEnd   || null,
-      clockedIn:   punch.clockedIn,
-      clockedOut:  punch.clockedOut,
-      needsConsent: !consentedIds.has(staffId),
+      shiftName:    shift?.shiftName  ?? null,
+      shiftStart:   shift?.shiftStart ?? null,
+      shiftEnd:     shift?.shiftEnd   ?? null,
+      clockedIn:    punch.clockedIn,
+      clockedOut:   punch.clockedOut,
+      onBreak:      punch.lastBreak === "break_start",
+      isAbsent:     absenceIds.has(staffId),
+      section:      (m as { section?: string | null }).section ?? null,
+      accountNumber: (s?.account_number as string | null | undefined) ?? null,
+      hasShiftToday: !!shift,
+      needsConsent:  !consentedIds.has(staffId),
     });
   }
 
@@ -123,11 +166,38 @@ export default async function PunchPage({
     return a.name.localeCompare(b.name, "ja");
   });
 
+  // 座席データ
+  const assignMap = new Map((assignmentRows ?? []).map(a => [a.seat_id, a.staff_id]));
+
+  const seats: TerminalSeat[] = (seatRows ?? []).map(s => {
+    const seatType = ((s as { seat_type?: string }).seat_type ?? "normal") as TerminalSeat["seatType"];
+    const staffId  = seatType === "disabled" ? null : (assignMap.get(s.id) ?? null);
+    return {
+      id:        s.id,
+      label:     s.label,
+      xPct:      s.x_pct,
+      yPct:      s.y_pct,
+      section:   s.section ?? null,
+      seatType,
+      shiftSlot: (s as { shift_slot?: string | null }).shift_slot ?? null,
+      staffId:   staffId as string | null,
+    };
+  });
+
+  const walls: TerminalWall[] = (wallRows ?? []).map(w => ({
+    x1Pct: w.x1_pct as number,
+    y1Pct: w.y1_pct as number,
+    x2Pct: w.x2_pct as number,
+    y2Pct: w.y2_pct as number,
+  }));
+
   return (
     <TerminalPunchClient
       projectId={projectId}
       projectName={project.name}
       members={members}
+      seats={seats}
+      walls={walls}
     />
   );
 }

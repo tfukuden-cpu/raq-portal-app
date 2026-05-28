@@ -130,6 +130,51 @@ export async function terminalPunchAction(
 }
 
 /**
+ * 現場端末用休憩トグルアクション（認証不要・adminClient使用）
+ */
+export async function terminalBreakAction(
+  projectId: string,
+  staffId: string,
+): Promise<{ ok: boolean; message: string; newStatus?: "on_break" | "working" }> {
+  if (!projectId || !staffId) {
+    return { ok: false, message: "パラメータが不正です" };
+  }
+  const admin = createAdminClient();
+  const today      = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  const todayStart = `${today}T00:00:00+09:00`;
+  const todayEnd   = `${today}T23:59:59+09:00`;
+
+  const { data: logs } = await admin
+    .from("punch_logs")
+    .select("punch_type")
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .in("punch_type", ["break_start", "break_end"])
+    .gte("recorded_at", todayStart)
+    .lte("recorded_at", todayEnd)
+    .order("recorded_at", { ascending: false })
+    .limit(1);
+
+  const isOnBreak = logs?.[0]?.punch_type === "break_start";
+  const newType   = isOnBreak ? "break_end" : "break_start";
+
+  const { error } = await admin.from("punch_logs").insert({
+    project_id:  projectId,
+    staff_id:    staffId,
+    punch_type:  newType,
+    recorded_at: new Date().toISOString(),
+  });
+
+  if (error) return { ok: false, message: error.message };
+  revalidatePath(`/punch/${projectId}`);
+  return {
+    ok: true,
+    message: isOnBreak ? "休憩終了を記録しました" : "休憩開始を記録しました",
+    newStatus: isOnBreak ? "working" : "on_break",
+  };
+}
+
+/**
  * 同意書サイン保存（当月初回打刻時）
  */
 export async function saveConsentAction(
