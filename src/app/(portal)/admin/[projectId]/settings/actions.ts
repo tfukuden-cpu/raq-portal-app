@@ -734,6 +734,14 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   await assertAdmin(projectId);
   const admin = adminSupa();
 
+  // churn_risk_since: ON のとき既存値があれば保持、新規に ON にするなら今日、OFF なら null
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  const { data: curPm } = await admin.from("project_members")
+    .select("churn_risk, churn_risk_since").eq("project_id", projectId).eq("staff_id", staffId).maybeSingle();
+  const churnRiskSince: string | null = churnRisk
+    ? (curPm?.churn_risk ? (curPm.churn_risk_since ?? today) : today)
+    : null;
+
   // staffs テーブル更新（氏名・会社名・アカウント番号）
   const { error: staffErr } = await admin
     .from("staffs")
@@ -753,6 +761,7 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
       start_date: startDate,
       desired_wage: desiredWage,
       churn_risk: churnRisk,
+      churn_risk_since: churnRiskSince,
     })
     .eq("project_id", projectId)
     .eq("staff_id", staffId);

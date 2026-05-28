@@ -201,7 +201,7 @@ export default async function ManageShiftsPage(props: {
     shiftBatch4,
   ] = await Promise.all([
     admin.from("project_members")
-      .select("staff_id, role, section, sections, end_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, churn_risk, staffs(id, name, display_name, account_number)")
+      .select("staff_id, role, section, sections, end_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, churn_risk, churn_risk_since, staffs(id, name, display_name, account_number)")
       .eq("project_id", selectedProjectId),
     admin.from("shift_patterns")
       .select("name, required_count, required_weekday, required_weekend, section, start_time, end_time")
@@ -301,6 +301,7 @@ export default async function ManageShiftsPage(props: {
         max_consecutive_days: (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? null,
         shift_note:           (m as { shift_note?: string | null }).shift_note ?? null,
         churn_risk:           (m as { churn_risk?: boolean | null }).churn_risk ?? false,
+        churn_risk_since:     (m as { churn_risk_since?: string | null }).churn_risk_since ?? null,
         accountNumber:        s?.account_number ?? null,
         trainingDates:        (trainingMap.get(staffId) ?? [])
           .sort((a, b) => a.training_date.localeCompare(b.training_date)),

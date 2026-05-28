@@ -160,6 +160,29 @@ export async function changeAttendanceStatusAction(
   }
 }
 
+/** 離脱リスクフラグをON/OFFする */
+export async function toggleChurnRiskAction(
+  projectId: string,
+  staffId: string,
+  value: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin(projectId);
+  const admin = createAdminClient();
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  // ON にする場合は既存の since 日付があればそれを維持、なければ今日
+  let churnRiskSince: string | null = null;
+  if (value) {
+    const { data: cur } = await admin.from("project_members")
+      .select("churn_risk_since").eq("project_id", projectId).eq("staff_id", staffId).maybeSingle();
+    churnRiskSince = cur?.churn_risk_since ?? today;
+  }
+  const { error } = await admin.from("project_members")
+    .update({ churn_risk: value, churn_risk_since: churnRiskSince })
+    .eq("project_id", projectId).eq("staff_id", staffId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 /** 公休スタッフへ出勤依頼LINE一括送信 */
 export async function sendBulkWorkRequestAction(
   projectId: string,

@@ -1,7 +1,7 @@
 ﻿"use client";
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
-import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction } from "./actions";
+import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction, toggleChurnRiskAction } from "./actions";
 import type { SendResult } from "./actions";
 
 // ── 型定義 ────────────────────────────────────────────────
@@ -127,6 +127,29 @@ export default function AttendanceClient({
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
+
+  // 離脱リスクフラグのローカルオーバーライド（楽観的更新）
+  const [churnRiskOverrides, setChurnRiskOverrides] = useState<Map<string, boolean>>(new Map());
+
+  function getEffectiveChurnRisk(staffId: string, original: boolean | undefined): boolean {
+    if (churnRiskOverrides.has(staffId)) return churnRiskOverrides.get(staffId)!;
+    return original ?? false;
+  }
+
+  function handleChurnRiskToggle(staffId: string, newValue: boolean) {
+    setChurnRiskOverrides(prev => new Map(prev).set(staffId, newValue));
+    startTransition(async () => {
+      const res = await toggleChurnRiskAction(projectId, staffId, newValue);
+      if (!res.ok) {
+        // 失敗したら元に戻す
+        setChurnRiskOverrides(prev => {
+          const next = new Map(prev);
+          next.delete(staffId);
+          return next;
+        });
+      }
+    });
+  }
 
   // ステータス手動変更
   const [isPending, startTransition] = useTransition();
@@ -348,6 +371,7 @@ export default function AttendanceClient({
                             const canRemind = (enableDeparture && currentStatus === "not_departed") || currentStatus === "late";
                             const isSelected = selectedIds.has(m.staffId);
                             const isMenuOpen = statusMenuId === m.staffId;
+                            const effectiveChurnRisk = getEffectiveChurnRisk(m.staffId, m.churnRisk);
                             return (
                               <div
                                 key={m.staffId}
@@ -367,11 +391,18 @@ export default function AttendanceClient({
                                     <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                                       {m.name}
                                     </span>
-                                    {m.churnRisk && (
-                                      <span className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 leading-none">
-                                        離脱リスク
-                                      </span>
-                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={e => { e.stopPropagation(); handleChurnRiskToggle(m.staffId, !effectiveChurnRisk); }}
+                                      title={effectiveChurnRisk ? "離脱リスクを解除" : "離脱リスクをONにする"}
+                                      className={`shrink-0 text-[9px] font-bold px-1 py-0.5 rounded leading-none transition-colors ${
+                                        effectiveChurnRisk
+                                          ? "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/60"
+                                          : "text-zinc-300 dark:text-zinc-600 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20"
+                                      }`}
+                                    >
+                                      {effectiveChurnRisk ? "離脱リスク" : "⚑"}
+                                    </button>
                                   </span>
                                   {currentStatus === "absent" && m.absenceReason && (
                                     <span className="block text-[11px] text-red-500 dark:text-red-400 truncate">

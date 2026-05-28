@@ -37,7 +37,7 @@ export default async function MembersPage(props: {
   const [{ data: project }, { data: members }, { data: shiftPatterns }] = await Promise.all([
     supabase.from("projects").select("name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
-      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, end_date, churn_risk, staffs(name, display_name, company_name, line_user_id, account_number)")
+      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, end_date, churn_risk, churn_risk_since, staffs(name, display_name, company_name, line_user_id, account_number)")
       .eq("project_id", projectId),
     admin.from("shift_patterns")
       .select("name, section")
@@ -68,6 +68,7 @@ export default async function MembersPage(props: {
       start_date:           (m as { start_date?: string | null }).start_date ?? null,
       end_date:             (m as { end_date?: string | null }).end_date ?? null,
       churn_risk:           (m as { churn_risk?: boolean | null }).churn_risk ?? false,
+      churn_risk_since:     (m as { churn_risk_since?: string | null }).churn_risk_since ?? null,
       compliance:           null as number | null,
       trainingDates:        [] as { id: string; training_date: string; training_name: string | null; start_time: string | null; end_time: string | null }[],
     };

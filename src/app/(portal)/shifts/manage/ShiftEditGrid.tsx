@@ -42,7 +42,7 @@ type Member = {
   work_days_type?: string | null; work_days_count?: number | null;
   preferred_shift?: string | null; preferred_section?: string | null;
   max_consecutive_days?: number | null; shift_note?: string | null;
-  accountNumber?: string | null; churn_risk?: boolean;
+  accountNumber?: string | null; churn_risk?: boolean; churn_risk_since?: string | null;
 };
 type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
@@ -927,16 +927,27 @@ export default function ShiftEditGrid({
     return m;
   }, [changeLogs]);
 
-  // 離脱リスクスタッフIDセット（充足カウントから除外）
-  const churnRiskStaffIds = useMemo(
-    () => new Set(activeMembers.filter(m => m.churn_risk).map(m => m.id)),
+  // 離脱リスクスタッフ: staffId → churn_risk_since (フラグが立っているものだけ)
+  const churnRiskSinceMap = useMemo(
+    () => {
+      const map = new Map<string, string | null>();
+      for (const m of activeMembers) {
+        if (m.churn_risk) map.set(m.id, m.churn_risk_since ?? null);
+      }
+      return map;
+    },
     [activeMembers]
   );
 
-  // 充足カウント（離脱リスクスタッフを除いた実効人数）
+  // 充足カウント（離脱リスク & フラグ設定日以降のシフト日は除外）
   function getEffectiveCount(patternName: string, date: string): number {
     return (resolvedGrid.get(`${patternName}__${date}`) ?? [])
-      .filter(id => !churnRiskStaffIds.has(id)).length;
+      .filter(id => {
+        if (!churnRiskSinceMap.has(id)) return true;        // フラグなし → カウント対象
+        const since = churnRiskSinceMap.get(id) ?? null;
+        if (!since) return false;                            // since 未設定 → 全除外
+        return date < since;                                 // フラグ設定日より前 → カウント対象
+      }).length;
   }
 
   function getRequired(patternName: string, date: string): number {
@@ -1022,7 +1033,7 @@ export default function ShiftEditGrid({
     }
     return list.sort((a, b) => a.date.localeCompare(b.date));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedGrid, allDates, shiftPatterns, slotReqMap, churnRiskStaffIds]);
+  }, [resolvedGrid, allDates, shiftPatterns, slotReqMap, churnRiskSinceMap]);
 
   // ── セクション仮確定ステータス ─────────────────────────────────
   // 'none' = 未着手, 'draft' = ドラフト済, 'staff_locked' = 人確定, 'slot_locked' = 枠確定

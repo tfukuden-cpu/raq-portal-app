@@ -39,7 +39,7 @@ import {
 } from "../../holiday-rule-config";
 import SeatLayoutEditor, { type SeatItem, type WallItem } from "./SeatLayoutEditor";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; churn_risk: boolean; compliance: number | null; trainingDates: TrainingEntry[] };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; churn_risk: boolean; churn_risk_since: string | null; compliance: number | null; trainingDates: TrainingEntry[] };
 type ShiftPattern = {
   id?: string;
   name: string;

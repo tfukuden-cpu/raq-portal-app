@@ -55,7 +55,7 @@ export default async function ProjectDetailPage(props: {
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
-      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, end_date, churn_risk, staffs(name, display_name, company_name, line_user_id, account_number)")
+      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, end_date, churn_risk, churn_risk_since, staffs(name, display_name, company_name, line_user_id, account_number)")
       .eq("project_id", projectId),
     createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id, enable_departure_report").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
@@ -158,6 +158,7 @@ export default async function ProjectDetailPage(props: {
       start_date:           (m as { start_date?: string | null }).start_date ?? null,
       end_date:             (m as { end_date?: string | null }).end_date ?? null,
       churn_risk:           (m as { churn_risk?: boolean | null }).churn_risk ?? false,
+      churn_risk_since:     (m as { churn_risk_since?: string | null }).churn_risk_since ?? null,
       compliance:           complianceMap.get(m.staff_id) ?? null,
       trainingDates:        (trainingMap.get(m.staff_id) ?? [])
         .sort((a, b) => a.training_date.localeCompare(b.training_date)),
