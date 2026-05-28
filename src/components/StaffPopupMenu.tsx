@@ -10,14 +10,18 @@ type Props = {
   staffName: string;
   projectId: string;
   onClose: () => void;
+  churnRisk?: boolean;
+  onChurnRiskToggle?: (value: boolean) => Promise<void>;
 };
 
-export default function StaffPopupMenu({ staffId, staffName, projectId, onClose }: Props) {
+export default function StaffPopupMenu({ staffId, staffName, projectId, onClose, churnRisk = false, onChurnRiskToggle }: Props) {
   const router = useRouter();
-  const [step, setStep] = useState<"menu" | "departure">("menu");
+  const [step, setStep] = useState<"menu" | "departure" | "churnRisk">("menu");
   const [departDate, setDepartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [isPending, startTransition] = useTransition();
+  const [isChurnRiskPending, setIsChurnRiskPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [churnRiskError, setChurnRiskError] = useState<string | null>(null);
 
   function handleDepart() {
     setError(null);
@@ -30,6 +34,19 @@ export default function StaffPopupMenu({ staffId, staffName, projectId, onClose 
         setError(result.message ?? "エラーが発生しました");
       }
     });
+  }
+
+  async function handleChurnRiskConfirm() {
+    if (!onChurnRiskToggle) return;
+    setChurnRiskError(null);
+    setIsChurnRiskPending(true);
+    try {
+      await onChurnRiskToggle(!churnRisk);
+      onClose();
+    } catch {
+      setChurnRiskError("エラーが発生しました");
+      setIsChurnRiskPending(false);
+    }
   }
 
   return (
@@ -66,6 +83,30 @@ export default function StaffPopupMenu({ staffId, staffName, projectId, onClose 
                 <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">メンバー設定</span>
               </Link>
 
+              {onChurnRiskToggle && (
+                <button
+                  type="button"
+                  onClick={() => setStep("churnRisk")}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors"
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    churnRisk
+                      ? "bg-red-50 dark:bg-red-950/40"
+                      : "bg-amber-50 dark:bg-amber-950/40"
+                  }`}>
+                    <svg className={`w-4 h-4 ${churnRisk ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                  </div>
+                  <span className={`text-sm font-semibold ${churnRisk ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
+                    {churnRisk ? "離脱リスク（解除する）" : "離脱リスクをONにする"}
+                  </span>
+                  {churnRisk && (
+                    <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400">ON</span>
+                  )}
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setStep("departure")}
@@ -87,6 +128,54 @@ export default function StaffPopupMenu({ staffId, staffName, projectId, onClose 
             >
               キャンセル
             </button>
+          </>
+        )}
+
+        {step === "churnRisk" && (
+          <>
+            <div className="px-4 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800">
+              <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                {staffName} の離脱リスク
+              </p>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {churnRisk
+                  ? "解除するとシフトの充足カウントに再び含まれます"
+                  : "ONにすると今日からシフトの充足カウントから除外されます"}
+              </p>
+            </div>
+
+            <div className="px-4 py-5">
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                {churnRisk
+                  ? `${staffName} さんの離脱リスクフラグを解除しますか？`
+                  : `${staffName} さんを離脱リスクとしてマークしますか？`}
+              </p>
+              {churnRiskError && (
+                <p className="text-xs text-red-500 mt-2">{churnRiskError}</p>
+              )}
+            </div>
+
+            <div className="flex gap-2 px-4 pb-5">
+              <button
+                type="button"
+                onClick={() => setStep("menu")}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                戻る
+              </button>
+              <button
+                type="button"
+                onClick={handleChurnRiskConfirm}
+                disabled={isChurnRiskPending}
+                className={`flex-1 py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-40 transition-colors ${
+                  churnRisk
+                    ? "bg-zinc-600 hover:bg-zinc-700"
+                    : "bg-amber-600 hover:bg-amber-700"
+                }`}
+              >
+                {isChurnRiskPending ? "処理中…" : (churnRisk ? "フラグを解除" : "ONにする")}
+              </button>
+            </div>
           </>
         )}
 

@@ -136,19 +136,18 @@ export default function AttendanceClient({
     return original ?? false;
   }
 
-  function handleChurnRiskToggle(staffId: string, newValue: boolean) {
+  async function handleChurnRiskToggle(staffId: string, newValue: boolean) {
     setChurnRiskOverrides(prev => new Map(prev).set(staffId, newValue));
-    startTransition(async () => {
-      const res = await toggleChurnRiskAction(projectId, staffId, newValue);
-      if (!res.ok) {
-        // 失敗したら元に戻す
-        setChurnRiskOverrides(prev => {
-          const next = new Map(prev);
-          next.delete(staffId);
-          return next;
-        });
-      }
-    });
+    const res = await toggleChurnRiskAction(projectId, staffId, newValue);
+    if (!res.ok) {
+      // 失敗したら元に戻す
+      setChurnRiskOverrides(prev => {
+        const next = new Map(prev);
+        next.delete(staffId);
+        return next;
+      });
+      throw new Error(res.error);
+    }
   }
 
   // ステータス手動変更
@@ -163,7 +162,7 @@ export default function AttendanceClient({
     }
   );
   const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
-  const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string } | null>(null);
+  const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string; churnRisk: boolean } | null>(null);
   const [detailMember, setDetailMember] = useState<MemberRow | null>(null);
 
   function handleStatusChange(staffId: string, newStatus: StatusKey) {
@@ -384,25 +383,18 @@ export default function AttendanceClient({
                                 {/* 名前 */}
                                 <button
                                   type="button"
-                                  onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name })}
+                                  onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name, churnRisk: effectiveChurnRisk })}
                                   className="flex-1 min-w-0 text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                                 >
                                   <span className="flex items-center gap-1.5 truncate">
                                     <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                                       {m.name}
                                     </span>
-                                    <button
-                                      type="button"
-                                      onClick={e => { e.stopPropagation(); handleChurnRiskToggle(m.staffId, !effectiveChurnRisk); }}
-                                      title={effectiveChurnRisk ? "離脱リスクを解除" : "離脱リスクをONにする"}
-                                      className={`shrink-0 text-[9px] font-bold px-1 py-0.5 rounded leading-none transition-colors ${
-                                        effectiveChurnRisk
-                                          ? "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/60"
-                                          : "text-zinc-300 dark:text-zinc-600 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20"
-                                      }`}
-                                    >
-                                      {effectiveChurnRisk ? "離脱リスク" : "⚑"}
-                                    </button>
+                                    {effectiveChurnRisk && (
+                                      <span className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 leading-none">
+                                        離脱リスク
+                                      </span>
+                                    )}
                                   </span>
                                   {currentStatus === "absent" && m.absenceReason && (
                                     <span className="block text-[11px] text-red-500 dark:text-red-400 truncate">
@@ -510,7 +502,7 @@ export default function AttendanceClient({
                     </span>
                     <button
                       type="button"
-                      onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name })}
+                      onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name, churnRisk: false })}
                       className="flex-1 min-w-0 text-sm font-semibold text-zinc-700 dark:text-zinc-300 truncate text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                     >
                       {m.name}
@@ -740,6 +732,10 @@ export default function AttendanceClient({
           staffName={staffMenu.staffName}
           projectId={projectId}
           onClose={() => setStaffMenu(null)}
+          churnRisk={staffMenu.churnRisk}
+          onChurnRiskToggle={async (value) => {
+            await handleChurnRiskToggle(staffMenu.staffId, value);
+          }}
         />
       )}
     </main>
