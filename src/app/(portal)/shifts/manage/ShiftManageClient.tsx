@@ -149,10 +149,16 @@ export default function ShiftManageClient({
   const [showRegenModal, setShowRegenModal] = useState(false);
   const [regenError, setRegenError] = useState<string | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportSection, setExportSection] = useState("");
+  const [exportSectionsSel, setExportSectionsSel] = useState<string[]>([]);
 
   // シフトパターンから使用中セクション一覧
   const exportSections = [...new Set(shiftPatterns.map(p => p.section).filter((s): s is string => !!s))];
+
+  function toggleExportSection(section: string) {
+    setExportSectionsSel(prev =>
+      prev.includes(section) ? prev.filter(s => s !== section) : [...prev, section]
+    );
+  }
   // 実際にグリッドへ渡すドラフト（新規 = null、続きから = initialDraft）
   const [activeDraft, setActiveDraft] = useState<GridDraftEntry[] | null>(null);
   const [isClearing, startClear] = useTransition();
@@ -221,12 +227,12 @@ export default function ShiftManageClient({
       return na - nb;
     });
 
-    // セクションフィルタ
-    if (exportSection) {
+    // セクションフィルタ（複数選択、空=全員）
+    if (exportSectionsSel.length > 0) {
       sorted = sorted.filter(m => {
         const shift = shiftMap.get(m.id);
         const resolved = resolveShiftSection(shift?.shift_name ?? null, m.section);
-        return resolved === exportSection;
+        return resolved !== null && exportSectionsSel.includes(resolved);
       });
     }
 
@@ -246,7 +252,7 @@ export default function ShiftManageClient({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const suffix = exportSection ? `_${exportSection}` : "";
+    const suffix = exportSectionsSel.length > 0 ? `_${exportSectionsSel.join("_")}` : "";
     a.download = `シフト_${selectedDate}${suffix}.csv`;
     a.click();
     URL.revokeObjectURL(url);
@@ -290,33 +296,40 @@ export default function ShiftManageClient({
           >
             <div>
               <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Excel出力</h2>
-              <p className="text-xs text-zinc-400 mt-0.5">{selectedDate} のシフト</p>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {selectedDate} のシフト
+                <span className="ml-1">
+                  {exportSectionsSel.length === 0 ? "（全員）" : `（${exportSectionsSel.join("・")}）`}
+                </span>
+              </p>
             </div>
 
-            {/* ラジオボタン一覧 */}
-            <div className="space-y-2">
-              {[{ value: "", label: "全員" }, ...exportSections.map(s => ({ value: s, label: s }))].map(opt => (
-                <label
-                  key={opt.value}
-                  className={[
-                    "flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors select-none",
-                    exportSection === opt.value
-                      ? "border-emerald-400 dark:border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30"
-                      : "border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800",
-                  ].join(" ")}
-                >
-                  <input
-                    type="radio"
-                    name="exportSection"
-                    value={opt.value}
-                    checked={exportSection === opt.value}
-                    onChange={() => setExportSection(opt.value)}
-                    className="accent-emerald-500 w-4 h-4"
-                  />
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{opt.label}</span>
-                </label>
-              ))}
+            {/* チェックボックス一覧（複数選択・未選択=全員） */}
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {exportSections.map(section => {
+                const checked = exportSectionsSel.includes(section);
+                return (
+                  <label
+                    key={section}
+                    className={[
+                      "flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors select-none",
+                      checked
+                        ? "border-emerald-400 dark:border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30"
+                        : "border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleExportSection(section)}
+                      className="accent-emerald-500 w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{section}</span>
+                  </label>
+                );
+              })}
             </div>
+            <p className="text-[11px] text-zinc-400 -mt-1">※ 未選択の場合は全員を出力</p>
 
             <button
               onClick={handleExportExcel}
