@@ -81,10 +81,14 @@ export async function saveSeatAssignmentsAction(
   return { success: true };
 }
 
-/** セクション×シフトで自動配置（翌日） */
+/** セクション×シフトで自動配置（翌日）
+ *  existingAssignments: クライアントが既に持っている配置（保持される）
+ *  空席かつ未割当スタッフのみ埋める
+ */
 export async function autoAssignSeatsAction(
   projectId: string,
   date: string,
+  existingAssignments: { seatId: string; staffId: string }[] = [],
 ): Promise<{ success: boolean; message?: string; assignments?: { seatId: string; staffId: string }[] }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -111,18 +115,21 @@ export async function autoAssignSeatsAction(
     .filter(s => s.shift_name && !OFF_NAMES.includes(s.shift_name))
     .map(s => ({ staffId: s.staff_id, section: sectionMap.get(s.staff_id) ?? "" }));
 
-  // セクションごとに席と人を対応付け
-  const assignments: { seatId: string; staffId: string }[] = [];
-  const usedSeats  = new Set<string>();
-  const usedStaff  = new Set<string>();
+  // 既存配置を起点にする
+  const assignments: { seatId: string; staffId: string }[] = [...existingAssignments];
+  const usedSeats  = new Set(existingAssignments.map(a => a.seatId));
+  const usedStaff  = new Set(existingAssignments.map(a => a.staffId));
 
   // 無効席は配置対象外
   const activeSeats = (seats ?? []).filter(s => (s as { seat_type?: string }).seat_type !== "disabled");
+  // まだ配置されていない席・スタッフだけ対象
+  const emptySeats    = activeSeats.filter(s => !usedSeats.has(s.id));
+  const pendingStaff  = workingStaff.filter(s => !usedStaff.has(s.staffId));
 
   // パス1: セクション一致（通常席）
-  for (const seat of activeSeats) {
+  for (const seat of emptySeats) {
     if (!seat.section || (seat as { seat_type?: string }).seat_type === "free") continue;
-    const match = workingStaff.find(s => !usedStaff.has(s.staffId) && s.section === seat.section);
+    const match = pendingStaff.find(s => !usedStaff.has(s.staffId) && s.section === seat.section);
     if (match) {
       assignments.push({ seatId: seat.id, staffId: match.staffId });
       usedSeats.add(seat.id);
@@ -131,8 +138,8 @@ export async function autoAssignSeatsAction(
   }
 
   // パス2: フリー席・セクション未指定席 → 余ったスタッフを順番に
-  const remainSeats  = activeSeats.filter(s => !usedSeats.has(s.id));
-  const remainStaff  = workingStaff.filter(s => !usedStaff.has(s.staffId));
+  const remainSeats  = emptySeats.filter(s => !usedSeats.has(s.id));
+  const remainStaff  = pendingStaff.filter(s => !usedStaff.has(s.staffId));
   for (let i = 0; i < Math.min(remainSeats.length, remainStaff.length); i++) {
     assignments.push({ seatId: remainSeats[i].id, staffId: remainStaff[i].staffId });
   }

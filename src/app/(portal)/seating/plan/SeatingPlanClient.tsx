@@ -43,6 +43,8 @@ export default function SeatingPlanClient({
 }) {
   const [seats, setSeats] = useState<PlanSeat[]>(initialSeats);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [dragSeatId,   setDragSeatId]   = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const router = useRouter();
@@ -55,11 +57,53 @@ export default function SeatingPlanClient({
     setTimeout(() => setToast(null), 2500);
   }
 
-  // 席をクリック
+  // ── ドラッグ&ドロップ（席同士の入れ替え） ─────────────
+  function handleDragStart(e: React.DragEvent, seatId: string) {
+    setDragSeatId(seatId);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleDragOver(e: React.DragEvent, seatId: string) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragSeatId && dragSeatId !== seatId) setDropTargetId(seatId);
+  }
+
+  function handleDragLeave() {
+    setDropTargetId(null);
+  }
+
+  function handleDrop(e: React.DragEvent, targetSeatId: string) {
+    e.preventDefault();
+    if (!dragSeatId || dragSeatId === targetSeatId) {
+      setDragSeatId(null);
+      setDropTargetId(null);
+      return;
+    }
+    setSeats(prev => {
+      const dragStaffId   = prev.find(s => s.id === dragSeatId)?.staffId   ?? null;
+      const targetStaffId = prev.find(s => s.id === targetSeatId)?.staffId ?? null;
+      return prev.map(s => {
+        if (s.id === dragSeatId)   return { ...s, staffId: targetStaffId };
+        if (s.id === targetSeatId) return { ...s, staffId: dragStaffId };
+        return s;
+      });
+    });
+    setDragSeatId(null);
+    setDropTargetId(null);
+  }
+
+  function handleDragEnd() {
+    setDragSeatId(null);
+    setDropTargetId(null);
+  }
+
+  // ── クリック操作 ──────────────────────────────────────
   function handleSeatClick(seat: PlanSeat) {
+    // ドラッグ操作後は click が発火するので無視
+    if (dragSeatId !== null) return;
+
     if (selectedStaffId) {
-      // 選択中スタッフを割当
-      // 他席への重複割当を解除
       setSeats(prev => prev.map(s => {
         if (s.id === seat.id) return { ...s, staffId: selectedStaffId };
         if (s.staffId === selectedStaffId) return { ...s, staffId: null };
@@ -67,40 +111,38 @@ export default function SeatingPlanClient({
       }));
       setSelectedStaffId(null);
     } else if (seat.staffId) {
-      // 割当解除
       setSeats(prev => prev.map(s => s.id === seat.id ? { ...s, staffId: null } : s));
     }
   }
 
-  // スタッフをクリック
   function handleStaffClick(id: string) {
     setSelectedStaffId(prev => prev === id ? null : id);
   }
 
-  // 自動配置
+  // ── 自動配置（現在の配置を保持して空席のみ埋める） ────
   function handleAutoAssign() {
+    const existing = seats
+      .filter(s => s.staffId)
+      .map(s => ({ seatId: s.id, staffId: s.staffId! }));
+
     startTransition(async () => {
-      const res = await autoAssignSeatsAction(projectId, date);
+      const res = await autoAssignSeatsAction(projectId, date, existing);
       if (res.success && res.assignments) {
         const map = new Map(res.assignments.map(a => [a.seatId, a.staffId]));
-        setSeats(prev => prev.map(s => ({
-          ...s,
-          staffId: map.get(s.id) ?? null,
-        })));
-        showToast(`自動配置完了（${res.assignments.length}名）`);
+        setSeats(prev => prev.map(s => ({ ...s, staffId: map.get(s.id) ?? null })));
+        const added = res.assignments.length - existing.length;
+        showToast(`自動配置完了（+${added}名追加）`);
       } else {
         showToast(res.message ?? "自動配置に失敗しました", false);
       }
     });
   }
 
-  // 全クリア
   function handleClear() {
     setSeats(prev => prev.map(s => ({ ...s, staffId: null })));
     setSelectedStaffId(null);
   }
 
-  // 保存
   function handleSave() {
     const assignments = seats
       .filter(s => s.staffId)
@@ -178,7 +220,7 @@ export default function SeatingPlanClient({
         </div>
       ) : (
         <p className="text-[11px] text-zinc-400 pt-1">
-          スタッフを選択 → 席をタップで配置 ／ 席を直接タップで解除
+          スタッフを選択 → 席をタップで配置 ／ 席カードをドラッグで入れ替え ／ 席を直接タップで解除
         </p>
       )}
 
@@ -214,7 +256,9 @@ export default function SeatingPlanClient({
             const isDisabled = seat.seatType === "disabled";
             const isFree     = seat.seatType === "free";
             const s = seat.staffId ? staffMap.get(seat.staffId) : null;
-            const isTarget = !isDisabled && selectedStaffId !== null && !seat.staffId;
+            const isTarget    = !isDisabled && selectedStaffId !== null && !seat.staffId;
+            const isDragging  = dragSeatId === seat.id;
+            const isDropOver  = dropTargetId === seat.id && dragSeatId !== null;
 
             if (isDisabled) {
               return (
@@ -231,14 +275,12 @@ export default function SeatingPlanClient({
                     </defs>
                     <rect width="100%" height="100%" fill={`url(#hatch-p-${seat.id})`} />
                   </svg>
-                  <span className="relative text-[9px] text-zinc-400 leading-none z-10">{seat.label}</span>
-                  <span className="relative text-[9px] text-zinc-400 leading-none z-10 mt-0.5">無効</span>
+                  <span className="relative text-[9px] text-zinc-400 leading-none z-10">無効</span>
                 </div>
               );
             }
 
             // セクション色の計算
-            // 優先順：スタッフのシフト名 > 席のシフト帯設定 > なし
             const seatSection   = seat.section;
             const assignedShift = s?.shiftName ?? null;
             const effectiveShift = assignedShift ?? seat.shiftSlot ?? null;
@@ -250,10 +292,18 @@ export default function SeatingPlanClient({
               <button
                 key={seat.id}
                 onClick={() => handleSeatClick(seat)}
+                draggable={!isFree && !!s}
+                onDragStart={e => handleDragStart(e, seat.id)}
+                onDragOver={e => handleDragOver(e, seat.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={e => handleDrop(e, seat.id)}
+                onDragEnd={handleDragEnd}
                 style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
                 className={[
                   "absolute flex flex-col items-center justify-center gap-px",
                   "w-[70px] h-[58px] rounded-xl border-2 text-center transition-all shadow-sm select-none overflow-hidden",
+                  isDragging  ? "opacity-40 scale-95" : "",
+                  isDropOver  ? "ring-2 ring-blue-500 ring-offset-1 scale-105" : "",
                   isTarget
                     ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 border-dashed cursor-pointer animate-pulse"
                     : isFree
@@ -265,7 +315,6 @@ export default function SeatingPlanClient({
                     : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-600 cursor-pointer",
                 ].join(" ")}
               >
-                <span className="text-[9px] text-zinc-500 leading-none">{seat.label}</span>
                 {s ? (
                   <>
                     <span className="text-[10px] font-mono text-zinc-500 tabular-nums leading-none">{s.accountNumber ?? ""}</span>
