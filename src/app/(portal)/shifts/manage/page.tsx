@@ -476,7 +476,7 @@ function TabBar({
   const tabs: { id: Tab; label: string }[] = [
     { id: "shift",    label: "シフト" },
     { id: "settings", label: "シフト設定" },
-    { id: "holiday",  label: "希望休設定" },
+    { id: "holiday",  label: "希望休" },
   ];
   return (
     <div className="flex overflow-x-auto -mx-4 px-4 border-b border-zinc-100 dark:border-zinc-800 -mb-2" style={{ scrollbarWidth: "none" }}>
