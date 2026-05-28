@@ -9,11 +9,12 @@ import { redirect } from "next/navigation";
 import ShiftManageClient from "./ShiftManageClient";
 import ShiftSettingsTab from "./ShiftSettingsTab";
 import ShiftHolidayTab from "./ShiftHolidayTab";
+import ShiftTrainingTab, { type TrainingMember } from "./ShiftTrainingTab";
 import type { ChangeLog } from "./ShiftEditGrid";
 import type { GridDraftEntry } from "../actions";
 import HeaderHeightSetter from "./HeaderHeightSetter";
 
-type Tab = "shift" | "settings" | "holiday";
+type Tab = "shift" | "settings" | "holiday" | "training";
 
 function dateKey(d: Date) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" })
@@ -180,6 +181,82 @@ export default async function ManageShiftsPage(props: {
             projectId={selectedProjectId}
             initialRules={holidayRules}
             members={holidayMembers}
+          />
+        </div>
+      </main>
+    );
+  }
+
+  // ── 研修設定タブ ──
+  if (tab === "training") {
+    const targetMonthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
+
+    const [{ data: membersRaw }, { data: trainingsRaw }] = await Promise.all([
+      admin.from("project_members")
+        .select("staff_id, section, staffs(id, name, display_name, account_number)")
+        .eq("project_id", selectedProjectId),
+      admin.from("staff_trainings")
+        .select("id, staff_id, training_date, training_name, start_time, end_time")
+        .eq("training_type", "onboarding")
+        .order("training_date"),
+    ]);
+
+    // training をスタッフIDごとにまとめる
+    const trainingMap = new Map<string, import("@/components/TrainingSection").TrainingEntry[]>();
+    for (const t of trainingsRaw ?? []) {
+      const sid = t.staff_id as string;
+      if (!trainingMap.has(sid)) trainingMap.set(sid, []);
+      trainingMap.get(sid)!.push({
+        id:            t.id as string,
+        training_date: t.training_date as string,
+        training_name: (t as { training_name?: string | null }).training_name ?? null,
+        start_time:    (t as { start_time?: string | null }).start_time ?? null,
+        end_time:      (t as { end_time?: string | null }).end_time ?? null,
+      });
+    }
+
+    function getAccNum(acc: string | null | undefined): number {
+      if (!acc) return Infinity;
+      const m = acc.match(/(\d+)/);
+      return m ? parseInt(m[1]) : Infinity;
+    }
+
+    const trainingMembers: TrainingMember[] = (membersRaw ?? [])
+      .map(m => {
+        const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+          { id?: string | null; name?: string | null; display_name?: string | null; account_number?: string | null } | null;
+        const staffId = (s?.id ?? m.staff_id) as string;
+        return {
+          id:            staffId,
+          name:          (s?.display_name ?? s?.name ?? m.staff_id) as string,
+          accountNumber: (s?.account_number ?? null) as string | null,
+          section:       m.section ?? null,
+          trainings:     trainingMap.get(staffId) ?? [],
+        };
+      })
+      .filter(m => !!m.id)
+      .sort((a, b) => {
+        const na = getAccNum(a.accountNumber);
+        const nb = getAccNum(b.accountNumber);
+        return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
+      });
+
+    return (
+      <main className="bg-white dark:bg-zinc-950 max-w-5xl mx-auto pb-24">
+        <HeaderHeightSetter className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
+          <div className="flex items-end justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">シフト管理</h1>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5 font-semibold">{project?.name}</p>
+            </div>
+          </div>
+          <TabBar tab={tab} tabUrl={tabUrl} />
+        </HeaderHeightSetter>
+        <div className="px-4 pt-6 pb-8">
+          <ShiftTrainingTab
+            projectId={selectedProjectId}
+            members={trainingMembers}
+            targetMonth={targetMonthStr}
           />
         </div>
       </main>
@@ -503,6 +580,7 @@ function TabBar({
     { id: "shift",    label: "シフト" },
     { id: "settings", label: "シフト設定" },
     { id: "holiday",  label: "希望休" },
+    { id: "training", label: "研修設定" },
   ];
   return (
     <div className="flex overflow-x-auto -mx-4 px-4 border-b border-zinc-100 dark:border-zinc-800 -mb-2" style={{ scrollbarWidth: "none" }}>
