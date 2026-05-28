@@ -281,10 +281,11 @@ export default function SeatingPlanClient({
             }
 
             // セクション色の計算
-            const seatSection   = seat.section;
-            const assignedShift = s?.shiftName ?? null;
+            // スタッフが配置済みならスタッフのセクション優先（ドラッグ入れ替えで色もついてくる）
+            const seatSection    = s ? (s.section ?? seat.section) : seat.section;
+            const assignedShift  = s?.shiftName ?? null;
             const effectiveShift = assignedShift ?? seat.shiftSlot ?? null;
-            const sectionBg     = seatSection ? getSeatBgClass(seatSection, s ? effectiveShift : seat.shiftSlot ?? null) : "";
+            const sectionBg     = seatSection ? getSeatBgClass(seatSection, effectiveShift) : "";
             const sectionBorder = seatSection ? getSeatBorderClass(seatSection) : "";
             const sectionText   = seatSection ? getSeatTextClass(seatSection) : "text-zinc-700 dark:text-zinc-200";
 
