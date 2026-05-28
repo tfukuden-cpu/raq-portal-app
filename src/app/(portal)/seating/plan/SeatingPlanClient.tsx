@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveSeatAssignmentsAction, autoAssignSeatsAction } from "../actions";
-import { getSeatBgClass, getSeatBorderClass, getSeatTextClass, formatSectionShift } from "@/lib/seatColors";
+import { getSeatBgClass, getSeatBorderClass, getSeatTextClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 
 export type WallData = {
   x1Pct: number;
@@ -281,9 +281,12 @@ export default function SeatingPlanClient({
             }
 
             // セクション色の計算
-            // スタッフが配置済みならスタッフのセクション優先（ドラッグ入れ替えで色もついてくる）
-            const seatSection    = s ? (s.section ?? seat.section) : seat.section;
+            // シフト名の先頭からセクションを解決（"MOTA_遅番_A" → "MOTA"）
+            // スタッフ配置済み：シフト名 > スタッフ所属 > 席セクション の優先順
             const assignedShift  = s?.shiftName ?? null;
+            const seatSection    = s
+              ? resolveShiftSection(assignedShift, s.section ?? seat.section)
+              : seat.section;
             const effectiveShift = assignedShift ?? seat.shiftSlot ?? null;
             const sectionBg     = seatSection ? getSeatBgClass(seatSection, effectiveShift) : "";
             const sectionBorder = seatSection ? getSeatBorderClass(seatSection) : "";

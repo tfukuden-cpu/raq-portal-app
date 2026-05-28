@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toggleBreakAction } from "./actions";
-import { getSeatBgClass, formatSectionShift } from "@/lib/seatColors";
+import { getSeatBgClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 
 export type WallData = {
   x1Pct: number;
@@ -215,10 +215,13 @@ export default function SeatingClient({
                   isPending ? "opacity-60" : "",
                 ].join(" ")}
               >
-                {/* セクション色バー（上部）：スタッフのシフト名優先、なければ席のシフト帯設定 */}
-                {seat.section && !isFree && (
-                  <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(seat.section, seat.shiftName ?? seat.shiftSlot)}`} />
-                )}
+                {/* セクション色バー（上部）：シフト名からセクション解決 → 色決定 */}
+                {!isFree && (() => {
+                  const effectiveSection = resolveShiftSection(seat.shiftName, seat.section);
+                  return effectiveSection ? (
+                    <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(effectiveSection, seat.shiftName ?? seat.shiftSlot)}`} />
+                  ) : null;
+                })()}
                 <span className="text-[9px] text-zinc-400 leading-none">{seat.label}</span>
                 {seat.staffName ? (
                   <>
@@ -229,7 +232,8 @@ export default function SeatingClient({
                       {seat.staffName}
                     </span>
                     {(() => {
-                      const label = formatSectionShift(seat.section, seat.shiftName ?? seat.shiftSlot);
+                      const effectiveSection = resolveShiftSection(seat.shiftName, seat.section);
+                      const label = formatSectionShift(effectiveSection, seat.shiftName ?? seat.shiftSlot);
                       return label ? (
                         <span className="text-[9px] leading-none text-zinc-500 dark:text-zinc-400 truncate px-0.5 w-full text-center">
                           {label}

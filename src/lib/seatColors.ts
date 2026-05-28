@@ -60,6 +60,24 @@ export function getSeatTextClass(section: string | null | undefined): string {
 }
 
 /**
+ * シフト名の先頭からセクションを解決する
+ * 例: "MOTA_遅番_A" → "MOTA"
+ *     "ローン_早番" → "ローン"
+ *     null          → fallback
+ */
+export function resolveShiftSection(
+  shiftName: string | null | undefined,
+  fallback: string | null | undefined,
+): string | null {
+  if (shiftName) {
+    for (const sec of Object.keys(SEAT_SECTION_COLORS)) {
+      if (shiftName.startsWith(sec)) return sec;
+    }
+  }
+  return fallback ?? null;
+}
+
+/**
  * 「セクション（シフト）」形式のラベルを返す
  * 早番/遅番がない場合はセクション名のみ
  * 例: formatSectionShift("査定", "査定_早番_A") → "査定（早番）"
