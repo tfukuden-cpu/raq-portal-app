@@ -233,21 +233,24 @@ export default function ShiftManageClient({
     }
 
     // ── セルの表示値を求めるヘルパー ─────────────────────────
-    function cellValue(staffId: string, memberSection: string | null, date: string): string {
+    // シフト名がセクション名で始まる場合のみ "セクション（早/遅番）" 形式で出力。
+    // 公休・有休・研修などはシフト名をそのまま表示（memberSection へのフォールバックなし）
+    function cellValue(staffId: string, date: string): string {
       const shiftName = effectiveMap.get(staffId)?.get(date) ?? null;
       if (!shiftName) return "";
-      const sec = resolveShiftSection(shiftName, memberSection);
-      return formatSectionShift(sec, shiftName);
+      const sec = resolveShiftSection(shiftName, null); // fallback なし
+      if (sec) return formatSectionShift(sec, shiftName);
+      return shiftName; // 公休・有休・研修など
     }
 
-    // ── ヘッダー2行 ─────────────────────────────────────────
+    // ── ヘッダー2行（アカウント番号列 + 名前列 + 日付列）──────
     const DAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const header1 = ["", ...allDates.map(d => {
+    const header1 = ["", "", ...allDates.map(d => {
       const [, m, day] = d.split("-");
       return `${parseInt(m)}/${parseInt(day)}`;
     })];
-    const header2 = ["", ...allDates.map(d =>
+    const header2 = ["", "", ...allDates.map(d =>
       DAY_JP[new Date(`${d}T12:00:00+09:00`).getDay()]
     )];
 
@@ -278,16 +281,18 @@ export default function ShiftManageClient({
     const dataRows: string[][] = [];
     for (let i = 1; i <= maxAcc; i++) {
       const m = accMap.get(i);
-      // アカウント番号ラベル（DB格納値をそのまま使用、なければゼロ埋め）
-      const accLabel = m?.accountNumber ?? String(i).padStart(2, "0");
+      // アカウント番号ラベル：常に "ASS XX" 形式
+      const accLabel = `ASS ${String(i).padStart(2, "0")}`;
+      const nameLabel = m?.name ?? "";
 
       if (!m || (sectionIds && !sectionIds.has(m.id))) {
-        // 該当メンバーなし or セクション外 → 空行
-        dataRows.push([accLabel, ...allDates.map(() => "")]);
+        // 該当メンバーなし or セクション外 → 空行（名前も空）
+        dataRows.push([accLabel, "", ...allDates.map(() => "")]);
       } else {
         dataRows.push([
           accLabel,
-          ...allDates.map(date => cellValue(m.id, m.section, date)),
+          nameLabel,
+          ...allDates.map(date => cellValue(m.id, date)),
         ]);
       }
     }
