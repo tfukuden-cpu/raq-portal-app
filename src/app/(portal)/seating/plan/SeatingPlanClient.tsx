@@ -183,10 +183,10 @@ export default function SeatingPlanClient({
       )}
 
       {/* キャンバス */}
-      <div className={embedded ? "px-3 mt-2" : "px-3 mt-2"}>
+      <div className="overflow-x-auto px-3 mt-2">
         <div
-          className="relative w-full bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
-          style={{ aspectRatio: "4/3", minHeight: 280 }}
+          className="relative bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
+          style={{ width: "max(100%, 900px)", aspectRatio: "4/3" }}
         >
           {seats.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center">

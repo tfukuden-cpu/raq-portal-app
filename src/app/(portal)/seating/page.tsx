@@ -116,7 +116,6 @@ export default async function SeatingPage() {
     x2Pct: w.x2_pct as number,
     y2Pct: w.y2_pct as number,
   }));
-  console.log("[SeatingPage] wallData count:", wallData.length, wallData[0]);
 
   const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const [{ data: myMembership }, { data: myStaff }] = await Promise.all([

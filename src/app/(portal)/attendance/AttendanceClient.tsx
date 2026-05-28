@@ -219,7 +219,7 @@ export default function AttendanceClient({
     : `【出勤依頼】{名前}さん、${REQUEST_MSG}`;
 
   return (
-    <main className="min-h-screen bg-white dark:bg-zinc-950 overflow-x-clip">
+    <main className="min-h-screen bg-white dark:bg-zinc-950">
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 pt-5 pb-4">
@@ -324,31 +324,26 @@ export default function AttendanceClient({
               </button>
             </div>
 
-            {/* max-w-5xl の制約から脱出してスタンドアロンページと同じ全幅を使用 */}
             {seatingSubTab === "current" && (
-              <div className="w-screen relative" style={{ marginLeft: "calc(-50vw + 50%)" }}>
-                <SeatingClient
-                  projectId={projectId}
-                  today={today}
-                  seats={seats}
-                  walls={walls}
-                  isAdmin={true}
-                  myStaffId={myStaffId}
-                  embedded={true}
-                />
-              </div>
+              <SeatingClient
+                projectId={projectId}
+                today={today}
+                seats={seats}
+                walls={walls}
+                isAdmin={true}
+                myStaffId={myStaffId}
+                embedded={true}
+              />
             )}
             {seatingSubTab === "plan" && (
-              <div className="w-screen relative" style={{ marginLeft: "calc(-50vw + 50%)" }}>
-                <SeatingPlanClient
-                  projectId={projectId}
-                  date={tomorrow}
-                  seats={planSeats}
-                  staff={planStaff}
-                  walls={walls}
-                  embedded={true}
-                />
-              </div>
+              <SeatingPlanClient
+                projectId={projectId}
+                date={tomorrow}
+                seats={planSeats}
+                staff={planStaff}
+                walls={walls}
+                embedded={true}
+              />
             )}
           </div>
         )}
