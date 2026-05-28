@@ -215,10 +215,14 @@ export default function ShiftManageClient({
     });
   }
 
-  // CSV出力（選択日のシフトをアカウント番号順に出力・Excelで開ける）
+  // CSV出力（当月全日付を列方向・スタッフを行方向・Excelで開ける）
   function handleExportExcel() {
-    const dateShifts = shifts.filter(s => s.shift_date === selectedDate);
-    const shiftMap = new Map(dateShifts.map(s => [s.staff_id, s]));
+    // スタッフ×日付→シフト名のマップ
+    const staffShiftMap = new Map<string, Map<string, string>>();
+    for (const s of shifts) {
+      if (!staffShiftMap.has(s.staff_id)) staffShiftMap.set(s.staff_id, new Map());
+      if (s.shift_name) staffShiftMap.get(s.staff_id)!.set(s.shift_date, s.shift_name);
+    }
 
     // アカウント番号で数値昇順ソート、未設定は末尾
     let sorted = [...activeMembers].sort((a, b) => {
@@ -227,33 +231,47 @@ export default function ShiftManageClient({
       return na - nb;
     });
 
-    // セクションフィルタ（複数選択、空=全員）
+    // セクションフィルタ（メンバーのsectionで絞り込み、空=全員）
     if (exportSectionsSel.length > 0) {
-      sorted = sorted.filter(m => {
-        const shift = shiftMap.get(m.id);
-        const resolved = resolveShiftSection(shift?.shift_name ?? null, m.section);
-        return resolved !== null && exportSectionsSel.includes(resolved);
-      });
+      sorted = sorted.filter(m => m.section !== null && exportSectionsSel.includes(m.section));
     }
 
+    const DAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const header = ["アカウント番号", "氏名", "日付", "シフト名", "セクション（シフト）"];
+
+    // ヘッダー行1：ASS番号列 + 日付（M/D形式）
+    const header1 = ["", ...allDates.map(d => {
+      const [, m, day] = d.split("-");
+      return `${parseInt(m)}/${parseInt(day)}`;
+    })];
+
+    // ヘッダー行2：空白 + 曜日
+    const header2 = ["", ...allDates.map(d => {
+      // タイムゾーンずれを防ぐためT12:00を使う
+      return DAY_LABELS[new Date(`${d}T12:00:00+09:00`).getDay()];
+    })];
+
+    // データ行：アカウント番号 + 各日付のセクション（シフト）
     const rows = sorted.map(m => {
-      const shift = shiftMap.get(m.id);
-      const shiftName = shift?.shift_name ?? "";
-      const section = resolveShiftSection(shiftName || null, m.section);
-      const sectionShift = formatSectionShift(section, shiftName || null);
-      return [m.accountNumber ?? "", m.name, selectedDate, shiftName, sectionShift];
+      const memberShifts = staffShiftMap.get(m.id) ?? new Map<string, string>();
+      const cols = allDates.map(date => {
+        const shiftName = memberShifts.get(date) ?? "";
+        const section = resolveShiftSection(shiftName || null, m.section);
+        return formatSectionShift(section, shiftName || null);
+      });
+      return [m.accountNumber ?? "", ...cols];
     });
 
-    const csv = [header, ...rows].map(r => r.map(c => esc(String(c))).join(",")).join("\r\n");
-    // BOM付きUTF-8でExcelが文字化けしないように
+    const csv = [header1, header2, ...rows]
+      .map(r => r.map(c => esc(String(c))).join(","))
+      .join("\r\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
+    const monthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
     const suffix = exportSectionsSel.length > 0 ? `_${exportSectionsSel.join("_")}` : "";
-    a.download = `シフト_${selectedDate}${suffix}.csv`;
+    a.download = `シフト_${monthStr}${suffix}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     setShowExportModal(false);
@@ -297,7 +315,7 @@ export default function ShiftManageClient({
             <div>
               <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Excel出力</h2>
               <p className="text-xs text-zinc-400 mt-0.5">
-                {selectedDate} のシフト
+                {targetYear}/{String(targetMonth).padStart(2, "0")} の月次シフト
                 <span className="ml-1">
                   {exportSectionsSel.length === 0 ? "（全員）" : `（${exportSectionsSel.join("・")}）`}
                 </span>
