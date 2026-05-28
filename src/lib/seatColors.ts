@@ -91,5 +91,5 @@ export function formatSectionShift(
   const shift = shiftName?.includes("早") ? "早番"
               : shiftName?.includes("遅") ? "遅番"
               : null;
-  return shift ? `${section}（${shift}）` : section;
+  return shift ? `${section}(${shift})` : section;
 }
