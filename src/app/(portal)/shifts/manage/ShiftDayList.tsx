@@ -600,24 +600,27 @@ export default function ShiftDayList({
                             const sName   = shift?.shift_name ?? null;
                             const absent  = isAbsent(m.id, d);
                             const pattern = sName ? (patternByName.get(sName) ?? null) : null;
-                            const bgColor = absent ? "" : (sName ? getPatternBg(sName, pattern) : "");
+                            const patBg   = sName ? getPatternBg(sName, pattern) : "";
+                            const offBg   =
+                              (sName === "希望休" || sName === "有休" || sName === "特別休暇") ? "bg-zinc-700 dark:bg-zinc-700"
+                              : sName === "公休" ? "bg-zinc-500 dark:bg-zinc-600"
+                              : "";
+                            const cellBg  = absent ? "bg-red-50 dark:bg-red-950/30" : offBg || patBg;
                             return (
                               <div
                                 key={m.id}
                                 className={cx(
                                   "h-9 flex items-center justify-center w-full",
                                   i < visibleMembers.length - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
-                                  absent ? "bg-red-50 dark:bg-red-950/30" : bgColor,
+                                  cellBg,
                                 )}
                               >
                                 {sName ? (
                                   <span className={cx(
                                     "text-[10px] font-semibold leading-none truncate px-0.5",
                                     absent ? "text-red-600 dark:text-red-400"
-                                    : sName === "公休" ? "text-zinc-400 dark:text-zinc-500"
-                                    : sName === "希望休" ? "text-blue-600 dark:text-blue-400"
-                                    : sName === "有休" || sName === "特別休暇" ? "text-teal-600 dark:text-teal-400"
-                                    : bgColor ? "text-zinc-800 dark:text-zinc-100"
+                                    : offBg ? "text-white"
+                                    : patBg ? "text-zinc-800 dark:text-zinc-100"
                                     : isSel ? "text-blue-700 dark:text-blue-300"
                                     : "text-zinc-700 dark:text-zinc-300",
                                   )}>
