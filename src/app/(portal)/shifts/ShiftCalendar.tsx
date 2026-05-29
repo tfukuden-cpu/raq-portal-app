@@ -160,14 +160,22 @@ export default function ShiftCalendar({
     isHoliday(s.shift_name) ? holidayCount++ : workCount++;
   }
 
-  const selShift   = selected ? (shiftMap.get(selected) ?? null) : null;
-  const selDow     = selected ? new Date(selected + "T00:00:00+09:00").getDay() : null;
-  const [, selMM, selDD] = selected?.split("-") ?? [];
-  const selLabel   = selected
-    ? `${Number(selMM)}月${Number(selDD)}日（${WEEKDAY_FULL[selDow!]}）`
-    : null;
-  const selKind    = classifyShift(selShift?.shift_name ?? null);
-  const selColors  = getShiftColors(selShift?.shift_name ?? null);
+  // モーダル用（selected とは別管理）
+  const [modal, setModal] = useState<string | null>(null);
+
+  const getSelInfo = (ds: string | null) => {
+    if (!ds) return null;
+    const shift = shiftMap.get(ds) ?? null;
+    const dow   = new Date(ds + "T00:00:00+09:00").getDay();
+    const [, mm, dd] = ds.split("-");
+    return {
+      label:  `${Number(mm)}月${Number(dd)}日（${WEEKDAY_FULL[dow]}）`,
+      shift,
+      kind:   classifyShift(shift?.shift_name ?? null),
+      colors: getShiftColors(shift?.shift_name ?? null),
+    };
+  };
+  const modalInfo = getSelInfo(modal);
 
   return (
     <div className="flex flex-col gap-2 h-full">
@@ -219,7 +227,7 @@ export default function ShiftCalendar({
           const ds      = `${monthStr}-${String(d).padStart(2, "0")}`;
           const s       = shiftMap.get(ds);
           const isToday = ds === todayStr;
-          const isSel   = ds === selected;
+          const isSel   = false; // セル選択状態は廃止（モーダルに移行）
           const dow     = new Date(year, month - 1, d).getDay();
           const kind    = classifyShift(s?.shift_name ?? null);
           const colors  = getShiftColors(s?.shift_name ?? null);
@@ -257,7 +265,7 @@ export default function ShiftCalendar({
             <button
               key={ds}
               type="button"
-              onClick={() => setSelected(isSel ? null : ds)}
+              onClick={() => setModal(ds)}
               className={cx(
                 "flex flex-col items-center justify-center gap-0 rounded-xl transition-colors relative overflow-hidden",
                 cellBg,
@@ -289,78 +297,92 @@ export default function ShiftCalendar({
         {Array.from({ length: trailing }).map((_, i) => <div key={`post${i}`} />)}
       </div>
 
-      {/* ── 選択日の詳細パネル ── */}
-      <div className={cx(
-        "flex-shrink-0 rounded-2xl px-4 py-3 min-h-[80px] flex flex-col justify-center",
-        selColors ? cx(selColors.bg, "bg-opacity-30") : "bg-zinc-50 dark:bg-zinc-900",
-      )}>
-        {!selected && (
-          <p className="text-xs text-zinc-400 text-center">日付を選択してください</p>
-        )}
-
-        {selected && !selShift && (
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{selLabel}</p>
-            <span className="text-xs text-zinc-400">シフト未登録</span>
-          </div>
-        )}
-
-        {selected && selShift && (
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{selLabel}</p>
-              {/* シフト名バッジ */}
+      {/* ── モーダル ── */}
+      {modal && modalInfo && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/40"
+          onClick={() => setModal(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 shadow-xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* ヘッダー：日付 ｜ シフト名 */}
+            <div className={cx(
+              "flex items-center justify-between px-5 py-4",
+              modalInfo.kind === "dayoff" ? "bg-zinc-700 text-white"
+              : modalInfo.kind === "off"  ? "bg-zinc-200 dark:bg-zinc-700"
+              : modalInfo.colors          ? cx(modalInfo.colors.bg)
+                                          : "bg-zinc-100 dark:bg-zinc-800",
+            )}>
               <span className={cx(
-                "text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0",
-                selKind === "dayoff" ? "bg-zinc-700 text-white"
-                : selKind === "off"  ? "bg-zinc-300 dark:bg-zinc-600 text-zinc-600 dark:text-zinc-300"
-                : selColors          ? cx(selColors.bg, selColors.text)
-                                     : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300",
+                "text-sm font-semibold",
+                modalInfo.kind === "dayoff" ? "text-white"
+                : modalInfo.colors ? modalInfo.colors.text : "text-zinc-700 dark:text-zinc-300",
               )}>
-                {selShift.shift_name}
+                {modalInfo.label}
+              </span>
+              <span className={cx(
+                "text-base font-bold",
+                modalInfo.kind === "dayoff" ? "text-white"
+                : modalInfo.colors ? modalInfo.colors.text : "text-zinc-700 dark:text-zinc-300",
+              )}>
+                {modalInfo.shift?.shift_name ?? "シフト未登録"}
               </span>
             </div>
 
-            {/* 時刻（出勤のみ） */}
-            {selKind === "work" && (selShift.shift_start || selShift.shift_end) && (
-              <p className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 leading-tight">
-                {selShift.shift_start?.slice(0, 5) ?? "--:--"}
-                <span className="text-zinc-300 dark:text-zinc-600 text-lg font-light mx-2">〜</span>
-                {selShift.shift_end?.slice(0, 5) ?? "--:--"}
-              </p>
-            )}
-
-            {selShift.note && (
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">{selShift.note}</p>
-            )}
-          </div>
-        )}
-
-        {/* 変更履歴 */}
-        {selected && (logMap.get(selected) ?? []).length > 0 && (
-          <div className={cx(
-            "pt-1 border-t border-zinc-200 dark:border-zinc-700",
-            selShift ? "mt-1.5" : "mt-0",
-          )}>
-            <p className="text-[10px] text-zinc-400 mb-1 flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
-              変更履歴
-            </p>
-            <div className="space-y-0.5 max-h-24 overflow-y-auto">
-              {(logMap.get(selected) ?? []).map((l, i) => (
-                <p key={i} className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-snug">
-                  <span className="font-semibold text-zinc-600 dark:text-zinc-300">{l.changed_by_name}</span>
-                  {" が "}
-                  {l.action === "delete" ? "削除"
-                    : l.action === "create" ? "追加"
-                    : `${l.before_shift_name ?? "（なし）"} → ${l.after_shift_name ?? "（なし）"}`}
-                  <span className="ml-1 text-zinc-400">{fmtLogAt(l.changed_at)}</span>
+            {/* ボディ */}
+            <div className="px-5 py-5 space-y-3">
+              {/* 開始〜終了時間 */}
+              {modalInfo.kind === "work" && (modalInfo.shift?.shift_start || modalInfo.shift?.shift_end) ? (
+                <p className="text-3xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 text-center leading-tight">
+                  {modalInfo.shift.shift_start?.slice(0, 5) ?? "--:--"}
+                  <span className="text-zinc-300 dark:text-zinc-600 text-xl font-light mx-3">〜</span>
+                  {modalInfo.shift.shift_end?.slice(0, 5) ?? "--:--"}
                 </p>
-              ))}
+              ) : modalInfo.kind === "none" ? (
+                <p className="text-sm text-zinc-400 text-center">シフトは登録されていません</p>
+              ) : null}
+
+              {/* メモ */}
+              {modalInfo.shift?.note && (
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center">{modalInfo.shift.note}</p>
+              )}
+
+              {/* 変更履歴 */}
+              {(logMap.get(modal) ?? []).length > 0 && (
+                <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 space-y-1">
+                  <p className="text-[11px] text-zinc-400 flex items-center gap-1 mb-1.5">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    変更履歴
+                  </p>
+                  {(logMap.get(modal) ?? []).map((l, i) => (
+                    <p key={i} className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug">
+                      <span className="font-semibold text-zinc-600 dark:text-zinc-300">{l.changed_by_name}</span>
+                      {" が "}
+                      {l.action === "delete" ? "削除"
+                        : l.action === "create" ? "追加"
+                        : `${l.before_shift_name ?? "（なし）"} → ${l.after_shift_name ?? "（なし）"}`}
+                      <span className="ml-1 text-zinc-400">{fmtLogAt(l.changed_at)}</span>
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 閉じるボタン */}
+            <div className="px-5 pb-5">
+              <button
+                type="button"
+                onClick={() => setModal(null)}
+                className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+              >
+                閉じる
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
