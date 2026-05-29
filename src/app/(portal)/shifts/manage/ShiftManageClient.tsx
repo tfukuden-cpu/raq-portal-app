@@ -590,7 +590,6 @@ export default function ShiftManageClient({
           year={targetYear}
           month={targetMonth}
           members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
-          shifts={shifts}
           defaultTemplate={publishMessageTemplate}
         />
 

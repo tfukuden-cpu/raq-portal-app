@@ -563,6 +563,60 @@ export async function sendShiftNotifyAction(
 }
 
 /**
+ * 1スタッフ分のシフト通知プレビューを生成（DBから最新シフトを取得）
+ */
+export async function previewShiftNotifyAction(
+  projectId: string,
+  staffId: string,
+  year: number,
+  month: number,
+  messageTemplate: string,
+): Promise<{ success: boolean; previewText?: string; staffName?: string; message?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const endDate   = `${year}-${String(month).padStart(2, "0")}-${new Date(year, month, 0).getDate()}`;
+  const targetMonth = `${year}/${String(month).padStart(2, "0")}`;
+
+  const [{ data: staffRow }, { data: shiftRows }] = await Promise.all([
+    admin.from("staffs").select("display_name, name").eq("id", staffId).maybeSingle(),
+    admin.from("shifts")
+      .select("shift_date, shift_name, shift_start, shift_end")
+      .eq("project_id", projectId)
+      .eq("staff_id", staffId)
+      .gte("shift_date", startDate)
+      .lte("shift_date", endDate)
+      .order("shift_date"),
+  ]);
+
+  const name = (staffRow as { display_name?: string | null; name?: string | null } | null)?.display_name
+    ?? (staffRow as { display_name?: string | null; name?: string | null } | null)?.name
+    ?? staffId;
+
+  const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
+  const shiftLines = (shiftRows ?? []).map(s => {
+    const dt  = new Date((s.shift_date as string) + "T12:00:00+09:00");
+    const wd  = WEEKDAY_JP[dt.getDay()];
+    const [, mm, dd] = (s.shift_date as string).split("-");
+    const timeStr = s.shift_start && s.shift_end
+      ? ` ${(s.shift_start as string).slice(0, 5)}〜${(s.shift_end as string).slice(0, 5)}`
+      : "";
+    return `${parseInt(mm)}/${parseInt(dd)}（${wd}）${s.shift_name ?? ""}${timeStr}`;
+  }).join("\n");
+
+  const previewText = resolveMessage(messageTemplate, {
+    "名前":      name,
+    "対象月":    targetMonth,
+    "シフト一覧": shiftLines || "（シフトなし）",
+  });
+
+  return { success: true, previewText, staffName: name };
+}
+
+/**
  * セクション仮確定の種別を設定する
  * lockType: 'none' = 解除, 'slot' = 枠確定（人の入替OK）, 'staff' = 人確定（人を固定）
  * draftEntries を渡すと draft_data も同時保存（再仮組みの保護を確実にするため）
