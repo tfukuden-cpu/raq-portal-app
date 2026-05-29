@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-29（v53：シフト充足数インライン編集・シフトパターン並び替え・SV合計行・タスクLINE通知）
+最終更新：2026-05-30（v54：シフトLINE通知ボタン新設・個人向けお知らせ・お知らせ管理テーブルUI刷新）
 
 ---
 
@@ -106,6 +106,33 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | アバターシステム | 🔄 設計済み・パーツ未実装（低優先） |
 
 ### 次に優先すべきこと（新しいセッションはここから）
+
+**v54 完了内容**
+- **シフトLINE通知ボタン新設（ShiftLineNotifyButton）**
+  - シフト管理画面に「シフトLINE通知」ボタンを独立して追加（シフト展開フローとは別）
+  - モーダル内でメッセージテンプレートを編集可能（`{名前}` `{対象月}` `{シフト一覧}` 変数対応）
+  - スタッフ一覧に名前検索機能あり（useMemo）
+  - 「プレビュー」ボタンでDBからシフトを取得し実際の送信内容を確認（LINE風バブル表示＋緑ボタン）
+  - 「この人だけ送信」で個別送信、「全員に送信」で一括送信（sendShiftNotifyAction）
+  - 「アプリ内のお知らせにも同時投稿する」チェックボックスで、個別/全員向けにお知らせも同時作成
+  - シフト展開（PublishButton）との違い：`shift_month_status` を更新しない・メッセージ編集可能
+- **`{シフト一覧}` 変数サポート追加**
+  - `notify-config.ts` の `shift_published` に `{シフト一覧}` 変数を追加
+  - デフォルトテンプレートに `{シフト一覧}` を含めるよう更新
+  - DB P001 の通知設定も更新済み
+  - 公休・希望休を含む全シフトエントリを対象月でフォーマット（`MM/DD（曜）シフト名 HH:MM〜HH:MM`）
+- **個人向けお知らせ（notices.target_staff_id）**
+  - `notices` テーブルに `target_staff_id text REFERENCES staffs(id)` カラム追加（Migration済み）
+  - RLS更新：`target_staff_id IS NULL`（全員）または `target_staff_id = current_staff_id()`（本人）または管理者が閲覧可
+  - `postShiftNoticeAction(projectId, title, body, targetStaffId?)` でスタッフ指定お知らせを作成
+  - 個別LINE送信時に `targetStaffId` をセット → 当該スタッフのみ見えるお知らせ
+- **お知らせ管理画面 テーブルUI刷新（NoticesManageClient）**
+  - カード表示からグリッドテーブル（送信日時 ｜ 宛先 ｜ お知らせ ｜ 操作）に刷新
+  - `grid-cols-[6rem_7rem_1fr_auto]` レイアウト
+  - 個人宛は amber 色で宛先名表示、全員向けは zinc グレーで「全員」表示
+  - 宛先検索フィールド追加（`target_name ?? "全員"` でフィルタリング・useMemo）
+  - 行クリックで詳細モーダル（全文 ＋ 宛先ラベル）
+  - 管理画面は adminClient を使用（RLSバイパスで全お知らせを表示）
 
 **v53 完了内容**
 - **シフト充足テーブル：必要枠数インライン編集（ShiftEditGrid）**
@@ -441,7 +468,8 @@ late_reports（遅刻報告）
 
 notices（周知事項）
   project_id, title, body, is_pinned, posted_by,
-  created_at, updated_at
+  created_at, updated_at,
+  target_staff_id text   ← ★v54新設（NULL=全員、値=個人向け）
 
 notice_reads（既読管理）
   notice_id, staff_id, read_at
@@ -608,6 +636,7 @@ src/
 | `absence_followup_remind` | 定時 | 欠勤者への翌日出勤可否確認（17時） ★v27新設 | スタッフ本人 |
 | `absence_followup_notify` | イベント | 経過報告受信通知 ★v27新設 | 管理者グループ |
 | `shift_published` | イベント | シフト展開（個人シフト送信） ★v27新設 | スタッフ本人 |
+| `{シフト一覧}` | shift_published 変数 | 対象月の全シフト一覧（日付・曜日・シフト名・時刻） ★v54新設 | — |
 
 ### 設定
 案件設定 → LINE通知タブ でON/OFF・宛先・タイミング・メッセージ文を変更できる。
@@ -1183,3 +1212,5 @@ export default async function Page({
 | 2026-05-27 | v38 | **仮組み余剰配置改善** 余剰配置ループで不足パターン（早番優先）を先に試みるロジック追加。遅番優先スタッフでも早番スロットが不足していれば早番に割当。 |
 | 2026-05-27 | v37 | **スタッフ詳細設定に希望給追加** `project_members.desired_wage integer` カラム追加。メンバー設定モーダルの基本設定セクションに希望給（円/時）入力欄追加。メンバー一覧カードに¥1,200/h形式バッジ表示（設定済みのみ・アンバー色）。|
 | 2026-05-27 | v35 | **スタッフ設定モーダル再構成・研修設定UI刷新** ① `staff_trainings`に`training_name text`・`start_time time`・`end_time time`カラム追加（Supabase MCP）。② `TrainingSection.tsx`を全面リライト：「研修日を設定」ボタン→展開パネル（導入研修/研修/案件研修/カスタムの4タイプ選択・時間入力・複数日カレンダー選択・登録済みは半透明表示・タイプ別グループ表示+×削除チップ）。③ メンバー編集モーダルを4セクションに再構成（基本設定：氏名/所属会社/ロール/アカウント番号/セクション/アサイン日、シフト設定：稼働日数デフォルト月21日/優先セクション/優先パターン/連勤上限、研修設定：TrainingSection、離脱処理）。④ シフト設定折りたたみを廃止・常時表示化。⑤ 新規スタッフ追加のアサイン日を必須に変更（未入力時「作成して追加」ボタン無効）。⑥ 仮組みロジック（draft-actions.ts）のtrainingEntries生成でtraining_name/start_time/end_timeを使用、validShiftNamesに研修名を動的追加。|
+| 2026-05-29 | v53 | **シフト充足数インライン編集・シフトパターン並び替え・SV合計行・タスクLINE通知** ① ShiftEditGrid：充足行のパターン名セルに✎アイコン追加→モーダルで全日付の必要枠数を一括編集（slot_requirements upsert）。localSlotReqOverridesで保存前もグリッド即時反映。② SettingsClient：shift_patterns に sort_order カラム追加・ShiftPatternListにHTML5 Drag-and-Drop 並び替えUI追加（⠿ハンドル・ドラッグ時ハイライト・collapsedインデックスのリマップ）。③ SVパターン2件以上の場合に最後のSV行直後に「SV合計」行を自動追加（充足色ロジック適用）。④ addTaskManualAction/updateTaskAction：担当者設定時・変更時にLINEプッシュ。notify-config.ts に task_assigned 通知種別追加。⑤ /api/cron/notify に daily_task_remind セクション追加：当日期限・未完了・担当者ありタスクを当日8時に個人宛プッシュ。 |
+| 2026-05-30 | v54 | **シフトLINE通知ボタン・個人向けお知らせ・お知らせ管理UI刷新** ① `ShiftLineNotifyButton.tsx` 新設：シフト管理に独立したLINE通知ボタン。テンプレート編集・名前検索・DB連動プレビュー（LINE風バブル）・個別/一括送信・アプリ内お知らせ同時投稿機能を搭載（シフト展開とは別・shift_month_statusを更新しない）。② `{シフト一覧}` 変数追加：notify-config.ts の shift_published テンプレートに追加、全シフト（公休含む）を `MM/DD（曜）シフト名 HH:MM〜HH:MM` 形式でフォーマット。③ `notices.target_staff_id text REFERENCES staffs(id)` カラム追加・RLS更新（target_staff_id IS NULL=全員閲覧可・値あり=本人+管理者のみ閲覧可）。④ `postShiftNoticeAction` 新設。⑤ `NoticesManageClient` をテーブルUIに全面刷新：`grid-cols-[6rem_7rem_1fr_auto]`（送信日時｜宛先｜お知らせ｜操作）・宛先検索・個人宛amber色表示・行クリック詳細モーダル。管理画面は adminClient でRLSバイパスし全お知らせ表示。 |
