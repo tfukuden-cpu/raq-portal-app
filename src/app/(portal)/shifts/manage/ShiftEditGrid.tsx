@@ -880,6 +880,57 @@ export default function ShiftEditGrid({
   const [focusedCandidateId, setFocusedCandidateId] = useState<string | null>(null);
   const staffRowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
+  // ── 必要枠数インライン編集 ────────────────────────────────────────
+  // サーバー DB に保存後、ページリロードなしで即時反映するためのローカルオーバーライド
+  const [localSlotReqOverrides, setLocalSlotReqOverrides] = useState<Map<string, number>>(new Map());
+  const [reqEditPattern, setReqEditPattern] = useState<Pattern | null>(null);
+  const [reqEditValues, setReqEditValues] = useState<Map<string, string>>(new Map());
+  const [isSavingReqs, startReqSaveTransition] = useTransition();
+  const [reqSaveMsg, setReqSaveMsg] = useState<string | null>(null);
+
+  // ── 分割ペイン ──────────────────────────────────────────────────
+  const [splitRatio, setSplitRatio] = useState(0.32);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const isDraggingDiv = useRef(false);
+  const sufficiencyPaneRef = useRef<HTMLDivElement>(null);
+  const staffPaneRef = useRef<HTMLDivElement>(null);
+  const isSyncingScrollX = useRef(false);
+
+  const handleEditGridSufficiencyScroll = (scrollLeft: number) => {
+    if (isSyncingScrollX.current) return;
+    isSyncingScrollX.current = true;
+    if (staffPaneRef.current) staffPaneRef.current.scrollLeft = scrollLeft;
+    requestAnimationFrame(() => { isSyncingScrollX.current = false; });
+  };
+  const handleEditGridStaffScroll = (scrollLeft: number) => {
+    if (isSyncingScrollX.current) return;
+    isSyncingScrollX.current = true;
+    if (sufficiencyPaneRef.current) sufficiencyPaneRef.current.scrollLeft = scrollLeft;
+    requestAnimationFrame(() => { isSyncingScrollX.current = false; });
+  };
+  const handleDividerDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    isDraggingDiv.current = true;
+    const onMove = (ev: MouseEvent | TouchEvent) => {
+      if (!isDraggingDiv.current || !splitContainerRef.current) return;
+      const rect = splitContainerRef.current.getBoundingClientRect();
+      const clientY = "touches" in ev ? ev.touches[0].clientY : ev.clientY;
+      const ratio = (clientY - rect.top) / rect.height;
+      setSplitRatio(Math.min(0.8, Math.max(0.1, ratio)));
+    };
+    const onUp = () => {
+      isDraggingDiv.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("touchend", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("mouseup", onUp);
+    document.addEventListener("touchend", onUp);
+  };
+
   // 候補スタッフ選択時にその行へスクロール
   useEffect(() => {
     if (!focusedCandidateId) return;
@@ -957,9 +1008,13 @@ export default function ShiftEditGrid({
   }
 
   function getRequired(patternName: string, date: string): number {
+    // インライン編集後のローカルオーバーライドを最優先
+    const localKey = `${patternName}__${date}`;
+    if (localSlotReqOverrides.has(localKey)) return localSlotReqOverrides.get(localKey)!;
+    // DB の日別オーバーライド
     const k = `${patternName}__${date}`;
     if (slotReqMap.has(k)) return slotReqMap.get(k)!;
-    // 日別オーバーライドがなければパターンの平日/土日デフォルトを使う
+    // パターンの平日/土日デフォルト
     const pattern = shiftPatterns.find(p => p.name === patternName);
     if (!pattern) return 0;
     const dow = new Date(date).getUTCDay();
@@ -1396,35 +1451,16 @@ export default function ShiftEditGrid({
     );
   }, [activeMembers]);
 
-  // 充足サマリーに表示するパターン（必要人数が設定されているもののみ・SV除外）
+  // 充足サマリーに表示するパターン（SVは各パターン個別に表示）
   const summaryPatterns = useMemo(() =>
     shiftPatterns.filter(p => {
-      if (p.section === "SV") return false;
+      if (p.section === "SV") return true;  // SV は各パターン個別行で表示
       if ((p.required_count ?? 0) > 0) return true;
       if ((p.required_weekday ?? 0) > 0) return true;
       if ((p.required_weekend ?? 0) > 0) return true;
       return slotRequirements.some(r => r.pattern_name === p.name);
     }),
   [shiftPatterns, slotRequirements]);
-
-  // SVセクションのパターン
-  const svPatterns = useMemo(
-    () => shiftPatterns.filter(p => p.section === "SV"),
-    [shiftPatterns],
-  );
-
-  // 日付ごとのSV配置人数
-  const svCountByDate = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const date of allDates) {
-      const count = svPatterns.reduce(
-        (sum, p) => sum + (resolvedGrid.get(`${p.name}__${date}`) ?? []).length,
-        0,
-      );
-      map.set(date, count);
-    }
-    return map;
-  }, [svPatterns, resolvedGrid, allDates]);
 
   // 選択不足セルの候補スタッフ（スコアリング付き）
   const shortageCandidates = useMemo(() => {
@@ -1946,8 +1982,234 @@ export default function ShiftEditGrid({
         {/* ── グリッド列 ── */}
         <div className="flex flex-col flex-1 min-w-0">
 
-      {/* ── Table ── */}
-      <div className="overflow-auto flex-1" style={{ WebkitOverflowScrolling: "touch" }}>
+      {/* ── 分割ペイン（充足テーブル ＋ スタッフテーブル） ── */}
+      <div ref={splitContainerRef} className="flex flex-col flex-1 min-h-0">
+
+        {/* ── 充足テーブルペイン ── */}
+        {showSummaryRows && (
+          <div
+            ref={sufficiencyPaneRef}
+            className="overflow-auto shrink-0"
+            style={{ flex: `0 0 ${splitRatio * 100}%`, scrollbarWidth: "none" } as React.CSSProperties}
+            onScroll={(e) => handleEditGridSufficiencyScroll(e.currentTarget.scrollLeft)}
+          >
+            <table className="border-separate"
+              style={{ tableLayout: "fixed", width: `${totalW}px`, minWidth: `${totalW}px`, borderSpacing: 0 }}>
+              <colgroup>
+                <col style={{ width: `${NAME_W}px` }} />
+                {prevDates.map((d) => <col key={`prev-col-s-${d}`} style={{ width: `${PREV_COL_W}px` }} />)}
+                {allDates.map((d) => <col key={`col-s-${d}`} style={{ width: `${COL_W}px` }} />)}
+                <col style={{ width: `${TOT_W}px` }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="sticky top-0 left-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-r-2 border-zinc-200 dark:border-zinc-700" />
+                  {prevDates.map((date, pi) => {
+                    const day = parseInt(date.slice(8)); const dw = dowLabel(date);
+                    const dn = dowNum(date); const isSun = dn === 0, isSat = dn === 6;
+                    const isLast = pi === prevDates.length - 1;
+                    return (
+                      <th key={`prev-hs-${date}`} className={["sticky top-0 z-20 h-11 border-b bg-zinc-100 dark:bg-zinc-800/70",
+                        isLast ? "border-r-2 border-r-zinc-400 dark:border-r-zinc-500" : "border-r border-zinc-300 dark:border-zinc-600"].join(" ")}>
+                        <div className="flex flex-col items-center justify-center h-full gap-0">
+                          <span className={`text-[10px] font-medium tabular-nums leading-none ${isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500"}`}>{day}</span>
+                          <span className={`text-[8px] leading-none ${isSun ? "text-red-300" : isSat ? "text-blue-300" : "text-zinc-300 dark:text-zinc-600"}`}>{dw}</span>
+                        </div>
+                      </th>
+                    );
+                  })}
+                  {allDates.map((date) => {
+                    const day = parseInt(date.slice(8)); const dw = dowLabel(date);
+                    const dn = dowNum(date); const isSun = dn === 0, isSat = dn === 6, isToday = date === todayJST;
+                    return (
+                      <th key={`hs-${date}`} className={["sticky top-0 z-20 h-11 border-b border-r border-zinc-200 dark:border-zinc-700",
+                        isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950"].join(" ")}>
+                        <div className="flex flex-col items-center justify-center h-full gap-0.5">
+                          <span className={`text-[11px] font-bold tabular-nums leading-none ${isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"}`}>{day}</span>
+                          <span className={`text-[9px] leading-none ${isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"}`}>{dw}</span>
+                        </div>
+                      </th>
+                    );
+                  })}
+                  <th className="sticky top-0 right-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-l-2 border-zinc-300 dark:border-zinc-600">
+                    <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">合計</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {summaryPatterns.map((pattern, patIdx, arr) => {
+                  // SV合計行を挿入: SV パターンが2つ以上ある場合、最後のSVパターンの直後に追加
+                  const svPats = arr.filter(p => p.section === "SV");
+                  const isSvTotal = svPats.length >= 2 && arr[patIdx + 1]?.section !== "SV" && pattern.section === "SV";
+                  const isFirst = patIdx === 0;
+                  const isLast  = patIdx === arr.length - 1;
+                  return (
+                    <React.Fragment key={`sum-frag-${pattern.name}`}>
+                    <tr style={{ height: `${SUM_ROW_H}px` }} className="bg-zinc-50 dark:bg-zinc-900">
+                      <td className={["p-0 overflow-hidden bg-zinc-200 dark:bg-zinc-700 border-r-2 border-zinc-400 dark:border-zinc-500 cursor-pointer hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors",
+                        isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                        isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
+                      ].join(" ")} style={{ position: "sticky", left: 0, zIndex: 10 }}
+                        onClick={() => { setReqEditPattern(pattern); setReqEditValues(new Map()); setReqSaveMsg(null); }}
+                        title="クリックして必要枠数を編集">
+                        <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-2 gap-1">
+                          <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200 leading-none truncate block">{pattern.name}</span>
+                          <span className="text-[9px] text-zinc-400 dark:text-zinc-500 shrink-0">✎</span>
+                        </div>
+                      </td>
+                      {prevDates.map((d, pi) => (
+                        <td key={`prev-sum-${d}`} className={["p-0 bg-zinc-200 dark:bg-zinc-700",
+                          isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                          isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
+                          pi === prevDates.length - 1 ? "border-r-2 border-r-zinc-400 dark:border-r-zinc-500" : "border-r border-r-zinc-300 dark:border-r-zinc-600",
+                        ].join(" ")} />
+                      ))}
+                      {allDates.map((date) => {
+                        const assigned = getEffectiveCount(pattern.name, date);
+                        const required = getRequired(pattern.name, date);
+                        const net = required - assigned;
+                        const isToday = date === todayJST;
+                        const isSelected = selectedShortage?.date === date && selectedShortage?.patternName === pattern.name;
+                        const isShortage = net > 0;
+                        let display: string, textCls: string, bgCls: string;
+                        if (required === 0) {
+                          display = assigned > 0 ? String(assigned) : "";
+                          textCls = "text-zinc-400 dark:text-zinc-500";
+                          bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
+                        } else if (net > 0) {
+                          display = `${assigned}/${required}`;
+                          textCls = isSelected ? "text-white font-bold" : "text-red-600 dark:text-red-400 font-bold";
+                          bgCls = isSelected ? "bg-red-500 dark:bg-red-600" : isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950";
+                        } else if (net < 0) {
+                          display = `${assigned}/${required}`;
+                          textCls = "text-emerald-700 dark:text-emerald-400 font-bold";
+                          bgCls = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950";
+                        } else {
+                          display = `${assigned}/${required}`;
+                          textCls = "text-emerald-500 dark:text-emerald-600";
+                          bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
+                        }
+                        return (
+                          <td key={date}
+                            onClick={isShortage ? () => setSelectedShortage(isSelected ? null : { date, patternName: pattern.name }) : undefined}
+                            className={["tabular-nums p-0 overflow-hidden", isShortage ? "cursor-pointer" : "", bgCls,
+                              isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                              isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500 border-r border-r-zinc-200 dark:border-r-zinc-700"
+                                      : "border-b border-b-zinc-300 dark:border-b-zinc-600 border-r border-r-zinc-200 dark:border-r-zinc-700",
+                            ].join(" ")}
+                          >
+                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
+                              <span className={`text-[10px] leading-none ${textCls}`}>{display}</span>
+                            </div>
+                          </td>
+                        );
+                      })}
+                      {(() => {
+                        const totalAssigned = allDates.reduce((s, d) => s + getEffectiveCount(pattern.name, d), 0);
+                        const totalRequired = allDates.reduce((s, d) => s + getRequired(pattern.name, d), 0);
+                        const totalNet = totalRequired - totalAssigned;
+                        let totDisplay: string, totText: string, totBg: string;
+                        if (totalRequired === 0) {
+                          totDisplay = totalAssigned > 0 ? String(totalAssigned) : "—";
+                          totText = "text-zinc-400 dark:text-zinc-500"; totBg = "bg-zinc-100 dark:bg-zinc-800";
+                        } else if (totalNet > 0) {
+                          totDisplay = `${totalAssigned}/${totalRequired}`;
+                          totText = "text-red-600 dark:text-red-400 font-bold"; totBg = "bg-red-100 dark:bg-red-950";
+                        } else if (totalNet < 0) {
+                          totDisplay = `${totalAssigned}/${totalRequired}`;
+                          totText = "text-emerald-700 dark:text-emerald-400 font-bold"; totBg = "bg-emerald-100 dark:bg-emerald-950";
+                        } else {
+                          totDisplay = `${totalAssigned}/${totalRequired}`;
+                          totText = "text-emerald-500 dark:text-emerald-600"; totBg = "bg-zinc-100 dark:bg-zinc-800";
+                        }
+                        return (
+                          <td className={["tabular-nums p-0 overflow-hidden border-l-2 border-zinc-300 dark:border-zinc-600", totBg,
+                            isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                            isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
+                          ].join(" ")} style={{ position: "sticky", right: 0, zIndex: 12 }}>
+                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
+                              <span className={`text-[10px] leading-none ${totText}`}>{totDisplay}</span>
+                            </div>
+                          </td>
+                        );
+                      })()}
+                    </tr>
+                    {/* SV合計行：SVパターンが2つ以上あり、かつこれが最後のSVパターン行のとき */}
+                    {isSvTotal && (() => {
+                      const totalAssignedByDate = allDates.map(d => svPats.reduce((s, p) => s + getEffectiveCount(p.name, d), 0));
+                      const totalRequiredByDate = allDates.map(d => svPats.reduce((s, p) => s + getRequired(p.name, d), 0));
+                      const grandAssigned = totalAssignedByDate.reduce((s, v) => s + v, 0);
+                      const grandRequired = totalRequiredByDate.reduce((s, v) => s + v, 0);
+                      const grandNet = grandRequired - grandAssigned;
+                      let totDisplay: string, totText: string, totBg: string;
+                      if (grandRequired === 0) { totDisplay = grandAssigned > 0 ? String(grandAssigned) : "—"; totText = "text-zinc-400 dark:text-zinc-500"; totBg = "bg-zinc-200 dark:bg-zinc-700"; }
+                      else if (grandNet > 0) { totDisplay = `${grandAssigned}/${grandRequired}`; totText = "text-red-600 dark:text-red-400 font-bold"; totBg = "bg-red-200 dark:bg-red-900/60"; }
+                      else if (grandNet < 0) { totDisplay = `${grandAssigned}/${grandRequired}`; totText = "text-emerald-700 dark:text-emerald-400 font-bold"; totBg = "bg-emerald-200 dark:bg-emerald-900/60"; }
+                      else { totDisplay = `${grandAssigned}/${grandRequired}`; totText = "text-emerald-600 dark:text-emerald-500"; totBg = "bg-zinc-200 dark:bg-zinc-700"; }
+                      return (
+                        <tr key="sv-total-row" style={{ height: `${SUM_ROW_H}px` }} className="bg-zinc-100 dark:bg-zinc-800">
+                          <td className="p-0 overflow-hidden bg-zinc-400 dark:bg-zinc-500 border-r-2 border-zinc-500 dark:border-zinc-400 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400"
+                            style={{ position: "sticky", left: 0, zIndex: 10 }}>
+                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-2">
+                              <span className="text-[10px] font-bold text-white dark:text-zinc-900 leading-none truncate block">SV合計</span>
+                            </div>
+                          </td>
+                          {prevDates.map((d) => (
+                            <td key={`prev-svtot-${d}`} className="p-0 bg-zinc-400 dark:bg-zinc-500 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400 border-r border-r-zinc-300 dark:border-r-zinc-600" />
+                          ))}
+                          {allDates.map((date, di) => {
+                            const asgn = totalAssignedByDate[di];
+                            const req  = totalRequiredByDate[di];
+                            const net  = req - asgn;
+                            const isToday = date === todayJST;
+                            let disp: string, tcls: string, bcls: string;
+                            if (req === 0) { disp = asgn > 0 ? String(asgn) : ""; tcls = "text-zinc-500 dark:text-zinc-400"; bcls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800"; }
+                            else if (net > 0) { disp = `${asgn}/${req}`; tcls = "text-red-700 dark:text-red-400 font-bold"; bcls = isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950"; }
+                            else if (net < 0) { disp = `${asgn}/${req}`; tcls = "text-emerald-700 dark:text-emerald-400 font-bold"; bcls = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950"; }
+                            else { disp = `${asgn}/${req}`; tcls = "text-emerald-600 dark:text-emerald-500"; bcls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800"; }
+                            return (
+                              <td key={date} className={["tabular-nums p-0 overflow-hidden border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400 border-r border-r-zinc-200 dark:border-r-zinc-700", bcls].join(" ")}>
+                                <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
+                                  <span className={`text-[10px] leading-none ${tcls}`}>{disp}</span>
+                                </div>
+                              </td>
+                            );
+                          })}
+                          <td className={["tabular-nums p-0 overflow-hidden border-l-2 border-zinc-400 dark:border-zinc-500 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400", totBg].join(" ")}
+                            style={{ position: "sticky", right: 0, zIndex: 12 }}>
+                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
+                              <span className={`text-[10px] leading-none ${totText}`}>{totDisplay}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })()}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ── ドラッグハンドル ── */}
+        {showSummaryRows && (
+          <div
+            className="flex-none h-2 bg-zinc-200 dark:bg-zinc-700 cursor-row-resize hover:bg-blue-300 dark:hover:bg-blue-600 active:bg-blue-400 transition-colors flex items-center justify-center select-none touch-none shrink-0"
+            onMouseDown={handleDividerDragStart}
+            onTouchStart={handleDividerDragStart}
+          >
+            <span className="w-8 h-0.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+          </div>
+        )}
+
+        {/* ── スタッフテーブルペイン ── */}
+        <div
+          ref={staffPaneRef}
+          className="overflow-auto flex-1 min-h-0"
+          style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+          onScroll={(e) => handleEditGridStaffScroll(e.currentTarget.scrollLeft)}
+        >
           <table className="border-separate"
             style={{ tableLayout: "fixed", width: `${totalW}px`, minWidth: `${totalW}px`, borderSpacing: 0 }}>
             <colgroup>
@@ -1956,256 +2218,45 @@ export default function ShiftEditGrid({
               {allDates.map((d) => <col key={d} style={{ width: `${COL_W}px` }} />)}
               <col style={{ width: `${TOT_W}px` }} />
             </colgroup>
-
-            {/* ── 日付ヘッダー ── */}
-            <thead>
-              <tr>
-                <th className="sticky top-0 left-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-r-2 border-zinc-200 dark:border-zinc-700" />
-                {/* 前月末5日 */}
-                {prevDates.map((date, pi) => {
-                  const day = parseInt(date.slice(8));
-                  const dw = dowLabel(date);
-                  const dn = dowNum(date);
-                  const isSun = dn === 0, isSat = dn === 6;
-                  const isLast = pi === prevDates.length - 1;
-                  return (
-                    <th key={`prev-h-${date}`} className={[
-                      "sticky top-0 z-20 h-11 border-b bg-zinc-100 dark:bg-zinc-800/70",
-                      isLast ? "border-r-2 border-r-zinc-400 dark:border-r-zinc-500" : "border-r border-zinc-300 dark:border-zinc-600",
-                    ].join(" ")}>
-                      <div className="flex flex-col items-center justify-center h-full gap-0">
-                        <span className={`text-[10px] font-medium tabular-nums leading-none ${
-                          isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500"
-                        }`}>{day}</span>
-                        <span className={`text-[8px] leading-none ${
-                          isSun ? "text-red-300" : isSat ? "text-blue-300" : "text-zinc-300 dark:text-zinc-600"
-                        }`}>{dw}</span>
-                      </div>
-                    </th>
-                  );
-                })}
-                {allDates.map((date) => {
-                  const day = parseInt(date.slice(8));
-                  const dw = dowLabel(date);
-                  const dn = dowNum(date);
-                  const isSun = dn === 0, isSat = dn === 6, isToday = date === todayJST;
-                  return (
-                    <th key={date} className={[
-                      "sticky top-0 z-20 h-11 border-b border-r border-zinc-200 dark:border-zinc-700",
-                      isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950",
-                    ].join(" ")}>
-                      <div className="flex flex-col items-center justify-center h-full gap-0.5">
-                        <span className={`text-[11px] font-bold tabular-nums leading-none ${
-                          isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"
-                        }`}>{day}</span>
-                        <span className={`text-[9px] leading-none ${
-                          isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"
-                        }`}>{dw}</span>
-                      </div>
-                    </th>
-                  );
-                })}
-                {/* 合計列ヘッダー（右固定） */}
-                <th className="sticky top-0 right-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-l-2 border-zinc-300 dark:border-zinc-600">
-                  <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">合計</span>
-                </th>
-              </tr>
-            </thead>
-
+            {/* 充足テーブル非表示時のみ日付ヘッダーを表示 */}
+            {!showSummaryRows && (
+              <thead>
+                <tr>
+                  <th className="sticky top-0 left-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-r-2 border-zinc-200 dark:border-zinc-700" />
+                  {prevDates.map((date, pi) => {
+                    const day = parseInt(date.slice(8)); const dw = dowLabel(date);
+                    const dn = dowNum(date); const isSun = dn === 0, isSat = dn === 6;
+                    const isLast = pi === prevDates.length - 1;
+                    return (
+                      <th key={`prev-h-${date}`} className={["sticky top-0 z-20 h-11 border-b bg-zinc-100 dark:bg-zinc-800/70",
+                        isLast ? "border-r-2 border-r-zinc-400 dark:border-r-zinc-500" : "border-r border-zinc-300 dark:border-zinc-600"].join(" ")}>
+                        <div className="flex flex-col items-center justify-center h-full gap-0">
+                          <span className={`text-[10px] font-medium tabular-nums leading-none ${isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500"}`}>{day}</span>
+                          <span className={`text-[8px] leading-none ${isSun ? "text-red-300" : isSat ? "text-blue-300" : "text-zinc-300 dark:text-zinc-600"}`}>{dw}</span>
+                        </div>
+                      </th>
+                    );
+                  })}
+                  {allDates.map((date) => {
+                    const day = parseInt(date.slice(8)); const dw = dowLabel(date);
+                    const dn = dowNum(date); const isSun = dn === 0, isSat = dn === 6, isToday = date === todayJST;
+                    return (
+                      <th key={date} className={["sticky top-0 z-20 h-11 border-b border-r border-zinc-200 dark:border-zinc-700",
+                        isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950"].join(" ")}>
+                        <div className="flex flex-col items-center justify-center h-full gap-0.5">
+                          <span className={`text-[11px] font-bold tabular-nums leading-none ${isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"}`}>{day}</span>
+                          <span className={`text-[9px] leading-none ${isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"}`}>{dw}</span>
+                        </div>
+                      </th>
+                    );
+                  })}
+                  <th className="sticky top-0 right-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-l-2 border-zinc-300 dark:border-zinc-600">
+                    <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">合計</span>
+                  </th>
+                </tr>
+              </thead>
+            )}
             <tbody>
-              {/* ── 充足サマリー行（常に上部に固定・sticky）── */}
-              {showSummaryRows && summaryPatterns.map((pattern, patIdx) => {
-                const topOffset = HEADER_H + SUM_ROW_H * patIdx;
-                const isFirst = patIdx === 0;
-                const isLast  = patIdx === summaryPatterns.length - 1;
-                return (
-                  <tr key={`sum-${pattern.name}`} style={{ height: `${SUM_ROW_H}px` }} className="bg-zinc-50 dark:bg-zinc-900">
-                    {/* パターン名セル（行ヘッダー風・left+top sticky） */}
-                    <td
-                      className={[
-                        "p-0 overflow-hidden",
-                        "bg-zinc-200 dark:bg-zinc-700 border-r-2 border-zinc-400 dark:border-zinc-500",
-                        isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
-                        isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
-                      ].join(" ")}
-                      style={{ position: "sticky", left: 0, top: topOffset, zIndex: 20 }}
-                    >
-                      <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-2">
-                        <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200 leading-none truncate block">
-                          {pattern.name}
-                        </span>
-                      </div>
-                    </td>
-                    {/* 前月列（サマリー行は空） */}
-                    {prevDates.map((d, pi) => (
-                      <td key={`prev-sum-${d}`}
-                        className={[
-                          "p-0 bg-zinc-200 dark:bg-zinc-700",
-                          isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
-                          isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
-                          pi === prevDates.length - 1 ? "border-r-2 border-r-zinc-400 dark:border-r-zinc-500" : "border-r border-r-zinc-300 dark:border-r-zinc-600",
-                        ].join(" ")}
-                        style={{ position: "sticky", top: topOffset, zIndex: 18 }}
-                      />
-                    ))}
-                    {/* 日付ごとの過不足 */}
-                    {allDates.map((date) => {
-                      const assigned = getEffectiveCount(pattern.name, date);
-                      const required = getRequired(pattern.name, date);
-                      const net = required - assigned; // 正=不足、負=余剰
-                      const isToday = date === todayJST;
-                      const isSelected = selectedShortage?.date === date && selectedShortage?.patternName === pattern.name;
-                      const isShortage = net > 0;
-                      let display: string;
-                      let textCls: string;
-                      let bgCls: string;
-                      if (required === 0) {
-                        display = assigned > 0 ? String(assigned) : "";
-                        textCls = "text-zinc-400 dark:text-zinc-500";
-                        bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
-                      } else if (net > 0) {
-                        display = `-${net}`;
-                        textCls = isSelected ? "text-white font-bold" : "text-red-600 dark:text-red-400 font-bold";
-                        bgCls = isSelected ? "bg-red-500 dark:bg-red-600" : isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950";
-                      } else if (net < 0) {
-                        display = `+${-net}`;
-                        textCls = "text-emerald-700 dark:text-emerald-400 font-bold";
-                        bgCls = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950";
-                      } else {
-                        display = "✓";
-                        textCls = "text-emerald-500 dark:text-emerald-600";
-                        bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
-                      }
-                      return (
-                        <td key={date}
-                          onClick={isShortage ? () => setSelectedShortage(isSelected ? null : { date, patternName: pattern.name }) : undefined}
-                          className={[
-                            "tabular-nums p-0 overflow-hidden",
-                            isShortage ? "cursor-pointer" : "",
-                            bgCls,
-                            isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
-                            isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500 border-r border-r-zinc-200 dark:border-r-zinc-700"
-                                    : "border-b border-b-zinc-300 dark:border-b-zinc-600 border-r border-r-zinc-200 dark:border-r-zinc-700",
-                          ].join(" ")}
-                          style={{ position: "sticky", top: topOffset, zIndex: 18 }}
-                        >
-                          <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
-                            <span className={`text-[10px] leading-none ${textCls}`}>{display}</span>
-                          </div>
-                        </td>
-                      );
-                    })}
-                    {/* 合計セル */}
-                    {(() => {
-                      const totalAssigned   = allDates.reduce((s, d) => s + getEffectiveCount(pattern.name, d), 0);
-                      const totalRequired   = allDates.reduce((s, d) => s + getRequired(pattern.name, d), 0);
-                      const totalNet        = totalRequired - totalAssigned;
-                      let totDisplay: string;
-                      let totText: string;
-                      let totBg: string;
-                      if (totalRequired === 0) {
-                        totDisplay = totalAssigned > 0 ? String(totalAssigned) : "—";
-                        totText = "text-zinc-400 dark:text-zinc-500";
-                        totBg   = "bg-zinc-100 dark:bg-zinc-800";
-                      } else if (totalNet > 0) {
-                        totDisplay = `-${totalNet}`;
-                        totText = "text-red-600 dark:text-red-400 font-bold";
-                        totBg   = "bg-red-100 dark:bg-red-950";
-                      } else if (totalNet < 0) {
-                        totDisplay = `+${-totalNet}`;
-                        totText = "text-emerald-700 dark:text-emerald-400 font-bold";
-                        totBg   = "bg-emerald-100 dark:bg-emerald-950";
-                      } else {
-                        totDisplay = "✓";
-                        totText = "text-emerald-500 dark:text-emerald-600";
-                        totBg   = "bg-zinc-100 dark:bg-zinc-800";
-                      }
-                      return (
-                        <td
-                          className={[
-                            "tabular-nums p-0 overflow-hidden border-l-2 border-zinc-300 dark:border-zinc-600",
-                            totBg,
-                            isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
-                            isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
-                          ].join(" ")}
-                          style={{ position: "sticky", top: topOffset, right: 0, zIndex: 22 }}
-                        >
-                          <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center">
-                            <span className={`text-[10px] leading-none ${totText}`}>{totDisplay}</span>
-                            {totalRequired > 0 && (
-                              <span className="text-[8px] leading-none text-zinc-400 dark:text-zinc-500 mt-0.5 tabular-nums">
-                                {totalAssigned}/{totalRequired}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })()}
-                  </tr>
-                );
-              })}
-
-              {/* ── SV配置数行（充足サマリーの直下・SVパターンがある場合のみ） ── */}
-              {showSummaryRows && svPatterns.length > 0 && (() => {
-                const svTopOffset = HEADER_H + SUM_ROW_H * summaryPatterns.length;
-                const totalSv = allDates.reduce((sum, d) => sum + (svCountByDate.get(d) ?? 0), 0);
-                return (
-                  <tr style={{ height: `${SUM_ROW_H}px` }}>
-                    {/* ラベルセル */}
-                    <td
-                      className="p-0 overflow-hidden bg-violet-100 dark:bg-violet-900/30 border-r-2 border-zinc-400 dark:border-zinc-500 border-t-2 border-b-2 border-t-violet-400 dark:border-t-violet-600 border-b-violet-400 dark:border-b-violet-600"
-                      style={{ position: "sticky", left: 0, top: svTopOffset, zIndex: 20 }}
-                    >
-                      <div style={{ height: `${SUM_ROW_H}px` }} className="flex items-center px-2">
-                        <span className="text-[10px] font-bold text-violet-700 dark:text-violet-300 leading-none">SV</span>
-                      </div>
-                    </td>
-                    {/* 前月列（SV行は空） */}
-                    {prevDates.map((d, pi) => (
-                      <td key={`prev-sv-${d}`}
-                        className={[
-                          "p-0 border-t-2 border-b-2 border-t-violet-400 dark:border-t-violet-600 border-b-violet-400 dark:border-b-violet-600 bg-violet-100/60 dark:bg-violet-900/20",
-                          pi === prevDates.length - 1 ? "border-r-2 border-r-zinc-400 dark:border-r-zinc-500" : "border-r border-r-zinc-300 dark:border-r-zinc-600",
-                        ].join(" ")}
-                        style={{ position: "sticky", top: svTopOffset, zIndex: 18 }}
-                      />
-                    ))}
-                    {/* 日付セル */}
-                    {allDates.map((date) => {
-                      const cnt = svCountByDate.get(date) ?? 0;
-                      const isToday = date === todayJST;
-                      return (
-                        <td
-                          key={date}
-                          className={[
-                            "tabular-nums p-0 overflow-hidden border-t-2 border-b-2 border-r border-t-violet-400 dark:border-t-violet-600 border-b-violet-400 dark:border-b-violet-600 border-r-zinc-200 dark:border-r-zinc-700",
-                            isToday ? "bg-violet-200 dark:bg-violet-900/40" : "bg-violet-50 dark:bg-violet-950/20",
-                          ].join(" ")}
-                          style={{ position: "sticky", top: svTopOffset, zIndex: 18 }}
-                        >
-                          <div style={{ height: `${SUM_ROW_H}px` }} className="flex items-center justify-center">
-                            <span className={`text-[10px] leading-none font-semibold ${cnt > 0 ? "text-violet-700 dark:text-violet-300" : "text-zinc-300 dark:text-zinc-600"}`}>
-                              {cnt > 0 ? cnt : ""}
-                            </span>
-                          </div>
-                        </td>
-                      );
-                    })}
-                    {/* 合計セル */}
-                    <td
-                      className="tabular-nums p-0 overflow-hidden border-l-2 border-t-2 border-b-2 border-l-zinc-300 dark:border-zinc-600 border-t-violet-400 dark:border-t-violet-600 border-b-violet-400 dark:border-b-violet-600 bg-violet-100 dark:bg-violet-900/30"
-                      style={{ position: "sticky", top: svTopOffset, right: 0, zIndex: 22 }}
-                    >
-                      <div style={{ height: `${SUM_ROW_H}px` }} className="flex items-center justify-center">
-                        <span className="text-[10px] leading-none font-bold text-violet-700 dark:text-violet-300 tabular-nums">
-                          {totalSv > 0 ? totalSv : ""}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })()}
-
               {/* ── スタッフ軸 ── */}
               {displayMembers.map((member, idx) => {
                 const prevSection = idx > 0 ? displayMembers[idx - 1].section : undefined;
@@ -2454,8 +2505,9 @@ export default function ShiftEditGrid({
               })}
             </tbody>
           </table>
+        </div>
 
-      </div>
+      </div>{/* /splitContainerRef */}
 
       {/* 凡例 */}
       <div className="shrink-0 px-4 py-1.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center text-[10px] text-zinc-400 gap-3 flex-wrap">
@@ -2747,6 +2799,106 @@ export default function ShiftEditGrid({
           onClose={() => setPopover(null)}
           anchorRect={popover.rect}
         />
+      )}
+
+      {/* 必要枠数編集モーダル */}
+      {reqEditPattern && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
+          onClick={() => { setReqEditPattern(null); setReqSaveMsg(null); }}>
+          <div className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm max-h-[85dvh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
+            {/* ヘッダー */}
+            <div className="px-4 pt-4 pb-2 border-b border-zinc-100 dark:border-zinc-800 shrink-0 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">必要枠数を変更</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">{reqEditPattern.name}</p>
+              </div>
+              <button onClick={() => { setReqEditPattern(null); setReqSaveMsg(null); }}
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-sm shrink-0">✕</button>
+            </div>
+            {/* 日付リスト */}
+            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-1.5">
+              <p className="text-[10px] text-zinc-400 mb-2">日付をタップして必要人数を変更。変更した日付のみ保存されます。</p>
+              {allDates.map(date => {
+                const dw = dowNum(date); const isSun = dw === 0, isSat = dw === 6;
+                const currentReq = getRequired(reqEditPattern!.name, date);
+                const inputVal = reqEditValues.get(date) ?? String(currentReq);
+                const isChanged = inputVal !== String(currentReq);
+                return (
+                  <div key={date} className={["flex items-center gap-3 px-2 py-1 rounded-lg", isChanged ? "bg-amber-50 dark:bg-amber-950/30" : ""].join(" ")}>
+                    <span className={["text-xs tabular-nums font-medium w-24 shrink-0",
+                      isSun ? "text-red-500 dark:text-red-400" : isSat ? "text-blue-500 dark:text-blue-400" : "text-zinc-600 dark:text-zinc-300"
+                    ].join(" ")}>
+                      {fmtDate(date)}
+                    </span>
+                    <input
+                      type="number" min={0} max={99}
+                      value={inputVal}
+                      onChange={e => setReqEditValues(prev => {
+                        const n = new Map(prev);
+                        n.set(date, e.target.value);
+                        return n;
+                      })}
+                      className="w-14 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-zinc-100 text-center tabular-nums"
+                    />
+                    <span className="text-[10px] text-zinc-400 shrink-0">人</span>
+                    {isChanged && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold shrink-0">変更中</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {/* フィードバック */}
+            {reqSaveMsg && (
+              <p className={["text-xs px-4 py-2 border-t shrink-0",
+                reqSaveMsg.startsWith("✓")
+                  ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-800"
+                  : "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-800"
+              ].join(" ")}>{reqSaveMsg}</p>
+            )}
+            {/* ボタン */}
+            <div className="px-4 pb-4 pt-2 flex gap-2 shrink-0">
+              <button onClick={() => { setReqEditPattern(null); setReqSaveMsg(null); }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                キャンセル
+              </button>
+              <button
+                disabled={isSavingReqs}
+                onClick={() => {
+                  const pat = reqEditPattern!;
+                  const changes: { patternName: string; date: string; section: string | null; requiredCount: number }[] = [];
+                  const updates = new Map(localSlotReqOverrides);
+                  for (const date of allDates) {
+                    const currentReq = getRequired(pat.name, date);
+                    const inputVal = reqEditValues.get(date) ?? String(currentReq);
+                    if (inputVal !== String(currentReq)) {
+                      const num = parseInt(inputVal, 10);
+                      if (!isNaN(num) && num >= 0) {
+                        changes.push({ patternName: pat.name, date, section: pat.section, requiredCount: num });
+                        updates.set(`${pat.name}__${date}`, num);
+                      }
+                    }
+                  }
+                  if (changes.length === 0) { setReqEditPattern(null); return; }
+                  startReqSaveTransition(async () => {
+                    const r = await upsertSlotRequirementsAction(projectId, changes);
+                    if (r.success) {
+                      setLocalSlotReqOverrides(updates);
+                      setReqEditValues(new Map());
+                      setReqSaveMsg("✓ 保存しました");
+                      setTimeout(() => { setReqSaveMsg(null); setReqEditPattern(null); }, 1200);
+                    } else {
+                      setReqSaveMsg("✗ " + (r.message ?? "保存に失敗しました"));
+                    }
+                  });
+                }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 transition-colors">
+                {isSavingReqs ? "保存中…" : "保存"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Notify Modal */}

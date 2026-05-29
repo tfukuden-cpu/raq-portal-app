@@ -24,6 +24,7 @@ import {
   saveDepartureSettingAction,
   departStaffAction,
   testNotifyAction,
+  testLinePushToSelfAction,
 } from "./actions";
 import {
   buildDefaultNotificationSettings,
@@ -200,6 +201,11 @@ export function SettingsContainer({
       {/* ── LINE通知タブ ── */}
       {tab === "notify" && (
         <div className="space-y-8">
+
+          {/* 疎通テスト */}
+          <LinePushTestSection projectId={projectId} />
+          <Divider />
+
           <section className="space-y-3">
             <SectionHeading
               title="LINEグループ連携"
@@ -1514,6 +1520,9 @@ export function ShiftPatternList({
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set(initialPatterns.map((_, i) => i)));
   const [result, setResult]   = useState<{ ok: boolean; msg: string } | null>(null);
   const [isPending, startTransition] = useTransition();
+  // ドラッグ＆ドロップ並び替え
+  const dragIdx = useRef<number | null>(null);
+  const dragOverIdx = useRef<number | null>(null);
 
   const update = (i: number, field: keyof ShiftPattern, value: string) =>
     setPatterns(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
@@ -1521,6 +1530,36 @@ export function ShiftPatternList({
     setPatterns(prev => [...prev, { name: "", short_name: "", start_time: "", end_time: "", section: "", target_role: "all" }]);
   const remove = (i: number) =>
     setPatterns(prev => prev.filter((_, idx) => idx !== i));
+
+  // ドラッグ並び替えハンドラ
+  function handleDragStart(i: number) { dragIdx.current = i; }
+  function handleDragOver(e: React.DragEvent, i: number) {
+    e.preventDefault();
+    dragOverIdx.current = i;
+  }
+  function handleDrop() {
+    const from = dragIdx.current;
+    const to   = dragOverIdx.current;
+    if (from === null || to === null || from === to) return;
+    setPatterns(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    // collapsed インデックスも更新
+    setCollapsed(prev => {
+      const arr = [...prev].map(idx => {
+        if (idx === from) return to;
+        if (from < to && idx > from && idx <= to) return idx - 1;
+        if (from > to && idx < from && idx >= to) return idx + 1;
+        return idx;
+      });
+      return new Set(arr);
+    });
+    dragIdx.current = null;
+    dragOverIdx.current = null;
+  }
 
   const save = () => {
     setResult(null);
@@ -1557,9 +1596,19 @@ export function ShiftPatternList({
           return next;
         });
         return (
-          <div key={i} className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+          <div key={i}
+            draggable
+            onDragStart={() => handleDragStart(i)}
+            onDragOver={e => handleDragOver(e, i)}
+            onDrop={handleDrop}
+            className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 cursor-default">
             {/* ヘッダー行（常に表示） */}
             <div className="flex items-center gap-2 p-3">
+              {/* ドラッグハンドル */}
+              <span
+                className="flex-shrink-0 text-zinc-300 dark:text-zinc-600 cursor-grab active:cursor-grabbing select-none text-sm leading-none px-0.5"
+                title="ドラッグで並び替え"
+              >⠿</span>
               <button type="button" onClick={toggle}
                 className="flex-1 flex items-center gap-2 min-w-0 text-left">
                 <span className={`text-zinc-400 text-xs transition-transform ${isCollapsed ? "" : "rotate-90"}`}>▶</span>
@@ -2339,5 +2388,63 @@ export function HolidayRulesList({
       </div>
       {result && <Flash ok={result.ok} msg={result.msg} />}
     </div>
+  );
+}
+
+// ── LINE push 疎通テスト ──────────────────────────────────────
+function LinePushTestSection({ projectId }: { projectId: string }) {
+  const [status, setStatus] = useState<"idle" | "sending" | "ok" | "err">("idle");
+  const [msg,    setMsg]    = useState<string>("");
+  const [detail, setDetail] = useState<string>("");
+  const [isPending, start]  = useTransition();
+
+  function handleTest() {
+    start(async () => {
+      setStatus("sending");
+      setMsg("");
+      setDetail("");
+      const res = await testLinePushToSelfAction(projectId);
+      setStatus(res.success ? "ok" : "err");
+      setMsg(res.message);
+      setDetail(res.detail ?? "");
+    });
+  }
+
+  return (
+    <section className="space-y-3">
+      <SectionHeading
+        title="LINE push 疎通テスト"
+        sub="自分のLINEに直接テストメッセージを送って通知が届くか確認します"
+      />
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={handleTest}
+          disabled={isPending}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-semibold disabled:opacity-40 transition-colors"
+        >
+          {status === "sending" ? (
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          )}
+          自分のLINEにテスト送信
+        </button>
+        {status === "ok" && (
+          <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">✓ {msg}</p>
+        )}
+        {status === "err" && (
+          <div>
+            <p className="text-sm font-semibold text-red-500">✗ {msg}</p>
+            {detail && <p className="text-xs text-red-400 mt-0.5">{detail}</p>}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

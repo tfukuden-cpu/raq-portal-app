@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { multicastLine, pushLine } from "@/lib/line";
+import { multicastLine, pushLine, pushLineWithButton } from "@/lib/line";
 import { getAdminLineIds, resolveMessage } from "@/lib/notify";
 import {
   buildDefaultNotificationSettings,
@@ -418,6 +418,63 @@ export async function GET(req: NextRequest) {
               { "名前": name, "対象月": targetMonth, "締切日": deadlineStr }
             );
             await pushLine(staff.line_user_id, message);
+            sent++;
+          }
+        }
+      }
+    }
+
+    // ── daily_task_remind：当日期限タスクの朝リマインド（個人宛） ─────────────
+    if (settings.daily_task_remind.enabled) {
+      const cfg = settings.daily_task_remind;
+      if (isNearTime(cfg.time ?? "08:00")) {
+        // 当日期限・未完了・担当者あり のタスクを一括取得
+        const { data: tasks } = await admin
+          .from("group_tasks")
+          .select("assignee_staff_id, title")
+          .eq("project_id", projectId)
+          .eq("due_date", today)
+          .eq("status", "pending")
+          .not("assignee_staff_id", "is", null);
+
+        if ((tasks ?? []).length > 0) {
+          // スタッフIDごとにタスクをグループ化
+          const byStaff = new Map<string, string[]>();
+          for (const t of tasks!) {
+            const sid = t.assignee_staff_id as string;
+            if (!byStaff.has(sid)) byStaff.set(sid, []);
+            byStaff.get(sid)!.push(t.title as string);
+          }
+
+          const staffIds = [...byStaff.keys()];
+          const { data: staffRows } = await admin
+            .from("staffs")
+            .select("id, display_name, name, line_user_id")
+            .in("id", staffIds) as { data: StaffRow[] | null };
+          const staffMap: Record<string, StaffRow> = Object.fromEntries(
+            (staffRows ?? []).map(s => [s.id, s])
+          );
+
+          const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+
+          for (const [staffId, titles] of byStaff) {
+            const staff = staffMap[staffId];
+            if (!staff?.line_user_id) continue;
+            const name    = staff.display_name ?? staff.name ?? staffId;
+            const taskList = titles.map(t => `・${t}`).join("\n");
+            const message = resolveMessage(
+              cfg.message ?? DEFAULT_NOTIFY_MESSAGES.daily_task_remind,
+              {
+                "名前":       name,
+                "タスク一覧": taskList,
+              }
+            );
+            await pushLineWithButton(
+              staff.line_user_id,
+              message,
+              "タスクを確認する",
+              `${appUrl}/tasks`,
+            );
             sent++;
           }
         }

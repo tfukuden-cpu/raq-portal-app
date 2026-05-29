@@ -1120,3 +1120,68 @@ export async function testNotifyAction(
   await Promise.allSettled(sends);
   return { success: true, message: "テスト送信しました" };
 }
+
+/**
+ * 自分自身（現在ログイン中の管理者）に直接 push テスト送信
+ * 結果に診断情報を含めて返す
+ */
+export async function testLinePushToSelfAction(
+  projectId: string,
+): Promise<{ success: boolean; message: string; detail?: string }> {
+  await assertAdmin(projectId);
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "未認証" };
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+
+  // 自分の line_user_id を取得
+  const { data: staff } = await adminSupa()
+    .from("staffs")
+    .select("display_name, name, line_user_id")
+    .eq("id", staffId)
+    .maybeSingle();
+
+  if (!staff?.line_user_id) {
+    return {
+      success: false,
+      message: "あなたの LINE が未連携です",
+      detail: "マイページ → LINE連携 から連携してください",
+    };
+  }
+
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!token) {
+    return {
+      success: false,
+      message: "LINE_CHANNEL_ACCESS_TOKEN が未設定",
+      detail: "Vercel の環境変数に LINE_CHANNEL_ACCESS_TOKEN を追加してください",
+    };
+  }
+
+  const name = staff.display_name ?? staff.name ?? staffId;
+  const res = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      to: staff.line_user_id,
+      messages: [{ type: "text", text: `【疎通テスト】\n${name}さん、LINE通知が正常に届いています ✓` }],
+    }),
+  });
+
+  if (res.ok) {
+    return { success: true, message: `${name}さんに送信しました。LINEを確認してください。` };
+  }
+
+  const body = await res.text().catch(() => "");
+  let detail = `LINE API: ${res.status} ${res.statusText}`;
+  if (res.status === 401) detail = "トークンが無効です。LINE Developersでトークンを再発行してください";
+  if (res.status === 400 && body.includes("not in the channelId")) {
+    detail = "チャンネルが違います。LINEログインとMessaging APIが別プロバイダーになっていないか確認してください";
+  }
+  console.error(`[LINE] testLinePushToSelfAction: ${res.status} — ${body}`);
+  return { success: false, message: `送信失敗 (${res.status})`, detail };
+}

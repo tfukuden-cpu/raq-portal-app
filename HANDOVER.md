@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-29（v52：シフト管理番号順ビュー強化・スタッフ向けシフトカレンダーUI刷新）
+最終更新：2026-05-29（v53：シフト充足数インライン編集・シフトパターン並び替え・SV合計行・タスクLINE通知）
 
 ---
 
@@ -106,6 +106,33 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | アバターシステム | 🔄 設計済み・パーツ未実装（低優先） |
 
 ### 次に優先すべきこと（新しいセッションはここから）
+
+**v53 完了内容**
+- **シフト充足テーブル：必要枠数インライン編集（ShiftEditGrid）**
+  - 充足行のパターン名セルに✎アイコンを追加。クリックで編集モーダルを開く
+  - モーダル内で全日付の必要枠数を一括編集できる（numberインプット）
+  - 保存時は `slot_requirements` テーブルに upsert（`useTransition` で非同期）
+  - 保存前でもローカル state（`localSlotReqOverrides`）でグリッドに即時反映
+- **シフトパターン並び替え（SettingsClient）**
+  - `shift_patterns` テーブルに `sort_order integer NOT NULL DEFAULT 0` カラム追加（Supabase migration）
+  - ROW_NUMBER() で既存パターンに初期順序を付与
+  - ShiftPatternList コンポーネントに HTML5 Drag-and-Drop API によるドラッグ並び替えUI追加
+  - ⠿ ハンドルアイコン、ドラッグ時ハイライト表示
+  - `collapsed`（折りたたみ）Set のインデックスもドロップ時に正しくリマップ
+- **SVセクション合計行（ShiftEditGrid）**
+  - SVパターンが2件以上ある場合、最後のSVパターン行の直後に「SV合計」行を自動追加
+  - React.Fragment を使って1つの `.map()` から2行（パターン行＋合計行）を返す実装
+  - 充足色ロジック（X=不足/Y=過剰）をSV合計行にも適用
+- **タスク割り当てLINE通知**
+  - `addTaskManualAction`：タスク作成時に担当者が設定されていればLINEプッシュ
+  - `updateTaskAction`：担当者が変更された場合（旧担当者と異なる場合のみ）LINEプッシュ
+  - `notify-config.ts` に `task_assigned` 通知種別を追加（デフォルト有効、担当スタッフ宛）
+  - メッセージテンプレート：タスクタイトル・期限・ポータルURLを含む
+- **当日期限タスクの朝リマインド（Cron）**
+  - `/api/cron/notify` の `daily_task_remind` セクションを追加
+  - 設定時刻（デフォルト 08:00）に、当日期限・未完了・担当者あり のタスクを案件ごとに集計
+  - スタッフ別にグループ化し、個人宛LINEプッシュ（ポータルURLリンク付き）
+  - `notify-config.ts` に `daily_task_remind` 通知種別を追加（デフォルト無効、定時通知）
 
 **v52 完了内容**
 - **シフト管理：番号順ビュー（ShiftDayList）強化**

@@ -72,12 +72,13 @@ function getRedirectUri() {
 
 // ── LINE Messaging API ────────────────────────────────────
 
-/** 1人にテキストメッセージを送る（失敗は握りつぶす） */
+/** 1人にテキストメッセージを送る */
 export async function pushLine(lineUserId: string, text: string): Promise<void> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  if (!token || !lineUserId) return;
+  if (!token) { console.error("[LINE] LINE_CHANNEL_ACCESS_TOKEN が未設定"); return; }
+  if (!lineUserId) { console.error("[LINE] lineUserId が空"); return; }
 
-  await fetch(`${LINE_API}/v2/bot/message/push`, {
+  const res = await fetch(`${LINE_API}/v2/bot/message/push`, {
     method:  "POST",
     headers: {
       "Content-Type":  "application/json",
@@ -87,7 +88,12 @@ export async function pushLine(lineUserId: string, text: string): Promise<void> 
       to:       lineUserId,
       messages: [{ type: "text", text }],
     }),
-  }).catch(() => {/* best-effort */});
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[LINE] pushLine failed: ${res.status} ${res.statusText} — userId=${lineUserId} — ${body}`);
+  }
 }
 
 /**
@@ -100,9 +106,10 @@ export async function pushLineTestButton(
   projectId: string,
 ): Promise<void> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  if (!token || !lineUserId) return;
+  if (!token) { console.error("[LINE] LINE_CHANNEL_ACCESS_TOKEN が未設定"); return; }
+  if (!lineUserId) { console.error("[LINE] lineUserId が空"); return; }
 
-  await fetch(`${LINE_API}/v2/bot/message/push`, {
+  const res = await fetch(`${LINE_API}/v2/bot/message/push`, {
     method:  "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
@@ -140,18 +147,87 @@ export async function pushLineTestButton(
         },
       }],
     }),
-  }).catch(() => {/* best-effort */});
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[LINE] pushLineTestButton failed: ${res.status} ${res.statusText} — userId=${lineUserId} — ${body}`);
+  }
+}
+
+/**
+ * テキスト本文 ＋ URIボタン付きFlexメッセージを1人に送る
+ * テキストは改行対応、ボタンはURLを開く
+ */
+export async function pushLineWithButton(
+  lineUserId: string,
+  text: string,
+  buttonLabel: string,
+  buttonUrl: string,
+  buttonColor: string = "#2563eb",
+): Promise<void> {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!token) { console.error("[LINE] LINE_CHANNEL_ACCESS_TOKEN が未設定"); return; }
+  if (!lineUserId) { console.error("[LINE] lineUserId が空"); return; }
+
+  const res = await fetch(`${LINE_API}/v2/bot/message/push`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      to: lineUserId,
+      messages: [{
+        type: "flex",
+        altText: text.split("\n")[0], // 通知プレビューに1行目を使用
+        contents: {
+          type: "bubble",
+          body: {
+            type: "box",
+            layout: "vertical",
+            spacing: "sm",
+            contents: [
+              {
+                type: "text",
+                text,
+                wrap: true,
+                size: "sm",
+                color: "#374151",
+              },
+            ],
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [{
+              type: "button",
+              action: {
+                type: "uri",
+                label: buttonLabel,
+                uri: buttonUrl,
+              },
+              style: "primary",
+              color: buttonColor,
+              height: "sm",
+            }],
+          },
+        },
+      }],
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[LINE] pushLineWithButton failed: ${res.status} ${res.statusText} — userId=${lineUserId} — ${body}`);
+  }
 }
 
 /** 複数人に同じメッセージをマルチキャスト（最大500人） */
 export async function multicastLine(lineUserIds: string[], text: string): Promise<void> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  if (!token || lineUserIds.length === 0) return;
+  if (!token) { console.error("[LINE] LINE_CHANNEL_ACCESS_TOKEN が未設定"); return; }
+  if (lineUserIds.length === 0) return;
 
   // 500件ずつ分割
   for (let i = 0; i < lineUserIds.length; i += 500) {
     const chunk = lineUserIds.slice(i, i + 500);
-    await fetch(`${LINE_API}/v2/bot/message/multicast`, {
+    const res = await fetch(`${LINE_API}/v2/bot/message/multicast`, {
       method:  "POST",
       headers: {
         "Content-Type":  "application/json",
@@ -161,6 +237,10 @@ export async function multicastLine(lineUserIds: string[], text: string): Promis
         to:       chunk,
         messages: [{ type: "text", text }],
       }),
-    }).catch(() => {});
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error(`[LINE] multicastLine failed: ${res.status} ${res.statusText} — ${body}`);
+    }
   }
 }

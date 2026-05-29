@@ -4,6 +4,64 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
+import { pushLineWithButton } from "@/lib/line";
+import { resolveMessage } from "@/lib/notify";
+import {
+  buildDefaultNotificationSettings,
+  DEFAULT_NOTIFY_MESSAGES,
+} from "@/app/(portal)/admin/[projectId]/settings/notify-config";
+
+const APP_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+
+/** タスク割り当て時にLINEプッシュを送る（失敗しても握りつぶす） */
+async function notifyTaskAssigned(
+  projectId: string,
+  assigneeStaffId: string,
+  taskTitle: string,
+  dueDateStr: string | null
+): Promise<void> {
+  try {
+    const admin = createAdminClient();
+
+    // 通知設定を取得
+    const { data: ps } = await admin
+      .from("project_settings")
+      .select("notification_settings")
+      .eq("project_id", projectId)
+      .maybeSingle();
+    const settings = buildDefaultNotificationSettings(
+      (ps?.notification_settings as Record<string, unknown>) ?? {}
+    );
+    if (!settings.task_assigned.enabled) return;
+
+    // スタッフのLINE IDと名前を取得
+    const { data: staff } = await admin
+      .from("staffs")
+      .select("line_user_id, display_name, name")
+      .eq("id", assigneeStaffId)
+      .maybeSingle();
+    if (!staff?.line_user_id) return;
+
+    const name    = staff.display_name ?? staff.name ?? assigneeStaffId;
+    const dueText = dueDateStr ? `期限：${dueDateStr}` : "";
+    const message = resolveMessage(
+      settings.task_assigned.message ?? DEFAULT_NOTIFY_MESSAGES.task_assigned,
+      {
+        "名前":     name,
+        "タイトル": taskTitle,
+        "期限":     dueText,
+      }
+    );
+    await pushLineWithButton(
+      staff.line_user_id,
+      message,
+      "タスクを確認する",
+      `${APP_URL}/tasks`,
+    );
+  } catch (e) {
+    console.error("[notify] notifyTaskAssigned failed:", e);
+  }
+}
 
 // タスクのステータス変更
 export async function updateTaskStatusAction(taskId: string, status: "pending" | "done" | "dismissed") {
@@ -33,10 +91,32 @@ export async function updateTaskAction(fd: FormData) {
   const assigneeStaffId  = String(fd.get("assigneeStaffId") ?? "").trim() || null;
   const dueDateStr       = String(fd.get("dueDate") ?? "").trim() || null;
 
+  // 変更前のタスクを取得して担当者が変わったか確認
+  const admin = createAdminClient();
+  const { data: oldTask } = await admin
+    .from("group_tasks")
+    .select("assignee_staff_id, title, project_id")
+    .eq("id", taskId)
+    .maybeSingle();
+
   await supabase.from("group_tasks").update({
     assignee_staff_id: assigneeStaffId,
     due_date:          dueDateStr,
   }).eq("id", taskId);
+
+  // 担当者が新たに設定（または変更）された場合のみ通知
+  if (
+    assigneeStaffId &&
+    assigneeStaffId !== oldTask?.assignee_staff_id &&
+    oldTask?.project_id
+  ) {
+    await notifyTaskAssigned(
+      oldTask.project_id,
+      assigneeStaffId,
+      oldTask.title ?? "",
+      dueDateStr
+    );
+  }
 
   revalidatePath("/tasks");
   return { success: true };
@@ -178,6 +258,11 @@ export async function addTaskManualAction(fd: FormData) {
     due_date:          dueDateStr,
     status:            "pending",
   });
+
+  // 担当者が設定されている場合はLINE通知
+  if (assigneeStaffId) {
+    await notifyTaskAssigned(projectId, assigneeStaffId, title, dueDateStr);
+  }
 
   revalidatePath("/tasks");
   return { success: true };

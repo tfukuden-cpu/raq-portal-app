@@ -63,6 +63,10 @@ export type NotificationSettings = {
   absence_followup_notify: NotifyItemConfig;
   /** シフト展開通知（管理者が展開ボタンを押したとき） → 全スタッフへ */
   shift_published:     NotifyItemConfig;
+  /** タスクが割り当てられたとき → 担当スタッフへ */
+  task_assigned:       NotifyItemConfig;
+  /** 毎朝の当日期限タスクリマインド → 担当スタッフへ（定時） */
+  daily_task_remind:   NotifyItemConfig;
 };
 
 // ── デフォルトメッセージ ──────────────────────────────────
@@ -182,6 +186,19 @@ export const DEFAULT_NOTIFY_MESSAGES: Record<keyof NotificationSettings, string>
   shift_published:
 `{名前}さん、{対象月}のシフトが確定しました。
 ポータルのシフトページからご確認ください。`,
+
+  task_assigned:
+`{名前}さん、タスクが割り当てられました。
+【タスク】{タイトル}
+{期限}
+内容はポータルのタスクページでご確認ください。`,
+
+  daily_task_remind:
+`{名前}さん、おはようございます。
+本日期限のタスクをお知らせします。
+
+{タスク一覧}
+ポータルのタスクページから確認・完了報告をお願いします。`,
 };
 
 // ── 変数定義（取得元の整理用） ────────────────────────────
@@ -307,6 +324,15 @@ export const NOTIFY_VARS: Record<keyof NotificationSettings, { label: string; no
     { label: "{名前}" },
     { label: "{対象月}", note: "展開した月（例：2026/06）" },
   ],
+  task_assigned: [
+    { label: "{名前}" },
+    { label: "{タイトル}", note: "タスクのタイトル" },
+    { label: "{期限}", note: "期限日（設定なしの場合は空）" },
+  ],
+  daily_task_remind: [
+    { label: "{名前}" },
+    { label: "{タスク一覧}", note: "本日期限のタスク一覧（・タイトル 形式）" },
+  ],
 };
 
 // ── デフォルト値の構築 ───────────────────────────────────
@@ -344,5 +370,7 @@ export function buildDefaultNotificationSettings(
     absence_followup_remind: get("absence_followup_remind", { enabled: false, recipient: "staff", time: "17:00", message: DEFAULT_NOTIFY_MESSAGES.absence_followup_remind }),
     absence_followup_notify: get("absence_followup_notify", { enabled: false, recipient: "admin", message: DEFAULT_NOTIFY_MESSAGES.absence_followup_notify }),
     shift_published:         get("shift_published",         { enabled: false, recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.shift_published }),
+    task_assigned:           get("task_assigned",           { enabled: true,  recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.task_assigned }),
+    daily_task_remind:       get("daily_task_remind",       { enabled: false, recipient: "staff", time: "08:00", message: DEFAULT_NOTIFY_MESSAGES.daily_task_remind }),
   };
 }

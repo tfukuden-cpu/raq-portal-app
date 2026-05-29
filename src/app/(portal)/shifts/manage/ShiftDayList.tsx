@@ -154,6 +154,8 @@ export default function ShiftDayList({
   const [collapsedPatterns, setCollapsedPatterns] = useState<Set<string>>(
     () => new Set(shiftPatterns.map(p => p.name))
   );
+  // 分割ペインの比率（充足テーブルが占める割合）
+  const [splitRatio, setSplitRatio] = useState(0.38);
   // 月次ストリップの横スクロールコンテナ
   const stripRef = useRef<HTMLDivElement>(null);
   // 充足テーブルの横スクロールコンテナ
@@ -162,6 +164,33 @@ export default function ShiftDayList({
   const headerInnerRef = useRef<HTMLDivElement>(null);
   // スクロール同期ループ防止フラグ
   const isSyncing = useRef(false);
+  // 分割ペイン外コンテナ
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  // ドラッグ中フラグ
+  const isDragging = useRef(false);
+
+  const handleDividerDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    const onMove = (ev: MouseEvent | TouchEvent) => {
+      if (!isDragging.current || !splitContainerRef.current) return;
+      const rect = splitContainerRef.current.getBoundingClientRect();
+      const clientY = "touches" in ev ? ev.touches[0].clientY : ev.clientY;
+      const ratio = (clientY - rect.top) / rect.height;
+      setSplitRatio(Math.min(0.8, Math.max(0.1, ratio)));
+    };
+    const onUp = () => {
+      isDragging.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("touchend", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("mouseup", onUp);
+    document.addEventListener("touchend", onUp);
+  };
 
   // 日付ヘッダーのみ同期（translateX）
   const syncHeader = (scrollLeft: number) => {
@@ -607,13 +636,14 @@ export default function ShiftDayList({
             ) : (
               /* ── スタッフ行ビュー（番号順）：分割ペイン ── */
               <div
+                ref={splitContainerRef}
                 className="flex flex-col"
                 style={{ height: "calc(100dvh - var(--page-header-h, 0px) - 200px)", minHeight: "400px" }}
               >
               {/* ── 充足テーブルペイン ── */}
               <div
-                className="flex flex-col border-b-2 border-zinc-400 dark:border-zinc-500"
-                style={showSufficiency ? { flex: "0 0 38%", overflow: "hidden" } : { flex: "0 0 auto" }}
+                className="flex flex-col"
+                style={showSufficiency ? { flex: `0 0 ${splitRatio * 100}%`, overflow: "hidden" } : { flex: "0 0 auto" }}
               >
                 {/* トグルヘッダー */}
                 <button
@@ -636,7 +666,7 @@ export default function ShiftDayList({
                 <div
                   ref={sufficiencyRef}
                   className="flex-1 min-h-0 overflow-auto"
-                  style={{ scrollbarWidth: "thin" }}
+                  style={{ scrollbarWidth: "none" }}
                   onScroll={(e) => handleSufficiencyScroll(e.currentTarget.scrollLeft)}
                 >
                   <div className="flex min-w-max bg-white dark:bg-zinc-900">
@@ -765,11 +795,22 @@ export default function ShiftDayList({
                 )}
               </div>
 
+              {/* ── ドラッグハンドル ── */}
+              {showSufficiency && (
+                <div
+                  className="flex-none h-2 bg-zinc-200 dark:bg-zinc-700 cursor-row-resize hover:bg-blue-300 dark:hover:bg-blue-600 active:bg-blue-400 dark:active:bg-blue-500 transition-colors flex items-center justify-center select-none touch-none"
+                  onMouseDown={handleDividerDragStart}
+                  onTouchStart={handleDividerDragStart}
+                >
+                  <span className="w-8 h-0.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                </div>
+              )}
+
               {/* ── データテーブルペイン ── */}
               <div
                 ref={stripRef}
-                className="flex-1 min-h-0 overflow-auto border-t border-zinc-100 dark:border-zinc-800"
-                style={{ scrollbarWidth: "thin" }}
+                className="flex-1 min-h-0 overflow-auto"
+                style={{ scrollbarWidth: "none" }}
                 onScroll={(e) => handleDataScroll(e.currentTarget.scrollLeft)}
               >
                 {(() => {
