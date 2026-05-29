@@ -605,10 +605,16 @@ export default function ShiftDayList({
                 </div>
               </div>
             ) : (
-              /* ── スタッフ行ビュー（番号順） ── */
-              <>
-              {/* ── 充足テーブル ── */}
-              <div className="border-b-2 border-zinc-300 dark:border-zinc-600">
+              /* ── スタッフ行ビュー（番号順）：分割ペイン ── */
+              <div
+                className="flex flex-col"
+                style={{ height: "calc(100dvh - var(--page-header-h, 0px) - 200px)", minHeight: "400px" }}
+              >
+              {/* ── 充足テーブルペイン ── */}
+              <div
+                className="flex flex-col border-b-2 border-zinc-400 dark:border-zinc-500"
+                style={showSufficiency ? { flex: "0 0 38%", overflow: "hidden" } : { flex: "0 0 auto" }}
+              >
                 {/* トグルヘッダー */}
                 <button
                   type="button"
@@ -629,8 +635,8 @@ export default function ShiftDayList({
                 {showSufficiency && (
                 <div
                   ref={sufficiencyRef}
-                  className="overflow-x-auto"
-                  style={{ scrollbarWidth: "none" }}
+                  className="flex-1 min-h-0 overflow-auto"
+                  style={{ scrollbarWidth: "thin" }}
                   onScroll={(e) => handleSufficiencyScroll(e.currentTarget.scrollLeft)}
                 >
                   <div className="flex min-w-max bg-white dark:bg-zinc-900">
@@ -759,11 +765,11 @@ export default function ShiftDayList({
                 )}
               </div>
 
-              {/* ── データテーブル ── */}
+              {/* ── データテーブルペイン ── */}
               <div
                 ref={stripRef}
-                className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
-                style={{ scrollbarWidth: "none" }}
+                className="flex-1 min-h-0 overflow-auto border-t border-zinc-100 dark:border-zinc-800"
+                style={{ scrollbarWidth: "thin" }}
                 onScroll={(e) => handleDataScroll(e.currentTarget.scrollLeft)}
               >
                 {(() => {
@@ -907,7 +913,7 @@ export default function ShiftDayList({
                   );
                 })()}
               </div>
-              </>
+              </div>
             )}
           </>
         )}
