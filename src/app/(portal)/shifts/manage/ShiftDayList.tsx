@@ -89,7 +89,7 @@ const PRIORITY_COLOR: Record<string, string> = {
 export default function ShiftDayList({
   allDates, shifts, activeMembers, shiftPatterns, slotRequirements,
   changeLogs, absenceSet, selectedDate, onDateChange, projectId, offRequests,
-  availableSections, shiftPatternNames,
+  availableSections, shiftPatternNames, sortByAccount,
 }: {
   allDates: string[];
   shifts: Shift[];
@@ -106,6 +106,7 @@ export default function ShiftDayList({
   offRequests?: { staff_id: string; request_date: string; priority: string; source?: string }[];
   availableSections?: string[];
   shiftPatternNames?: string[];
+  sortByAccount?: boolean;
 }) {
   // staff_id__date → priority のマップ
   const offRequestMap = new Map(
@@ -322,198 +323,302 @@ export default function ShiftDayList({
               </div>
             </div>
 
-            {/* ── データテーブル ── */}
-            <div
-              ref={stripRef}
-              className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
-              style={{ scrollbarWidth: "none" }}
-              onScroll={(e) => syncHeader(e.currentTarget.scrollLeft)}
-            >
-              <div className="flex min-w-max bg-white dark:bg-zinc-900">
+            {/* ── データテーブル（パターン軸 / スタッフ軸 切り替え） ── */}
+            {!sortByAccount ? (
+              /* ── パターン軸ビュー（デフォルト） ── */
+              <div
+                ref={stripRef}
+                className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
+                style={{ scrollbarWidth: "none" }}
+                onScroll={(e) => syncHeader(e.currentTarget.scrollLeft)}
+              >
+                <div className="flex min-w-max bg-white dark:bg-zinc-900">
 
-                {/* ── 左固定列（パターン名） ── */}
-                <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-                  {visibleShiftPatterns.map((pattern, gi, arr) => {
-                    const maxSlots  = patternMaxSlots.get(pattern.name) ?? 0;
-                    const isCollapsed = collapsedPatterns.has(pattern.name);
-                    const isLast    = gi === arr.length - 1;
-                    return (
-                      <div key={pattern.name} className={cx("flex flex-col", isLast ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
+                  {/* ── 左固定列（パターン名） ── */}
+                  <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
+                    {visibleShiftPatterns.map((pattern, gi, arr) => {
+                      const maxSlots  = patternMaxSlots.get(pattern.name) ?? 0;
+                      const isCollapsed = collapsedPatterns.has(pattern.name);
+                      const isLast    = gi === arr.length - 1;
+                      return (
+                        <div key={pattern.name} className={cx("flex flex-col", isLast ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
+                          <button
+                            type="button"
+                            onClick={() => togglePattern(pattern.name)}
+                            className="h-9 flex items-center gap-1 px-2 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-700/60 hover:bg-zinc-100 dark:hover:bg-zinc-700/60 transition-colors"
+                          >
+                            <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate flex-1 text-left leading-tight" title={pattern.name}>
+                              {pattern.name}
+                            </span>
+                            <svg
+                              className={cx("w-2.5 h-2.5 text-zinc-400 flex-shrink-0 transition-transform", isCollapsed ? "-rotate-90" : "")}
+                              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          {!isCollapsed && Array.from({ length: maxSlots }).map((_, i) => (
+                            <div key={i} className={cx("h-8", i < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "")} />
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* ── 日付列 ── */}
+                  <div className="flex pr-4">
+                    {allDates.map(d => {
+                      const isSel     = d === selectedDate;
+                      const dayOfWeek = new Date(d).getUTCDay();
+                      const isSun     = dayOfWeek === 0;
+                      const isSat     = dayOfWeek === 6;
+
+                      return (
+                        <div
+                          key={d}
+                          className={cx(
+                            "w-11 flex-shrink-0 flex flex-col",
+                            isSel
+                              ? "bg-blue-50/80 dark:bg-blue-950/20"
+                              : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
+                          )}
+                        >
+                          {visibleShiftPatterns.map((pattern, gi, arr) => {
+                            const maxSlots    = patternMaxSlots.get(pattern.name) ?? 0;
+                            const isCollapsed = collapsedPatterns.has(pattern.name);
+                            const staffOnDay  = visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name);
+                            const req         = getReqForDate(pattern, d);
+                            const actual      = staffOnDay.length;
+                            const isLastGrp   = gi === arr.length - 1;
+
+                            return (
+                              <div key={pattern.name} className={cx("flex flex-col", isLastGrp ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
+                                {/* 充足数行 (h-9) */}
+                                <div className="h-9 flex items-center justify-center border-b border-zinc-100 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-800/30">
+                                  {pattern.section === "SV" ? (
+                                    <span className="tabular-nums text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+                                      {actual > 0 ? actual : "—"}
+                                    </span>
+                                  ) : req > 0 ? (
+                                    <div className="flex flex-col items-center gap-px">
+                                      <span className={cx(
+                                        "tabular-nums text-[11px] font-bold leading-none",
+                                        actual > req ? "text-emerald-600 dark:text-emerald-400"
+                                        : actual < req ? "text-red-500 dark:text-red-400"
+                                        : "text-emerald-600 dark:text-emerald-400",
+                                      )}>{actual}/{req}</span>
+                                      <span className={cx(
+                                        "tabular-nums text-[8px] font-bold leading-none",
+                                        actual > req ? "text-emerald-500 dark:text-emerald-400"
+                                        : actual < req ? "text-red-400 dark:text-red-500"
+                                        : "text-zinc-300 dark:text-zinc-600",
+                                      )}>
+                                        {actual > req ? `+${actual - req}人`
+                                        : actual < req ? `-${req - actual}人`
+                                        : "✓"}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                                  )}
+                                </div>
+                                {/* スタッフ行 (h-8 each) */}
+                                {!isCollapsed && Array.from({ length: maxSlots }).map((_, slotIdx) => {
+                                  const member = staffOnDay[slotIdx];
+                                  const absent = member ? isAbsent(member.id, d) : false;
+                                  return (
+                                    <div
+                                      key={slotIdx}
+                                      className={cx(
+                                        "h-8 flex items-center justify-center w-full",
+                                        slotIdx < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
+                                        absent ? "bg-red-50 dark:bg-red-950/30" : "",
+                                      )}
+                                    >
+                                      {member ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setStaffInfoTarget(member)}
+                                          className={cx(
+                                            "text-[10px] font-semibold leading-none truncate px-0.5 hover:underline",
+                                            absent
+                                              ? "text-red-600 dark:text-red-400"
+                                              : isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
+                                          )}
+                                        >
+                                          {shortName(member.name)}
+                                        </button>
+                                      ) : slotIdx < req ? (
+                                        <span className="w-4 h-px bg-zinc-100 dark:bg-zinc-800 rounded-full" />
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* ── 合計列（右固定） ── */}
+                  <div className="sticky right-0 z-20 w-16 flex-shrink-0 bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
+                    {visibleShiftPatterns.map((pattern, gi, arr) => {
+                      const isCollapsed = collapsedPatterns.has(pattern.name);
+                      const maxSlots    = patternMaxSlots.get(pattern.name) ?? 0;
+                      const isLastGrp   = gi === arr.length - 1;
+                      const isSV        = pattern.section === "SV";
+
+                      const totalActual   = allDates.reduce((s, d) =>
+                        s + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length, 0);
+                      const totalRequired = isSV ? 0 : allDates.reduce((s, d) => s + getReqForDate(pattern, d), 0);
+                      const net           = totalRequired - totalActual;
+
+                      return (
+                        <div key={pattern.name} className={cx("flex flex-col", isLastGrp ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
+                          <div className="h-9 flex flex-col items-center justify-center border-b border-zinc-100 dark:border-zinc-700/60 bg-zinc-100/60 dark:bg-zinc-800/50">
+                            {isSV ? (
+                              <span className="tabular-nums text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+                                {totalActual > 0 ? totalActual : "—"}
+                              </span>
+                            ) : totalRequired > 0 ? (
+                              <>
+                                <span className={cx(
+                                  "tabular-nums text-[11px] font-bold leading-none",
+                                  net > 0 ? "text-red-500 dark:text-red-400"
+                                  : net < 0 ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-emerald-600 dark:text-emerald-400",
+                                )}>{totalActual}/{totalRequired}</span>
+                                <span className={cx(
+                                  "tabular-nums text-[9px] font-bold leading-none mt-0.5",
+                                  net > 0 ? "text-red-400 dark:text-red-500"
+                                  : net < 0 ? "text-emerald-500 dark:text-emerald-400"
+                                  : "text-zinc-300 dark:text-zinc-600",
+                                )}>
+                                  {net > 0 ? `-${net}人` : net < 0 ? `+${-net}人` : "✓"}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                            )}
+                          </div>
+                          {!isCollapsed && Array.from({ length: maxSlots }).map((_, i) => (
+                            <div key={i} className={cx("h-8", i < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "")} />
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                </div>
+              </div>
+            ) : (
+              /* ── スタッフ行ビュー（番号順） ── */
+              <div
+                ref={stripRef}
+                className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
+                style={{ scrollbarWidth: "none" }}
+                onScroll={(e) => syncHeader(e.currentTarget.scrollLeft)}
+              >
+                <div className="flex min-w-max bg-white dark:bg-zinc-900">
+
+                  {/* 左固定列（スタッフ名） */}
+                  <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
+                    {visibleMembers.map((m, i) => (
+                      <div key={m.id} className={cx(
+                        "h-9 flex flex-col justify-center px-2",
+                        i < visibleMembers.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : "",
+                      )}>
+                        <span className="text-[9px] font-medium text-zinc-400 dark:text-zinc-500 leading-none truncate">
+                          {m.section ?? "—"}
+                        </span>
                         <button
                           type="button"
-                          onClick={() => togglePattern(pattern.name)}
-                          className="h-9 flex items-center gap-1 px-2 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-700/60 hover:bg-zinc-100 dark:hover:bg-zinc-700/60 transition-colors"
+                          onClick={() => setStaffInfoTarget(m)}
+                          className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300 hover:underline leading-tight truncate text-left mt-0.5"
                         >
-                          <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate flex-1 text-left leading-tight" title={pattern.name}>
-                            {pattern.name}
-                          </span>
-                          <svg
-                            className={cx("w-2.5 h-2.5 text-zinc-400 flex-shrink-0 transition-transform", isCollapsed ? "-rotate-90" : "")}
-                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
+                          {shortName(m.name)}
                         </button>
-                        {!isCollapsed && Array.from({ length: maxSlots }).map((_, i) => (
-                          <div key={i} className={cx("h-8", i < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "")} />
-                        ))}
                       </div>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
 
-                {/* ── 日付列 ── */}
-                <div className="flex pr-4">
-                  {allDates.map(d => {
-                    const isSel     = d === selectedDate;
-                    const dayOfWeek = new Date(d).getUTCDay();
-                    const isSun     = dayOfWeek === 0;
-                    const isSat     = dayOfWeek === 6;
+                  {/* 日付列 */}
+                  <div className="flex pr-4">
+                    {allDates.map(d => {
+                      const isSel     = d === selectedDate;
+                      const dayOfWeek = new Date(d).getUTCDay();
+                      const isSun     = dayOfWeek === 0;
+                      const isSat     = dayOfWeek === 6;
 
-                    return (
-                      <div
-                        key={d}
-                        className={cx(
-                          "w-11 flex-shrink-0 flex flex-col",
-                          isSel
-                            ? "bg-blue-50/80 dark:bg-blue-950/20"
+                      return (
+                        <div
+                          key={d}
+                          className={cx(
+                            "w-11 flex-shrink-0 flex flex-col",
+                            isSel ? "bg-blue-50/80 dark:bg-blue-950/20"
                             : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
-                        )}
-                      >
-                        {visibleShiftPatterns.map((pattern, gi, arr) => {
-                          const maxSlots    = patternMaxSlots.get(pattern.name) ?? 0;
-                          const isCollapsed = collapsedPatterns.has(pattern.name);
-                          const staffOnDay  = visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name);
-                          const req         = getReqForDate(pattern, d);
-                          const actual      = staffOnDay.length;
-                          const ok          = req === 0 || actual >= req;
-                          const isLastGrp   = gi === arr.length - 1;
-
-                          return (
-                            <div key={pattern.name} className={cx("flex flex-col", isLastGrp ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
-                              {/* 充足数行 (h-9) */}
-                              <div className="h-9 flex items-center justify-center border-b border-zinc-100 dark:border-zinc-700/60 bg-zinc-50/50 dark:bg-zinc-800/30">
-                                {pattern.section === "SV" ? (
-                                  /* SVパターン: 配置人数のみ */
-                                  <span className="tabular-nums text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
-                                    {actual > 0 ? actual : "—"}
+                          )}
+                        >
+                          {visibleMembers.map((m, i) => {
+                            const shift  = getShift(m.id, d);
+                            const sName  = shift?.shift_name ?? null;
+                            const absent = isAbsent(m.id, d);
+                            return (
+                              <div
+                                key={m.id}
+                                className={cx(
+                                  "h-9 flex items-center justify-center w-full",
+                                  i < visibleMembers.length - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
+                                  absent ? "bg-red-50 dark:bg-red-950/30" : "",
+                                )}
+                              >
+                                {sName ? (
+                                  <span className={cx(
+                                    "text-[10px] font-semibold leading-none truncate px-0.5",
+                                    absent ? "text-red-600 dark:text-red-400"
+                                    : sName === "公休" ? "text-zinc-400 dark:text-zinc-500"
+                                    : sName === "希望休" ? "text-blue-500 dark:text-blue-400"
+                                    : isSel ? "text-blue-700 dark:text-blue-300"
+                                    : "text-zinc-700 dark:text-zinc-300",
+                                  )}>
+                                    {sName.slice(0, 2)}
                                   </span>
-                                ) : req > 0 ? (
-                                  <div className="flex flex-col items-center gap-px">
-                                    <span className={cx(
-                                      "tabular-nums text-[11px] font-bold leading-none",
-                                      actual > req ? "text-emerald-600 dark:text-emerald-400"
-                                      : actual < req ? "text-red-500 dark:text-red-400"
-                                      : "text-emerald-600 dark:text-emerald-400",
-                                    )}>{actual}/{req}</span>
-                                    <span className={cx(
-                                      "tabular-nums text-[8px] font-bold leading-none",
-                                      actual > req ? "text-emerald-500 dark:text-emerald-400"
-                                      : actual < req ? "text-red-400 dark:text-red-500"
-                                      : "text-zinc-300 dark:text-zinc-600",
-                                    )}>
-                                      {actual > req ? `+${actual - req}人`
-                                      : actual < req ? `-${req - actual}人`
-                                      : "✓"}
-                                    </span>
-                                  </div>
                                 ) : (
-                                  <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                                  <span className="w-2 h-px bg-zinc-100 dark:bg-zinc-800 rounded-full" />
                                 )}
                               </div>
-                              {/* スタッフ行 (h-8 each) */}
-                              {!isCollapsed && Array.from({ length: maxSlots }).map((_, slotIdx) => {
-                                const member = staffOnDay[slotIdx];
-                                const absent = member ? isAbsent(member.id, d) : false;
-                                return (
-                                  <div
-                                    key={slotIdx}
-                                    className={cx(
-                                      "h-8 flex items-center justify-center w-full",
-                                      slotIdx < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
-                                      absent ? "bg-red-50 dark:bg-red-950/30" : "",
-                                    )}
-                                  >
-                                    {member ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => setStaffInfoTarget(member)}
-                                        className={cx(
-                                          "text-[10px] font-semibold leading-none truncate px-0.5 hover:underline",
-                                          absent
-                                            ? "text-red-600 dark:text-red-400"
-                                            : isSel ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-300",
-                                        )}
-                                      >
-                                        {shortName(member.name)}
-                                      </button>
-                                    ) : slotIdx < req ? (
-                                      <span className="w-4 h-px bg-zinc-100 dark:bg-zinc-800 rounded-full" />
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* ── 合計列（右固定） ── */}
-                <div className="sticky right-0 z-20 w-16 flex-shrink-0 bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
-                  {visibleShiftPatterns.map((pattern, gi, arr) => {
-                    const isCollapsed = collapsedPatterns.has(pattern.name);
-                    const maxSlots    = patternMaxSlots.get(pattern.name) ?? 0;
-                    const isLastGrp   = gi === arr.length - 1;
-                    const isSV        = pattern.section === "SV";
-
-                    const totalActual   = allDates.reduce((s, d) =>
-                      s + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length, 0);
-                    const totalRequired = isSV ? 0 : allDates.reduce((s, d) => s + getReqForDate(pattern, d), 0);
-                    const net           = totalRequired - totalActual; // 正=不足、負=余剰
-
-                    return (
-                      <div key={pattern.name} className={cx("flex flex-col", isLastGrp ? "" : "border-b border-zinc-200 dark:border-zinc-700")}>
-                        {/* 合計充足行 */}
-                        <div className="h-9 flex flex-col items-center justify-center border-b border-zinc-100 dark:border-zinc-700/60 bg-zinc-100/60 dark:bg-zinc-800/50">
-                          {isSV ? (
-                            <span className="tabular-nums text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
-                              {totalActual > 0 ? totalActual : "—"}
-                            </span>
-                          ) : totalRequired > 0 ? (
-                            <>
-                              <span className={cx(
-                                "tabular-nums text-[11px] font-bold leading-none",
-                                net > 0 ? "text-red-500 dark:text-red-400"
-                                : net < 0 ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-emerald-600 dark:text-emerald-400",
-                              )}>{totalActual}/{totalRequired}</span>
-                              <span className={cx(
-                                "tabular-nums text-[9px] font-bold leading-none mt-0.5",
-                                net > 0 ? "text-red-400 dark:text-red-500"
-                                : net < 0 ? "text-emerald-500 dark:text-emerald-400"
-                                : "text-zinc-300 dark:text-zinc-600",
-                              )}>
-                                {net > 0 ? `-${net}人` : net < 0 ? `+${-net}人` : "✓"}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
-                          )}
+                            );
+                          })}
                         </div>
-                        {/* スタッフ行の高さスペーサー */}
-                        {!isCollapsed && Array.from({ length: maxSlots }).map((_, i) => (
-                          <div key={i} className={cx("h-8", i < maxSlots - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "")} />
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
 
+                  {/* 合計列（右固定）：出勤日数 */}
+                  <div className="sticky right-0 z-20 w-16 flex-shrink-0 bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
+                    {visibleMembers.map((m, i) => {
+                      const workCount = allDates.filter(d => {
+                        const sn = getShift(m.id, d)?.shift_name;
+                        return sn && sn !== "公休" && sn !== "希望休";
+                      }).length;
+                      return (
+                        <div key={m.id} className={cx(
+                          "h-9 flex items-center justify-center",
+                          i < visibleMembers.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : "",
+                        )}>
+                          <span className="tabular-nums text-[11px] font-bold text-zinc-600 dark:text-zinc-400">
+                            {workCount > 0 ? workCount : "—"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
 

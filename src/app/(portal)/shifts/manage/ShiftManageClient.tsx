@@ -622,6 +622,7 @@ export default function ShiftManageClient({
         offRequests={offRequests}
         availableSections={[...new Set(shiftPatterns.map(p => p.section).filter((s): s is string => !!s))]}
         shiftPatternNames={shiftPatterns.map(p => p.name).filter(Boolean)}
+        sortByAccount={sortByAccount}
       />
     </div>
   );
