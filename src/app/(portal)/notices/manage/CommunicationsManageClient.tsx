@@ -12,6 +12,8 @@ type Notice = {
   created_at: string;
   posted_by: string;
   poster_name: string;
+  target_staff_id: string | null;
+  target_name: string | null;
 };
 
 type Inquiry = {

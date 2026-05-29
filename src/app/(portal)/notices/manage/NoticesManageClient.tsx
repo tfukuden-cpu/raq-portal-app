@@ -12,6 +12,8 @@ type Notice = {
   created_at: string;
   posted_by: string;
   poster_name: string;
+  target_staff_id: string | null;
+  target_name: string | null;
 };
 
 type ModalState =
@@ -193,9 +195,20 @@ export default function NoticesManageClient({ notices }: { notices: Notice[] }) 
                     </span>
                   )}
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50 truncate">
-                      {n.title}
-                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50 truncate">
+                        {n.title}
+                      </p>
+                      {n.target_name ? (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex-shrink-0 whitespace-nowrap">
+                          個人宛：{n.target_name}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex-shrink-0">
+                          全員
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2 whitespace-pre-wrap">
                       {n.body}
                     </p>
