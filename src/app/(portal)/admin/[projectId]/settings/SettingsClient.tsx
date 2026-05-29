@@ -2354,7 +2354,7 @@ export function HolidayRulesList({
 }
 
 // ── LINE push 疎通テスト ──────────────────────────────────────
-function LinePushTestSection({ projectId }: { projectId: string }) {
+export function LinePushTestSection({ projectId }: { projectId: string }) {
   const [status, setStatus] = useState<"idle" | "sending" | "ok" | "err">("idle");
   const [msg,    setMsg]    = useState<string>("");
   const [detail, setDetail] = useState<string>("");

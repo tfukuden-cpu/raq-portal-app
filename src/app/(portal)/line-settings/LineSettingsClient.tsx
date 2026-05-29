@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import LineConnectionSection from "@/app/(portal)/admin/[projectId]/settings/LineConnectionSection";
-import { LineGroupSection, LineNotifySettings } from "@/app/(portal)/admin/[projectId]/settings/SettingsClient";
+import { LineGroupSection, LineNotifySettings, LinePushTestSection } from "@/app/(portal)/admin/[projectId]/settings/SettingsClient";
 import type { NotificationSettings } from "@/app/(portal)/admin/[projectId]/settings/notify-config";
 
 type Member = {
@@ -99,16 +99,22 @@ export default function LineSettingsClient({
 
       {/* 通知設定タブ */}
       {tab === "notify" && (
-        <section className="space-y-3 pt-4">
-          <div>
-            <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">LINE通知設定</h2>
-            <p className="text-[10px] text-zinc-400 mt-0.5">各イベント発生時にLINEへ通知するかどうかを設定します</p>
-          </div>
-          <LineNotifySettings
-            projectId={projectId}
-            initialSettings={notificationSettings}
-          />
-        </section>
+        <div className="space-y-8 pt-4">
+          <LinePushTestSection projectId={projectId} />
+
+          <div className="border-t border-zinc-100 dark:border-zinc-800" />
+
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">LINE通知設定</h2>
+              <p className="text-[10px] text-zinc-400 mt-0.5">各イベント発生時にLINEへ通知するかどうかを設定します</p>
+            </div>
+            <LineNotifySettings
+              projectId={projectId}
+              initialSettings={notificationSettings}
+            />
+          </section>
+        </div>
       )}
     </div>
   );
