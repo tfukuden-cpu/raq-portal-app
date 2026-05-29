@@ -259,127 +259,137 @@ export default function ShiftDayList({
 
   return (
     <>
-      {/* ━━ タブ / フィルター ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {/* ━━ 固定ヘッダー（タブ行 + 日付ストリップ + 検索ボックスを一体化） ━━ */}
       <div
-        className="sticky z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800"
+        className="sticky z-30 bg-white dark:bg-zinc-950"
         style={{ top: "var(--page-header-h, 0px)" }}
       >
-
         {/* ① タブ行（出勤 / 公休 / 希望休） */}
-        <div className="px-4 pt-2 pb-2 flex items-center gap-1">
-          <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5 flex-1">
-            {tabs.map((t) => {
-              const isSel = tabKey === t.key;
-              return (
-                <button
-                  key={t.key} type="button"
-                  onClick={() => setTabKey(t.key)}
-                  className={cx(
-                    "flex-1 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition-all",
-                    isSel
-                      ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm"
-                      : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
-                  )}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
+        <div className="border-b border-zinc-100 dark:border-zinc-800">
+          <div className="px-4 pt-2 pb-2 flex items-center gap-1">
+            <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5 flex-1">
+              {tabs.map((t) => {
+                const isSel = tabKey === t.key;
+                return (
+                  <button
+                    key={t.key} type="button"
+                    onClick={() => setTabKey(t.key)}
+                    className={cx(
+                      "flex-1 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition-all",
+                      isSel
+                        ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm"
+                        : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300",
+                    )}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+            {/* 全折りたたみ / 展開（出勤タブのみ） */}
+            {tabKey === "shukkin" && visibleShiftPatterns.length > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (collapsedPatterns.size < visibleShiftPatterns.length) {
+                    setCollapsedPatterns(new Set(visibleShiftPatterns.map(p => p.name)));
+                  } else {
+                    setCollapsedPatterns(new Set());
+                  }
+                }}
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 whitespace-nowrap transition-colors border border-zinc-200 dark:border-zinc-700"
+              >
+                {collapsedPatterns.size < visibleShiftPatterns.length ? "全畳" : "全開"}
+              </button>
+            )}
           </div>
-          {/* 全折りたたみ / 展開（出勤タブのみ） */}
-          {tabKey === "shukkin" && visibleShiftPatterns.length > 1 && (
-            <button
-              type="button"
-              onClick={() => {
-                if (collapsedPatterns.size < visibleShiftPatterns.length) {
-                  setCollapsedPatterns(new Set(visibleShiftPatterns.map(p => p.name)));
-                } else {
-                  setCollapsedPatterns(new Set());
-                }
-              }}
-              className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 whitespace-nowrap transition-colors border border-zinc-200 dark:border-zinc-700"
-            >
-              {collapsedPatterns.size < visibleShiftPatterns.length ? "全畳" : "全開"}
-            </button>
-          )}
         </div>
 
+        {/* ② 日付ストリップ（全タブ共通） */}
+        <div className="flex bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-700">
+          {/* 左コーナー */}
+          <div className="sticky left-0 z-10 w-20 flex-shrink-0 h-12 px-2 flex items-end pb-2 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
+          </div>
+          {/* 日付ボタン群 */}
+          <div className="overflow-hidden flex-1">
+            <div ref={headerInnerRef} className="flex">
+              <div className="flex pr-2">
+                {allDates.map(d => {
+                  const dt        = new Date(d);
+                  const dateNum   = dt.getUTCDate();
+                  const dayOfWeek = dt.getUTCDay();
+                  const dow       = WEEKDAY_JP[dayOfWeek];
+                  const isSel     = d === selectedDate;
+                  const isToday   = d === todayStr;
+                  const isSun     = dayOfWeek === 0;
+                  const isSat     = dayOfWeek === 6;
+                  const hasLog    = (logsByDate.get(d)?.length ?? 0) > 0;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => onDateChange(d)}
+                      className={cx(
+                        "w-11 flex-shrink-0 h-12 flex flex-col items-center justify-center gap-0.5 relative transition-colors",
+                        isSel
+                          ? "bg-zinc-900 dark:bg-zinc-100"
+                          : isSun ? "bg-red-50 dark:bg-red-950/20 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                          : isSat ? "bg-blue-50/40 dark:bg-blue-950/10 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                          : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
+                      )}
+                    >
+                      {isToday && !isSel && (
+                        <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-500" />
+                      )}
+                      {hasLog && !isSel && (
+                        <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-400" />
+                      )}
+                      <span className={cx(
+                        "text-[9px] font-medium leading-none",
+                        isSel  ? "text-zinc-500 dark:text-zinc-500"
+                        : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500",
+                      )}>{dow}</span>
+                      <span className={cx(
+                        "text-sm font-bold tabular-nums leading-none",
+                        isSel    ? "text-white dark:text-zinc-900"
+                        : isToday ? "text-blue-600 dark:text-blue-400"
+                        : isSun   ? "text-red-500"
+                        : isSat   ? "text-blue-500"
+                                  : "text-zinc-700 dark:text-zinc-300",
+                      )}>{dateNum}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          {/* 合計列ヘッダー */}
+          <div className="sticky right-0 z-10 w-16 flex-shrink-0 h-12 flex items-end pb-2 justify-center bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
+            <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">合計</span>
+          </div>
+        </div>
+
+        {/* ③ 名前検索（番号順ビューのみ） */}
+        {tabKey === "shukkin" && sortByAccount && (
+          <div className="border-b border-zinc-100 dark:border-zinc-800 px-3 py-2">
+            <input
+              type="search"
+              placeholder="名前で絞り込み…"
+              value={nameFilter}
+              onChange={e => setNameFilter(e.target.value)}
+              className="w-full max-w-xs px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 border border-transparent focus:border-blue-400 dark:focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
+        )}
       </div>
 
       {/* ━━ コンテンツ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="pt-0">
+      <div>
 
         {/* ── 出勤タブ: 月次一覧テーブル ── */}
         {tabKey === "shukkin" && (
           <>
-            {/* ── 日付ヘッダーストリップ（sticky・overflow-x コンテナ外） ── */}
-            <div
-              className="sticky z-20 flex bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-700"
-              style={{ top: "calc(var(--page-header-h, 0px) + 48px)" }}
-            >
-              {/* 左コーナー */}
-              <div className="sticky left-0 z-30 w-20 flex-shrink-0 h-12 px-2 flex items-end pb-2 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-                <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
-              </div>
-              {/* 日付ボタン群（overflow:hidden → translateX で同期） */}
-              <div className="overflow-hidden flex-1">
-                <div ref={headerInnerRef} className="flex">
-                  <div className="flex pr-2">
-                    {allDates.map(d => {
-                      const dt        = new Date(d);
-                      const dateNum   = dt.getUTCDate();
-                      const dayOfWeek = dt.getUTCDay();
-                      const dow       = WEEKDAY_JP[dayOfWeek];
-                      const isSel     = d === selectedDate;
-                      const isToday   = d === todayStr;
-                      const isSun     = dayOfWeek === 0;
-                      const isSat     = dayOfWeek === 6;
-                      const hasLog    = (logsByDate.get(d)?.length ?? 0) > 0;
-                      return (
-                        <button
-                          key={d}
-                          type="button"
-                          onClick={() => onDateChange(d)}
-                          className={cx(
-                            "w-11 flex-shrink-0 h-12 flex flex-col items-center justify-center gap-0.5 relative transition-colors",
-                            isSel
-                              ? "bg-zinc-900 dark:bg-zinc-100"
-                              : isSun ? "bg-red-50 dark:bg-red-950/20 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
-                              : isSat ? "bg-blue-50/40 dark:bg-blue-950/10 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
-                              : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
-                          )}
-                        >
-                          {isToday && !isSel && (
-                            <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-500" />
-                          )}
-                          {hasLog && !isSel && (
-                            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-400" />
-                          )}
-                          <span className={cx(
-                            "text-[9px] font-medium leading-none",
-                            isSel  ? "text-zinc-500 dark:text-zinc-500"
-                            : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500",
-                          )}>{dow}</span>
-                          <span className={cx(
-                            "text-sm font-bold tabular-nums leading-none",
-                            isSel    ? "text-white dark:text-zinc-900"
-                            : isToday ? "text-blue-600 dark:text-blue-400"
-                            : isSun   ? "text-red-500"
-                            : isSat   ? "text-blue-500"
-                                      : "text-zinc-700 dark:text-zinc-300",
-                          )}>{dateNum}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-              {/* 合計列ヘッダー（右固定） */}
-              <div className="sticky right-0 z-30 w-16 flex-shrink-0 h-12 flex items-end pb-2 justify-center bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
-                <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">合計</span>
-              </div>
-            </div>
-
             {/* ── データテーブル（パターン軸 / スタッフ軸 切り替え） ── */}
             {!sortByAccount ? (
               /* ── パターン軸ビュー（デフォルト） ── */
@@ -573,19 +583,6 @@ export default function ShiftDayList({
             ) : (
               /* ── スタッフ行ビュー（番号順） ── */
               <>
-              {/* 名前検索 */}
-              <div
-                className="sticky z-20 px-3 py-2 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800"
-                style={{ top: "calc(var(--page-header-h, 0px) + 96px)" }}
-              >
-                <input
-                  type="search"
-                  placeholder="名前で絞り込み…"
-                  value={nameFilter}
-                  onChange={e => setNameFilter(e.target.value)}
-                  className="w-full max-w-xs px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 border border-transparent focus:border-blue-400 dark:focus:border-blue-500 outline-none transition-colors"
-                />
-              </div>
               <div
                 ref={stripRef}
                 className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
@@ -746,62 +743,6 @@ export default function ShiftDayList({
             : 1;
           return (
             <>
-              {/* ── 日付ヘッダーストリップ（sticky） ── */}
-              <div
-                className="sticky z-20 flex bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-700"
-                style={{ top: "calc(var(--page-header-h, 0px) + 48px)" }}
-              >
-                <div className="sticky left-0 z-30 w-20 flex-shrink-0 h-12 px-2 flex items-end pb-2 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-                  <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
-                </div>
-                <div className="overflow-hidden flex-1">
-                  <div ref={headerInnerRef} className="flex">
-                    <div className="flex pr-4">
-                      {allDates.map(d => {
-                        const dt        = new Date(d);
-                        const dateNum   = dt.getUTCDate();
-                        const dayOfWeek = dt.getUTCDay();
-                        const dow       = WEEKDAY_JP[dayOfWeek];
-                        const isSel     = d === selectedDate;
-                        const isToday   = d === todayStr;
-                        const isSun     = dayOfWeek === 0;
-                        const isSat     = dayOfWeek === 6;
-                        return (
-                          <button
-                            key={d}
-                            type="button"
-                            onClick={() => onDateChange(d)}
-                            className={cx(
-                              "w-11 flex-shrink-0 h-12 flex flex-col items-center justify-center gap-0.5 relative transition-colors",
-                              isSel
-                                ? "bg-zinc-900 dark:bg-zinc-100"
-                                : isSun ? "bg-red-50 dark:bg-red-950/20 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
-                                : isSat ? "bg-blue-50/40 dark:bg-blue-950/10 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
-                                : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800/60",
-                            )}
-                          >
-                            {isToday && !isSel && (
-                              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-500" />
-                            )}
-                            <span className={cx(
-                              "text-[9px] font-medium leading-none",
-                              isSel  ? "text-zinc-500 dark:text-zinc-500"
-                              : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500",
-                            )}>{dow}</span>
-                            <span className={cx(
-                              "text-sm font-bold tabular-nums leading-none",
-                              isSel    ? "text-white dark:text-zinc-900"
-                              : isToday ? "text-blue-600 dark:text-blue-400"
-                              : isSun   ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300",
-                            )}>{dateNum}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* ── データテーブル ── */}
               <div
                 ref={stripRef}
