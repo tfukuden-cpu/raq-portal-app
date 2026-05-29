@@ -26,6 +26,7 @@ type Member = {
   preferred_shift: string | null; preferred_section: string | null;
   max_consecutive_days: number | null; shift_note: string | null;
   accountNumber?: string | null;
+  churn_risk?: boolean; churn_risk_since?: string | null;
 };
 type Pattern = {
   name: string;

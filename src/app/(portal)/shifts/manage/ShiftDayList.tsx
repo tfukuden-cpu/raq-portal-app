@@ -21,6 +21,7 @@ type Member  = {
   preferred_shift?: string | null; preferred_section?: string | null;
   max_consecutive_days?: number | null; shift_note?: string | null;
   endDate?: string | null;
+  churn_risk?: boolean; churn_risk_since?: string | null;
 };
 type Pattern = {
   name: string;
@@ -183,6 +184,19 @@ export default function ShiftDayList({
   });
 
   const visibleMembers = activeMembers;
+
+  // 離脱リスクマップ（staff_id → churn_risk_since | null）
+  const churnRiskSinceMap = new Map<string, string | null>();
+  for (const m of visibleMembers) {
+    if (m.churn_risk) churnRiskSinceMap.set(m.id, m.churn_risk_since ?? null);
+  }
+  /** 充足カウントから除外すべきか（離脱リスク判定） */
+  function isChurnExcluded(memberId: string, date: string): boolean {
+    if (!churnRiskSinceMap.has(memberId)) return false;
+    const since = churnRiskSinceMap.get(memberId) ?? null;
+    if (!since) return true;          // since 未設定 → 全期間除外
+    return date >= since;             // since 以降を除外
+  }
 
   // シフトルックアップ
   const shiftMap = new Map<string, Shift>(shifts.map((s) => [`${s.staff_id}__${s.shift_date}`, s]));
@@ -423,7 +437,7 @@ export default function ShiftDayList({
                             const isCollapsed = collapsedPatterns.has(pattern.name);
                             const staffOnDay  = visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name);
                             const req         = getReqForDate(pattern, d);
-                            const actual      = staffOnDay.length;
+                            const actual      = staffOnDay.filter(m => !isChurnExcluded(m.id, d)).length;
                             const isLastGrp   = gi === arr.length - 1;
 
                             return (
@@ -506,7 +520,7 @@ export default function ShiftDayList({
                       const isSV        = pattern.section === "SV";
 
                       const totalActual   = allDates.reduce((s, d) =>
-                        s + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name).length, 0);
+                        s + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name && !isChurnExcluded(m.id, d)).length, 0);
                       const totalRequired = isSV ? 0 : allDates.reduce((s, d) => s + getReqForDate(pattern, d), 0);
                       const net           = totalRequired - totalActual;
 

@@ -403,6 +403,7 @@ export default async function ManageShiftsPage(props: {
       preferred_shift: string | null; preferred_section: string | null;
       max_consecutive_days: number | null; shift_note: string | null;
       accountNumber: string | null; company_name: string | null; start_date: string | null;
+      churn_risk: boolean; churn_risk_since: string | null;
     }[];
 
   const staffNameMap = new Map(activeMembers.map(m => [m.id, m.name]));
