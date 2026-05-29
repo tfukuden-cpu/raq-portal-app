@@ -51,7 +51,7 @@ type ShiftPattern = {
   section: string;
   target_role: string; // "all" | "admin" | "staff"
 };
-type TabId = "basic" | "members" | "seats" | "line" | "notify" | "danger";
+type TabId = "basic" | "members" | "seats" | "danger";
 
 // ── 共通フィードバック ──────────────────────────────────
 
@@ -119,8 +119,6 @@ export function SettingsContainer({
     { id: "basic",   label: "基本設定" },
     { id: "members", label: "メンバー", count: members.length },
     { id: "seats",   label: "座席" },
-    { id: "line",    label: "LINE連携", count: members.filter(m => !m.lineLinked).length || undefined },
-    { id: "notify",  label: "LINE通知" },
     ...(canArchive ? [{ id: "danger" as TabId, label: "危険操作", red: true }] : []),
   ];
 
@@ -193,42 +191,6 @@ export function SettingsContainer({
         />
       )}
 
-      {/* ── LINE連携タブ ── */}
-      {tab === "line" && (
-        <LineConnectionSection projectId={projectId} members={members} />
-      )}
-
-      {/* ── LINE通知タブ ── */}
-      {tab === "notify" && (
-        <div className="space-y-8">
-
-          {/* 疎通テスト */}
-          <LinePushTestSection projectId={projectId} />
-          <Divider />
-
-          <section className="space-y-3">
-            <SectionHeading
-              title="LINEグループ連携"
-              sub="グループIDを入力するとグループへも通知が届きます"
-            />
-            <LineGroupSection
-              projectId={projectId}
-              currentGroupId={lineGroupId}
-            />
-          </section>
-          <Divider />
-          <section className="space-y-3">
-            <SectionHeading
-              title="LINE通知設定"
-              sub="各イベント発生時にLINEグループへ通知するかどうかを設定します"
-            />
-            <LineNotifySettings
-              projectId={projectId}
-              initialSettings={notificationSettings}
-            />
-          </section>
-        </div>
-      )}
 
       {/* ── 座席タブ ── */}
       {tab === "seats" && (
