@@ -120,7 +120,7 @@ const PRIORITY_COLOR: Record<string, string> = {
 export default function ShiftDayList({
   allDates, shifts, activeMembers, shiftPatterns, slotRequirements,
   changeLogs, absenceSet, selectedDate, onDateChange, projectId, offRequests,
-  availableSections, shiftPatternNames, sortByAccount,
+  availableSections, shiftPatternNames, sortByAccount, onSetKyukyu,
 }: {
   allDates: string[];
   shifts: Shift[];
@@ -138,6 +138,7 @@ export default function ShiftDayList({
   availableSections?: string[];
   shiftPatternNames?: string[];
   sortByAccount?: boolean;
+  onSetKyukyu?: (staffId: string, date: string) => void;
 }) {
   // staff_id__date → priority のマップ
   const offRequestMap = new Map(
@@ -626,6 +627,15 @@ export default function ShiftDayList({
                                   )}>
                                     {shiftAbbr(sName)}
                                   </span>
+                                ) : onSetKyukyu ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onSetKyukyu(m.id, d)}
+                                    className="w-full h-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                                    title="公休にする"
+                                  >
+                                    <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500">休</span>
+                                  </button>
                                 ) : (
                                   <span className="w-2 h-px bg-zinc-100 dark:bg-zinc-800 rounded-full" />
                                 )}

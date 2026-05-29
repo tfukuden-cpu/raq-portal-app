@@ -6,7 +6,7 @@ import ShiftDayList from "./ShiftDayList";
 import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
 import ShiftEditGrid, { type ChangeLog } from "./ShiftEditGrid";
 import { clearGridDraftAction, type GridDraftEntry } from "../actions";
-import { regenerateShiftDraftAction } from "./actions";
+import { regenerateShiftDraftAction, upsertSingleShiftAction } from "./actions";
 import PublishButton from "./PublishButton";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import { resolveShiftSection, formatSectionShift } from "@/lib/seatColors";
@@ -202,10 +202,18 @@ export default function ShiftManageClient({
   const [activeDraft, setActiveDraft] = useState<GridDraftEntry[] | null>(null);
   const [isClearing, startClear] = useTransition();
   const [isRegenerating, startRegen] = useTransition();
+  const [isSettingKyukyu, startSetKyukyu] = useTransition();
   const router = useRouter();
 
   const targetMonthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
   const hasDraft = !!(initialDraft && initialDraft.length > 0);
+
+  function handleSetKyukyu(staffId: string, date: string) {
+    startSetKyukyu(async () => {
+      await upsertSingleShiftAction(projectId, staffId, date, "公休");
+      router.refresh();
+    });
+  }
 
   function handleSaved() {
     setMode("list");
@@ -623,6 +631,7 @@ export default function ShiftManageClient({
         availableSections={[...new Set(shiftPatterns.map(p => p.section).filter((s): s is string => !!s))]}
         shiftPatternNames={shiftPatterns.map(p => p.name).filter(Boolean)}
         sortByAccount={sortByAccount}
+        onSetKyukyu={sortByAccount ? handleSetKyukyu : undefined}
       />
     </div>
   );

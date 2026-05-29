@@ -40,6 +40,33 @@ async function fetchRequestInfo(requestId: string) {
   };
 }
 
+/** 単一スタッフ×日付のシフトを直接 upsert（番号順ビューの空セル → 公休 等） */
+export async function upsertSingleShiftAction(
+  projectId: string,
+  staffId: string,
+  date: string,
+  shiftName: string,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("shifts").upsert({
+    project_id: projectId,
+    staff_id:   staffId,
+    shift_date: date,
+    shift_name: shiftName,
+    shift_start: null,
+    shift_end:   null,
+    note:        null,
+  });
+
+  if (error) return { success: false, message: error.message };
+  revalidatePath("/shifts/manage");
+  return { success: true };
+}
+
 export async function upsertSlotRequirementsAction(
   projectId: string,
   changes: { patternName: string; date: string; section: string | null; requiredCount: number }[],
