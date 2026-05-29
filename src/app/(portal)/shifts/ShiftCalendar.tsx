@@ -77,15 +77,22 @@ function getShiftColors(name: string | null): { bg: string; text: string } | nul
   return { bg: cols.def, text: cols.text };
 }
 
-/** カレンダーセル内の略称（3文字以内） */
+/** カレンダーセル内の略称（2文字を基本に） */
 function shiftAbbr(name: string): string {
   if (name === "公休")    return "公休";
-  if (name === "希望休")  return "希望休";
+  if (name === "希望休")  return "希休";
   if (name === "有休")    return "有休";
   if (name === "特別休暇") return "特休";
-  if (name.includes("早番")) return name.replace("早番", "早").slice(0, 3);
-  if (name.includes("遅番")) return name.replace("遅番", "遅").slice(0, 3);
-  return name.slice(0, 3);
+  // セクション頭1文字 + "早"/"遅" で2文字
+  if (name.includes("早番")) {
+    const sec = detectSection(name);
+    return (sec ? sec.slice(0, 1) : name.slice(0, 1)) + "早";
+  }
+  if (name.includes("遅番")) {
+    const sec = detectSection(name);
+    return (sec ? sec.slice(0, 1) : name.slice(0, 1)) + "遅";
+  }
+  return name.slice(0, 2);
 }
 
 function isHoliday(name: string | null) {
@@ -204,7 +211,7 @@ export default function ShiftCalendar({
       {/* カレンダーグリッド（常に6行 = 42マス） */}
       <div
         className="flex-1 min-h-0 grid grid-cols-7 gap-0.5"
-        style={{ gridAutoRows: "1fr" }}
+        style={{ gridAutoRows: "minmax(52px, 1fr)" }}
       >
         {Array.from({ length: firstDow }).map((_, i) => <div key={`pre${i}`} />)}
 
@@ -264,7 +271,7 @@ export default function ShiftCalendar({
               {/* シフト名 */}
               {s?.shift_name && (
                 <span className={cx(
-                  "text-[8px] leading-none font-bold mt-0.5 px-0.5 text-center",
+                  "text-[11px] leading-none font-bold mt-0.5 tracking-tight",
                   nameCls,
                 )}>
                   {shiftAbbr(s.shift_name)}
