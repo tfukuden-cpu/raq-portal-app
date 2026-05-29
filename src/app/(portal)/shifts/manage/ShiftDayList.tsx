@@ -147,6 +147,7 @@ export default function ShiftDayList({
   );
   const [tabKey, setTabKey]   = useState<TabKey>("shukkin");
   const [nameFilter, setNameFilter] = useState("");
+  const [showSufficiency, setShowSufficiency] = useState(true);
   const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string } | null>(null);
   const [staffInfoTarget, setStaffInfoTarget] = useState<Member | null>(null);
   // パターンごとの折りたたみ状態（初期値: 全折りたたみ）
@@ -608,6 +609,24 @@ export default function ShiftDayList({
               <>
               {/* ── 充足テーブル ── */}
               <div className="border-b-2 border-zinc-300 dark:border-zinc-600">
+                {/* トグルヘッダー */}
+                <button
+                  type="button"
+                  onClick={() => setShowSufficiency(v => !v)}
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800/80 border-b border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700/60 transition-colors text-left"
+                >
+                  <svg
+                    className={cx("w-3 h-3 text-zinc-400 flex-shrink-0 transition-transform", showSufficiency ? "" : "-rotate-90")}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">充足状況</span>
+                  {!showSufficiency && (
+                    <span className="ml-1 text-[10px] text-zinc-400 dark:text-zinc-500">（タップで展開）</span>
+                  )}
+                </button>
+                {showSufficiency && (
                 <div
                   ref={sufficiencyRef}
                   className="overflow-x-auto"
@@ -737,6 +756,7 @@ export default function ShiftDayList({
 
                   </div>
                 </div>
+                )}
               </div>
 
               {/* ── データテーブル ── */}
