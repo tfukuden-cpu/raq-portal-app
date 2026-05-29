@@ -462,6 +462,7 @@ export async function postShiftNoticeAction(
   projectId: string,
   title: string,
   body: string,
+  targetStaffId?: string,       // 指定時は個人宛（そのスタッフのみ表示）
 ): Promise<{ success: boolean; message?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -471,11 +472,12 @@ export async function postShiftNoticeAction(
   const admin = createAdminClient();
 
   const { error } = await admin.from("notices").insert({
-    project_id: projectId,
-    title:      title.trim(),
-    body:       body.trim(),
-    is_pinned:  false,
-    posted_by:  staffId,
+    project_id:      projectId,
+    title:           title.trim(),
+    body:            body.trim(),
+    is_pinned:       false,
+    posted_by:       staffId,
+    target_staff_id: targetStaffId ?? null,
   });
 
   if (error) return { success: false, message: error.message };

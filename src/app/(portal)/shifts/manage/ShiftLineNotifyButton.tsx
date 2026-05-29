@@ -90,9 +90,13 @@ export default function ShiftLineNotifyButton({
         return;
       }
 
-      // アプリ内お知らせ（全員送信時のみ、個別送信は除く）
-      if (alsoNotice && !staffId) {
-        const nr = await postShiftNoticeAction(projectId, noticeTitle, noticeBody);
+      // アプリ内お知らせ
+      if (alsoNotice) {
+        // 個別送信: そのスタッフのみ表示されるお知らせ
+        // 全員送信: 全員向け（target_staff_id = null）
+        const nr = await postShiftNoticeAction(
+          projectId, noticeTitle, noticeBody, staffId
+        );
         if (!nr.success) {
           setSendError(`LINEは送信済みですが、お知らせ投稿に失敗しました：${nr.message}`);
           setResult({ sent: res.sent ?? 0, noLine: res.noLine ?? [] });
@@ -202,7 +206,11 @@ export default function ShiftLineNotifyButton({
                         className="w-full text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-zinc-800 dark:text-zinc-200 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
-                    <p className="text-[10px] text-zinc-400">お知らせはアプリ内の全スタッフに表示されます</p>
+                    <p className="text-[10px] text-zinc-400">
+                      {previewId
+                        ? `「この人だけ送信」時は ${selectedMember?.name} さんにのみ表示されます。「全員に送信」時は全スタッフに表示されます。`
+                        : "全員に送信する場合はアプリ内の全スタッフに表示されます"}
+                    </p>
                   </div>
                 )}
               </div>
