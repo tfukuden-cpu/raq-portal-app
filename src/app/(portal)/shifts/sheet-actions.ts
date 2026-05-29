@@ -178,13 +178,27 @@ export async function exportShiftToSheetAction(fd: FormData): Promise<SyncResult
     const { startDate, endDate } = monthRange(year, month);
     const names = await getStaffNames(supabase, projectId);
 
-    const { data, error } = await supabase
-      .from("shifts")
-      .select("staff_id, shift_date, shift_name, shift_start, shift_end, note")
-      .eq("project_id", projectId)
-      .gte("shift_date", startDate).lte("shift_date", endDate)
-      .order("shift_date").order("staff_id");
-    if (error) return { success: false, message: error.message };
+    // ページネーション付きフェッチ（PostgREST 1000行上限対策）
+    const allShiftData: { staff_id: string; shift_date: string; shift_name: string | null; shift_start: string | null; shift_end: string | null; note: string | null }[] = [];
+    {
+      const PAGE = 1000;
+      let from = 0;
+      while (true) {
+        const { data: page, error } = await supabase
+          .from("shifts")
+          .select("staff_id, shift_date, shift_name, shift_start, shift_end, note")
+          .eq("project_id", projectId)
+          .gte("shift_date", startDate).lte("shift_date", endDate)
+          .order("shift_date").order("staff_id")
+          .range(from, from + PAGE - 1);
+        if (error) return { success: false, message: error.message };
+        if (!page || page.length === 0) break;
+        allShiftData.push(...page);
+        if (page.length < PAGE) break;
+        from += PAGE;
+      }
+    }
+    const data = allShiftData;
 
     const header = ["社員ID", "氏名", "日付", "シフト名", "開始", "終了", "備考"];
     const rows = (data ?? []).map((s) => [
@@ -380,14 +394,26 @@ export async function exportAttendanceSummaryToSheetAction(fd: FormData): Promis
       .order("recorded_at");
     if (error) return { success: false, message: error.message };
 
-    // シフト取得（遅刻・早退照合用）
-    const { data: shifts, error: shiftErr } = await supabase
-      .from("shifts")
-      .select("staff_id, shift_date, shift_name, shift_start, shift_end")
-      .eq("project_id", projectId)
-      .gte("shift_date", startDate)
-      .lte("shift_date", endDate);
-    if (shiftErr) return { success: false, message: shiftErr.message };
+    // シフト取得（遅刻・早退照合用・ページネーション対応）
+    const shifts: { staff_id: string; shift_date: string; shift_name: string | null; shift_start: string | null; shift_end: string | null }[] = [];
+    {
+      const PAGE = 1000;
+      let from = 0;
+      while (true) {
+        const { data: page, error: shiftErr } = await supabase
+          .from("shifts")
+          .select("staff_id, shift_date, shift_name, shift_start, shift_end")
+          .eq("project_id", projectId)
+          .gte("shift_date", startDate)
+          .lte("shift_date", endDate)
+          .range(from, from + PAGE - 1);
+        if (shiftErr) return { success: false, message: shiftErr.message };
+        if (!page || page.length === 0) break;
+        shifts.push(...page);
+        if (page.length < PAGE) break;
+        from += PAGE;
+      }
+    }
 
     // 欠勤報告取得（absence_reports テーブルから）
     const { data: absenceReports } = await supabase

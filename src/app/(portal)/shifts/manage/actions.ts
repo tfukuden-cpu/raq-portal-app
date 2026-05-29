@@ -292,16 +292,29 @@ export async function publishShiftsAction(
   const endDate   = `${year}-${String(month).padStart(2, "0")}-${new Date(year, month, 0).getDate()}`;
   const targetMonth = `${year}/${String(month).padStart(2, "0")}`;
 
-  // 対象月の全シフトを取得
-  const { data: shifts } = await admin
-    .from("shifts")
-    .select("staff_id, shift_date, shift_name, shift_start, shift_end")
-    .eq("project_id", projectId)
-    .gte("shift_date", startDate)
-    .lte("shift_date", endDate)
-    .order("shift_date");
+  // 対象月の全シフトを取得（ページネーション対応：PostgREST デフォルト1000行上限を突破）
+  const allShifts: { staff_id: string; shift_date: string; shift_name: string; shift_start: string | null; shift_end: string | null }[] = [];
+  {
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await admin
+        .from("shifts")
+        .select("staff_id, shift_date, shift_name, shift_start, shift_end")
+        .eq("project_id", projectId)
+        .gte("shift_date", startDate)
+        .lte("shift_date", endDate)
+        .order("shift_date")
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      allShifts.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+  const shifts = allShifts;
 
-  if (!shifts?.length) return { success: false, message: "対象月のシフトがありません" };
+  if (!shifts.length) return { success: false, message: "対象月のシフトがありません" };
 
   // スタッフ別にシフトをまとめる
   const shiftsByStaff = new Map<string, typeof shifts>();

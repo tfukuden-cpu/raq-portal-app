@@ -314,26 +314,52 @@ export async function GET(req: NextRequest) {
 
   // データ並列取得
   const OFF_SHIFT_NAMES = ["公休","有休","休暇","振替休日","特別休暇","代休","欠勤"];
-  let shiftsQ = admin.from("shifts")
-    .select("staff_id, shift_date, shift_name, shift_start, shift_end")
-    .eq("project_id", projectId)
-    .gte("shift_date", startDate).lte("shift_date", endDate)
-    .order("shift_date").order("staff_id");
-  if (targetIds.length > 0) shiftsQ = shiftsQ.in("staff_id", targetIds);
+
+  // shifts：ページネーション付きフェッチ（PostgREST 1000行上限対策）
+  const shifts: { staff_id: string; shift_date: string; shift_name: string; shift_start: string | null; shift_end: string | null }[] = [];
+  {
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      let q = admin.from("shifts")
+        .select("staff_id, shift_date, shift_name, shift_start, shift_end")
+        .eq("project_id", projectId)
+        .gte("shift_date", startDate).lte("shift_date", endDate)
+        .order("shift_date").order("staff_id")
+        .range(from, from + PAGE - 1);
+      if (targetIds.length > 0) q = q.in("staff_id", targetIds);
+      const { data, error } = await q;
+      if (error || !data || data.length === 0) break;
+      shifts.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+
+  // punches：ページネーション付きフェッチ
+  const punches: { staff_id: string; punch_type: string; recorded_at: string }[] = [];
+  {
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await admin.from("punch_logs")
+        .select("staff_id, punch_type, recorded_at")
+        .eq("project_id", projectId)
+        .gte("recorded_at", startISO).lte("recorded_at", endISO)
+        .order("recorded_at")
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      punches.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
 
   const [
-    { data: shifts },
-    { data: punches },
     { data: absences },
     { data: lates },
     { data: shiftPatterns },
   ] = await Promise.all([
-    shiftsQ,
-    admin.from("punch_logs")
-      .select("staff_id, punch_type, recorded_at")
-      .eq("project_id", projectId)
-      .gte("recorded_at", startISO).lte("recorded_at", endISO)
-      .order("recorded_at"),
     admin.from("absence_reports")
       .select("staff_id, absence_date, reason")
       .eq("project_id", projectId)
