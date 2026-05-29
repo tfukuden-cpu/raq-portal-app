@@ -268,13 +268,13 @@ export default function ShiftCalendar({
                 {d}
               </span>
 
-              {/* シフト名 */}
+              {/* シフト名（フルネーム・セル幅に合わせてリサイズ） */}
               {s?.shift_name && (
-                <span className={cx(
-                  "text-[11px] leading-none font-bold mt-0.5 tracking-tight",
-                  nameCls,
-                )}>
-                  {shiftAbbr(s.shift_name)}
+                <span
+                  className={cx("leading-none font-bold mt-0.5 w-full text-center truncate px-0.5", nameCls)}
+                  style={{ fontSize: "clamp(8px, 3.2vw, 12px)" }}
+                >
+                  {s.shift_name}
                 </span>
               )}
 
