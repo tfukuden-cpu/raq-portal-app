@@ -258,13 +258,27 @@ export async function notifyShiftChangesAction(
   if (notifications.length === 0) return { success: true, sent: 0, noLine: [] };
 
   const admin = createAdminClient();
+
+  // ── 変更通知が無効なら即終了 ──────────────────────────────────
+  const { data: ps } = await admin
+    .from("project_settings")
+    .select("notification_settings")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  const settings = buildDefaultNotificationSettings(
+    (ps?.notification_settings as Record<string, unknown>) ?? {}
+  );
+  if (!settings.shift_changed.enabled) {
+    return { success: true, sent: 0, noLine: [] };
+  }
+
   const { data: staffRows } = await admin
     .from("staffs")
-    .select("id, line_user_id")
+    .select("id, line_user_id, display_name, name")
     .in("id", notifications.map(n => n.staffId));
 
-  const lineMap = new Map(
-    (staffRows ?? []).map(s => [s.id as string, s.line_user_id as string | null])
+  const staffMap = new Map(
+    (staffRows ?? []).map(s => [s.id as string, s])
   );
 
   const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
@@ -277,16 +291,20 @@ export async function notifyShiftChangesAction(
   const noLine: string[] = [];
 
   for (const n of notifications) {
-    const lineId = lineMap.get(n.staffId);
+    const staff  = staffMap.get(n.staffId);
+    const lineId = staff?.line_user_id as string | null | undefined;
     if (!lineId) { noLine.push(n.staffName); continue; }
 
+    const staffName = (staff?.display_name ?? staff?.name ?? n.staffName) as string;
     const lines = n.changes.map(c => {
       if (!c.from && c.to) return `${fmtDateLine(c.date)} ${c.to} 新規追加`;
       if (c.from && !c.to) return `${fmtDateLine(c.date)} ${c.from} 削除`;
       return `${fmtDateLine(c.date)} ${c.from} → ${c.to}`;
     });
 
-    const text = `【シフト変更のお知らせ】\n以下のシフトが変更されました。\n\n${lines.join("\n")}`;
+    const baseMsg = settings.shift_changed.message ?? DEFAULT_NOTIFY_MESSAGES.shift_changed;
+    const header  = resolveMessage(baseMsg, { "名前": staffName });
+    const text    = `${header}\n\n${lines.join("\n")}`;
     await pushLine(lineId, text);
     sent++;
   }
@@ -361,6 +379,21 @@ export async function publishShiftsAction(
     (ps?.notification_settings as Record<string, unknown>) ?? {}
   );
 
+  // ── 展開通知が無効なら送信しない ──────────────────────────────
+  if (!settings.shift_published.enabled) {
+    // 展開済みとして記録だけして終了
+    const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
+    await admin.from("shift_month_status").upsert(
+      {
+        project_id:   projectId,
+        year_month:   yearMonth,
+        published_by: user.email?.split("@")[0]?.toUpperCase() ?? "",
+      },
+      { onConflict: "project_id,year_month" }
+    );
+    return { success: true, sent: 0, noLine: [] };
+  }
+
   // LINE IDを含むスタッフ情報を取得
   const staffIds = [...shiftsByStaff.keys()];
   const { data: staffRows } = await admin
@@ -380,18 +413,9 @@ export async function publishShiftsAction(
 
     const myShifts = shiftsByStaff.get(staff.id as string) ?? [];
 
-    // シフト一覧を整形
-    const shiftLines = myShifts.map(s => {
-      const dt = new Date(`${s.shift_date}T00:00:00+09:00`);
-      const dayLabel = `${dt.getMonth() + 1}/${dt.getDate()}（${WEEKDAY_JP[dt.getDay()]}）`;
-      const time = s.shift_start && s.shift_end ? ` ${s.shift_start}〜${s.shift_end}` : "";
-      const sName = s.shift_name ? ` ${s.shift_name}` : "";
-      return `・${dayLabel}${sName}${time}`;
-    }).join("\n");
-
+    // 設定メッセージのみ送信（シフト一覧は付加しない）
     const baseMsg = settings.shift_published.message ?? DEFAULT_NOTIFY_MESSAGES.shift_published;
-    const header  = resolveMessage(baseMsg, { "名前": name, "対象月": targetMonth });
-    const message = `${header}\n\n${shiftLines}`;
+    const message = resolveMessage(baseMsg, { "名前": name, "対象月": targetMonth });
 
     await pushLine(lineId, message);
     sent++;
