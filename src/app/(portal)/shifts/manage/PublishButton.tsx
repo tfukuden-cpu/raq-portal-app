@@ -18,6 +18,8 @@ export default function PublishButton({ projectId, year, month, isPublished, fla
   const [error, setError]    = useState<string | null>(null);
   const [isPending, start]   = useTransition();
   const [showConfirm, setShowConfirm] = useState(false);
+  // 展開成功後にクライアント側で即グレーアウトするためのローカルフラグ
+  const [localPublished, setLocalPublished] = useState(isPublished ?? false);
 
   const targetMonth = `${year}/${String(month).padStart(2, "0")}`;
 
@@ -29,6 +31,7 @@ export default function PublishButton({ projectId, year, month, isPublished, fla
       setShowConfirm(false);
       if (res.success) {
         setResult({ sent: res.sent ?? 0, noLine: res.noLine ?? [] });
+        setLocalPublished(true); // 即グレーアウト
       } else {
         setError(res.message ?? "エラーが発生しました");
       }
@@ -36,7 +39,7 @@ export default function PublishButton({ projectId, year, month, isPublished, fla
   };
 
   // 展開済みの場合はグレーアウトバッジ表示（再展開も可能）
-  if (isPublished) {
+  if (localPublished) {
     return (
       <div className="relative">
         <button
