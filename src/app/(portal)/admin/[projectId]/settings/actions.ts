@@ -3,7 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
-import { pushLine, pushLineTestButton } from "@/lib/line";
+import { pushLine, pushLineTestButton, multicastLine } from "@/lib/line";
+import { getAdminLineIds } from "@/lib/notify";
 import { redirect } from "next/navigation";
 import {
   createSpreadsheet,
@@ -1081,4 +1082,41 @@ export async function clearLineTestConfirmationsAction(projectId: string): Promi
     .eq("project_id", projectId);
   if (error) return { success: false, message: error.message };
   return { success: true };
+}
+
+// ── 通知テスト送信 ────────────────────────────────────────────
+
+/**
+ * 指定メッセージを管理者グループ（LINE グループ + 管理者個人）へテスト送信
+ */
+export async function testNotifyAction(
+  projectId: string,
+  message: string,
+): Promise<SettingsResult> {
+  await assertAdmin(projectId);
+
+  // LINE グループ ID 取得
+  const { data: ps } = await adminSupa()
+    .from("project_settings")
+    .select("line_group_id")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  const groupId = (ps?.line_group_id as string | null) ?? null;
+
+  // 管理者個人の LINE ID
+  const adminIds = await getAdminLineIds(projectId);
+
+  if (!groupId && adminIds.length === 0) {
+    return { success: false, message: "管理者グループ・管理者のLINEがどちらも未設定です" };
+  }
+
+  const prefix   = "【テスト通知】\n";
+  const fullText = prefix + message;
+
+  const sends: Promise<void>[] = [];
+  if (groupId)          sends.push(pushLine(groupId, fullText));
+  if (adminIds.length)  sends.push(multicastLine(adminIds, fullText));
+
+  await Promise.allSettled(sends);
+  return { success: true, message: "テスト送信しました" };
 }

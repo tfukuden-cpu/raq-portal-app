@@ -23,6 +23,7 @@ import {
   saveLineGroupAction,
   saveDepartureSettingAction,
   departStaffAction,
+  testNotifyAction,
 } from "./actions";
 import {
   buildDefaultNotificationSettings,
@@ -1814,6 +1815,7 @@ function NotifyCard({
   onToggle,
   onRecipient,
   onMessage,
+  projectId,
 }: {
   notifyKey: NotifyKey;
   label: string;
@@ -1824,9 +1826,24 @@ function NotifyCard({
   onToggle: () => void;
   onRecipient: (v: "admin" | "staff") => void;
   onMessage: (v: string) => void;
+  projectId: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [testStatus, setTestStatus] = useState<"idle" | "sending" | "ok" | "err">("idle");
+  const [testMsg,    setTestMsg]    = useState<string>("");
+  const [isPendingTest, startTest]  = useTransition();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleTestSend = () => {
+    const message = config.message ?? DEFAULT_NOTIFY_MESSAGES[notifyKey] ?? label;
+    startTest(async () => {
+      setTestStatus("sending");
+      const res = await testNotifyAction(projectId, message);
+      setTestStatus(res.success ? "ok" : "err");
+      setTestMsg(res.message ?? "");
+      setTimeout(() => setTestStatus("idle"), 3000);
+    });
+  };
 
   const insertVar = (v: string) => {
     const el = textareaRef.current;
@@ -1846,24 +1863,66 @@ function NotifyCard({
   return (
     <div className="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
       {/* ヘッダー行 */}
-      <div className="flex items-center gap-3 px-4 py-3.5">
+      <div className="flex items-center gap-3 px-4 py-3.5 relative">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 leading-tight">{label}</p>
           <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">{desc}</p>
         </div>
         {config.enabled && (
-          <button
-            type="button"
-            onClick={() => setOpen(v => !v)}
-            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            aria-label={open ? "折り畳む" : "設定を開く"}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+          <>
+            {/* テスト送信ボタン */}
+            <button
+              type="button"
+              onClick={handleTestSend}
+              disabled={isPendingTest}
+              className={[
+                "flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors",
+                testStatus === "ok"  ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
+                : testStatus === "err" ? "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700",
+              ].join(" ")}
+              title="管理者グループへテスト送信"
+            >
+              {testStatus === "sending" ? (
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+              ) : testStatus === "ok" ? (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : testStatus === "err" ? (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              )}
+              {testStatus === "ok" ? "送信済" : testStatus === "err" ? "失敗" : testStatus === "sending" ? "" : "テスト"}
+            </button>
+            {/* 展開ボタン */}
+            <button
+              type="button"
+              onClick={() => setOpen(v => !v)}
+              className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              aria-label={open ? "折り畳む" : "設定を開く"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </>
         )}
         <Toggle checked={config.enabled} onChange={() => { onToggle(); if (!config.enabled) setOpen(true); }} />
+        {/* テスト結果ツールチップ */}
+        {testMsg && testStatus !== "idle" && (
+          <span className={`absolute right-16 top-3 text-[10px] px-2 py-0.5 rounded-full ${testStatus === "ok" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+            {testMsg}
+          </span>
+        )}
       </div>
 
       {/* 詳細設定（ON かつ open のときのみ） */}
@@ -1965,6 +2024,7 @@ export function LineNotifySettings({
             onToggle={() => updateItem(item.key, { enabled: !settings[item.key].enabled })}
             onRecipient={v => updateItem(item.key, { recipient: v })}
             onMessage={v => updateItem(item.key, { message: v })}
+            projectId={projectId}
           />
         ))}
       </div>
@@ -1985,6 +2045,7 @@ export function LineNotifySettings({
           onToggle={() => updateItem("shift_start_remind", { enabled: !settings.shift_start_remind.enabled })}
           onRecipient={v => updateItem("shift_start_remind", { recipient: v })}
           onMessage={v => updateItem("shift_start_remind", { message: v })}
+          projectId={projectId}
           extra={
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">タイミング</span>
@@ -2008,6 +2069,7 @@ export function LineNotifySettings({
           onToggle={() => updateItem("shift_end_remind", { enabled: !settings.shift_end_remind.enabled })}
           onRecipient={v => updateItem("shift_end_remind", { recipient: v })}
           onMessage={v => updateItem("shift_end_remind", { message: v })}
+          projectId={projectId}
           extra={
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">タイミング</span>
@@ -2031,6 +2093,7 @@ export function LineNotifySettings({
           onToggle={() => updateItem("rest_day_remind", { enabled: !settings.rest_day_remind.enabled })}
           onRecipient={v => updateItem("rest_day_remind", { recipient: v })}
           onMessage={v => updateItem("rest_day_remind", { message: v })}
+          projectId={projectId}
           extra={
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">送信時刻</span>
@@ -2053,6 +2116,7 @@ export function LineNotifySettings({
           onToggle={() => updateItem("daily_summary", { enabled: !settings.daily_summary.enabled })}
           onRecipient={v => updateItem("daily_summary", { recipient: v })}
           onMessage={v => updateItem("daily_summary", { message: v })}
+          projectId={projectId}
           extra={
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">送信時刻</span>
@@ -2075,6 +2139,7 @@ export function LineNotifySettings({
           onToggle={() => updateItem("holiday_reminder", { enabled: !settings.holiday_reminder.enabled })}
           onRecipient={v => updateItem("holiday_reminder", { recipient: v })}
           onMessage={v => updateItem("holiday_reminder", { message: v })}
+          projectId={projectId}
           extra={
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">タイミング</span>
@@ -2107,6 +2172,7 @@ export function LineNotifySettings({
           onToggle={() => updateItem("holiday_open_notify", { enabled: !settings.holiday_open_notify.enabled })}
           onRecipient={v => updateItem("holiday_open_notify", { recipient: v })}
           onMessage={v => updateItem("holiday_open_notify", { message: v })}
+          projectId={projectId}
           extra={
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">送信時刻</span>
@@ -2129,6 +2195,7 @@ export function LineNotifySettings({
           onToggle={() => updateItem("absence_followup_remind", { enabled: !settings.absence_followup_remind.enabled })}
           onRecipient={v => updateItem("absence_followup_remind", { recipient: v })}
           onMessage={v => updateItem("absence_followup_remind", { message: v })}
+          projectId={projectId}
           extra={
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">送信時刻</span>
@@ -2151,6 +2218,7 @@ export function LineNotifySettings({
           onToggle={() => updateItem("absence_followup_notify", { enabled: !settings.absence_followup_notify.enabled })}
           onRecipient={v => updateItem("absence_followup_notify", { recipient: v })}
           onMessage={v => updateItem("absence_followup_notify", { message: v })}
+          projectId={projectId}
         />
 
         {/* シフト展開通知 */}
@@ -2163,6 +2231,7 @@ export function LineNotifySettings({
           onToggle={() => updateItem("shift_published", { enabled: !settings.shift_published.enabled })}
           onRecipient={v => updateItem("shift_published", { recipient: v })}
           onMessage={v => updateItem("shift_published", { message: v })}
+          projectId={projectId}
         />
       </div>
 
