@@ -260,7 +260,10 @@ export default function ShiftDayList({
   return (
     <>
       {/* ━━ タブ / フィルター ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+      <div
+        className="sticky z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800"
+        style={{ top: "var(--page-header-h, 0px)" }}
+      >
 
         {/* ① タブ行（出勤 / 公休 / 希望休） */}
         <div className="px-4 pt-2 pb-2 flex items-center gap-1">
@@ -312,7 +315,7 @@ export default function ShiftDayList({
             {/* ── 日付ヘッダーストリップ（sticky・overflow-x コンテナ外） ── */}
             <div
               className="sticky z-20 flex bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-700"
-              style={{ top: "var(--page-header-h, 0px)" }}
+              style={{ top: "calc(var(--page-header-h, 0px) + 48px)" }}
             >
               {/* 左コーナー */}
               <div className="sticky left-0 z-30 w-20 flex-shrink-0 h-12 px-2 flex items-end pb-2 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
@@ -571,7 +574,10 @@ export default function ShiftDayList({
               /* ── スタッフ行ビュー（番号順） ── */
               <>
               {/* 名前検索 */}
-              <div className="px-3 py-2 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+              <div
+                className="sticky z-20 px-3 py-2 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800"
+                style={{ top: "calc(var(--page-header-h, 0px) + 96px)" }}
+              >
                 <input
                   type="search"
                   placeholder="名前で絞り込み…"
@@ -743,7 +749,7 @@ export default function ShiftDayList({
               {/* ── 日付ヘッダーストリップ（sticky） ── */}
               <div
                 className="sticky z-20 flex bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-700"
-                style={{ top: "var(--page-header-h, 0px)" }}
+                style={{ top: "calc(var(--page-header-h, 0px) + 48px)" }}
               >
                 <div className="sticky left-0 z-30 w-20 flex-shrink-0 h-12 px-2 flex items-end pb-2 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
                   <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
