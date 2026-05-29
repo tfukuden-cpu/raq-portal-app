@@ -456,6 +456,37 @@ export async function publishShiftsAction(
 }
 
 /**
+ * シフト確定お知らせをアプリ内に投稿（notices テーブル）
+ */
+export async function postShiftNoticeAction(
+  projectId: string,
+  title: string,
+  body: string,
+): Promise<{ success: boolean; message?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+  const admin = createAdminClient();
+
+  const { error } = await admin.from("notices").insert({
+    project_id: projectId,
+    title:      title.trim(),
+    body:       body.trim(),
+    is_pinned:  false,
+    posted_by:  staffId,
+  });
+
+  if (error) return { success: false, message: error.message };
+
+  revalidatePath("/notices");
+  revalidatePath("/notices/manage");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+/**
  * シフト通知（別送り）：shift_month_status を更新せず通知のみ送信
  * PublishButton とは独立した「今回だけ送る」用
  */

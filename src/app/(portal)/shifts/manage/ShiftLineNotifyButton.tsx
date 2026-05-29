@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { sendShiftNotifyAction, previewShiftNotifyAction } from "./actions";
+import { sendShiftNotifyAction, previewShiftNotifyAction, postShiftNoticeAction } from "./actions";
 
 type Member = { id: string; name: string };
 
@@ -30,6 +30,11 @@ export default function ShiftLineNotifyButton({
   const [previewText, setPreviewText] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>("");
 
+  // アプリ内通知
+  const [alsoNotice, setAlsoNotice]         = useState(false);
+  const [noticeTitle, setNoticeTitle]       = useState("");
+  const [noticeBody, setNoticeBody]         = useState("");
+
   const [isSending, startSend]         = useTransition();
   const [isPreviewing, startPreview]   = useTransition();
 
@@ -40,11 +45,8 @@ export default function ShiftLineNotifyButton({
   const targetMonth = `${year}/${String(month).padStart(2, "0")}`;
   const APP_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
 
-  // 名前検索フィルター
   const filteredMembers = useMemo(() =>
-    search.trim()
-      ? members.filter(m => m.name.includes(search.trim()))
-      : members,
+    search.trim() ? members.filter(m => m.name.includes(search.trim())) : members,
     [members, search]
   );
 
@@ -55,6 +57,9 @@ export default function ShiftLineNotifyButton({
     setPreviewId(members[0]?.id ?? "");
     setPreviewText(null);
     setPreviewName("");
+    setAlsoNotice(false);
+    setNoticeTitle(`${targetMonth} シフトが確定しました`);
+    setNoticeBody(`${targetMonth}のシフトが確定しました。\nアプリのシフトページからご確認ください。`);
     setResult(null);
     setSendError(null);
     setPreviewError(null);
@@ -75,30 +80,29 @@ export default function ShiftLineNotifyButton({
     });
   }
 
-  function handleSendAll() {
+  async function doSend(staffId?: string) {
     setSendError(null);
     startSend(async () => {
-      const res = await sendShiftNotifyAction(projectId, year, month, message);
-      if (res.success) {
-        setResult({ sent: res.sent ?? 0, noLine: res.noLine ?? [] });
-        setOpen(false);
-      } else {
+      // LINE送信
+      const res = await sendShiftNotifyAction(projectId, year, month, message, staffId);
+      if (!res.success) {
         setSendError(res.message ?? "送信に失敗しました");
+        return;
       }
-    });
-  }
 
-  function handleSendOne() {
-    if (!previewId) return;
-    setSendError(null);
-    startSend(async () => {
-      const res = await sendShiftNotifyAction(projectId, year, month, message, previewId);
-      if (res.success) {
-        setResult({ sent: res.sent ?? 0, noLine: res.noLine ?? [] });
-        setOpen(false);
-      } else {
-        setSendError(res.message ?? "送信に失敗しました");
+      // アプリ内お知らせ（全員送信時のみ、個別送信は除く）
+      if (alsoNotice && !staffId) {
+        const nr = await postShiftNoticeAction(projectId, noticeTitle, noticeBody);
+        if (!nr.success) {
+          setSendError(`LINEは送信済みですが、お知らせ投稿に失敗しました：${nr.message}`);
+          setResult({ sent: res.sent ?? 0, noLine: res.noLine ?? [] });
+          setOpen(false);
+          return;
+        }
       }
+
+      setResult({ sent: res.sent ?? 0, noLine: res.noLine ?? [] });
+      setOpen(false);
     });
   }
 
@@ -128,7 +132,6 @@ export default function ShiftLineNotifyButton({
         </div>
       )}
 
-      {/* モーダル */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 bg-black/50">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[94dvh] flex flex-col">
@@ -137,9 +140,7 @@ export default function ShiftLineNotifyButton({
             <div className="px-5 pt-5 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex items-start justify-between gap-3 flex-shrink-0">
               <div>
                 <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50">シフト通知（LINE）</h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  {targetMonth} — 個別 / 全員へ送信
-                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{targetMonth} — 個別 / 全員へ送信</p>
               </div>
               <button onClick={() => setOpen(false)} className="text-zinc-400 hover:text-zinc-600 p-1 -mt-0.5 flex-shrink-0">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -151,11 +152,9 @@ export default function ShiftLineNotifyButton({
             {/* スクロールエリア */}
             <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
 
-              {/* ── メッセージテンプレート ── */}
+              {/* ── LINEメッセージテンプレート ── */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
-                  メッセージテンプレート
-                </label>
+                <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">LINEメッセージ</label>
                 <textarea
                   value={message}
                   onChange={e => { setMessage(e.target.value); setPreviewText(null); }}
@@ -169,13 +168,50 @@ export default function ShiftLineNotifyButton({
                 </p>
               </div>
 
+              {/* ── アプリ内お知らせ ── */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={alsoNotice}
+                    onChange={e => setAlsoNotice(e.target.checked)}
+                    className="w-4 h-4 rounded accent-blue-600"
+                  />
+                  <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                    アプリ内のお知らせにも同時投稿する
+                  </span>
+                </label>
+
+                {alsoNotice && (
+                  <div className="space-y-2 pl-6 border-l-2 border-blue-200 dark:border-blue-800">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">タイトル</label>
+                      <input
+                        type="text"
+                        value={noticeTitle}
+                        onChange={e => setNoticeTitle(e.target.value)}
+                        className="w-full text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">本文</label>
+                      <textarea
+                        value={noticeBody}
+                        onChange={e => setNoticeBody(e.target.value)}
+                        rows={3}
+                        className="w-full text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-zinc-800 dark:text-zinc-200 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <p className="text-[10px] text-zinc-400">お知らせはアプリ内の全スタッフに表示されます</p>
+                  </div>
+                )}
+              </div>
+
               {/* ── スタッフ選択（名前検索付き） ── */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
                   プレビュー / 個別送信
                 </label>
-
-                {/* 検索ボックス */}
                 <div className="relative">
                   <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -196,7 +232,6 @@ export default function ShiftLineNotifyButton({
                   )}
                 </div>
 
-                {/* スタッフリスト */}
                 <div className="border border-zinc-200 dark:border-zinc-700 rounded-xl overflow-hidden max-h-36 overflow-y-auto">
                   {filteredMembers.length === 0 ? (
                     <p className="text-xs text-zinc-400 text-center py-3">該当なし</p>
@@ -218,7 +253,6 @@ export default function ShiftLineNotifyButton({
                   )}
                 </div>
 
-                {/* プレビュー＋個別送信ボタン */}
                 {previewId && (
                   <div className="flex gap-2">
                     <button
@@ -231,7 +265,7 @@ export default function ShiftLineNotifyButton({
                     </button>
                     <button
                       type="button"
-                      onClick={handleSendOne}
+                      onClick={() => doSend(previewId)}
                       disabled={isSending || isPreviewing || !message.trim()}
                       className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-400 text-white text-xs font-semibold transition-colors"
                     >
@@ -241,7 +275,7 @@ export default function ShiftLineNotifyButton({
                 )}
               </div>
 
-              {/* ── LINE風プレビューバブル ── */}
+              {/* LINE風プレビューバブル */}
               {previewError && (
                 <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/20 rounded-lg px-3 py-2">{previewError}</p>
               )}
@@ -249,9 +283,7 @@ export default function ShiftLineNotifyButton({
               {previewText !== null && (
                 <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 overflow-hidden bg-[#f0f0f0] dark:bg-zinc-800 shadow-sm">
                   <div className="px-3 pt-2.5 pb-0.5">
-                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
-                      {previewName} さんへのメッセージ
-                    </p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">{previewName} さんへのメッセージ</p>
                   </div>
                   <div className="px-3 pb-3">
                     <div className="bg-white dark:bg-zinc-900 rounded-xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-700">
@@ -283,7 +315,7 @@ export default function ShiftLineNotifyButton({
               )}
             </div>
 
-            {/* フッター：全員に送信 */}
+            {/* フッター */}
             <div className="px-5 py-4 border-t border-zinc-100 dark:border-zinc-800 flex gap-3 flex-shrink-0">
               <button
                 onClick={() => setOpen(false)}
@@ -292,13 +324,14 @@ export default function ShiftLineNotifyButton({
                 キャンセル
               </button>
               <button
-                onClick={handleSendAll}
+                onClick={() => doSend()}
                 disabled={isSending || isPreviewing || !message.trim()}
                 className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-400 text-sm font-semibold text-white transition-colors"
               >
                 {isSending ? "送信中..." : `全員に送信（${members.length}名）`}
               </button>
             </div>
+
           </div>
         </div>
       )}
