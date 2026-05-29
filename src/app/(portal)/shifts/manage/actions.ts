@@ -464,6 +464,7 @@ export async function sendShiftNotifyAction(
   year: number,
   month: number,
   customMessage?: string,
+  targetStaffId?: string,       // 指定した場合はその1人だけ送信
 ): Promise<PublishShiftsResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -475,13 +476,13 @@ export async function sendShiftNotifyAction(
   const endDate    = `${year}-${String(month).padStart(2, "0")}-${new Date(year, month, 0).getDate()}`;
   const targetMonth = `${year}/${String(month).padStart(2, "0")}`;
 
-  // 対象月の全シフトを取得
+  // 対象月のシフトを取得（targetStaffId指定時は1人分のみ）
   const allShifts: { staff_id: string; shift_date: string; shift_name: string; shift_start: string | null; shift_end: string | null }[] = [];
   {
     const PAGE = 1000;
     let from = 0;
     while (true) {
-      const { data, error } = await admin
+      let q = admin
         .from("shifts")
         .select("staff_id, shift_date, shift_name, shift_start, shift_end")
         .eq("project_id", projectId)
@@ -489,6 +490,8 @@ export async function sendShiftNotifyAction(
         .lte("shift_date", endDate)
         .order("shift_date")
         .range(from, from + PAGE - 1);
+      if (targetStaffId) q = q.eq("staff_id", targetStaffId);
+      const { data, error } = await q;
       if (error || !data || data.length === 0) break;
       allShifts.push(...data);
       if (data.length < PAGE) break;
