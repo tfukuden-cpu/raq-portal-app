@@ -61,6 +61,37 @@ function cx(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(" ");
 }
 
+// ── シフト色定義（ShiftEditGrid と共通） ──────────────────────────
+const SECTION_SHIFT_COLORS: Record<string, { early: string; late: string; def: string }> = {
+  "SV":       { early: "bg-blue-100 dark:bg-blue-900/50",      late: "bg-blue-300 dark:bg-blue-700/70",      def: "bg-blue-200 dark:bg-blue-800/60" },
+  "査定":     { early: "bg-emerald-100 dark:bg-emerald-900/50", late: "bg-emerald-300 dark:bg-emerald-700/70", def: "bg-emerald-200 dark:bg-emerald-800/60" },
+  "販売":     { early: "bg-orange-100 dark:bg-orange-900/50",   late: "bg-orange-300 dark:bg-orange-700/70",   def: "bg-orange-200 dark:bg-orange-800/60" },
+  "MOTA":     { early: "bg-red-100 dark:bg-red-900/50",        late: "bg-red-300 dark:bg-red-700/70",        def: "bg-red-200 dark:bg-red-800/60" },
+  "リメイク": { early: "bg-pink-100 dark:bg-pink-900/50",      late: "bg-pink-300 dark:bg-pink-700/70",      def: "bg-pink-200 dark:bg-pink-800/60" },
+  "ローン":   { early: "bg-violet-100 dark:bg-violet-900/50",  late: "bg-violet-300 dark:bg-violet-700/70",  def: "bg-violet-200 dark:bg-violet-800/60" },
+};
+const SECTION_SHIFT_FALLBACK = { early: "bg-sky-100 dark:bg-sky-900/50", late: "bg-sky-300 dark:bg-sky-700/70", def: "bg-sky-200 dark:bg-sky-800/60" };
+
+function getPatternBg(shiftName: string | null, pattern: Pattern | null): string {
+  if (!shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇") return "";
+  if (!pattern) return "";
+  const colors = SECTION_SHIFT_COLORS[pattern.section ?? ""] ?? SECTION_SHIFT_FALLBACK;
+  if (shiftName.includes("早番")) return colors.early;
+  if (shiftName.includes("遅番")) return colors.late;
+  const startH = pattern.start_time ? parseInt(pattern.start_time.split(":")[0], 10) : null;
+  if (startH !== null && startH < 12) return colors.early;
+  if (startH !== null && startH >= 12) return colors.late;
+  return colors.def;
+}
+
+/** 3文字以内のシフト略称（早番/遅番を区別できるよう調整） */
+function shiftAbbr(name: string): string {
+  // 早番 → "早", 遅番 → "遅" をキーワードとして保持しつつ先頭2文字と合わせて3文字に
+  if (name.includes("早番")) return name.replace("早番", "早").slice(0, 3);
+  if (name.includes("遅番")) return name.replace("遅番", "遅").slice(0, 3);
+  return name.slice(0, 3);
+}
+
 type TabKey = "shukkin" | "kyukyu" | "kiboshu";
 
 type SlotReq = { section: string; pattern_name: string; shift_date: string; required_count: number };
@@ -155,6 +186,9 @@ export default function ShiftDayList({
   // シフトルックアップ
   const shiftMap = new Map<string, Shift>(shifts.map((s) => [`${s.staff_id}__${s.shift_date}`, s]));
   const getShift = (sid: string, d: string) => shiftMap.get(`${sid}__${d}`);
+
+  // パターン名 → パターン定義（色付けに使用）
+  const patternByName = new Map<string, Pattern>(shiftPatterns.map(p => [p.name, p]));
 
   // 変更ログ：日付ごとにまとめる
   const logsByDate = new Map<string, ChangeLog[]>();
@@ -562,16 +596,18 @@ export default function ShiftDayList({
                           )}
                         >
                           {visibleMembers.map((m, i) => {
-                            const shift  = getShift(m.id, d);
-                            const sName  = shift?.shift_name ?? null;
-                            const absent = isAbsent(m.id, d);
+                            const shift   = getShift(m.id, d);
+                            const sName   = shift?.shift_name ?? null;
+                            const absent  = isAbsent(m.id, d);
+                            const pattern = sName ? (patternByName.get(sName) ?? null) : null;
+                            const bgColor = absent ? "" : (sName ? getPatternBg(sName, pattern) : "");
                             return (
                               <div
                                 key={m.id}
                                 className={cx(
                                   "h-9 flex items-center justify-center w-full",
                                   i < visibleMembers.length - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
-                                  absent ? "bg-red-50 dark:bg-red-950/30" : "",
+                                  absent ? "bg-red-50 dark:bg-red-950/30" : bgColor,
                                 )}
                               >
                                 {sName ? (
@@ -579,11 +615,13 @@ export default function ShiftDayList({
                                     "text-[10px] font-semibold leading-none truncate px-0.5",
                                     absent ? "text-red-600 dark:text-red-400"
                                     : sName === "公休" ? "text-zinc-400 dark:text-zinc-500"
-                                    : sName === "希望休" ? "text-blue-500 dark:text-blue-400"
+                                    : sName === "希望休" ? "text-blue-600 dark:text-blue-400"
+                                    : sName === "有休" || sName === "特別休暇" ? "text-teal-600 dark:text-teal-400"
+                                    : bgColor ? "text-zinc-800 dark:text-zinc-100"
                                     : isSel ? "text-blue-700 dark:text-blue-300"
                                     : "text-zinc-700 dark:text-zinc-300",
                                   )}>
-                                    {sName.slice(0, 2)}
+                                    {shiftAbbr(sName)}
                                   </span>
                                 ) : (
                                   <span className="w-2 h-px bg-zinc-100 dark:bg-zinc-800 rounded-full" />
