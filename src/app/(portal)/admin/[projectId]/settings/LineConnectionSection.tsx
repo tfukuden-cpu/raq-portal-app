@@ -38,6 +38,7 @@ export default function LineConnectionSection({
   const [isPending, startTransition]        = useTransition();
   // staffId → confirmed_at(ISO)
   const [confirmMap, setConfirmMap]         = useState<Record<string, string>>({});
+  const [failedSet,  setFailedSet]          = useState<Set<string>>(new Set());
   const [isFetching, setIsFetching]         = useState(false);
   const pollTimerRef                        = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollEndRef                          = useRef<number>(0);
@@ -111,6 +112,9 @@ export default function LineConnectionSection({
       if (staffId) fd.set("staffId", staffId);
       const r = await sendLineTestAction(fd);
       showFlash(r.success, r.message ?? (r.success ? "送信しました" : "送信失敗"));
+      if (r.failedStaffIds && r.failedStaffIds.length > 0) {
+        setFailedSet(prev => new Set([...prev, ...r.failedStaffIds!]));
+      }
       if (r.success) startPolling();
     });
   }
@@ -119,6 +123,7 @@ export default function LineConnectionSection({
     startTransition(async () => {
       await clearLineTestConfirmationsAction(projectId);
       setConfirmMap({});
+      setFailedSet(new Set());
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -259,16 +264,25 @@ export default function LineConnectionSection({
                 )}
               </span>
 
-              {/* 確認済みバッジ */}
-              {m.lineLinked && (
-                <span className={`text-[11px] font-semibold flex-shrink-0 tabular-nums min-w-[48px] text-right ${
-                  confirmedAt
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-zinc-300 dark:text-zinc-600"
-                }`}>
-                  {confirmedAt ? `✓ ${fmtTime(confirmedAt)}` : "—"}
-                </span>
-              )}
+              {/* 確認状態バッジ */}
+              {m.lineLinked && (() => {
+                const failed = failedSet.has(m.staffId);
+                if (confirmedAt) return (
+                  <span className="text-[11px] font-semibold flex-shrink-0 tabular-nums text-emerald-600 dark:text-emerald-400 min-w-[64px] text-right">
+                    ✓ 開封 {fmtTime(confirmedAt)}
+                  </span>
+                );
+                if (failed) return (
+                  <span className="text-[11px] font-semibold flex-shrink-0 text-red-500 dark:text-red-400 min-w-[64px] text-right">
+                    ⚠ 未達
+                  </span>
+                );
+                return (
+                  <span className="text-[11px] font-semibold flex-shrink-0 text-zinc-300 dark:text-zinc-600 min-w-[64px] text-right">
+                    —
+                  </span>
+                );
+              })()}
 
               {/* ボタン */}
               <div className="flex items-center gap-1.5 flex-shrink-0">

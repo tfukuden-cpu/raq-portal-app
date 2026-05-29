@@ -100,14 +100,15 @@ export async function pushLine(lineUserId: string, text: string): Promise<void> 
  * ボタン付きFlexメッセージを1人に送る（通知テスト用）
  * スタッフがボタンを押すと postback data="line_test_confirm:<projectId>" が届く
  */
+/** 戻り値: true=送信成功 / false=送信失敗 */
 export async function pushLineTestButton(
   lineUserId: string,
   staffName: string,
   projectId: string,
-): Promise<void> {
+): Promise<boolean> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  if (!token) { console.error("[LINE] LINE_CHANNEL_ACCESS_TOKEN が未設定"); return; }
-  if (!lineUserId) { console.error("[LINE] lineUserId が空"); return; }
+  if (!token) { console.error("[LINE] LINE_CHANNEL_ACCESS_TOKEN が未設定"); return false; }
+  if (!lineUserId) { console.error("[LINE] lineUserId が空"); return false; }
 
   const res = await fetch(`${LINE_API}/v2/bot/message/push`, {
     method:  "POST",
@@ -151,7 +152,9 @@ export async function pushLineTestButton(
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     console.error(`[LINE] pushLineTestButton failed: ${res.status} ${res.statusText} — userId=${lineUserId} — ${body}`);
+    return false;
   }
+  return true;
 }
 
 /**

@@ -1019,7 +1019,9 @@ export async function unlinkLineAction(fd: FormData): Promise<SettingsResult> {
 
 // ── LINEテスト通知 ─────────────────────────────────────────
 
-export async function sendLineTestAction(fd: FormData): Promise<SettingsResult> {
+export async function sendLineTestAction(
+  fd: FormData,
+): Promise<SettingsResult & { failedStaffIds?: string[] }> {
   const staffId   = String(fd.get("staffId")   ?? "").trim() || null;
   const projectId = String(fd.get("projectId") ?? "").trim();
 
@@ -1027,7 +1029,7 @@ export async function sendLineTestAction(fd: FormData): Promise<SettingsResult> 
   const admin = adminSupa();
 
   if (staffId) {
-    // 個別送信（ボタン付きFlexメッセージ）
+    // 個別送信
     const { data: staff } = await admin
       .from("staffs")
       .select("line_user_id, display_name, name")
@@ -1035,10 +1037,12 @@ export async function sendLineTestAction(fd: FormData): Promise<SettingsResult> 
       .maybeSingle();
     if (!staff?.line_user_id) return { success: false, message: "LINE未連携のスタッフです" };
     const name = staff.display_name ?? staff.name ?? staffId;
-    await pushLineTestButton(staff.line_user_id, name, projectId);
-    return { success: true, message: `${name} に送信しました` };
+    const ok = await pushLineTestButton(staff.line_user_id, name, projectId);
+    return ok
+      ? { success: true,  message: `${name} に送信しました` }
+      : { success: false, message: `${name} への送信に失敗しました（ブロックされている可能性）`, failedStaffIds: [staffId] };
   } else {
-    // 全員一括送信（ボタン付きFlexメッセージ）
+    // 全員一括送信
     const { data: members } = await admin
       .from("project_members")
       .select("staff_id, staffs(line_user_id, display_name, name)")
@@ -1048,14 +1052,32 @@ export async function sendLineTestAction(fd: FormData): Promise<SettingsResult> 
       .map(m => {
         const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
           { line_user_id: string | null; display_name: string | null; name: string | null } | null;
-        return { lineId: s?.line_user_id, name: s?.display_name ?? s?.name ?? m.staff_id };
+        return {
+          staffId: m.staff_id as string,
+          lineId:  s?.line_user_id,
+          name:    s?.display_name ?? s?.name ?? (m.staff_id as string),
+        };
       })
-      .filter((t): t is { lineId: string; name: string } => !!t.lineId);
+      .filter((t): t is { staffId: string; lineId: string; name: string } => !!t.lineId);
 
     if (targets.length === 0) return { success: false, message: "LINE連携済みスタッフがいません" };
 
-    await Promise.all(targets.map(t => pushLineTestButton(t.lineId, t.name, projectId)));
-    return { success: true, message: `${targets.length}名に送信しました` };
+    const results = await Promise.all(
+      targets.map(async t => ({
+        staffId: t.staffId,
+        ok: await pushLineTestButton(t.lineId, t.name, projectId),
+      }))
+    );
+    const failedStaffIds = results.filter(r => !r.ok).map(r => r.staffId);
+    const sentCount      = results.filter(r =>  r.ok).length;
+
+    return {
+      success: true,
+      message: failedStaffIds.length > 0
+        ? `${sentCount}名に送信（${failedStaffIds.length}名失敗）`
+        : `${sentCount}名に送信しました`,
+      failedStaffIds,
+    };
   }
 }
 
