@@ -155,14 +155,36 @@ export default function ShiftDayList({
   );
   // 月次ストリップの横スクロールコンテナ
   const stripRef = useRef<HTMLDivElement>(null);
+  // 充足テーブルの横スクロールコンテナ
+  const sufficiencyRef = useRef<HTMLDivElement>(null);
   // 日付ヘッダーストリップの内部 div（translateX でスクロール同期）
   const headerInnerRef = useRef<HTMLDivElement>(null);
+  // スクロール同期ループ防止フラグ
+  const isSyncing = useRef(false);
 
-  // データテーブルのスクロールに合わせて日付ヘッダーを同期
+  // 日付ヘッダーのみ同期（translateX）
   const syncHeader = (scrollLeft: number) => {
     if (headerInnerRef.current) {
       headerInnerRef.current.style.transform = `translateX(-${scrollLeft}px)`;
     }
+  };
+
+  // データテーブルがスクロールしたとき → ヘッダー＋充足テーブルを同期
+  const handleDataScroll = (scrollLeft: number) => {
+    if (isSyncing.current) return;
+    isSyncing.current = true;
+    syncHeader(scrollLeft);
+    if (sufficiencyRef.current) sufficiencyRef.current.scrollLeft = scrollLeft;
+    requestAnimationFrame(() => { isSyncing.current = false; });
+  };
+
+  // 充足テーブルがスクロールしたとき → ヘッダー＋データテーブルを同期
+  const handleSufficiencyScroll = (scrollLeft: number) => {
+    if (isSyncing.current) return;
+    isSyncing.current = true;
+    syncHeader(scrollLeft);
+    if (stripRef.current) stripRef.current.scrollLeft = scrollLeft;
+    requestAnimationFrame(() => { isSyncing.current = false; });
   };
 
   // 選択日が変わったらストリップを中央にスクロール
@@ -175,6 +197,7 @@ export default function ShiftDayList({
     const target = LEFT_COL + idx * COL_W - (stripRef.current.clientWidth - LEFT_COL) / 2 + COL_W / 2;
     const scrollLeft = Math.max(0, target);
     stripRef.current.scrollTo({ left: scrollLeft, behavior: "smooth" });
+    if (sufficiencyRef.current) sufficiencyRef.current.scrollLeft = scrollLeft;
     syncHeader(scrollLeft);
   }, [selectedDate, allDates]);
 
@@ -583,11 +606,145 @@ export default function ShiftDayList({
             ) : (
               /* ── スタッフ行ビュー（番号順） ── */
               <>
+              {/* ── 充足テーブル ── */}
+              <div className="border-b-2 border-zinc-300 dark:border-zinc-600">
+                <div
+                  ref={sufficiencyRef}
+                  className="overflow-x-auto"
+                  style={{ scrollbarWidth: "none" }}
+                  onScroll={(e) => handleSufficiencyScroll(e.currentTarget.scrollLeft)}
+                >
+                  <div className="flex min-w-max bg-white dark:bg-zinc-900">
+
+                    {/* 左固定列（シフトパターン名） */}
+                    <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
+                      {visibleShiftPatterns.map((pattern, i, arr) => (
+                        <div key={pattern.name} className={cx(
+                          "h-9 flex items-center px-2 bg-zinc-50 dark:bg-zinc-800/60",
+                          i < arr.length - 1 ? "border-b border-zinc-100 dark:border-zinc-700/60" : "",
+                        )}>
+                          <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate leading-tight" title={pattern.name}>
+                            {pattern.name}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 日付列 */}
+                    <div className="flex pr-4">
+                      {allDates.map(d => {
+                        const isSel     = d === selectedDate;
+                        const dayOfWeek = new Date(d).getUTCDay();
+                        const isSun     = dayOfWeek === 0;
+                        const isSat     = dayOfWeek === 6;
+                        return (
+                          <div
+                            key={d}
+                            className={cx(
+                              "w-11 flex-shrink-0 flex flex-col",
+                              isSel ? "bg-blue-50/80 dark:bg-blue-950/20"
+                              : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
+                            )}
+                          >
+                            {visibleShiftPatterns.map((pattern, i, arr) => {
+                              const isSV   = pattern.section === "SV";
+                              const req    = getReqForDate(pattern, d);
+                              const actual = visibleMembers.filter(m =>
+                                getShift(m.id, d)?.shift_name === pattern.name && !isChurnExcluded(m.id, d)
+                              ).length;
+                              return (
+                                <div
+                                  key={pattern.name}
+                                  className={cx(
+                                    "h-9 flex items-center justify-center bg-zinc-50/50 dark:bg-zinc-800/30",
+                                    i < arr.length - 1 ? "border-b border-zinc-100 dark:border-zinc-700/60" : "",
+                                  )}
+                                >
+                                  {isSV ? (
+                                    <span className="tabular-nums text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+                                      {actual > 0 ? actual : "—"}
+                                    </span>
+                                  ) : req > 0 ? (
+                                    <div className="flex flex-col items-center gap-px">
+                                      <span className={cx(
+                                        "tabular-nums text-[11px] font-bold leading-none",
+                                        actual < req ? "text-red-500 dark:text-red-400"
+                                        : "text-emerald-600 dark:text-emerald-400",
+                                      )}>{actual}/{req}</span>
+                                      <span className={cx(
+                                        "tabular-nums text-[8px] font-bold leading-none",
+                                        actual > req ? "text-emerald-500 dark:text-emerald-400"
+                                        : actual < req ? "text-red-400 dark:text-red-500"
+                                        : "text-zinc-300 dark:text-zinc-600",
+                                      )}>
+                                        {actual > req ? `+${actual - req}人`
+                                        : actual < req ? `-${req - actual}人`
+                                        : "✓"}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* 合計列（右固定） */}
+                    <div className="sticky right-0 z-20 w-16 flex-shrink-0 bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
+                      {visibleShiftPatterns.map((pattern, i, arr) => {
+                        const isSV          = pattern.section === "SV";
+                        const totalActual   = allDates.reduce((s, d) =>
+                          s + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name && !isChurnExcluded(m.id, d)).length, 0);
+                        const totalRequired = isSV ? 0 : allDates.reduce((s, d) => s + getReqForDate(pattern, d), 0);
+                        const net           = totalRequired - totalActual;
+                        return (
+                          <div key={pattern.name} className={cx(
+                            "h-9 flex flex-col items-center justify-center bg-zinc-100/60 dark:bg-zinc-800/50",
+                            i < arr.length - 1 ? "border-b border-zinc-200 dark:border-zinc-700" : "",
+                          )}>
+                            {isSV ? (
+                              <span className="tabular-nums text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+                                {totalActual > 0 ? totalActual : "—"}
+                              </span>
+                            ) : totalRequired > 0 ? (
+                              <>
+                                <span className={cx(
+                                  "tabular-nums text-[11px] font-bold leading-none",
+                                  net > 0 ? "text-red-500 dark:text-red-400"
+                                  : net < 0 ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-emerald-600 dark:text-emerald-400",
+                                )}>{totalActual}/{totalRequired}</span>
+                                <span className={cx(
+                                  "tabular-nums text-[9px] font-bold leading-none mt-0.5",
+                                  net > 0 ? "text-red-400 dark:text-red-500"
+                                  : net < 0 ? "text-emerald-500 dark:text-emerald-400"
+                                  : "text-zinc-300 dark:text-zinc-600",
+                                )}>
+                                  {net > 0 ? `-${net}人` : net < 0 ? `+${-net}人` : "✓"}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+
+              {/* ── データテーブル ── */}
               <div
                 ref={stripRef}
                 className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
                 style={{ scrollbarWidth: "none" }}
-                onScroll={(e) => syncHeader(e.currentTarget.scrollLeft)}
+                onScroll={(e) => handleDataScroll(e.currentTarget.scrollLeft)}
               >
                 {(() => {
                   const filtered = nameFilter.trim()
