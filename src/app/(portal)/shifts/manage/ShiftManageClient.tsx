@@ -8,6 +8,7 @@ import ShiftEditGrid, { type ChangeLog } from "./ShiftEditGrid";
 import { clearGridDraftAction, type GridDraftEntry } from "../actions";
 import { regenerateShiftDraftAction, upsertSingleShiftAction } from "./actions";
 import PublishButton from "./PublishButton";
+import ShiftLineNotifyButton from "./ShiftLineNotifyButton";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import { resolveShiftSection, formatSectionShift } from "@/lib/seatColors";
 
@@ -583,8 +584,18 @@ export default function ShiftManageClient({
           {sortByAccount ? "番号順" : "セクション順"}
         </button>
 
+        {/* LINE通知ボタン（シフト展開とは独立） */}
+        <ShiftLineNotifyButton
+          projectId={projectId}
+          year={targetYear}
+          month={targetMonth}
+          members={activeMembers.map(m => ({ id: m.id, name: m.name }))}
+          shifts={shifts}
+          defaultTemplate={publishMessageTemplate}
+        />
+
         {/* まとめたボタン群：シフト展開 ／ Excel出力 ／ シフト編集 */}
-        <div className="flex items-stretch ml-auto rounded-xl border border-zinc-200 dark:border-zinc-700 divide-x divide-zinc-200 dark:divide-zinc-700 overflow-hidden text-xs font-semibold">
+        <div className="flex items-stretch rounded-xl border border-zinc-200 dark:border-zinc-700 divide-x divide-zinc-200 dark:divide-zinc-700 overflow-hidden text-xs font-semibold">
           {/* シフト展開（flat=true で角丸なし・グループに馴染む） */}
           <PublishButton
             projectId={projectId}
@@ -592,7 +603,6 @@ export default function ShiftManageClient({
             month={targetMonth}
             isPublished={isPublished}
             flat
-            defaultMessage={publishMessageTemplate}
           />
 
           {/* Excel出力 */}

@@ -456,6 +456,113 @@ export async function publishShiftsAction(
 }
 
 /**
+ * シフト通知（別送り）：shift_month_status を更新せず通知のみ送信
+ * PublishButton とは独立した「今回だけ送る」用
+ */
+export async function sendShiftNotifyAction(
+  projectId: string,
+  year: number,
+  month: number,
+  customMessage?: string,
+): Promise<PublishShiftsResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+
+  const startDate  = `${year}-${String(month).padStart(2, "0")}-01`;
+  const endDate    = `${year}-${String(month).padStart(2, "0")}-${new Date(year, month, 0).getDate()}`;
+  const targetMonth = `${year}/${String(month).padStart(2, "0")}`;
+
+  // 対象月の全シフトを取得
+  const allShifts: { staff_id: string; shift_date: string; shift_name: string; shift_start: string | null; shift_end: string | null }[] = [];
+  {
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await admin
+        .from("shifts")
+        .select("staff_id, shift_date, shift_name, shift_start, shift_end")
+        .eq("project_id", projectId)
+        .gte("shift_date", startDate)
+        .lte("shift_date", endDate)
+        .order("shift_date")
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      allShifts.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+
+  if (!allShifts.length) return { success: false, message: "対象月のシフトがありません" };
+
+  const shiftsByStaff = new Map<string, typeof allShifts>();
+  for (const s of allShifts) {
+    const id = s.staff_id as string;
+    if (!shiftsByStaff.has(id)) shiftsByStaff.set(id, []);
+    shiftsByStaff.get(id)!.push(s);
+  }
+
+  // 通知設定を取得
+  const { data: ps } = await admin
+    .from("project_settings")
+    .select("notification_settings")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  const settings = buildDefaultNotificationSettings(
+    (ps?.notification_settings as Record<string, unknown>) ?? {}
+  );
+
+  const staffIds = [...shiftsByStaff.keys()];
+  const { data: staffRows } = await admin
+    .from("staffs")
+    .select("id, display_name, name, line_user_id")
+    .in("id", staffIds);
+
+  const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
+  const APP_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+
+  let sent = 0;
+  const noLine: string[] = [];
+
+  for (const staff of staffRows ?? []) {
+    const name   = (staff.display_name ?? staff.name ?? staff.id) as string;
+    const lineId = staff.line_user_id as string | null;
+
+    if (!lineId) { noLine.push(name); continue; }
+
+    const myShifts = shiftsByStaff.get(staff.id as string) ?? [];
+
+    const shiftLines = myShifts
+      .sort((a, b) => (a.shift_date as string).localeCompare(b.shift_date as string))
+      .map(s => {
+        const dt = new Date((s.shift_date as string) + "T12:00:00+09:00");
+        const wd = WEEKDAY_JP[dt.getDay()];
+        const [, mm, dd] = (s.shift_date as string).split("-");
+        const timeStr = s.shift_start && s.shift_end
+          ? ` ${(s.shift_start as string).slice(0, 5)}〜${(s.shift_end as string).slice(0, 5)}`
+          : "";
+        return `${parseInt(mm)}/${parseInt(dd)}（${wd}）${s.shift_name}${timeStr}`;
+      })
+      .join("\n");
+
+    const baseMsg = customMessage?.trim() || settings.shift_published.message || DEFAULT_NOTIFY_MESSAGES.shift_published;
+    const message = resolveMessage(baseMsg, {
+      "名前": name,
+      "対象月": targetMonth,
+      "シフト一覧": shiftLines || "（シフトなし）",
+    });
+
+    await pushLineWithButton(lineId, message, "シフトを確認する", `${APP_URL}/shifts`, "#10b981");
+    sent++;
+  }
+
+  return { success: true, sent, noLine };
+}
+
+/**
  * セクション仮確定の種別を設定する
  * lockType: 'none' = 解除, 'slot' = 枠確定（人の入替OK）, 'staff' = 人確定（人を固定）
  * draftEntries を渡すと draft_data も同時保存（再仮組みの保護を確実にするため）
