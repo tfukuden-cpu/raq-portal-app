@@ -13,6 +13,7 @@ import ShiftTrainingTab, { type TrainingMember } from "./ShiftTrainingTab";
 import { fetchTrainingSessionsAction } from "./training-session-actions";
 import type { ChangeLog } from "./ShiftEditGrid";
 import type { GridDraftEntry } from "../actions";
+import { buildDefaultNotificationSettings } from "@/app/(portal)/admin/[projectId]/settings/notify-config";
 import HeaderHeightSetter from "./HeaderHeightSetter";
 
 type Tab = "shift" | "settings" | "holiday" | "training";
@@ -286,6 +287,7 @@ export default async function ManageShiftsPage(props: {
     shiftBatch2,
     shiftBatch3,
     shiftBatch4,
+    { data: projectSettingsRow },
   ] = await Promise.all([
     admin.from("project_members")
       .select("staff_id, role, section, sections, end_date, start_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, churn_risk, churn_risk_since, staffs(id, name, display_name, account_number, company_name)")
@@ -346,6 +348,10 @@ export default async function ManageShiftsPage(props: {
     shiftSelect().range(2000, 2999),
     shiftSelect().range(3000, 3999),
     shiftSelect().range(4000, 4999),
+    admin.from("project_settings")
+      .select("notification_settings")
+      .eq("project_id", selectedProjectId)
+      .maybeSingle(),
   ]);
 
   const shiftsRaw = [
@@ -457,6 +463,13 @@ export default async function ManageShiftsPage(props: {
   });
 
   const isPublished = !!monthStatusRow;
+
+  // シフト展開通知のメッセージテンプレート（通知設定から取得）
+  const notifySettings = buildDefaultNotificationSettings(
+    (projectSettingsRow?.notification_settings as Record<string, unknown>) ?? {}
+  );
+  const publishMessageTemplate = notifySettings.shift_published.message;
+
   const initialDraft = draftRow ? (draftRow.draft_data as GridDraftEntry[]) : null;
   const draftSavedBy = draftRow?.saved_by
     ? (staffNameMap2.get(draftRow.saved_by as string) ?? draftRow.saved_by as string)
@@ -547,6 +560,7 @@ export default async function ManageShiftsPage(props: {
           monthNavBase={monthNavBase}
           prevMonth={prevMonth}
           nextMonth={nextMonth}
+          publishMessageTemplate={publishMessageTemplate}
       />
     </main>
   );

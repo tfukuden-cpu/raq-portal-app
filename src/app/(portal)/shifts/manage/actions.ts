@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { sendEventNotify } from "@/lib/notify";
-import { multicastLine, pushLine } from "@/lib/line";
+import { multicastLine, pushLine, pushLineWithButton } from "@/lib/line";
 import {
   buildDefaultNotificationSettings,
   DEFAULT_NOTIFY_MESSAGES,
@@ -326,6 +326,7 @@ export async function publishShiftsAction(
   projectId: string,
   year: number,
   month: number,
+  customMessage?: string,
 ): Promise<PublishShiftsResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -402,6 +403,8 @@ export async function publishShiftsAction(
     .in("id", staffIds);
 
   const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
+  const APP_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+
   let sent = 0;
   const noLine: string[] = [];
 
@@ -413,11 +416,28 @@ export async function publishShiftsAction(
 
     const myShifts = shiftsByStaff.get(staff.id as string) ?? [];
 
-    // 設定メッセージのみ送信（シフト一覧は付加しない）
-    const baseMsg = settings.shift_published.message ?? DEFAULT_NOTIFY_MESSAGES.shift_published;
-    const message = resolveMessage(baseMsg, { "名前": name, "対象月": targetMonth });
+    // シフト一覧テキスト生成（全シフトを日付順）
+    const shiftLines = myShifts
+      .sort((a, b) => (a.shift_date as string).localeCompare(b.shift_date as string))
+      .map(s => {
+        const dt = new Date((s.shift_date as string) + "T12:00:00+09:00");
+        const wd = WEEKDAY_JP[dt.getDay()];
+        const [, mm, dd] = (s.shift_date as string).split("-");
+        const timeStr = s.shift_start && s.shift_end
+          ? ` ${(s.shift_start as string).slice(0, 5)}〜${(s.shift_end as string).slice(0, 5)}`
+          : "";
+        return `${parseInt(mm)}/${parseInt(dd)}（${wd}）${s.shift_name}${timeStr}`;
+      })
+      .join("\n");
 
-    await pushLine(lineId, message);
+    const baseMsg = customMessage?.trim() || settings.shift_published.message || DEFAULT_NOTIFY_MESSAGES.shift_published;
+    const message = resolveMessage(baseMsg, {
+      "名前": name,
+      "対象月": targetMonth,
+      "シフト一覧": shiftLines || "（シフトなし）",
+    });
+
+    await pushLineWithButton(lineId, message, "シフトを確認する", `${APP_URL}/shifts`, "#10b981");
     sent++;
   }
 

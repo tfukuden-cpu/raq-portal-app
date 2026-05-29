@@ -185,6 +185,8 @@ export const DEFAULT_NOTIFY_MESSAGES: Record<keyof NotificationSettings, string>
 
   shift_published:
 `{名前}さん、{対象月}のシフトが確定しました。
+
+{シフト一覧}
 ポータルのシフトページからご確認ください。`,
 
   task_assigned:
@@ -323,6 +325,7 @@ export const NOTIFY_VARS: Record<keyof NotificationSettings, { label: string; no
   shift_published: [
     { label: "{名前}" },
     { label: "{対象月}", note: "展開した月（例：2026/06）" },
+    { label: "{シフト一覧}", note: "出勤日のシフト一覧（日付・曜日・シフト名・時刻）" },
   ],
   task_assigned: [
     { label: "{名前}" },

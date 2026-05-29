@@ -70,6 +70,7 @@ type Props = {
   monthNavBase: string;
   prevMonth: { year: number; month: number };
   nextMonth: { year: number; month: number };
+  publishMessageTemplate?: string;
 };
 
 // ── ShiftEditGridOverlay ────────────────────────────────────────
@@ -158,7 +159,7 @@ export default function ShiftManageClient({
   shifts, activeMembers: activeMembersRaw, shiftPatterns, shiftRequests, slotRequirements,
   changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
   isPublished, lockedSections, slotLockedSections, initialEditLock, offRequests, prevMonthShifts,
-  monthNavBase, prevMonth, nextMonth,
+  monthNavBase, prevMonth, nextMonth, publishMessageTemplate,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [mode, setMode] = useState<"list" | "edit">("list");
@@ -591,6 +592,7 @@ export default function ShiftManageClient({
             month={targetMonth}
             isPublished={isPublished}
             flat
+            defaultMessage={publishMessageTemplate}
           />
 
           {/* Excel出力 */}
