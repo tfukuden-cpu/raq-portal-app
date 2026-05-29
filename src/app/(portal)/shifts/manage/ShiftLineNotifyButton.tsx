@@ -38,7 +38,9 @@ export default function ShiftLineNotifyButton({
   const APP_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
 
   function openModal() {
-    setMessage(defaultTemplate?.trim() || DEFAULT_TEMPLATE);
+    // {シフト一覧} が含まれていない古いテンプレートは使わず DEFAULT_TEMPLATE を使う
+    const tmpl = defaultTemplate?.trim() ?? "";
+    setMessage(tmpl.includes("{シフト一覧}") ? tmpl : DEFAULT_TEMPLATE);
     setPreviewId(members[0]?.id ?? "");
     setPreviewText(null);
     setPreviewName("");
