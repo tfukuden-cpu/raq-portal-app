@@ -146,6 +146,7 @@ export default function ShiftDayList({
     (offRequests ?? []).map(r => [`${r.staff_id}__${r.request_date}`, r.priority])
   );
   const [tabKey, setTabKey]   = useState<TabKey>("shukkin");
+  const [nameFilter, setNameFilter] = useState("");
   const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string } | null>(null);
   const [staffInfoTarget, setStaffInfoTarget] = useState<Member | null>(null);
   // パターンごとの折りたたみ状態（初期値: 全折りたたみ）
@@ -196,6 +197,10 @@ export default function ShiftDayList({
     const since = churnRiskSinceMap.get(memberId) ?? null;
     if (!since) return true;          // since 未設定 → 全期間除外
     return date >= since;             // since 以降を除外
+  }
+  /** セルに赤枠＋離脱リスク表示すべきか */
+  function isChurnRiskCell(memberId: string, date: string): boolean {
+    return isChurnExcluded(memberId, date);
   }
 
   // シフトルックアップ
@@ -564,33 +569,63 @@ export default function ShiftDayList({
               </div>
             ) : (
               /* ── スタッフ行ビュー（番号順） ── */
+              <>
+              {/* 名前検索 */}
+              <div className="px-3 py-2 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+                <input
+                  type="search"
+                  placeholder="名前で絞り込み…"
+                  value={nameFilter}
+                  onChange={e => setNameFilter(e.target.value)}
+                  className="w-full max-w-xs px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 border border-transparent focus:border-blue-400 dark:focus:border-blue-500 outline-none transition-colors"
+                />
+              </div>
               <div
                 ref={stripRef}
                 className="overflow-x-auto border-b border-zinc-100 dark:border-zinc-800"
                 style={{ scrollbarWidth: "none" }}
                 onScroll={(e) => syncHeader(e.currentTarget.scrollLeft)}
               >
+                {(() => {
+                  const filtered = nameFilter.trim()
+                    ? visibleMembers.filter(m => m.name.includes(nameFilter.trim()))
+                    : visibleMembers;
+                  return (
                 <div className="flex min-w-max bg-white dark:bg-zinc-900">
 
                   {/* 左固定列（スタッフ名） */}
                   <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-                    {visibleMembers.map((m, i) => (
+                    {filtered.map((m, i) => {
+                      const isRisk = churnRiskSinceMap.has(m.id);
+                      return (
                       <div key={m.id} className={cx(
                         "h-9 flex flex-col justify-center px-2",
-                        i < visibleMembers.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : "",
+                        i < filtered.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : "",
+                        isRisk ? "bg-red-50 dark:bg-red-950/30" : "",
                       )}>
                         <span className="text-[9px] font-medium text-zinc-400 dark:text-zinc-500 leading-none truncate">
                           {m.section ?? "—"}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setStaffInfoTarget(m)}
-                          className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300 hover:underline leading-tight truncate text-left mt-0.5"
-                        >
-                          {shortName(m.name)}
-                        </button>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setStaffInfoTarget(m)}
+                            className={cx(
+                              "text-[10px] font-semibold hover:underline leading-tight truncate text-left",
+                              isRisk ? "text-red-700 dark:text-red-300" : "text-zinc-700 dark:text-zinc-300",
+                            )}
+                          >
+                            {shortName(m.name)}
+                          </button>
+                          {isRisk && (
+                            <span className="text-[7px] font-bold px-0.5 py-px rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none shrink-0 whitespace-nowrap">
+                              離脱
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    ))}
+                    );})}
+
                   </div>
 
                   {/* 日付列 */}
@@ -610,10 +645,11 @@ export default function ShiftDayList({
                             : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
                           )}
                         >
-                          {visibleMembers.map((m, i) => {
+                          {filtered.map((m, i) => {
                             const shift   = getShift(m.id, d);
                             const sName   = shift?.shift_name ?? null;
                             const absent  = isAbsent(m.id, d);
+                            const churnCell = isChurnRiskCell(m.id, d);
                             const pattern = sName ? (patternByName.get(sName) ?? null) : null;
                             const patBg   = sName ? getPatternBg(sName, pattern) : "";
                             const offBg   =
@@ -625,22 +661,28 @@ export default function ShiftDayList({
                               <div
                                 key={m.id}
                                 className={cx(
-                                  "h-9 flex items-center justify-center w-full",
-                                  i < visibleMembers.length - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
+                                  "h-9 flex flex-col items-center justify-center w-full relative",
+                                  i < filtered.length - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
                                   cellBg,
+                                  churnCell ? "ring-inset ring-1 ring-red-400 dark:ring-red-500" : "",
                                 )}
                               >
                                 {sName ? (
-                                  <span className={cx(
-                                    "text-[10px] font-semibold leading-none truncate px-0.5",
-                                    absent ? "text-red-600 dark:text-red-400"
-                                    : offBg ? "text-white"
-                                    : patBg ? "text-zinc-800 dark:text-zinc-100"
-                                    : isSel ? "text-blue-700 dark:text-blue-300"
-                                    : "text-zinc-700 dark:text-zinc-300",
-                                  )}>
-                                    {shiftAbbr(sName)}
-                                  </span>
+                                  <>
+                                    <span className={cx(
+                                      "text-[10px] font-semibold leading-none truncate px-0.5",
+                                      absent ? "text-red-600 dark:text-red-400"
+                                      : offBg ? "text-white"
+                                      : patBg ? "text-zinc-800 dark:text-zinc-100"
+                                      : isSel ? "text-blue-700 dark:text-blue-300"
+                                      : "text-zinc-700 dark:text-zinc-300",
+                                    )}>
+                                      {shiftAbbr(sName)}
+                                    </span>
+                                    {churnCell && (
+                                      <span className="text-[6px] leading-none font-bold text-red-500 dark:text-red-400 whitespace-nowrap">離脱リスク</span>
+                                    )}
+                                  </>
                                 ) : onSetKyukyu ? (
                                   <button
                                     type="button"
@@ -663,7 +705,7 @@ export default function ShiftDayList({
 
                   {/* 合計列（右固定）：出勤日数 */}
                   <div className="sticky right-0 z-20 w-16 flex-shrink-0 bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
-                    {visibleMembers.map((m, i) => {
+                    {filtered.map((m, i) => {
                       const workCount = allDates.filter(d => {
                         const sn = getShift(m.id, d)?.shift_name;
                         return sn && sn !== "公休" && sn !== "希望休";
@@ -671,7 +713,7 @@ export default function ShiftDayList({
                       return (
                         <div key={m.id} className={cx(
                           "h-9 flex items-center justify-center",
-                          i < visibleMembers.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : "",
+                          i < filtered.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : "",
                         )}>
                           <span className="tabular-nums text-[11px] font-bold text-zinc-600 dark:text-zinc-400">
                             {workCount > 0 ? workCount : "—"}
@@ -682,7 +724,10 @@ export default function ShiftDayList({
                   </div>
 
                 </div>
+                  );
+                })()}
               </div>
+              </>
             )}
           </>
         )}

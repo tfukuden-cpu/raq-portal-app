@@ -378,7 +378,7 @@ export default function ShiftManageClient({
   }
 
   return (
-    <div className="max-w-5xl mx-auto pb-24 pt-3">
+    <div className="w-full pb-24 pt-3">
       {/* Excel出力 セクション選択モーダル */}
       {showExportModal && (
         <div
