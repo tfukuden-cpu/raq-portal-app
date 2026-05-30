@@ -543,4 +543,164 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ---
 
+## 8. 開発環境・再開手順
+
+### 起動
+
+```powershell
+cd C:\dev\raq-portal-app
+npm run dev
+# → http://localhost:3000
+```
+
+### テストアカウント
+
+| 項目 | 値 |
+|------|-----|
+| メール | `s001@raq.internal` |
+| 社員ID | `S001` |
+| グローバルロール | `admin` |
+| 案件 | P001（管理者）/ P002（スタッフ） |
+| 別アカウント | O002 — `global_role = "executive"`（運用者） |
+
+### 案件コンテキスト（Cookie）
+
+| 属性 | 値 |
+|------|-----|
+| Cookie名 | `rqp-project-id` |
+| 有効期間 | 30日 |
+| フラグ | HTTPOnly |
+| セット場所 | `/api/set-project`（Route Handler） |
+
+1案件のみ所属 → ログイン後に自動セット  
+複数案件所属 → `/select-project` で選択
+
+### Cron ローカルテスト
+
+```powershell
+curl -H "Authorization: Bearer <CRON_SECRETの値>" http://localhost:3000/api/cron/notify
+```
+
+---
+
+## 9. 環境変数（.env.local）
+
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx...
+SUPABASE_SERVICE_ROLE_KEY=eyJxxx...   # 絶対公開禁止・サーバーのみ
+
+# アプリURL
+NEXT_PUBLIC_BASE_URL=http://localhost:3000   # 本番は https://...
+
+# LINE Messaging API（プッシュ通知・Webhook）
+LINE_CHANNEL_ACCESS_TOKEN=...
+
+# LINE Login（OAuth 認証）
+LINE_LOGIN_CHANNEL_ID=...
+LINE_LOGIN_CHANNEL_SECRET=...
+
+# Cron 認証（openssl rand -hex 32 等で生成）
+CRON_SECRET=...
+
+# Google Sheets 連携（以下いずれかの方式で設定）
+# 方式A: OAuth2（推奨）
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...
+# 方式B: サービスアカウントJSON（丸ごと）
+GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
+# 方式C: サービスアカウント個別変数
+GOOGLE_CLIENT_EMAIL=...
+GOOGLE_PRIVATE_KEY=...
+
+# Web Push（VAPID）
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+```
+
+> **注意:** `SUPABASE_SERVICE_ROLE_KEY` / `LINE_LOGIN_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` / Google 認証情報は **絶対にブラウザ側コード（NEXT_PUBLIC_*）に置かない**。サーバーコンポーネント・Server Actions・API Routes のみで使用する。
+
+---
+
+## 10. 外部サービス連携
+
+### LINE Messaging API
+
+| 関数 | 用途 |
+|------|------|
+| `pushLine(userId, message)` | 個人宛テキスト送信 |
+| `multicastLine(userIds, message)` | 複数人宛テキスト送信 |
+| `pushLineWithButton(userId, message, label, url)` | ボタン付きメッセージ送信 |
+
+ソース: `src/lib/line.ts`
+
+Webhook エンドポイント: `POST /api/line/webhook`
+- `follow` イベント → `staffs.line_friend = true`
+- `unfollow` イベント → `staffs.line_blocked = true`, `line_friend = false`
+
+LINE Login OAuth コールバック: `GET /api/auth/line/callback`  
+- 連携完了時 → `staffs.line_user_id` をセット + `line_friend = true`
+
+### Google Sheets
+
+ソース: `src/lib/gsheets.ts`
+
+認証フォールバック順:
+1. `GOOGLE_SERVICE_ACCOUNT_JSON`（JSON丸ごと）
+2. `GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`
+3. `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `GOOGLE_REFRESH_TOKEN`（OAuth2）
+
+主な操作:
+- 案件設定 → スプシ自動生成 / URL手動入力 → メンバーシート自動同期
+- 案件設定 → 「シフト表生成」→ 希望休を自動反映したテンプレートをスプシに作成
+- シフト管理 → 「スプシから読込」→ `shifts` テーブルへ反映
+
+スプシ構成（9シート固定）: 設定 / メンバー / 希望休 / シフト表 / シフト / 打刻ログ / 日別勤怠 / 月次集計 / シフト変更ログ
+
+### Supabase Admin Client
+
+RLSをバイパスする必要がある場合は `createAdminClient()`（`src/lib/supabase/admin.ts`）を使用。  
+**クライアントコンポーネントから絶対にインポートしないこと。**
+
+### Vercel Cron
+
+`vercel.json` に設定済み。`/api/cron/notify` を5分ごとに実行。  
+`Authorization: Bearer CRON_SECRET` ヘッダーで保護。
+
+---
+
+## 11. アーキテクチャメモ・注意事項
+
+### Next.js 15 の変更点（要注意）
+
+```tsx
+// searchParams は Promise — 必ず await する
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const { month } = await searchParams;
+```
+
+### "use server" ファイルの制約
+
+`"use server"` を宣言したファイルから非 async 関数をエクスポートできない。  
+型・定数・ヘルパーは別ファイル（例: `notify-config.ts`）に分離する。
+
+### adminClient が必要な場面
+
+- 運用者が自分の所属していない案件のデータを扱う場合
+- LINE OAuth コールバック（magic link 発行）
+- 打刻端末 `/punch/[projectId]`（認証不要ページ）
+
+### Avatar システム（未完成・触らないこと）
+
+`src/app/(portal)/admin/my/AvatarSvg.tsx` はパーツのSVGパスが未実装。  
+コンポーネントの骨格と型定義のみ存在する。新しいエージェントは触らずそのまま残すこと。
+
+---
+
 *このドキュメントはソースコードから自動生成ではなく、実装を読み解いて作成したものです。実装変更時は本ドキュメントも更新してください。*
