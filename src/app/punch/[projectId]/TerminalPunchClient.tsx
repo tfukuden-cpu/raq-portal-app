@@ -107,6 +107,14 @@ const BREAK_OPTIONS_AFTER: readonly { label: string; note: string; color: string
   { label: "小休憩（15分）", note: "小休憩（15分）", color: "bg-amber-800 hover:bg-amber-700 shadow-amber-900/30" },
 ];
 
+// ── シフト開始時刻を過ぎているか判定 ──────────────────────────
+function isShiftStartPassed(shiftStart: string | null): boolean {
+  if (!shiftStart) return false; // 時刻なし → 定時扱い
+  const now = new Date();
+  const todayJST = now.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  return now >= new Date(`${todayJST}T${shiftStart}+09:00`);
+}
+
 // ── ステップ定義 ──────────────────────────────────────────────
 type Step =
   | { kind: "list" }
@@ -271,12 +279,18 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     setStep({ kind: "action", member });
   }
 
-  // ── 出勤アクション開始 ──────────────────────────────────────
+  // ── 出勤アクション開始（シフト時刻で自動判定）──────────────
   function handleClockIn(member: TerminalMember) {
     if (member.needsConsent) {
       setStep({ kind: "consent", member });
+      return;
+    }
+    if (isShiftStartPassed(member.shiftStart)) {
+      // シフト開始時刻を過ぎている → 遅刻
+      setStep({ kind: "approver", member, punchType: "clock_in", punchKind: "late" });
     } else {
-      setStep({ kind: "clock_kind", member, punchType: "clock_in" });
+      // 開始前 or 時刻なし → 定時出勤で即打刻
+      handleConfirm(member, "clock_in", "normal", undefined);
     }
   }
 
@@ -326,7 +340,12 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
       setLocalMembers(prev => prev.map(m =>
         m.staffId === member.staffId ? { ...m, needsConsent: false } : m
       ));
-      setStep({ kind: "clock_kind", member: updated, punchType: "clock_in" });
+      // 同意書後も時刻で自動判定
+      if (isShiftStartPassed(updated.shiftStart)) {
+        setStep({ kind: "approver", member: updated, punchType: "clock_in", punchKind: "late" });
+      } else {
+        handleConfirm(updated, "clock_in", "normal", undefined);
+      }
     });
   }
 
@@ -917,7 +936,11 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               {isPending ? "記録中…" : "打刻を確定する"}
             </button>
             <button
-              onClick={() => setStep({ kind: "clock_kind", member, punchType })}
+              onClick={() =>
+                punchType === "clock_out"
+                  ? setStep({ kind: "clock_kind", member, punchType })
+                  : setStep({ kind: "action", member })
+              }
               className="w-full py-3 rounded-2xl border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
             >
               ← 戻る
