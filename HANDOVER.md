@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-31（v57：打刻ページ フロー全面刷新・離席タイマー追加）
+最終更新：2026-05-31（v58：経過報告フォーム全面刷新・17時LINE通知ボタン追加）
 
 ---
 
@@ -106,6 +106,26 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | アバターシステム | 🔄 設計済み・パーツ未実装（低優先） |
 
 ### 次に優先すべきこと（新しいセッションはここから）
+
+**v58 完了内容**
+- **経過報告フォーム（`/absence-followup`）全面刷新**
+  - `page.tsx` をサーバーコンポーネントに変更：当日の欠勤理由・翌日シフト有無を自動取得
+  - 新規 `FollowupClient.tsx`：症状チェック（有/無トグル）・軽快状況3択（改善/横ばい/悪化）・受診状況2択・翌日出勤可否2択
+  - 出勤困難を選ぶと「次回出勤可否報告予定」の日付＋時刻入力欄が展開
+  - `followup_recovery_status` が入力済みなら提出済み画面を表示（重複送信防止）
+  - `actions.ts` を全面書き直し：欠勤報告と同様にフォーマット通りの文面を直接構築し管理者グループ＋個人LINE送信
+- **DBカラム追加（`absence_reports`）**
+  - `followup_symptoms` JSONB
+  - `followup_recovery_status` TEXT
+  - `followup_consultation_status` TEXT
+  - `followup_next_report_date` TEXT
+  - `followup_next_report_time` TEXT
+- **17時欠勤フォローアップCron通知にボタン追加**（`api/cron/notify/route.ts`）
+  - `pushLine` → `pushLineWithButton` に変更
+  - ボタンラベル「経過報告を入力する」、リンク先：`{NEXT_PUBLIC_BASE_URL}/absence-followup`
+- **ホーム画面（`HomeClient.tsx`）の欠勤ボタン切り替え**
+  - 欠勤報告未提出 → 「欠勤報告」ボタン（赤）
+  - 欠勤報告済み（`hasAbsenceReport=true`）→ 「経過報告」ボタン（青）に切り替わり `/absence-followup` へ遷移
 
 **v57 完了内容**
 - **打刻ページ ボタンフロー全面刷新（`TerminalPunchClient.tsx`）**
@@ -520,8 +540,17 @@ departure_reports（出発報告）
 
 absence_reports（欠勤報告）
   project_id, staff_id, absence_date (text), reason,
-  next_day_available, day_after_available, status
-  ※ next_day_available は経過報告で更新（/absence-followup から送信）
+  symptoms jsonb,              ← ★欠勤時の症状
+  recovery_status text,        ← ★欠勤時の軽快状況
+  has_consultation boolean,    ← ★当日受診予定
+  next_day_available boolean,  ← 経過報告で更新（true=出勤可能 / false=出勤困難）
+  followup_symptoms jsonb,         ← ★v58新設：経過報告時の症状
+  followup_recovery_status text,   ← ★v58新設：経過報告時の軽快状況（NULLなら未提出）
+  followup_consultation_status text, ← ★v58新設：経過報告時の受診状況
+  followup_next_report_date text,  ← ★v58新設：次回出勤可否報告予定日
+  followup_next_report_time text,  ← ★v58新設：次回出勤可否報告予定時刻
+  day_after_available, status
+  ※ followup_recovery_status IS NOT NULL = 経過報告提出済み
   ※ next_day_available=false の場合、翌日の absence_report を自動作成
 
 late_reports（遅刻報告）

@@ -28,6 +28,8 @@ export interface HomeClientProps {
   noticeCount: number;
   upcomingShifts?: { date: string; name: string | null; start: string | null; end: string | null }[];
   enableDeparture?: boolean;
+  hasPrevAbsence?: boolean;
+  nextDayHasShift?: boolean;
 }
 
 function nowJST(): string {
@@ -38,7 +40,7 @@ function nowJST(): string {
 function reportBadge(s: string | null) {
   if (s === "approved") return "承認済";
   if (s === "rejected") return "却下";
-  return "審査中";
+  return "報告済";
 }
 
 function DepartureIcon({ className }: { className?: string }) {
@@ -105,12 +107,47 @@ function fmtDate(iso: string) {
 
 const HR = () => <div className="border-t border-zinc-100 dark:border-zinc-800" />;
 
+type Symptoms = {
+  fever: boolean; fever_temp: string;
+  headache: boolean; cough: boolean; fatigue: boolean;
+  nausea: boolean; other: boolean; other_detail: string;
+};
+const initSymptoms: Symptoms = {
+  fever: false, fever_temp: "", headache: false, cough: false,
+  fatigue: false, nausea: false, other: false, other_detail: "",
+};
+
+function SymptomRow({ label, value, onChange }: {
+  label: string; value: boolean; onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      <span className="text-[14px] text-zinc-700 dark:text-zinc-300">{label}</span>
+      <div className="flex gap-1.5">
+        <button type="button" onClick={() => onChange(true)}
+          className={`px-3 py-1 rounded-lg text-[13px] font-semibold transition-colors ${
+            value
+              ? "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
+          }`}>有</button>
+        <button type="button" onClick={() => onChange(false)}
+          className={`px-3 py-1 rounded-lg text-[13px] font-semibold transition-colors ${
+            !value
+              ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
+          }`}>無</button>
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function HomeClient({
   displayName, todayLabel,
   shift, departureTime, clockInTime, clockOutTime,
   hasAbsenceReport, absenceStatus, hasLateReport, lateStatus, noticeCount,
   upcomingShifts, enableDeparture = true,
+  hasPrevAbsence = false, nextDayHasShift = false,
 }: HomeClientProps) {
 
   const [modal, setModal]            = useState<ModalType>("none");
@@ -128,16 +165,19 @@ export default function HomeClient({
     : "pre_departure";
 
   const [etaDep, setEtaDep]         = useState(30);
-  const [absStep, setAbsStep]       = useState<1|2|3>(1);
   const [absReason, setAbsReason]   = useState("");
-  const [absNextDay, setAbsNextDay] = useState(true);
+  const [symptoms, setSymptoms]     = useState<Symptoms>(initSymptoms);
+  const [recoveryStatus, setRecoveryStatus] = useState<"改善"|"横ばい"|"悪化"|null>(null);
+  const [hasConsultation, setHasConsultation] = useState<boolean|null>(null);
+  const [absError, setAbsError]     = useState<string|null>(null);
   const [lateStep, setLateStep]     = useState<1|2>(1);
   const [lateReason, setLateReason] = useState("");
   const [lateEta, setLateEta]       = useState(30);
 
   const closeModal = () => {
     setModal("none");
-    setAbsStep(1); setAbsReason(""); setAbsNextDay(true);
+    setAbsReason(""); setSymptoms(initSymptoms);
+    setRecoveryStatus(null); setHasConsultation(null); setAbsError(null);
     setLateStep(1); setLateReason(""); setLateEta(30);
   };
 
@@ -150,9 +190,16 @@ export default function HomeClient({
       else setFeedback({ ok: false, msg: r.message ?? "エラー" });
     });
   };
-  const handleAbsence = (nextDay: boolean, dayAfter: boolean) => {
+  const handleAbsenceSubmit = () => {
+    if (!absReason.trim()) { setAbsError("理由を入力してください"); return; }
+    if (hasConsultation === null) { setAbsError("当日受診予定を選択してください"); return; }
+    setAbsError(null);
     const fd = new FormData();
-    fd.set("reason", absReason); fd.set("nextDay", String(nextDay)); fd.set("dayAfter", String(dayAfter));
+    fd.set("reason", absReason);
+    fd.set("symptomsJson", JSON.stringify(symptoms));
+    fd.set("hasConsultation", String(hasConsultation));
+    fd.set("nextDayHasShift", String(nextDayHasShift));
+    if (recoveryStatus) fd.set("recoveryStatus", recoveryStatus);
     closeModal();
     startTransition(async () => {
       const r = await submitAbsenceAction(fd);
@@ -305,9 +352,10 @@ export default function HomeClient({
           <HR />
           <div className="flex gap-3 mt-6 mb-6">
             {hasAbsenceReport ? (
-              <div className="flex-1 h-11 rounded-xl bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center">
-                <span className="text-[12px] text-zinc-400">欠勤済 · {reportBadge(absenceStatus)}</span>
-              </div>
+              <a href="/absence-followup"
+                className="flex-1 h-11 rounded-xl border border-blue-200 dark:border-blue-800 text-[14px] font-medium text-blue-600 dark:text-blue-400 active:bg-blue-50 dark:active:bg-blue-900/20 flex items-center justify-center transition-colors">
+                経過報告
+              </a>
             ) : (
               <button onClick={() => !isPending && setModal("absence")} disabled={isPending}
                 className="flex-1 h-11 rounded-xl border border-zinc-200 dark:border-zinc-800 text-[14px] font-medium text-red-500 active:bg-red-50 disabled:opacity-40 transition-colors">
@@ -378,31 +426,144 @@ export default function HomeClient({
     )}
 
     {modal === "absence" && (
-      <ModalWrap onClose={closeModal}>
-        {absStep === 1 && (<>
-          <h2 className="text-[20px] font-bold text-zinc-900 dark:text-zinc-50 mb-1">欠勤を報告する</h2>
-          <p className="text-[13px] text-zinc-400 mb-5">1 / 3</p>
-          <textarea value={absReason} onChange={e => setAbsReason(e.target.value)}
-            placeholder="欠勤の理由を入力..." rows={4}
-            className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 text-[16px] resize-none mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-          <div className="flex gap-3">
-            <button onClick={closeModal} className="flex-1 py-3 rounded-2xl bg-zinc-100 text-[17px] font-semibold text-zinc-600">キャンセル</button>
-            <button onClick={() => setAbsStep(2)} disabled={!absReason.trim()} className="flex-1 py-3 rounded-2xl bg-blue-600 text-white text-[17px] font-semibold disabled:opacity-50">次へ</button>
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center"
+        onClick={closeModal}>
+        <div className="bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl w-full max-w-sm mx-0 sm:mx-4 shadow-2xl max-h-[92dvh] flex flex-col"
+          onClick={e => e.stopPropagation()}>
+          {/* ヘッダー（固定） */}
+          <div className="px-5 pt-5 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
+            <h2 className="text-[17px] font-bold text-zinc-900 dark:text-zinc-50">欠員報告フォーマット</h2>
+            <p className="text-[11px] text-red-500 mt-0.5">※当日9:00までに必ずご報告ください※</p>
           </div>
-        </>)}
-        {absStep === 2 && (<>
-          <p className="text-[13px] text-zinc-400 mb-2">2 / 3</p>
-          <h2 className="text-[24px] font-bold text-zinc-900 dark:text-zinc-50 leading-snug">明日は<br/>出勤できますか？</h2>
-          <YesNo onYes={() => { setAbsNextDay(true); setAbsStep(3); }} onNo={() => { setAbsNextDay(false); setAbsStep(3); }} />
-          <button onClick={() => setAbsStep(1)} className="mt-3 w-full py-2 text-[15px] text-blue-500">戻る</button>
-        </>)}
-        {absStep === 3 && (<>
-          <p className="text-[13px] text-zinc-400 mb-2">3 / 3</p>
-          <h2 className="text-[24px] font-bold text-zinc-900 dark:text-zinc-50 leading-snug">明後日は<br/>出勤できますか？</h2>
-          <YesNo onYes={() => handleAbsence(absNextDay, true)} onNo={() => handleAbsence(absNextDay, false)} pending={isPending} />
-          <button onClick={() => setAbsStep(2)} className="mt-3 w-full py-2 text-[15px] text-blue-500">戻る</button>
-        </>)}
-      </ModalWrap>
+          {/* スクロール本体 */}
+          <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+            {/* 自動項目 */}
+            <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl px-4 py-3 space-y-1.5 text-[13px]">
+              {[
+                ["報告日",   todayLabel],
+                ["報告者",   displayName],
+                ["報告区分", "欠勤"],
+              ].map(([k, v]) => (
+                <div key={k} className="flex gap-3">
+                  <span className="text-zinc-400 w-16 flex-shrink-0">{k}</span>
+                  <span className="font-medium text-zinc-700 dark:text-zinc-200">{v}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* 理由 */}
+            <div>
+              <label className="block text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                理由 <span className="text-red-500">*</span>
+              </label>
+              <textarea value={absReason} onChange={e => setAbsReason(e.target.value)}
+                placeholder="例：発熱のため" rows={2}
+                className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+            </div>
+
+            {/* 症状 */}
+            <div>
+              <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">症状等（可能な範囲で回答）</p>
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                <SymptomRow label="発熱" value={symptoms.fever}
+                  onChange={v => setSymptoms(s => ({ ...s, fever: v, fever_temp: v ? s.fever_temp : "" }))} />
+                {symptoms.fever && (
+                  <div className="flex items-center gap-2 py-2 pl-4">
+                    <input type="number" value={symptoms.fever_temp}
+                      onChange={e => setSymptoms(s => ({ ...s, fever_temp: e.target.value }))}
+                      placeholder="36.5" step="0.1" min="35" max="42"
+                      className="w-20 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[15px] text-center focus:outline-none focus:ring-1 focus:ring-blue-500/40" />
+                    <span className="text-[13px] text-zinc-400">度</span>
+                  </div>
+                )}
+                <SymptomRow label="頭痛" value={symptoms.headache}
+                  onChange={v => setSymptoms(s => ({ ...s, headache: v }))} />
+                <SymptomRow label="咳や喉の痛み" value={symptoms.cough}
+                  onChange={v => setSymptoms(s => ({ ...s, cough: v }))} />
+                <SymptomRow label="だるさ倦怠感" value={symptoms.fatigue}
+                  onChange={v => setSymptoms(s => ({ ...s, fatigue: v }))} />
+                <SymptomRow label="吐き気や嘔吐" value={symptoms.nausea}
+                  onChange={v => setSymptoms(s => ({ ...s, nausea: v }))} />
+                <SymptomRow label="その他" value={symptoms.other}
+                  onChange={v => setSymptoms(s => ({ ...s, other: v, other_detail: v ? s.other_detail : "" }))} />
+                {symptoms.other && (
+                  <div className="py-2 pl-4">
+                    <input type="text" value={symptoms.other_detail}
+                      onChange={e => setSymptoms(s => ({ ...s, other_detail: e.target.value }))}
+                      placeholder="内容を入力"
+                      className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[15px] focus:outline-none focus:ring-1 focus:ring-blue-500/40" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 軽快状況（前日欠勤のみ） */}
+            {hasPrevAbsence && (
+              <div>
+                <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 mb-2">軽快状況</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["改善", "横ばい", "悪化"] as const).map(v => (
+                    <button key={v} type="button"
+                      onClick={() => setRecoveryStatus(prev => prev === v ? null : v)}
+                      className={`py-2 rounded-xl text-[14px] font-semibold border-2 transition-colors ${
+                        recoveryStatus === v
+                          ? v === "改善"  ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-300"
+                          : v === "悪化"  ? "bg-red-50 dark:bg-red-900/30 border-red-500 text-red-700 dark:text-red-300"
+                          : "bg-amber-50 dark:bg-amber-900/30 border-amber-500 text-amber-700 dark:text-amber-300"
+                          : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                      }`}>{v}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 当日受診予定 */}
+            <div>
+              <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 mb-2">当日受診予定 <span className="text-red-500">*</span></p>
+              <div className="grid grid-cols-2 gap-2">
+                {([true, false] as const).map(v => (
+                  <button key={String(v)} type="button" onClick={() => setHasConsultation(v)}
+                    className={`py-2.5 rounded-xl text-[14px] font-semibold border-2 transition-colors ${
+                      hasConsultation === v
+                        ? v ? "bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300"
+                           : "bg-zinc-100 dark:bg-zinc-800 border-zinc-400 text-zinc-700 dark:text-zinc-200"
+                        : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                    }`}>{v ? "有" : "無"}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* 自動項目（翌日） */}
+            <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl px-4 py-3 space-y-1.5 text-[13px]">
+              <div className="flex gap-3">
+                <span className="text-zinc-400 flex-1">翌日出勤予定</span>
+                <span className={`font-semibold ${nextDayHasShift ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>
+                  {nextDayHasShift ? "有" : "無"}
+                </span>
+                <span className="text-zinc-300 dark:text-zinc-600 text-[11px]">自動</span>
+              </div>
+              <div className="flex gap-3">
+                <span className="text-zinc-400 flex-1">翌日出勤可否報告予定</span>
+                <span className="font-medium text-zinc-700 dark:text-zinc-200">17:00</span>
+              </div>
+            </div>
+
+            {absError && <p className="text-[13px] text-red-500">{absError}</p>}
+          </div>
+
+          {/* フッターボタン（固定） */}
+          <div className="px-5 py-4 border-t border-zinc-100 dark:border-zinc-800 flex gap-3 flex-shrink-0">
+            <button onClick={closeModal}
+              className="flex-1 py-3 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-[16px] font-semibold text-zinc-600 dark:text-zinc-300">
+              キャンセル
+            </button>
+            <button onClick={handleAbsenceSubmit} disabled={isPending}
+              className="flex-1 py-3 rounded-2xl bg-red-500 hover:bg-red-600 text-white text-[16px] font-semibold disabled:opacity-50 transition-colors">
+              {isPending ? "送信中..." : "報告する"}
+            </button>
+          </div>
+        </div>
+      </div>
     )}
 
     {modal === "late" && (

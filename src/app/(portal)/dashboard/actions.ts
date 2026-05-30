@@ -4,10 +4,13 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
 import { appendSheetRow, extractSpreadsheetId } from "@/lib/gsheets";
 import { sendEventNotify } from "@/lib/notify";
+import { pushLine, multicastLine } from "@/lib/line";
+import { getAdminLineIds } from "@/lib/notify";
 
 export type ActionResult = {
   success: boolean;
@@ -47,9 +50,11 @@ export async function recordDepartureAction(
 export async function submitAbsenceAction(
   fd: FormData
 ): Promise<ActionResult> {
-  const reason   = String(fd.get("reason")   ?? "").trim();
-  const nextDay  = fd.get("nextDay")  === "true";
-  const dayAfter = fd.get("dayAfter") === "true";
+  const reason          = String(fd.get("reason")         ?? "").trim();
+  const symptomsJson    = String(fd.get("symptomsJson")   ?? "{}");
+  const recoveryStatus  = String(fd.get("recoveryStatus") ?? "").trim() || null;
+  const hasConsultation = fd.get("hasConsultation") === "true";
+  const nextDayHasShift = fd.get("nextDayHasShift") === "true";
 
   if (!reason) return { success: false, message: "理由を入力してください" };
 
@@ -63,14 +68,18 @@ export async function submitAbsenceAction(
 
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
+  let symptoms: Record<string, unknown> = {};
+  try { symptoms = JSON.parse(symptomsJson); } catch { /* ignore */ }
+
   const { error } = await supabase.from("absence_reports").insert({
-    staff_id:           staffId,
-    project_id:         projectId,
-    absence_date:       today,
+    staff_id:         staffId,
+    project_id:       projectId,
+    absence_date:     today,
     reason,
-    next_day_available: nextDay,
-    day_after_available: dayAfter,
-    status:             "pending",
+    symptoms,
+    recovery_status:  recoveryStatus,
+    has_consultation: hasConsultation,
+    status:           "pending",
   });
 
   if (error) {
@@ -85,6 +94,24 @@ export async function submitAbsenceAction(
     .from("staffs").select("display_name, name").eq("id", staffId).maybeSingle();
   const name = staffData?.display_name ?? staffData?.name ?? staffId;
 
+  // 日付を MM/DD 形式に
+  const [, mm, dd] = today.split("-");
+  const dateLabel = `${parseInt(mm)}/${parseInt(dd)}`;
+
+  // 症状テキスト整形
+  const s = symptoms as {
+    fever?: boolean; fever_temp?: string; headache?: boolean; cough?: boolean;
+    fatigue?: boolean; nausea?: boolean; other?: boolean; other_detail?: string;
+  };
+  const symptomLines: string[] = [];
+  if (s.fever)    symptomLines.push(`発熱：有${s.fever_temp ? `（${s.fever_temp}度）` : ""}`);
+  if (s.headache) symptomLines.push("頭痛：有");
+  if (s.cough)    symptomLines.push("咳や喉の痛み：有");
+  if (s.fatigue)  symptomLines.push("だるさ倦怠感：有");
+  if (s.nausea)   symptomLines.push("吐き気や嘔吐：有");
+  if (s.other)    symptomLines.push(`その他：${s.other_detail || "有"}`);
+  const symptomText = symptomLines.length > 0 ? symptomLines.join("、") : "なし";
+
   // スプレッドシートへ追記
   try {
     const { data: settings } = await supabase
@@ -98,28 +125,61 @@ export async function submitAbsenceAction(
       const nowJST = new Date()
         .toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" }).replace("T", " ");
       await appendSheetRow(spreadsheetId, "欠勤報告", [
-        nowJST, staffId, name, today, reason,
-        nextDay  ? "出勤可" : "欠勤",
-        dayAfter ? "出勤可" : "欠勤",
+        nowJST, staffId, name, today, reason, symptomText,
+        recoveryStatus ?? "-",
+        hasConsultation ? "有" : "無",
+        nextDayHasShift ? "有" : "無",
       ]);
     }
   } catch (e) {
     console.error("欠勤報告スプシ追記エラー:", e);
   }
 
-  // LINE通知：管理者グループへ（欠勤申請）
-  void sendEventNotify(projectId, "absence", {
-    "名前":          name,
-    "日付":          today,
-    "欠勤理由":      reason,
-    "翌日出勤可否":   nextDay  ? "翌日：出勤可" : "翌日：欠勤",
-    "翌々日出勤可否": dayAfter ? "翌々日：出勤可" : "翌々日：欠勤",
-  });
+  // LINE通知：フォーマット通りに整形して管理者グループへ送信
+  const syms = symptoms as {
+    fever?: boolean; fever_temp?: string; headache?: boolean; cough?: boolean;
+    fatigue?: boolean; nausea?: boolean; other?: boolean; other_detail?: string;
+  };
+  const fmtYN = (v?: boolean) => v ? "有" : "無";
+  const lines = [
+    `【欠員報告フォーマット_${dateLabel}】`,
+    `※当日「9:00」までに必ずご報告お願いたします※`,
+    `-------------------------------`,
+    `□報告日：${dateLabel}`,
+    `□報告者：${name}`,
+    `□報告区分：欠勤`,
+    `□理由：${reason}`,
+    `□症状等：`,
+    `・発熱：${fmtYN(syms.fever)}${syms.fever && syms.fever_temp ? `（${syms.fever_temp}度）` : ""}`,
+    `・頭痛：${fmtYN(syms.headache)}`,
+    `・咳や喉の痛み：${fmtYN(syms.cough)}`,
+    `・だるさ倦怠感：${fmtYN(syms.fatigue)}`,
+    `・吐き気や嘔吐：${fmtYN(syms.nausea)}`,
+    `・その他：${fmtYN(syms.other)}${syms.other && syms.other_detail ? `（${syms.other_detail}）` : ""}`,
+    ...(recoveryStatus ? [`□軽快状況：${recoveryStatus}`] : []),
+    `□当日受診予定：${hasConsultation ? "有" : "無"}`,
+    `□翌日出勤予定：${nextDayHasShift ? "有" : "無"}`,
+    `□翌日出勤可否報告予定：17:00`,
+  ];
+  const message = lines.join("\n");
+
+  void (async () => {
+    try {
+      const admin = createAdminClient();
+      const { data: ps } = await admin
+        .from("project_settings").select("line_group_id")
+        .eq("project_id", projectId).maybeSingle();
+      const groupId = ps?.line_group_id as string | null;
+      const adminIds = await getAdminLineIds(projectId);
+      if (adminIds.length > 0) await multicastLine(adminIds, message);
+      if (groupId) await pushLine(groupId, message);
+    } catch (e) {
+      console.error("[absence] LINE送信エラー:", e);
+    }
+  })();
 
   // LINE通知：申請したスタッフ本人へ（受付完了）
-  void sendEventNotify(projectId, "absence_confirm", {
-    "名前": name,
-  }, staffId);
+  void sendEventNotify(projectId, "absence_confirm", { "名前": name }, staffId);
 
   return { success: true, message: "欠勤報告を送信しました" };
 }

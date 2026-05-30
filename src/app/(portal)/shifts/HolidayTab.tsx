@@ -29,8 +29,10 @@ type Props = {
   holidayRequests: HolidayRequest[];
   initialYear: number;
   initialMonth: number;
+  openDay?: number | null;
   deadlineDay?: number | null;
   maxDaysPerMonth?: number | null;
+  weekendLimit?: number | null;
 };
 
 export default function HolidayTab({
@@ -38,8 +40,10 @@ export default function HolidayTab({
   holidayRequests,
   initialYear,
   initialMonth,
+  openDay = null,
   deadlineDay = null,
   maxDaysPerMonth = null,
+  weekendLimit = null,
 }: Props) {
   const [view, setView] = useState<"list" | "apply">("list");
   const [selected, setSelected] = useState<HolidayRequest | null>(null);
@@ -82,8 +86,10 @@ export default function HolidayTab({
           initialYear={applyInitialYear}
           initialMonth={applyInitialMonth}
           appliedRequests={localRequests}
+          openDay={openDay}
           deadlineDay={deadlineDay}
           maxDaysPerMonth={maxDaysPerMonth}
+          weekendLimit={weekendLimit}
         />
       </div>
     );

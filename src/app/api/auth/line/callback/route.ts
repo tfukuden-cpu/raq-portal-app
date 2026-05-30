@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
 
     await admin
       .from("staffs")
-      .update({ line_user_id: profile.userId })
+      .update({ line_user_id: profile.userId, line_friend: true })
       .eq("id", staffId);
 
     // LINE連携完了後はパスワードをランダム値に変更（なりすまし防止）

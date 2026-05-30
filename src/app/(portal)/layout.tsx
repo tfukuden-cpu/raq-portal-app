@@ -8,6 +8,7 @@ import { logoutAction } from "@/app/login/actions";
 import { switchProjectAction } from "./switch-project-action";
 import type { IconKey } from "@/components/icons";
 import PushPermissionRequest from "./PushPermissionRequest";
+import LineFriendGate from "./LineFriendGate";
 
 export type NavItem = { href: string; icon: IconKey; label: string };
 export type NavSection = {
@@ -25,6 +26,7 @@ const STAFF_ITEMS: NavItem[] = [
   { href: "/shifts",     icon: "Calendar",      label: "シフト" },
   { href: "/record",     icon: "BarChart2",     label: "勤怠実績" },
   { href: "/post",       icon: "PenSquare",     label: "投稿" },
+  { href: "/notices",    icon: "Bell",          label: "お知らせ" },
   { href: "/inquiries",  icon: "MessageSquare", label: "問い合わせ" },
   { href: "/help",       icon: "HelpCircle",    label: "ヘルプ" },
 ];
@@ -34,7 +36,8 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
   { href: "/attendance",      icon: "Users",           label: "当日状況" },   // 座席表統合
   { href: "/shifts/manage",   icon: "CalendarSettings", label: "シフト管理" },
   { href: "/members",         icon: "IdCard",          label: "メンバー管理" },
-  { href: "/notices/manage",  icon: "Megaphone",       label: "周知・問合せ" }, // 周知＋問合せ統合
+  { href: "/notices/manage",    icon: "Megaphone",       label: "周知管理" },
+  { href: "/inquiries/manage",  icon: "MessageSquare",   label: "問合せ管理" },
   { href: "/attendance/edit", icon: "ClipboardCheck",  label: "勤怠管理" },
   { href: "/line-settings",   icon: "Smartphone",      label: "LINE連携" },
   { href: "/admin",           icon: "Settings",        label: "案件設定" },
@@ -58,7 +61,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
   const { data: staff } = await supabase
     .from("staffs")
-    .select("name, display_name, global_role, line_user_id")
+    .select("name, display_name, global_role, line_user_id, line_friend")
     .eq("id", staffId)
     .maybeSingle();
 
@@ -137,8 +140,30 @@ export default async function PortalLayout({ children }: { children: React.React
 
   const staffName = staff?.display_name ?? staff?.name ?? staffId;
 
+  // LINE友達追加ゲート用のURLを取得（line_friend でない場合のみ）
+  let lineAddUrl = "";
+  if (!staff?.line_friend) {
+    try {
+      const botRes = await fetch("https://api.line.me/v2/bot/info", {
+        headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
+        next: { revalidate: 3600 }, // 1時間キャッシュ
+      });
+      if (botRes.ok) {
+        const botInfo = await botRes.json() as { basicId?: string };
+        if (botInfo.basicId) {
+          lineAddUrl = `https://line.me/R/ti/p/${botInfo.basicId}`;
+        }
+      }
+    } catch {
+      // フォールバック：ゲートは表示するがURLは空
+    }
+  }
+
   return (
     <>
+      {!staff?.line_friend && (
+        <LineFriendGate lineAddUrl={lineAddUrl} />
+      )}
       <PushPermissionRequest />
       <AppNav
         sections={sections}

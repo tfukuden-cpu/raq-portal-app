@@ -104,8 +104,10 @@ export default async function ShiftsPage() {
       changed_at:        l.created_at as string,
     };
   });
-  const holidayDeadlineDay   = ruleMap.get("deadline_day") ?? null;
+  const holidayOpenDay         = ruleMap.get("open_day") ?? null;
+  const holidayDeadlineDay     = ruleMap.get("deadline_day") ?? null;
   const holidayMaxDaysPerMonth = ruleMap.get("monthly_limit_per_person") ?? null;
+  const holidayWeekendLimit    = ruleMap.get("weekend_limit") ?? null;
 
   const minMonth = `${rangeStart.getFullYear()}-${String(rangeStart.getMonth() + 1).padStart(2, "0")}`;
   const maxMonth = `${rangeEnd.getFullYear()}-${String(rangeEnd.getMonth() + 1).padStart(2, "0")}`;
@@ -125,8 +127,10 @@ export default async function ShiftsPage() {
         holidayRequests={holidaysRes.data ?? []}
         shiftRequests={requestsRes.data ?? []}
         shiftOpenings={openingsRes.data ?? []}
+        holidayOpenDay={holidayOpenDay}
         holidayDeadlineDay={holidayDeadlineDay}
         holidayMaxDaysPerMonth={holidayMaxDaysPerMonth}
+        holidayWeekendLimit={holidayWeekendLimit}
       />
     </main>
   );

@@ -361,6 +361,8 @@ export async function GET(req: NextRequest) {
               .select("id, display_name, name, line_user_id")
               .in("id", toNotify) as { data: StaffRow[] | null };
 
+            const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+
             for (const staff of staffRows ?? []) {
               if (!staff.line_user_id) continue;
               const name    = staff.display_name ?? staff.name ?? staff.id;
@@ -368,7 +370,12 @@ export async function GET(req: NextRequest) {
                 cfg.message ?? DEFAULT_NOTIFY_MESSAGES.absence_followup_remind,
                 { "名前": name, "翌日": tmrw }
               );
-              await pushLine(staff.line_user_id, message);
+              await pushLineWithButton(
+                staff.line_user_id,
+                message,
+                "経過報告を入力する",
+                `${appUrl}/absence-followup`,
+              );
               sent++;
             }
           }

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import LineConnectionSection from "@/app/(portal)/admin/[projectId]/settings/LineConnectionSection";
-import { LineGroupSection, LineNotifySettings, LinePushTestSection } from "@/app/(portal)/admin/[projectId]/settings/SettingsClient";
+import { LineGroupSection, LineNotifySettings } from "@/app/(portal)/admin/[projectId]/settings/SettingsClient";
 import type { NotificationSettings } from "@/app/(portal)/admin/[projectId]/settings/notify-config";
 
 type Member = {
@@ -100,8 +100,6 @@ export default function LineSettingsClient({
       {/* 通知設定タブ */}
       {tab === "notify" && (
         <div className="space-y-8 pt-4">
-          <LinePushTestSection projectId={projectId} />
-
           <div className="border-t border-zinc-100 dark:border-zinc-800" />
 
           <section className="space-y-3">

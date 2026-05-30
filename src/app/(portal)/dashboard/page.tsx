@@ -101,6 +101,10 @@ export default async function DashboardPage() {
   const todayEnd = `${today}T23:59:59+09:00`;
   const weekLater = new Date(); weekLater.setDate(weekLater.getDate() + 7);
   const weekLaterStr = weekLater.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
   const adminClient = createAdminClient();
 
@@ -115,6 +119,8 @@ export default async function DashboardPage() {
     { data: readNotices },
     { data: upcomingShiftRows },
     { data: projectSettings },
+    { data: yesterdayAbsence },
+    { data: tomorrowShift },
     rawTasksResult,
     rawGroupsResult,
     membersResult,
@@ -183,6 +189,23 @@ export default async function DashboardPage() {
       .select("enable_departure_report")
       .eq("project_id", currentProjectId!)
       .maybeSingle(),
+    // 前日欠勤チェック（軽快状況の表示判定用）
+    supabase
+      .from("absence_reports")
+      .select("id")
+      .eq("staff_id", staffId)
+      .eq("project_id", currentProjectId!)
+      .eq("absence_date", yesterdayStr)
+      .maybeSingle(),
+    // 翌日シフトチェック（翌日出勤予定の自動表示用）
+    supabase
+      .from("shifts")
+      .select("id")
+      .eq("staff_id", staffId)
+      .eq("project_id", currentProjectId!)
+      .eq("shift_date", tomorrowStr)
+      .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休")')
+      .maybeSingle(),
     // タスク関連（管理者のみ使用）
     isAdmin
       ? supabase.from("group_tasks")
@@ -236,6 +259,8 @@ export default async function DashboardPage() {
     hasLateReport: !!todayLate,
     lateStatus: todayLate?.status ?? null,
     enableDeparture: (projectSettings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true,
+    hasPrevAbsence: !!yesterdayAbsence,
+    nextDayHasShift: !!tomorrowShift,
     noticeCount: unreadCount,
     upcomingShifts: (upcomingShiftRows ?? []).map(s => ({
       date:  s.shift_date  as string,

@@ -34,8 +34,10 @@ export async function submitHolidayAction(
     .select("rule_type, value")
     .eq("project_id", projectId);
   const ruleMap = new Map((ruleRows ?? []).map(r => [r.rule_type, r.value as number]));
+  const openDay          = ruleMap.get("open_day") ?? null;
   const deadlineDay      = ruleMap.get("deadline_day") ?? null;
   const maxDaysPerMonth  = ruleMap.get("monthly_limit_per_person") ?? null;
+  const weekendLimit     = ruleMap.get("weekend_limit") ?? null;
   const dailyLimitCount  = ruleMap.get("daily_limit_count") ?? null;
   const consecutiveLimit = ruleMap.get("consecutive_limit") ?? null;
 
@@ -44,6 +46,11 @@ export async function submitHolidayAction(
   const todayDay   = today.getDate();
   const todayYear  = today.getFullYear();
   const todayMonth = today.getMonth() + 1;
+
+  // 申請受付開始前チェック：今月の受付開始日を過ぎていないとNG
+  if (openDay !== null && todayDay < openDay) {
+    return { success: false, message: `希望休の申請受付は毎月${openDay}日から開始されます（現在${todayDay}日）` };
+  }
 
   // 締切チェック：今月分の申請は締切日以降NG
   if (deadlineDay !== null) {
@@ -81,6 +88,41 @@ export async function submitHolidayAction(
         return {
           success: false,
           message: `${Number(m)}月の残り申請枠は${remaining}日です（上限${maxDaysPerMonth}日）`,
+        };
+      }
+    }
+  }
+
+  // 土日申請上限チェック：月ごとに土日の申請数を検証
+  if (weekendLimit !== null) {
+    const isWeekend = (ds: string) => {
+      const dow = new Date(ds + "T00:00:00").getDay();
+      return dow === 0 || dow === 6;
+    };
+    const byMonth = new Map<string, number>();
+    for (const d of dates) {
+      if (!isWeekend(d)) continue;
+      const mo = d.slice(0, 7);
+      byMonth.set(mo, (byMonth.get(mo) ?? 0) + 1);
+    }
+    for (const [mo, count] of byMonth) {
+      const [y, m] = mo.split("-").map(Number);
+      const from = `${mo}-01`;
+      const to   = `${mo}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+      const { data: existing } = await supabase
+        .from("holiday_requests")
+        .select("request_date")
+        .eq("project_id", projectId)
+        .eq("staff_id", staffId)
+        .eq("status", "approved")
+        .gte("request_date", from)
+        .lte("request_date", to);
+      const existingWeekend = (existing ?? []).filter(r => isWeekend(r.request_date as string)).length;
+      if (existingWeekend + count > weekendLimit) {
+        const remaining = weekendLimit - existingWeekend;
+        return {
+          success: false,
+          message: `${Number(m)}月の土日の残り申請枠は${remaining}日です（上限${weekendLimit}日）`,
         };
       }
     }

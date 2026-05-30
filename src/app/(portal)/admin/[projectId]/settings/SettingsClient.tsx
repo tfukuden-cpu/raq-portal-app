@@ -42,7 +42,7 @@ import {
 } from "../../holiday-rule-config";
 import SeatLayoutEditor, { type SeatItem, type WallItem } from "./SeatLayoutEditor";
 
-type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; churn_risk: boolean; churn_risk_since: string | null; compliance: number | null; trainingDates: TrainingEntry[] };
+type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; line_friend: boolean | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; churn_risk: boolean; churn_risk_since: string | null; compliance: number | null; trainingDates: TrainingEntry[] };
 type ShiftPattern = {
   id?: string;
   name: string;
@@ -451,6 +451,7 @@ export function MemberList({
   const [companyFilter, setCompanyFilter] = useState(""); // "" | "__unset__" | company name
   const [sectionFilter, setSectionFilter] = useState(""); // "" | "__unset__" | section name
   const [filterExpanded, setFilterExpanded] = useState<"none" | "company" | "section">("none");
+  const [lineFriendFilter, setLineFriendFilter] = useState(false); // true=友達未のみ表示
   const [csvText, setCsvText]       = useState("");
   const [csvPreview, setCsvPreview] = useState<CsvRow[]>([]);
   const [csvResults, setCsvResults] = useState<CsvResult[] | null>(null);
@@ -576,8 +577,12 @@ export function MemberList({
     const matchSection = !sectionFilter ? true
       : sectionFilter === "__unset__" ? mSections.length === 0
       : mSections.includes(sectionFilter);
-    return matchSearch && matchCompany && matchSection;
+    const matchLineFriend = !lineFriendFilter ? true : (m.lineLinked && !m.line_friend);
+    return matchSearch && matchCompany && matchSection && matchLineFriend;
   });
+
+  // 友達未のLINE連携済みスタッフ数
+  const lineFriendUnsetCount = members.filter(m => m.lineLinked && !m.line_friend).length;
 
   const reset = (mode: AddMode = "none") => {
     setAddMode(mode);
@@ -723,7 +728,7 @@ export function MemberList({
       )}
 
       {/* フィルター（アコーディオン式） */}
-      {addMode === "none" && (companies.length > 1 || sections.length > 0) && (
+      {addMode === "none" && (companies.length > 1 || sections.length > 0 || lineFriendUnsetCount > 0) && (
         <div className="space-y-1.5">
           {/* カテゴリボタン行 */}
           <div className="flex gap-2 flex-wrap">
@@ -767,10 +772,25 @@ export function MemberList({
                 <span className={`text-[10px] transition-transform ${filterExpanded === "section" ? "rotate-180" : ""}`}>▾</span>
               </button>
             )}
-            {(companyFilter || sectionFilter) && (
+            {lineFriendUnsetCount > 0 && (
               <button
                 type="button"
-                onClick={() => { setCompanyFilter(""); setSectionFilter(""); setFilterExpanded("none"); }}
+                onClick={() => setLineFriendFilter(v => !v)}
+                className={[
+                  "flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-colors border",
+                  lineFriendFilter
+                    ? "bg-orange-500 text-white border-transparent"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700",
+                ].join(" ")}
+              >
+                友達未
+                <span className={`tabular-nums ${lineFriendFilter ? "opacity-80" : "opacity-60"}`}>{lineFriendUnsetCount}</span>
+              </button>
+            )}
+            {(companyFilter || sectionFilter || lineFriendFilter) && (
+              <button
+                type="button"
+                onClick={() => { setCompanyFilter(""); setSectionFilter(""); setLineFriendFilter(false); setFilterExpanded("none"); }}
                 className="px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
               >
                 クリア
@@ -1039,6 +1059,15 @@ export function MemberList({
                     }`}>
                       LINE{m.lineLinked ? "✓" : "未"}
                     </span>
+                    {m.lineLinked && (
+                      <span className={`text-[10px] px-1 py-0 rounded font-medium flex-shrink-0 ${
+                        m.line_friend
+                          ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                          : "bg-orange-100 dark:bg-orange-900/30 text-orange-500 dark:text-orange-400"
+                      }`}>
+                        友達{m.line_friend ? "✓" : "未"}
+                      </span>
+                    )}
                     <span className="text-[10px] px-1.5 py-0 rounded font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex-shrink-0">
                       {m.role === "project_admin" ? "管理者" : "スタッフ"}
                     </span>

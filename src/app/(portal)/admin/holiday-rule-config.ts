@@ -1,7 +1,13 @@
 export const RULE_CONFIG = [
   {
+    key:   "open_day",
+    label: "申請受付開始日",
+    unit:  "日",
+    hint:  "毎月XX日から翌月分の希望休申請を受け付け開始",
+  },
+  {
     key:   "deadline_day",
-    label: "申請期限日",
+    label: "申請終了期日",
     unit:  "日",
     hint:  "翌月分の希望休を毎月XX日までに申請",
   },
@@ -10,6 +16,12 @@ export const RULE_CONFIG = [
     label: "月上限（1人あたり）",
     unit:  "日",
     hint:  "1人が1ヶ月に申請できる上限日数",
+  },
+  {
+    key:   "weekend_limit",
+    label: "土日申請可能日数",
+    unit:  "日",
+    hint:  "月上限のうち土日に使える日数の上限",
   },
   {
     key:   "daily_limit_count",

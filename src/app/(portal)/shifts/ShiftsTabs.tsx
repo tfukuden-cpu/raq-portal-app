@@ -55,8 +55,10 @@ type Props = {
   holidayRequests: HolidayRequest[];
   shiftRequests: ShiftRequest[];
   shiftOpenings: ShiftOpening[];
+  holidayOpenDay?: number | null;
   holidayDeadlineDay?: number | null;
   holidayMaxDaysPerMonth?: number | null;
+  holidayWeekendLimit?: number | null;
 };
 
 type TabKey = "shift" | "holiday" | "request";
@@ -71,7 +73,7 @@ export default function ShiftsTabs({
   projectId,
   shifts, changeLogs = [], todayStr, initialYear, initialMonth, minMonth, maxMonth,
   holidayRequests, shiftRequests, shiftOpenings,
-  holidayDeadlineDay = null, holidayMaxDaysPerMonth = null,
+  holidayOpenDay = null, holidayDeadlineDay = null, holidayMaxDaysPerMonth = null, holidayWeekendLimit = null,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("shift");
   // シフトタブの月ナビ状態（ShiftCalendar に渡す制御値）
@@ -157,8 +159,10 @@ export default function ShiftsTabs({
             holidayRequests={holidayRequests}
             initialYear={initialYear}
             initialMonth={initialMonth}
+            openDay={holidayOpenDay}
             deadlineDay={holidayDeadlineDay}
             maxDaysPerMonth={holidayMaxDaysPerMonth}
+            weekendLimit={holidayWeekendLimit}
           />
         )}
 

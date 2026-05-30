@@ -37,7 +37,7 @@ export default async function MembersPage(props: {
   const [{ data: project }, { data: members }, { data: shiftPatterns }] = await Promise.all([
     supabase.from("projects").select("name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
-      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, end_date, churn_risk, churn_risk_since, staffs(name, display_name, company_name, line_user_id, account_number)")
+      .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, end_date, churn_risk, churn_risk_since, staffs(name, display_name, company_name, line_user_id, line_friend, account_number)")
       .eq("project_id", projectId),
     admin.from("shift_patterns")
       .select("name, section")
@@ -49,7 +49,7 @@ export default async function MembersPage(props: {
 
   const memberList = (members ?? []).map((m) => {
     const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
-      { name: string | null; display_name: string | null; company_name: string | null; line_user_id: string | null; account_number: string | null } | null;
+      { name: string | null; display_name: string | null; company_name: string | null; line_user_id: string | null; line_friend: boolean | null; account_number: string | null } | null;
     return {
       staffId:              m.staff_id,
       name:                 s?.display_name ?? s?.name ?? m.staff_id,
@@ -57,6 +57,7 @@ export default async function MembersPage(props: {
       role:                 m.role ?? "staff",
       lineLinked:           !!s?.line_user_id,
       line_user_id:         s?.line_user_id ?? null,
+      line_friend:          s?.line_friend ?? null,
       section:              m.section ?? null,
       sections:             ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean),
       account_number:       s?.account_number ?? null,

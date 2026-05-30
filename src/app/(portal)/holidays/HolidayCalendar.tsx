@@ -32,14 +32,18 @@ export default function HolidayCalendar({
   initialYear,
   initialMonth,
   appliedRequests,
+  openDay = null,
   deadlineDay = null,
   maxDaysPerMonth = null,
+  weekendLimit = null,
 }: {
   initialYear: number;
   initialMonth: number;
   appliedRequests: AppliedRequest[];
+  openDay?: number | null;
   deadlineDay?: number | null;
   maxDaysPerMonth?: number | null;
+  weekendLimit?: number | null;
 }) {
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
@@ -64,6 +68,9 @@ export default function HolidayCalendar({
     : todayMonth;
   const canGoNext = !(year === maxApplyYear && month >= maxApplyMonth);
 
+  // 申請受付前チェック：今月は open_day を過ぎていないと申請不可
+  const beforeOpen = openDay !== null && todayDay < openDay;
+
   // 申請済み日付マップ
   const appliedMap = new Map(appliedRequests.map((r) => [r.request_date, r]));
 
@@ -73,6 +80,14 @@ export default function HolidayCalendar({
     r => r.request_date.startsWith(monthStr) && r.status === "approved"
   ).length;
   const remaining = maxDaysPerMonth !== null ? maxDaysPerMonth - approvedThisMonth : null;
+
+  // 土日のapproved件数（土日上限チェック用）
+  const approvedWeekendThisMonth = appliedRequests.filter(r => {
+    if (!r.request_date.startsWith(monthStr) || r.status !== "approved") return false;
+    const dow = new Date(r.request_date + "T00:00:00").getDay();
+    return dow === 0 || dow === 6;
+  }).length;
+  const remainingWeekend = weekendLimit !== null ? weekendLimit - approvedWeekendThisMonth : null;
 
   // 締切チェック：表示中の月が今月で、今日 > deadline_day なら締切済み
   const isCurrentMonth = year === todayYear && month === todayMonth;
@@ -98,8 +113,11 @@ export default function HolidayCalendar({
       setModal({ type: "detail", request: appliedMap.get(ds)! });
       return;
     }
-    if (pastDeadline || isFutureBlocked || isPastMonth) return;
+    if (beforeOpen || pastDeadline || isFutureBlocked || isPastMonth) return;
     if (remaining !== null && remaining <= 0 && !selected.includes(ds)) return;
+    const dow = new Date(ds + "T00:00:00").getDay();
+    const isWd = dow === 0 || dow === 6;
+    if (isWd && remainingWeekend !== null && remainingWeekend <= 0 && !selected.includes(ds)) return;
     setSelected((prev) =>
       prev.includes(ds) ? prev.filter((d) => d !== ds) : [...prev, ds]
     );
@@ -107,10 +125,19 @@ export default function HolidayCalendar({
 
   const handleApply = () => {
     if (selected.length === 0) return;
-    // 上限チェック
     if (remaining !== null && selected.length > remaining) {
       setError(`この月の残り申請枠は${remaining}日です`);
       return;
+    }
+    if (remainingWeekend !== null) {
+      const newWeekend = selected.filter(ds => {
+        const dow = new Date(ds + "T00:00:00").getDay();
+        return dow === 0 || dow === 6;
+      }).length;
+      if (newWeekend > remainingWeekend) {
+        setError(`この月の土日残り申請枠は${remainingWeekend}日です`);
+        return;
+      }
     }
     setNote("");
     setError(null);
@@ -165,6 +192,15 @@ export default function HolidayCalendar({
                 申請枠: 残{remaining ?? 0}/{maxDaysPerMonth}日
               </p>
             )}
+            {weekendLimit !== null && (
+              <p className={`text-[11px] tabular-nums ${
+                (remainingWeekend ?? 0) <= 0
+                  ? "text-amber-500 dark:text-amber-400 font-bold"
+                  : "text-zinc-400"
+              }`}>
+                土日枠: 残{remainingWeekend ?? 0}/{weekendLimit}日
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -176,20 +212,36 @@ export default function HolidayCalendar({
           </button>
         </div>
 
+        {/* 申請受付前 */}
+        {beforeOpen && isCurrentMonth && (
+          <div className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-xl px-3 py-2.5">
+            申請受付は毎月{openDay}日から開始します（現在{todayDay}日）
+          </div>
+        )}
         {/* 期限・上限警告 */}
         {pastDeadline && (
           <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-xl px-3 py-2.5">
-            申請締切日（{deadlineDay}日）を過ぎているため、今月分の新規申請・取り下げはできません
+            申請終了期日（{deadlineDay}日）を過ぎているため、今月分の新規申請・取り下げはできません
           </div>
         )}
-        {!pastDeadline && deadlineDay !== null && isCurrentMonth && (
+        {!pastDeadline && !beforeOpen && deadlineDay !== null && isCurrentMonth && (
           <div className="text-xs text-zinc-400 px-1">
             今月の申請締切: {month}/{deadlineDay}
+          </div>
+        )}
+        {!pastDeadline && !beforeOpen && openDay !== null && isCurrentMonth && (
+          <div className="text-xs text-zinc-400 px-1">
+            申請受付: 毎月{openDay}日〜{deadlineDay !== null ? `${deadlineDay}日` : ""}
           </div>
         )}
         {remaining !== null && remaining <= 0 && !pastDeadline && (
           <div className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2.5">
             この月の申請上限（{maxDaysPerMonth}日）に達しています
+          </div>
+        )}
+        {remainingWeekend !== null && remainingWeekend <= 0 && !pastDeadline && (
+          <div className="text-xs text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-xl px-3 py-2.5">
+            この月の土日申請上限（{weekendLimit}日）に達しています
           </div>
         )}
 
@@ -212,6 +264,8 @@ export default function HolidayCalendar({
             const isSelected = selected.includes(ds);
             const dow = new Date(year, month - 1, d).getDay();
             const atLimit = remaining !== null && remaining <= 0 && !isSelected;
+            const isWd = dow === 0 || dow === 6;
+            const atWeekendLimit = isWd && remainingWeekend !== null && remainingWeekend <= 0 && !isSelected;
 
             let cellClass =
               "rounded-lg py-2 text-sm font-medium transition-colors cursor-pointer select-none ";
@@ -225,7 +279,7 @@ export default function HolidayCalendar({
                   : "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900";
             } else if (isSelected) {
               cellClass += "bg-blue-600 text-white";
-            } else if (pastDeadline || atLimit) {
+            } else if (beforeOpen || pastDeadline || atLimit || atWeekendLimit) {
               cellClass += "text-zinc-300 dark:text-zinc-600 cursor-default";
             } else {
               cellClass +=

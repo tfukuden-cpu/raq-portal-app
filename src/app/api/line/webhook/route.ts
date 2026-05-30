@@ -87,18 +87,18 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // ── ブロック/フォロー解除 → line_blocked フラグ管理 ──
-        if (event.type === "unfollow" && userId) {
-          await admin
-            .from("staffs")
-            .update({ line_blocked: true })
-            .eq("line_user_id", userId);
-        }
-
+        // ── フォロー → line_friend=true / ブロック・解除 → line_friend=false ──
         if (event.type === "follow" && userId) {
           await admin
             .from("staffs")
-            .update({ line_blocked: false })
+            .update({ line_blocked: false, line_friend: true })
+            .eq("line_user_id", userId);
+        }
+
+        if (event.type === "unfollow" && userId) {
+          await admin
+            .from("staffs")
+            .update({ line_blocked: true, line_friend: false })
             .eq("line_user_id", userId);
         }
 
