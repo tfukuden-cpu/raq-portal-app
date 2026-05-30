@@ -407,6 +407,15 @@ function NotifyModal({
     return true;
   }
 
+  // 「通知なしで確定」：保存のみ
+  async function handleSaveOnly() {
+    setBusy(true);
+    setSaveError(null);
+    const ok = await doSave();
+    setBusy(false);
+    if (ok) onSaved();
+  }
+
   // 「LINEで送信」で保存＋通知
   async function handleSend() {
     setBusy(true);
@@ -500,24 +509,31 @@ function NotifyModal({
           </div>
         )}
 
-        <div className="px-4 pb-4 pt-2 flex gap-2 shrink-0">
+        <div className="px-4 pb-4 pt-2 flex flex-col gap-2 shrink-0">
           {result ? (
             <button onClick={onSaved}
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+              className="py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors">
               閉じる
             </button>
           ) : (
             <>
-              {/* キャンセル：保存せず編集に戻る */}
-              <button onClick={onCancel} disabled={busy}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors">
-                キャンセル
-              </button>
-              {/* LINE送信：保存＋通知 */}
+              {/* LINE送信：保存＋通知（メインアクション） */}
               <button onClick={handleSend} disabled={busy || selected.size === 0}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 transition-colors">
-                {busy ? "保存中…" : `LINEで送信（${selected.size}名）`}
+                className="py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 transition-colors">
+                {busy ? "保存中…" : `LINEで通知して確定（${selected.size}名）`}
               </button>
+              <div className="flex gap-2">
+                {/* キャンセル：保存せず編集に戻る */}
+                <button onClick={onCancel} disabled={busy}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors">
+                  キャンセル
+                </button>
+                {/* 通知なしで確定：保存のみ */}
+                <button onClick={handleSaveOnly} disabled={busy}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors">
+                  通知なしで確定
+                </button>
+              </div>
             </>
           )}
         </div>
