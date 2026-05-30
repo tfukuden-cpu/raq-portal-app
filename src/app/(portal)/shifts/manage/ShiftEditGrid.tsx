@@ -881,6 +881,8 @@ export default function ShiftEditGrid({
   const [showSummaryRows, setShowSummaryRows] = useState(true);
   // 並び順：番号順 or セクション順（props の初期値を引き継ぐ）
   const [sortByAccountLocal, setSortByAccountLocal] = useState(sortByAccount ?? false);
+  // SV並び替えオーバーライド（staffId[]）
+  const [svOrderOverride, setSvOrderOverride] = useState<string[]>([]);
   // セクションフィルタ（"" = 全員表示）
   const [filterSection, setFilterSection] = useState<string>("");
   // インラインパターンピッカー
@@ -1416,6 +1418,19 @@ export default function ShiftEditGrid({
     const m = acc.match(/(\d+)/);
     return m ? parseInt(m[1]) : Infinity;
   };
+
+  // SV サブタイプ判定ヘルパー（sortedMembersBySection より前に定義が必要）
+  const svSubType = (m: Member | { preferred_shift: string | null }): "早番" | "中番" | "遅番" | "その他" => {
+    const ps = (m as Member).preferred_shift ?? "";
+    if (ps.includes("早")) return "早番";
+    if (ps.includes("中")) return "中番";
+    if (ps.includes("遅")) return "遅番";
+    return "その他";
+  };
+
+  // SV グループ表示順: 早番 → 遅番 → 中番
+  const SV_SUB_ORDER: Record<string, number> = { "早番": 0, "遅番": 1, "中番": 2, "その他": 3 };
+
   const sortedMembersBySection = useMemo(() => {
     if (sortByAccountLocal) {
       // 番号順モード：SV を上部固定（名前順）、SV以外をアカウント番号昇順
@@ -1429,11 +1444,25 @@ export default function ShiftEditGrid({
         return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
       });
     }
-    // デフォルト：セクション順 → SVは名前順・その他はアカウント番号順
+    // デフォルト：セクション順 → SVはsvOrderOverride順・その他はアカウント番号順
     return [...activeMembers].sort((a, b) => {
       const ra = sectionRank(a.section);
       const rb = sectionRank(b.section);
       if (ra !== rb) return ra - rb;
+      const aIsSV = a.section === "SV";
+      const bIsSV = b.section === "SV";
+      if (aIsSV && bIsSV) {
+        const ai = svOrderOverride.indexOf(a.id);
+        const bi = svOrderOverride.indexOf(b.id);
+        if (ai !== -1 && bi !== -1) return ai - bi; // 手動並び替えが優先
+        if (ai !== -1) return -1;
+        if (bi !== -1) return 1;
+        // デフォルト: 早番→遅番→中番→その他の順
+        const ra = SV_SUB_ORDER[svSubType(a)] ?? 3;
+        const rb = SV_SUB_ORDER[svSubType(b)] ?? 3;
+        if (ra !== rb) return ra - rb;
+        return a.name.localeCompare(b.name, "ja");
+      }
       if (a.section !== "SV") {
         const na = getAccNumGrid(a.accountNumber);
         const nb = getAccNumGrid(b.accountNumber);
@@ -1441,7 +1470,7 @@ export default function ShiftEditGrid({
       }
       return a.name.localeCompare(b.name, "ja");
     });
-  }, [activeMembers, sortByAccountLocal]);
+  }, [activeMembers, sortByAccountLocal, svOrderOverride]);
 
   // セクションフィルタ適用済みリスト
   const displayMembers = useMemo(() =>
@@ -1467,6 +1496,13 @@ export default function ShiftEditGrid({
     );
   }, [activeMembers]);
 
+  const SV_GROUP_STYLES = {
+    "早番": { header: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300", row: "bg-amber-50 dark:bg-amber-950" },
+    "中番": { header: "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500",        row: "bg-zinc-100 dark:bg-zinc-800" },
+    "遅番": { header: "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300", row: "bg-purple-50 dark:bg-purple-950" },
+    "その他": { header: "bg-zinc-100 dark:bg-zinc-800 text-zinc-500", row: "bg-white dark:bg-zinc-950" },
+  } as const;
+
   // 充足サマリーに表示するパターン（SVは各パターン個別に表示）
   const summaryPatterns = useMemo(() =>
     shiftPatterns.filter(p => {
@@ -1475,6 +1511,12 @@ export default function ShiftEditGrid({
       if ((p.required_weekday ?? 0) > 0) return true;
       if ((p.required_weekend ?? 0) > 0) return true;
       return slotRequirements.some(r => r.pattern_name === p.name);
+    }).sort((a, b) => {
+      // SV パターン内は 早番→遅番→中番 の順に並べる
+      if (a.section !== "SV" || b.section !== "SV") return 0;
+      const rankA = a.name.includes("早") ? 0 : a.name.includes("遅") ? 1 : a.name.includes("中") ? 2 : 3;
+      const rankB = b.name.includes("早") ? 0 : b.name.includes("遅") ? 1 : b.name.includes("中") ? 2 : 3;
+      return rankA - rankB;
     }),
   [shiftPatterns, slotRequirements]);
 
@@ -1612,7 +1654,7 @@ export default function ShiftEditGrid({
   const NAME_W = 100;
   const TOT_W = 52;     // 合計列幅
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
-  const SUM_ROW_H = 20; // 20px (充足サマリー行の高さ)
+  const SUM_ROW_H = 34; // 34px (充足サマリー行の高さ)
 
   // 前月末5日間の日付リスト
   const prevDates = useMemo(() => {
@@ -1695,6 +1737,9 @@ export default function ShiftEditGrid({
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 leading-tight">
             {draftCount > 0 ? `${draftCount}件 変更中` : "シフト編集"}
+          </span>
+          <span className="text-xs text-amber-700 dark:text-amber-400 font-medium leading-tight">
+            {targetMonth.split("-").map(Number)[0]}年{targetMonth.split("-").map(Number)[1]}月
           </span>
           {draftMsg && (
             <span className="text-[10px] text-green-600 dark:text-green-400">{draftMsg}</span>
@@ -2054,9 +2099,20 @@ export default function ShiftEditGrid({
               </thead>
               <tbody>
                 {summaryPatterns.map((pattern, patIdx, arr) => {
-                  // SV合計行を挿入: SV パターンが2つ以上ある場合、最後のSVパターンの直後に追加
-                  const svPats = arr.filter(p => p.section === "SV");
-                  const isSvTotal = svPats.length >= 2 && arr[patIdx + 1]?.section !== "SV" && pattern.section === "SV";
+                  // 早番+遅番 合計行: 遅番の最後パターン直後（次が中番 or SV外）に表示
+                  const svEarlyPats = arr.filter(p => p.section === "SV" && p.name.includes("早"));
+                  const svLatePats  = arr.filter(p => p.section === "SV" && p.name.includes("遅"));
+                  const hasEarlyOrLate = svEarlyPats.length > 0 || svLatePats.length > 0;
+                  // 「遅番パターンの最後」＝次が中番 or SV以外 or 配列末尾
+                  const isEarlyLateTotal = hasEarlyOrLate
+                    && pattern.section === "SV"
+                    && (pattern.name.includes("早") || pattern.name.includes("遅"))
+                    && (arr[patIdx + 1]?.section !== "SV"
+                        || arr[patIdx + 1]?.name.includes("中")
+                        || (!arr[patIdx + 1]?.name.includes("早") && !arr[patIdx + 1]?.name.includes("遅")));
+                  // 旧個別合計は使用しない
+                  const isEarlyTotal = false;
+                  const isLateTotal  = false;
                   const isFirst = patIdx === 0;
                   const isLast  = patIdx === arr.length - 1;
                   return (
@@ -2087,22 +2143,23 @@ export default function ShiftEditGrid({
                         const isToday = date === todayJST;
                         const isSelected = selectedShortage?.date === date && selectedShortage?.patternName === pattern.name;
                         const isShortage = net > 0;
-                        let display: string, textCls: string, bgCls: string;
+                        let netDisplay: string, netCls: string, bgCls: string;
+                        const showSubLine = required > 0;
                         if (required === 0) {
-                          display = assigned > 0 ? String(assigned) : "";
-                          textCls = "text-zinc-400 dark:text-zinc-500";
+                          netDisplay = assigned > 0 ? String(assigned) : "";
+                          netCls = "text-zinc-400 dark:text-zinc-500";
                           bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
                         } else if (net > 0) {
-                          display = `${assigned}/${required}`;
-                          textCls = isSelected ? "text-white font-bold" : "text-red-600 dark:text-red-400 font-bold";
+                          netDisplay = `-${net}`;
+                          netCls = isSelected ? "text-white font-bold" : "text-red-600 dark:text-red-400 font-bold";
                           bgCls = isSelected ? "bg-red-500 dark:bg-red-600" : isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950";
                         } else if (net < 0) {
-                          display = `${assigned}/${required}`;
-                          textCls = "text-emerald-700 dark:text-emerald-400 font-bold";
+                          netDisplay = `+${-net}`;
+                          netCls = "text-emerald-700 dark:text-emerald-400 font-bold";
                           bgCls = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950";
                         } else {
-                          display = `${assigned}/${required}`;
-                          textCls = "text-emerald-500 dark:text-emerald-600";
+                          netDisplay = "✓";
+                          netCls = "text-emerald-400 dark:text-emerald-500 font-bold";
                           bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
                         }
                         return (
@@ -2114,8 +2171,11 @@ export default function ShiftEditGrid({
                                       : "border-b border-b-zinc-300 dark:border-b-zinc-600 border-r border-r-zinc-200 dark:border-r-zinc-700",
                             ].join(" ")}
                           >
-                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
-                              <span className={`text-[10px] leading-none ${textCls}`}>{display}</span>
+                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center gap-0.5">
+                              <span className={`text-[13px] font-bold leading-none ${netCls}`}>{netDisplay}</span>
+                              {showSubLine && (
+                                <span className={`text-[9px] leading-none opacity-80 ${isSelected ? "text-white" : "text-zinc-500 dark:text-zinc-400"}`}>{assigned}/{required}</span>
+                              )}
                             </div>
                           </td>
                         );
@@ -2124,77 +2184,85 @@ export default function ShiftEditGrid({
                         const totalAssigned = allDates.reduce((s, d) => s + getEffectiveCount(pattern.name, d), 0);
                         const totalRequired = allDates.reduce((s, d) => s + getRequired(pattern.name, d), 0);
                         const totalNet = totalRequired - totalAssigned;
-                        let totDisplay: string, totText: string, totBg: string;
+                        let totNetDisplay: string, totText: string, totBg: string;
+                        const totShowSubLine = totalRequired > 0;
                         if (totalRequired === 0) {
-                          totDisplay = totalAssigned > 0 ? String(totalAssigned) : "—";
+                          totNetDisplay = totalAssigned > 0 ? String(totalAssigned) : "—";
                           totText = "text-zinc-400 dark:text-zinc-500"; totBg = "bg-zinc-100 dark:bg-zinc-800";
                         } else if (totalNet > 0) {
-                          totDisplay = `${totalAssigned}/${totalRequired}`;
+                          totNetDisplay = `-${totalNet}`;
                           totText = "text-red-600 dark:text-red-400 font-bold"; totBg = "bg-red-100 dark:bg-red-950";
                         } else if (totalNet < 0) {
-                          totDisplay = `${totalAssigned}/${totalRequired}`;
+                          totNetDisplay = `+${-totalNet}`;
                           totText = "text-emerald-700 dark:text-emerald-400 font-bold"; totBg = "bg-emerald-100 dark:bg-emerald-950";
                         } else {
-                          totDisplay = `${totalAssigned}/${totalRequired}`;
-                          totText = "text-emerald-500 dark:text-emerald-600"; totBg = "bg-zinc-100 dark:bg-zinc-800";
+                          totNetDisplay = "✓";
+                          totText = "text-emerald-400 dark:text-emerald-500 font-bold"; totBg = "bg-zinc-100 dark:bg-zinc-800";
                         }
                         return (
                           <td className={["tabular-nums p-0 overflow-hidden border-l-2 border-zinc-300 dark:border-zinc-600", totBg,
                             isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
                             isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
                           ].join(" ")} style={{ position: "sticky", right: 0, zIndex: 12 }}>
-                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
-                              <span className={`text-[10px] leading-none ${totText}`}>{totDisplay}</span>
+                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center gap-0.5">
+                              <span className={`text-[13px] font-bold leading-none ${totText}`}>{totNetDisplay}</span>
+                              {totShowSubLine && (
+                                <span className="text-[9px] leading-none opacity-80 text-zinc-500 dark:text-zinc-400">{totalAssigned}/{totalRequired}</span>
+                              )}
                             </div>
                           </td>
                         );
                       })()}
                     </tr>
-                    {/* SV合計行：SVパターンが2つ以上あり、かつこれが最後のSVパターン行のとき */}
-                    {isSvTotal && (() => {
-                      const totalAssignedByDate = allDates.map(d => svPats.reduce((s, p) => s + getEffectiveCount(p.name, d), 0));
-                      const totalRequiredByDate = allDates.map(d => svPats.reduce((s, p) => s + getRequired(p.name, d), 0));
-                      const grandAssigned = totalAssignedByDate.reduce((s, v) => s + v, 0);
-                      const grandRequired = totalRequiredByDate.reduce((s, v) => s + v, 0);
-                      const grandNet = grandRequired - grandAssigned;
-                      let totDisplay: string, totText: string, totBg: string;
-                      if (grandRequired === 0) { totDisplay = grandAssigned > 0 ? String(grandAssigned) : "—"; totText = "text-zinc-400 dark:text-zinc-500"; totBg = "bg-zinc-200 dark:bg-zinc-700"; }
-                      else if (grandNet > 0) { totDisplay = `${grandAssigned}/${grandRequired}`; totText = "text-red-600 dark:text-red-400 font-bold"; totBg = "bg-red-200 dark:bg-red-900/60"; }
-                      else if (grandNet < 0) { totDisplay = `${grandAssigned}/${grandRequired}`; totText = "text-emerald-700 dark:text-emerald-400 font-bold"; totBg = "bg-emerald-200 dark:bg-emerald-900/60"; }
-                      else { totDisplay = `${grandAssigned}/${grandRequired}`; totText = "text-emerald-600 dark:text-emerald-500"; totBg = "bg-zinc-200 dark:bg-zinc-700"; }
+                    {/* 早番+遅番 合計行（中番の前に表示） */}
+                    {isEarlyLateTotal && (() => {
+                      const elPats = [...svEarlyPats, ...svLatePats];
+                      const elAssignedByDate = allDates.map(d => elPats.reduce((s, p) => s + getEffectiveCount(p.name, d), 0));
+                      const elRequiredByDate = allDates.map(d => elPats.reduce((s, p) => s + getRequired(p.name, d), 0));
+                      const elGrandAsgn = elAssignedByDate.reduce((s, v) => s + v, 0);
+                      const elGrandReq  = elRequiredByDate.reduce((s, v) => s + v, 0);
+                      const elGrandNet  = elGrandReq - elGrandAsgn;
+                      let elTotDisp: string, elTotText: string, elTotBg: string;
+                      if (elGrandReq === 0) { elTotDisp = elGrandAsgn > 0 ? String(elGrandAsgn) : "—"; elTotText = "text-zinc-400 dark:text-zinc-500"; elTotBg = "bg-zinc-200 dark:bg-zinc-700"; }
+                      else if (elGrandNet > 0) { elTotDisp = `-${elGrandNet}`; elTotText = "text-red-600 dark:text-red-400 font-bold"; elTotBg = "bg-red-200 dark:bg-red-900/60"; }
+                      else if (elGrandNet < 0) { elTotDisp = `+${-elGrandNet}`; elTotText = "text-emerald-700 dark:text-emerald-400 font-bold"; elTotBg = "bg-emerald-200 dark:bg-emerald-900/60"; }
+                      else { elTotDisp = "✓"; elTotText = "text-emerald-400 dark:text-emerald-500 font-bold"; elTotBg = "bg-zinc-200 dark:bg-zinc-700"; }
                       return (
-                        <tr key="sv-total-row" style={{ height: `${SUM_ROW_H}px` }} className="bg-zinc-100 dark:bg-zinc-800">
+                        <tr key="sv-el-total-row" style={{ height: `${SUM_ROW_H}px` }} className="bg-zinc-100 dark:bg-zinc-800">
                           <td className="p-0 overflow-hidden bg-zinc-400 dark:bg-zinc-500 border-r-2 border-zinc-500 dark:border-zinc-400 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400"
                             style={{ position: "sticky", left: 0, zIndex: 10 }}>
                             <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-2">
-                              <span className="text-[10px] font-bold text-white dark:text-zinc-900 leading-none truncate block">SV合計</span>
+                              <span className="text-[10px] font-bold text-white dark:text-zinc-900 leading-none truncate block">合計</span>
                             </div>
                           </td>
                           {prevDates.map((d) => (
-                            <td key={`prev-svtot-${d}`} className="p-0 bg-zinc-400 dark:bg-zinc-500 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400 border-r border-r-zinc-300 dark:border-r-zinc-600" />
+                            <td key={`prev-eltot-${d}`} className="p-0 bg-zinc-400 dark:bg-zinc-500 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400 border-r border-r-zinc-300 dark:border-r-zinc-600" />
                           ))}
                           {allDates.map((date, di) => {
-                            const asgn = totalAssignedByDate[di];
-                            const req  = totalRequiredByDate[di];
+                            const asgn = elAssignedByDate[di];
+                            const req  = elRequiredByDate[di];
                             const net  = req - asgn;
                             const isToday = date === todayJST;
-                            let disp: string, tcls: string, bcls: string;
-                            if (req === 0) { disp = asgn > 0 ? String(asgn) : ""; tcls = "text-zinc-500 dark:text-zinc-400"; bcls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800"; }
-                            else if (net > 0) { disp = `${asgn}/${req}`; tcls = "text-red-700 dark:text-red-400 font-bold"; bcls = isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950"; }
-                            else if (net < 0) { disp = `${asgn}/${req}`; tcls = "text-emerald-700 dark:text-emerald-400 font-bold"; bcls = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950"; }
-                            else { disp = `${asgn}/${req}`; tcls = "text-emerald-600 dark:text-emerald-500"; bcls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800"; }
+                            let nd: string, tc: string, bc: string;
+                            const showSub = req > 0;
+                            if (req === 0) { nd = asgn > 0 ? String(asgn) : ""; tc = "text-zinc-500 dark:text-zinc-400"; bc = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800"; }
+                            else if (net > 0) { nd = `-${net}`; tc = "text-red-600 dark:text-red-400 font-bold"; bc = isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950"; }
+                            else if (net < 0) { nd = `+${-net}`; tc = "text-emerald-700 dark:text-emerald-400 font-bold"; bc = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950"; }
+                            else { nd = "✓"; tc = "text-emerald-400 dark:text-emerald-500 font-bold"; bc = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800"; }
                             return (
-                              <td key={date} className={["tabular-nums p-0 overflow-hidden border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400 border-r border-r-zinc-200 dark:border-r-zinc-700", bcls].join(" ")}>
-                                <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
-                                  <span className={`text-[10px] leading-none ${tcls}`}>{disp}</span>
+                              <td key={date} className={["tabular-nums p-0 overflow-hidden border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400 border-r border-r-zinc-200 dark:border-r-zinc-700", bc].join(" ")}>
+                                <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center gap-0.5">
+                                  <span className={`text-[13px] font-bold leading-none ${tc}`}>{nd}</span>
+                                  {showSub && <span className="text-[9px] leading-none opacity-80 text-zinc-500 dark:text-zinc-400">{asgn}/{req}</span>}
                                 </div>
                               </td>
                             );
                           })}
-                          <td className={["tabular-nums p-0 overflow-hidden border-l-2 border-zinc-400 dark:border-zinc-500 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400", totBg].join(" ")}
+                          <td className={["tabular-nums p-0 overflow-hidden border-l-2 border-zinc-400 dark:border-zinc-500 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400", elTotBg].join(" ")}
                             style={{ position: "sticky", right: 0, zIndex: 12 }}>
-                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center justify-center">
-                              <span className={`text-[10px] leading-none ${totText}`}>{totDisplay}</span>
+                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center gap-0.5">
+                              <span className={`text-[13px] font-bold leading-none ${elTotText}`}>{elTotDisp}</span>
+                              {elGrandReq > 0 && <span className="text-[9px] leading-none opacity-80 text-zinc-500 dark:text-zinc-400">{elGrandAsgn}/{elGrandReq}</span>}
                             </div>
                           </td>
                         </tr>
@@ -2279,6 +2347,14 @@ export default function ShiftEditGrid({
                 // 番号順モード：SV のヘッダーのみ表示、SV以外は非表示
                 const showSectionHeader = !filterSection && member.section !== prevSection
                   && (!sortByAccountLocal || member.section === "SV");
+                // SV サブグループヘッダー
+                const prevMember = idx > 0 ? displayMembers[idx - 1] : null;
+                const showSvSubHeader = member.section === "SV"
+                  && (!sortByAccountLocal)
+                  && (!filterSection)
+                  && svSubType(member) !== svSubType(prevMember ?? { preferred_shift: null } as Member);
+                const svType = svSubType(member);
+                const svStyle = SV_GROUP_STYLES[svType];
                 // 離脱リスク（行レベル）オーバーライド込み
                 const _rowChurnOv = churnRiskOverrides.get(member.id);
                 const effChurnRisk = _rowChurnOv !== undefined ? _rowChurnOv.churn_risk : (member.churn_risk ?? false);
@@ -2324,6 +2400,14 @@ export default function ShiftEditGrid({
                         })()}
                       </tr>
                     )}
+                    {showSvSubHeader && member.section === "SV" && (
+                      <tr>
+                        <td className={`sticky left-0 z-10 px-3 py-0.5 border-b text-[9px] font-bold ${svStyle.header}`}>
+                          {svType}
+                        </td>
+                        <td colSpan={prevDates.length + allDates.length + 1} className={`border-b ${svStyle.header}`} />
+                      </tr>
+                    )}
                     <tr
                       ref={(el) => {
                         if (el) staffRowRefs.current.set(member.id, el);
@@ -2337,6 +2421,8 @@ export default function ShiftEditGrid({
                           ? "bg-blue-100 dark:bg-blue-900/40"
                           : effChurnRisk
                           ? "bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40"
+                          : member.section === "SV"
+                          ? `${svStyle.row} hover:brightness-95`
                           : "bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-800/60",
                       ].join(" ")}
                       onClick={() => setStaffInfoTarget(member)}
@@ -2345,7 +2431,7 @@ export default function ShiftEditGrid({
                           {isFocusedRow && (
                             <span className="w-1.5 h-5 rounded-full bg-blue-500 shrink-0" />
                           )}
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <span className={[
                               "text-[11px] font-semibold block leading-tight truncate",
                               isFocusedRow ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-200",
@@ -2370,6 +2456,40 @@ export default function ShiftEditGrid({
                               )}
                             </div>
                           </div>
+                          {member.section === "SV" && (
+                            <div className="flex flex-col gap-0 shrink-0 ml-auto">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSvOrderOverride(prev => {
+                                    const list = prev.length ? prev : sortedMembersBySection.filter(m => m.section === "SV").map(m => m.id);
+                                    const i = list.indexOf(member.id);
+                                    if (i <= 0) return list;
+                                    const next = [...list];
+                                    [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                                    return next;
+                                  });
+                                }}
+                                className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none"
+                              >▲</button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSvOrderOverride(prev => {
+                                    const list = prev.length ? prev : sortedMembersBySection.filter(m => m.section === "SV").map(m => m.id);
+                                    const i = list.indexOf(member.id);
+                                    if (i < 0 || i >= list.length - 1) return list;
+                                    const next = [...list];
+                                    [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                                    return next;
+                                  });
+                                }}
+                                className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none"
+                              >▼</button>
+                            </div>
+                          )}
                         </div>
                       </td>
                       {/* 前月末セル（読み取り専用・グレー表示） */}

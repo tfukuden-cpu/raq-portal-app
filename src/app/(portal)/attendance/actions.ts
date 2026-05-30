@@ -226,6 +226,77 @@ export async function getStaffDetailsAction(
   };
 }
 
+/** スタッフを別セクションのシフトへ移動（最も開始時刻が近いパターンを自動選択） */
+export async function moveSectionAction(
+  projectId: string,
+  staffId: string,
+  shiftDate: string, // YYYY-MM-DD
+  targetSection: string,
+): Promise<{ ok: boolean; newShiftName?: string; error?: string }> {
+  await requireAdmin(projectId);
+  const admin = createAdminClient();
+
+  try {
+    // 1. 現在のシフトを取得
+    const { data: currentShift } = await admin
+      .from("shifts")
+      .select("shift_name, shift_start, shift_end")
+      .eq("project_id", projectId)
+      .eq("staff_id", staffId)
+      .eq("shift_date", shiftDate)
+      .maybeSingle();
+
+    if (!currentShift) return { ok: false, error: "シフトが見つかりません" };
+
+    // 2. ターゲットセクションのシフトパターンを取得
+    const { data: patterns } = await admin
+      .from("shift_patterns")
+      .select("name, start_time, end_time")
+      .eq("project_id", projectId)
+      .eq("section", targetSection)
+      .order("sort_order");
+
+    if (!patterns || patterns.length === 0) {
+      return { ok: false, error: `${targetSection}にシフトパターンがありません` };
+    }
+
+    // 3. 現在の開始時刻に最も近いパターンを選択
+    const currentStart = (currentShift.shift_start as string | null) ?? "09:00";
+    let bestPattern = patterns[0];
+    let minDiff = Infinity;
+    for (const p of patterns) {
+      const diff = Math.abs(
+        _timeToMinutes((p.start_time as string | null) ?? "09:00") -
+        _timeToMinutes(currentStart),
+      );
+      if (diff < minDiff) { minDiff = diff; bestPattern = p; }
+    }
+
+    // 4. shifts テーブルを更新
+    const { error: updateErr } = await admin
+      .from("shifts")
+      .update({
+        shift_name:  bestPattern.name,
+        shift_start: bestPattern.start_time,
+        shift_end:   bestPattern.end_time,
+      })
+      .eq("project_id", projectId)
+      .eq("staff_id", staffId)
+      .eq("shift_date", shiftDate);
+
+    if (updateErr) return { ok: false, error: updateErr.message };
+    return { ok: true, newShiftName: bestPattern.name as string };
+
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+function _timeToMinutes(time: string): number {
+  const parts = time.split(":").map(Number);
+  return (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+}
+
 /** 公休スタッフへ出勤依頼LINE一括送信 */
 export async function sendBulkWorkRequestAction(
   projectId: string,

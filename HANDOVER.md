@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-30（v54：シフトLINE通知ボタン新設・個人向けお知らせ・お知らせ管理テーブルUI刷新）
+最終更新：2026-05-30（v55：LINE友達追加ゲート・Web Push VAPID修正・シフトグリッドSVグループ表示改善）
 
 ---
 
@@ -106,6 +106,34 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | アバターシステム | 🔄 設計済み・パーツ未実装（低優先） |
 
 ### 次に優先すべきこと（新しいセッションはここから）
+
+**v55 完了内容**
+- **LINE友達追加ゲート（LineFriendGate）**
+  - `staffs.line_friend boolean` カラムを参照し、未追加ユーザーに全画面ゲートを表示
+  - 「友達追加する」ボタン押下 → LINE公式アカウント友達追加URLを開く
+  - `visibilitychange` イベントでLINEアプリから戻ってきたことを自動検知 → `confirmLineFriendAction` で `line_friend = true` をセット
+  - 「すでに追加済み・手動で確認する」ボタンで手動確認も可能
+  - `/api/line/webhook` で `follow` イベント → `line_friend = true`、`unfollow` → `line_friend = false`
+  - LINE OAuthコールバック（mode=link）でも `line_friend = true` をセット
+  - `layout.tsx` で `line_friend !== true` の場合にゲートを前面表示（LINE公式アカウントURLはbot infoから動的取得）
+- **Web Push VAPID キー修正**
+  - VAPID公開鍵・秘密鍵が不一致でApple Push Serviceから403 BadJwtTokenが返されていた問題を修正
+  - `web-push` ライブラリで新規キーペアを生成し `.env.local` および Vercel 環境変数を更新
+  - `PushPermissionRequest.tsx` を改修：既存サブスクリプションの `applicationServerKey` と現在のVAPID公開鍵を比較し、不一致の場合は自動的に再サブスクライブ
+- **メンバー管理に友達状態を表示・フィルター追加**
+  - `SettingsClient.tsx` の `Member` 型に `line_friend: boolean | null` を追加
+  - メンバー一覧に「友達✓」（emerald）・「友達未」（orange）チップを表示
+  - 「友達未 N」トグルボタン追加（LINEは連携済みだが友達追加未完了のスタッフを絞り込み）
+  - `admin/[projectId]/page.tsx` および `members/page.tsx` で `line_friend` をDBから取得
+- **シフト編集グリッド：SVグループ表示・充足テーブル改善**
+  - **充足テーブル2行表示**：差分（大きめ）と「配置/必要」を縦2行で表示（`SUM_ROW_H` を 20→34px に変更）
+  - **編集モード月表示**：ツールバーに「YYYY年M月」を表示
+  - **SV並び替えボタン**：SV名前セルに▲▼ボタンを追加。クリックで `svOrderOverride` を更新しSV内の表示順を手動変更可能
+  - **SVグループ分け・色付け**：早番=アンバー、遅番=パープル、中番=薄グレー の行背景色。グループ切り替わりに小ヘッダー行を表示
+  - **SV表示順**：早番→遅番→合計→中番（`SV_SUB_ORDER` で管理）
+  - **早番＋遅番合計行**：遅番の最終パターン直後（次が中番またはSV外）に「合計」行を表示（早番パターン + 遅番パターン合計）。旧「SV合計」行は廃止
+  - **バグ修正①**：`svSubType` / `SV_SUB_ORDER` を `sortedMembersBySection` useMemo より後に定義していたことで発生していたTDZランタイムエラーを修正（定義順を変更）
+  - **バグ修正②**：SV行背景色に半透明クラス（`/50`等）を使用していたためサブグループヘッダー文字が透けて見える問題を修正（完全不透明色に変更）
 
 **v54 完了内容**
 - **シフトLINE通知ボタン新設（ShiftLineNotifyButton）**
@@ -414,6 +442,7 @@ staffs（社員マスタ）
   avatar_color text,       ← 廃止予定（avatar_config に移行中）
   avatar_config jsonb,     ← ★v9新設（要SQL実行：セクション9参照）
   line_blocked boolean     ← ★v27新設（LINEブロック検知用。unfollowイベントでtrue）
+  line_friend  boolean     ← ★v55新設（LINE公式アカウント友達追加済みかどうか。followでtrue・unfollowでfalse・confirmLineFriendActionでtrue）
 
 project_members（兼務対応）
   staff_id, project_id, role (staff/project_admin),
@@ -1213,4 +1242,5 @@ export default async function Page({
 | 2026-05-27 | v37 | **スタッフ詳細設定に希望給追加** `project_members.desired_wage integer` カラム追加。メンバー設定モーダルの基本設定セクションに希望給（円/時）入力欄追加。メンバー一覧カードに¥1,200/h形式バッジ表示（設定済みのみ・アンバー色）。|
 | 2026-05-27 | v35 | **スタッフ設定モーダル再構成・研修設定UI刷新** ① `staff_trainings`に`training_name text`・`start_time time`・`end_time time`カラム追加（Supabase MCP）。② `TrainingSection.tsx`を全面リライト：「研修日を設定」ボタン→展開パネル（導入研修/研修/案件研修/カスタムの4タイプ選択・時間入力・複数日カレンダー選択・登録済みは半透明表示・タイプ別グループ表示+×削除チップ）。③ メンバー編集モーダルを4セクションに再構成（基本設定：氏名/所属会社/ロール/アカウント番号/セクション/アサイン日、シフト設定：稼働日数デフォルト月21日/優先セクション/優先パターン/連勤上限、研修設定：TrainingSection、離脱処理）。④ シフト設定折りたたみを廃止・常時表示化。⑤ 新規スタッフ追加のアサイン日を必須に変更（未入力時「作成して追加」ボタン無効）。⑥ 仮組みロジック（draft-actions.ts）のtrainingEntries生成でtraining_name/start_time/end_timeを使用、validShiftNamesに研修名を動的追加。|
 | 2026-05-29 | v53 | **シフト充足数インライン編集・シフトパターン並び替え・SV合計行・タスクLINE通知** ① ShiftEditGrid：充足行のパターン名セルに✎アイコン追加→モーダルで全日付の必要枠数を一括編集（slot_requirements upsert）。localSlotReqOverridesで保存前もグリッド即時反映。② SettingsClient：shift_patterns に sort_order カラム追加・ShiftPatternListにHTML5 Drag-and-Drop 並び替えUI追加（⠿ハンドル・ドラッグ時ハイライト・collapsedインデックスのリマップ）。③ SVパターン2件以上の場合に最後のSV行直後に「SV合計」行を自動追加（充足色ロジック適用）。④ addTaskManualAction/updateTaskAction：担当者設定時・変更時にLINEプッシュ。notify-config.ts に task_assigned 通知種別追加。⑤ /api/cron/notify に daily_task_remind セクション追加：当日期限・未完了・担当者ありタスクを当日8時に個人宛プッシュ。 |
+| 2026-05-30 | v55 | **LINE友達追加ゲート・Web Push VAPID修正・シフトグリッドSVグループ表示改善** ① `LineFriendGate.tsx` 新設：`line_friend` 未設定ユーザーに全画面ゲート表示。友達追加URLを開き `visibilitychange` で自動検知→`confirmLineFriendAction` で DB更新。手動確認ボタンも実装。LINE webhook（follow/unfollow）・OAuthコールバック（mode=link）でも `line_friend` を更新。② Web Push VAPID キーを再生成し `.env.local`・Vercel 環境変数を更新。`PushPermissionRequest.tsx` でサブスクリプションキーの不一致を検知し自動再登録。③ メンバー管理に「友達✓/友達未」チップ追加・「友達未 N」フィルターボタン追加（`line_friend` をDBから取得し `SettingsClient.tsx`・`members/page.tsx`・`admin/[projectId]/page.tsx` に反映）。④ ShiftEditGrid：充足テーブル2行表示（SUM_ROW_H=34px）・ツールバーに月表示・SV▲▼並び替えボタン・早番/遅番/中番グループ分け（色付け・小ヘッダー行）・SV表示順（早番→遅番→合計→中番）・早番＋遅番合計行（isEarlyLateTotal）。バグ修正：svSubType/SV_SUB_ORDER定義順TDZエラー・半透明背景による文字透け。 |
 | 2026-05-30 | v54 | **シフトLINE通知ボタン・個人向けお知らせ・お知らせ管理UI刷新** ① `ShiftLineNotifyButton.tsx` 新設：シフト管理に独立したLINE通知ボタン。テンプレート編集・名前検索・DB連動プレビュー（LINE風バブル）・個別/一括送信・アプリ内お知らせ同時投稿機能を搭載（シフト展開とは別・shift_month_statusを更新しない）。② `{シフト一覧}` 変数追加：notify-config.ts の shift_published テンプレートに追加、全シフト（公休含む）を `MM/DD（曜）シフト名 HH:MM〜HH:MM` 形式でフォーマット。③ `notices.target_staff_id text REFERENCES staffs(id)` カラム追加・RLS更新（target_staff_id IS NULL=全員閲覧可・値あり=本人+管理者のみ閲覧可）。④ `postShiftNoticeAction` 新設。⑤ `NoticesManageClient` をテーブルUIに全面刷新：`grid-cols-[6rem_7rem_1fr_auto]`（送信日時｜宛先｜お知らせ｜操作）・宛先検索・個人宛amber色表示・行クリック詳細モーダル。管理画面は adminClient でRLSバイパスし全お知らせ表示。 |

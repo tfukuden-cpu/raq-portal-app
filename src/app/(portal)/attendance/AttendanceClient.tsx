@@ -1,7 +1,7 @@
 ﻿"use client";
-import { useState, useMemo, useTransition, useRef, useEffect } from "react";
+import React, { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
-import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction, toggleChurnRiskAction } from "./actions";
+import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction, toggleChurnRiskAction, moveSectionAction } from "./actions";
 import type { SendResult } from "./actions";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/app/(portal)/seating/SeatingClient";
 import SeatingPlanClient, { type PlanSeat, type PlanStaff } from "@/app/(portal)/seating/plan/SeatingPlanClient";
@@ -64,6 +64,46 @@ export type ShiftChangeEntry = {
   changedByName: string;
   changedAt: string;
 };
+
+// ── セクション × 早番/遅番 カラーテーブル（ShiftEditGrid と統一）────────
+type ShiftColorSet = { early: string; late: string; def: string };
+
+/** 列コンテナ用：外枠ボーダー + ヘッダー背景 */
+const SECTION_COL: Record<string, { border: string; headerBg: string }> = {
+  "SV":       { border: "border-blue-200 dark:border-blue-800",      headerBg: "bg-blue-50 dark:bg-blue-950/50" },
+  "査定":     { border: "border-emerald-200 dark:border-emerald-800", headerBg: "bg-emerald-50 dark:bg-emerald-950/50" },
+  "販売":     { border: "border-orange-200 dark:border-orange-800",   headerBg: "bg-orange-50 dark:bg-orange-950/50" },
+  "MOTA":     { border: "border-red-200 dark:border-red-800",         headerBg: "bg-red-50 dark:bg-red-950/50" },
+  "リメイク": { border: "border-pink-200 dark:border-pink-800",       headerBg: "bg-pink-50 dark:bg-pink-950/50" },
+  "ローン":   { border: "border-violet-200 dark:border-violet-800",   headerBg: "bg-violet-50 dark:bg-violet-950/50" },
+};
+const SECTION_COL_FALLBACK = { border: "border-sky-200 dark:border-sky-800", headerBg: "bg-sky-50 dark:bg-sky-950/50" };
+
+/** カード用：背景 + ボーダー（早番=薄色、遅番=濃色） */
+const SECTION_CARD: Record<string, ShiftColorSet> = {
+  "SV":       { early: "bg-blue-50 border-blue-200 dark:bg-blue-950/60 dark:border-blue-800",            late: "bg-blue-100 border-blue-300 dark:bg-blue-900/50 dark:border-blue-700",           def: "bg-blue-50 border-blue-200 dark:bg-blue-950/50 dark:border-blue-800" },
+  "査定":     { early: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800", late: "bg-emerald-100 border-emerald-300 dark:bg-emerald-900/50 dark:border-emerald-700", def: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/50 dark:border-emerald-800" },
+  "販売":     { early: "bg-orange-50 border-orange-200 dark:bg-orange-950/60 dark:border-orange-800",     late: "bg-orange-100 border-orange-300 dark:bg-orange-900/50 dark:border-orange-700",    def: "bg-orange-50 border-orange-200 dark:bg-orange-950/50 dark:border-orange-800" },
+  "MOTA":     { early: "bg-red-50 border-red-200 dark:bg-red-950/60 dark:border-red-800",                 late: "bg-red-100 border-red-300 dark:bg-red-900/50 dark:border-red-700",                def: "bg-red-50 border-red-200 dark:bg-red-950/50 dark:border-red-800" },
+  "リメイク": { early: "bg-pink-50 border-pink-200 dark:bg-pink-950/60 dark:border-pink-800",             late: "bg-pink-100 border-pink-300 dark:bg-pink-900/50 dark:border-pink-700",             def: "bg-pink-50 border-pink-200 dark:bg-pink-950/50 dark:border-pink-800" },
+  "ローン":   { early: "bg-violet-50 border-violet-200 dark:bg-violet-950/60 dark:border-violet-800",     late: "bg-violet-100 border-violet-300 dark:bg-violet-900/50 dark:border-violet-700",    def: "bg-violet-50 border-violet-200 dark:bg-violet-950/50 dark:border-violet-800" },
+};
+const SECTION_CARD_FALLBACK: ShiftColorSet = {
+  early: "bg-sky-50 border-sky-200 dark:bg-sky-950/60 dark:border-sky-800",
+  late:  "bg-sky-100 border-sky-300 dark:bg-sky-900/50 dark:border-sky-700",
+  def:   "bg-sky-50 border-sky-200 dark:bg-sky-950/50 dark:border-sky-800",
+};
+
+/** section + shiftName + shiftStart からカードの bg + border クラスを返す */
+function getCardBg(section: string, shiftName: string, shiftStart: string | null): string {
+  const entry = SECTION_CARD[section] ?? SECTION_CARD_FALLBACK;
+  if (shiftName.includes("早番")) return entry.early;
+  if (shiftName.includes("遅番")) return entry.late;
+  const h = shiftStart ? parseInt(shiftStart.split(":")[0], 10) : null;
+  if (h !== null && h < 12) return entry.early;
+  if (h !== null && h >= 12) return entry.late;
+  return entry.def;
+}
 
 // ── 定数 ──────────────────────────────────────────────────
 const STATUS_LABEL: Record<StatusKey, string> = {
@@ -176,6 +216,101 @@ export default function AttendanceClient({
   const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string; churnRisk: boolean } | null>(null);
   const [detailMember, setDetailMember] = useState<MemberRow | null>(null);
 
+  // ── セクション間ドラッグ ──────────────────────────────────
+  const [dragStaffId, setDragStaffId] = useState<string | null>(null);
+  const [dragOverSection, setDragOverSection] = useState<string | null>(null);
+  const [sectionOverrides, setSectionOverrides] = useState<Map<string, string>>(new Map());
+
+  // ボード用：セクション×シフトグループ×メンバー（ドラッグオーバーライド反映）
+  type BoardMember = MemberRow & { shiftName: string; shiftStart: string | null };
+  type BoardGroup  = { shiftName: string; shiftStart: string | null; members: BoardMember[] };
+  type BoardSection = { section: string; groups: BoardGroup[] };
+
+  const boardSections = useMemo((): BoardSection[] => {
+    const all: BoardMember[] = grouped.flatMap(({ section: sec, shiftGroups }) =>
+      shiftGroups.flatMap(({ shiftName, shiftStart, members }) =>
+        members.map(m => ({ ...m, shiftName, shiftStart }))
+      )
+    );
+    // Key: "section|||shiftName"
+    const shiftMap = new Map<string, { shiftStart: string | null; members: BoardMember[] }>();
+    for (const m of all) {
+      const sec = sectionOverrides.get(m.staffId) ?? m.section;
+      const key = `${sec}|||${m.shiftName}`;
+      if (!shiftMap.has(key)) shiftMap.set(key, { shiftStart: m.shiftStart, members: [] });
+      shiftMap.get(key)!.members.push(m);
+    }
+    const sectionOrder: string[] = [];
+    const seen = new Set<string>();
+    for (const { section: sec } of grouped) {
+      if (!seen.has(sec)) { seen.add(sec); sectionOrder.push(sec); }
+    }
+    return sectionOrder.map(sec => {
+      const groups: BoardGroup[] = [];
+      for (const [key, val] of shiftMap) {
+        const sepIdx = key.indexOf("|||");
+        if (key.slice(0, sepIdx) === sec)
+          groups.push({ shiftName: key.slice(sepIdx + 3), shiftStart: val.shiftStart, members: val.members });
+      }
+      // 開始時刻昇順（早番→遅番）
+      groups.sort((a, b) => {
+        if (!a.shiftStart && !b.shiftStart) return a.shiftName.localeCompare(b.shiftName, "ja");
+        if (!a.shiftStart) return 1;
+        if (!b.shiftStart) return -1;
+        return a.shiftStart.localeCompare(b.shiftStart);
+      });
+      return { section: sec, groups };
+    });
+  }, [grouped, sectionOverrides]);
+
+  function handleSectionDrop(targetSection: string) {
+    if (!dragStaffId) return;
+    const staffId = dragStaffId;
+    const origSec = grouped
+      .flatMap(g => g.shiftGroups.flatMap(sg => sg.members))
+      .find(m => m.staffId === staffId)?.section ?? "";
+
+    setDragStaffId(null);
+    setDragOverSection(null);
+
+    if (origSec === targetSection) return; // 同じセクションなら何もしない
+
+    // 楽観的に画面に反映
+    setSectionOverrides(prev => new Map(prev).set(staffId, targetSection));
+
+    // DBへ即時反映（確定ボタン不要）
+    moveSectionAction(projectId, staffId, today, targetSection).then(res => {
+      if (!res.ok) {
+        // 失敗したら元に戻す
+        setSectionOverrides(prev => {
+          const next = new Map(prev);
+          next.delete(staffId);
+          return next;
+        });
+        setStatusToast(`移動できませんでした: ${res.error}`);
+        setTimeout(() => setStatusToast(null), 4000);
+      } else {
+        setStatusToast(`${targetSection}へ移動しました`);
+        setTimeout(() => setStatusToast(null), 2500);
+      }
+    });
+  }
+
+  function handleSectionRevert(staffId: string, originalSection: string) {
+    setSectionOverrides(prev => {
+      const next = new Map(prev);
+      next.delete(staffId);
+      return next;
+    });
+    // DBも元のセクションに戻す
+    moveSectionAction(projectId, staffId, today, originalSection).then(res => {
+      if (!res.ok) {
+        setStatusToast(`元に戻せませんでした: ${res.error}`);
+        setTimeout(() => setStatusToast(null), 4000);
+      }
+    });
+  }
+
   function handleStatusChange(staffId: string, newStatus: StatusKey) {
     setStatusMenuId(null);
     startTransition(async () => {
@@ -286,7 +421,7 @@ export default function AttendanceClient({
                 : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
             }`}
           >
-            当日シフト
+            出勤簿
           </button>
           <button
             onClick={() => setActiveTab("changes")}
@@ -396,157 +531,188 @@ export default function AttendanceClient({
           </div>
         )}
 
-        {/* ── 当日シフトタブ ── */}
+        {/* ── 出勤簿タブ（セクション横並びボード） ── */}
         {activeTab === "today" && grouped.length === 0 ? (
           <p className="text-sm text-zinc-400 text-center py-10">本日の出勤予定者はいません</p>
         ) : activeTab === "today" && (
-          <div className="space-y-2">
-            {grouped.map(({ section, shiftGroups }) => {
-              const sAll = shiftGroups.flatMap(g => g.members);
-              const sDep = sAll.filter(m => m.departureTime || m.clockIn).length;
-              const sClk = sAll.filter(m => m.clockIn).length;
-              const sAbs = sAll.filter(m => m.status === "absent").length;
-              const sTot = sAll.length;
+          <div className="overflow-x-auto -mx-4 px-4">
+            <div className="flex gap-3 pb-4 items-start" style={{ minWidth: "max-content" }}>
+              {boardSections.map(({ section, groups }) => {
+                const allMembers = groups.flatMap(g => g.members);
+                const present = allMembers.filter(m => {
+                  const s = localStatuses.get(m.staffId) ?? m.status;
+                  return s === "working" || s === "clocked_out" || s === "departed";
+                }).length;
+                const absCnt = allMembers.filter(m =>
+                  (localStatuses.get(m.staffId) ?? m.status) === "absent"
+                ).length;
+                const isDragTarget = dragOverSection === section;
+                const secCol = SECTION_COL[section] ?? SECTION_COL_FALLBACK;
 
-              return (
-                <details key={section} className="group bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-                  <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none list-none hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <ChevronRight className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-90 flex-shrink-0" />
-                      <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{section}</span>
-                      <span className="text-xs text-zinc-400">{sTot}名</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs tabular-nums">
-                      {enableDeparture && (
-                        <span className="text-blue-600 dark:text-blue-400 font-semibold">出発 {sDep}/{sTot}</span>
+                return (
+                  <div
+                    key={section}
+                    className={[
+                      "flex flex-col rounded-2xl border-2 transition-all w-52 shrink-0",
+                      "h-[calc(100dvh-280px)]",
+                      isDragTarget
+                        ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20 shadow-lg"
+                        : `${secCol.border} bg-white dark:bg-zinc-900`,
+                    ].join(" ")}
+                    onDragOver={e => { e.preventDefault(); setDragOverSection(section); }}
+                    onDragLeave={e => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node))
+                        setDragOverSection(null);
+                    }}
+                    onDrop={() => handleSectionDrop(section)}
+                  >
+                    {/* カラムヘッダー（固定） */}
+                    <div className={`px-3 pt-2.5 pb-2 border-b shrink-0 rounded-t-2xl ${secCol.headerBg} ${secCol.border.replace("border-", "border-b-")}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{section}</span>
+                        <span className="text-xs font-bold tabular-nums text-green-600 dark:text-green-400">
+                          {present}<span className="text-zinc-400 font-normal">/{allMembers.length}</span>
+                        </span>
+                      </div>
+                      {absCnt > 0 && (
+                        <span className="text-[11px] font-bold text-red-500 dark:text-red-400 block mt-0.5">
+                          欠員 {absCnt}名
+                        </span>
                       )}
-                      <span className="text-green-600 dark:text-green-400 font-semibold">出勤 {sClk}/{sTot}</span>
-                      {sAbs > 0 && <span className="text-red-500 font-semibold">欠勤 {sAbs}</span>}
                     </div>
-                  </summary>
 
-                  <div className="border-t border-zinc-100 dark:border-zinc-800">
-                    {shiftGroups.map(({ shiftName, shiftStart, shiftEnd, members: gMembers }) => (
-                      <div key={shiftName}>
-                        {/* シフト名サブヘッダー */}
-                        <div className="px-4 py-1.5 bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-between">
-                          <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                            {shiftName}{shiftStart && shiftEnd && ` ${shiftStart}〜${shiftEnd}`}
-                          </span>
-                          <span className="text-xs text-zinc-400">{gMembers.length}名</span>
-                        </div>
-                        {/* メンバー1行リスト */}
-                        <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                          {gMembers.map(m => {
-                            const currentStatus = localStatuses.get(m.staffId) ?? m.status;
-                            const canRemind = (enableDeparture && currentStatus === "not_departed") || currentStatus === "late";
-                            const isSelected = selectedIds.has(m.staffId);
-                            const isMenuOpen = statusMenuId === m.staffId;
-                            const effectiveChurnRisk = getEffectiveChurnRisk(m.staffId, m.churnRisk);
-                            return (
-                              <div
-                                key={m.staffId}
-                                className={`flex items-center gap-2 px-3 py-2 transition-colors ${isSelected ? "bg-blue-50 dark:bg-blue-950/20" : ""}`}
+                    {/* メンバーカード一覧（独立スクロール・スクロールバー非表示） */}
+                    <div
+                      className="flex flex-col gap-1.5 p-2 overflow-y-auto flex-1 min-h-0 [&::-webkit-scrollbar]:hidden"
+                      style={{ scrollbarWidth: "none" }}
+                    >
+                      {groups.map(({ shiftName, members }, gi) => (
+                        <React.Fragment key={shiftName}>
+                          {/* 複数シフトグループがある場合のみサブヘッダー */}
+                          {groups.length > 1 && (
+                            <div className={`flex items-center gap-1.5 ${gi > 0 ? "mt-0.5" : ""}`}>
+                              <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
+                              <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 shrink-0 tabular-nums">
+                                {shiftName}
+                              </span>
+                              <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
+                            </div>
+                          )}
+                      {members.map(m => {
+                        const currentStatus = localStatuses.get(m.staffId) ?? m.status;
+                        const isMenuOpen = statusMenuId === m.staffId;
+                        const effectiveChurnRisk = getEffectiveChurnRisk(m.staffId, m.churnRisk);
+                        const isMoved = sectionOverrides.has(m.staffId);
+                        const isDragging = dragStaffId === m.staffId;
+                        const canRemind = (enableDeparture && currentStatus === "not_departed") || currentStatus === "late";
+                        const isSelected = selectedIds.has(m.staffId);
+
+                        return (
+                          <div
+                            key={m.staffId}
+                            draggable
+                            onDragStart={() => setDragStaffId(m.staffId)}
+                            onDragEnd={() => { setDragStaffId(null); setDragOverSection(null); }}
+                            className={[
+                              "rounded-lg border px-2 py-1.5 cursor-grab active:cursor-grabbing select-none transition-all",
+                              isDragging ? "opacity-40 scale-95" : "",
+                              currentStatus === "absent"
+                                ? "border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30"
+                                : isMoved
+                                ? "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20"
+                                : getCardBg(section, m.shiftName, m.shiftStart),
+                            ].join(" ")}
+                          >
+                            {/* 1行：番号 ＋ 名前 ＋ ステータス */}
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-[10px] font-mono text-zinc-400 tabular-nums shrink-0 leading-none">
+                                {m.accountNumber ?? "—"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name, churnRisk: effectiveChurnRisk })}
+                                className="flex-1 min-w-0 text-left"
                               >
-                                {/* アカウント番号 */}
-                                <span className="w-16 text-xs font-mono text-zinc-400 tabular-nums flex-shrink-0 truncate" title={m.accountNumber ?? ""}>
-                                  {m.accountNumber ?? ""}
+                                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-100 truncate block leading-none hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                                  {m.name}
                                 </span>
-                                {/* 名前 */}
+                              </button>
+                              <div className="relative shrink-0">
                                 <button
-                                  type="button"
-                                  onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name, churnRisk: effectiveChurnRisk })}
-                                  className="flex-1 min-w-0 text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                  onClick={e => { e.stopPropagation(); setStatusMenuId(isMenuOpen ? null : m.staffId); }}
+                                  className={[
+                                    "text-[10px] font-bold px-1.5 py-0.5 rounded leading-none whitespace-nowrap",
+                                    STATUS_COLOR[currentStatus],
+                                    isPending ? "opacity-50" : "",
+                                  ].join(" ")}
                                 >
-                                  <span className="flex items-center gap-1.5 truncate">
-                                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                                      {m.name}
-                                    </span>
-                                    {effectiveChurnRisk && (
-                                      <span className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 leading-none">
-                                        離脱リスク
-                                      </span>
-                                    )}
-                                  </span>
-                                  {currentStatus === "absent" && m.absenceReason && (
-                                    <span className="block text-[11px] text-red-500 dark:text-red-400 truncate">
-                                      {m.absenceReason}
-                                    </span>
-                                  )}
-                                  {currentStatus === "late" && m.lateReason && (
-                                    <span className="block text-[11px] text-amber-500 dark:text-amber-400 truncate">
-                                      {m.lateReason}
-                                    </span>
-                                  )}
+                                  {(!enableDeparture && currentStatus === "not_departed") ? "未出勤" : STATUS_LABEL[currentStatus]} ▾
                                 </button>
-                                {/* ステータスバッジ（タップで変更メニュー） */}
-                                <div className="relative flex-shrink-0">
-                                  <button
-                                    onClick={() => setStatusMenuId(isMenuOpen ? null : m.staffId)}
-                                    className={`text-xs font-semibold px-1.5 py-0.5 rounded whitespace-nowrap transition-opacity ${STATUS_COLOR[currentStatus]} ${isPending ? "opacity-50" : ""}`}
-                                  >
-                                    {(!enableDeparture && currentStatus === "not_departed") ? "未出勤" : STATUS_LABEL[currentStatus]} ▾
-                                  </button>
-                                  {isMenuOpen && (
-                                    <StatusMenu
-                                      current={currentStatus}
-                                      onSelect={s => handleStatusChange(m.staffId, s)}
-                                      onClose={() => setStatusMenuId(null)}
-                                      enableDeparture={enableDeparture}
-                                    />
-                                  )}
-                                </div>
-                                {/* 時刻 */}
-                                <span className="text-xs font-mono tabular-nums text-zinc-400 whitespace-nowrap flex-shrink-0">
-                                  {m.clockIn  && `出${fmtTime(m.clockIn)}`}
-                                  {m.clockOut && ` 退${fmtTime(m.clockOut)}`}
-                                  {enableDeparture && m.departureTime && !m.clockIn && `出発${fmtTime(m.departureTime)}`}
-                                  {currentStatus === "late" && m.expectedArrival && `→${m.expectedArrival.slice(0,5)}`}
-                                </span>
-                                {/* 催促 / 詳細ボタン */}
-                                {canRemind ? (
-                                  <div className="flex-shrink-0 flex items-center gap-1">
-                                    <button
-                                      onClick={() => toggleReminder(m.staffId, "reminder")}
-                                      className={`text-xs font-semibold px-2 py-1 rounded-lg border transition-colors whitespace-nowrap ${
-                                        isSelected
-                                          ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
-                                          : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800"
-                                      }`}
-                                    >
-                                      {isSelected ? "✓ 選択中" : "催促する"}
-                                    </button>
-                                    {currentStatus === "late" && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setDetailMember(m)}
-                                        className="text-xs font-semibold px-1.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-                                      >
-                                        詳細
-                                      </button>
-                                    )}
-                                  </div>
-                                ) : currentStatus === "absent" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setDetailMember(m)}
-                                    className="flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap"
-                                  >
-                                    詳細
-                                  </button>
-                                ) : (
-                                  <div className="w-14 flex-shrink-0" />
+                                {isMenuOpen && (
+                                  <StatusMenu
+                                    current={currentStatus}
+                                    onSelect={s => handleStatusChange(m.staffId, s)}
+                                    onClose={() => setStatusMenuId(null)}
+                                    enableDeparture={enableDeparture}
+                                  />
                                 )}
                               </div>
-                            );
-                          })}
+                            </div>
+
+                            {/* サブ情報（欠勤・遅刻・催促・移動）*/}
+                            {currentStatus === "absent" && (
+                              <button type="button" onClick={() => setDetailMember(m)}
+                                className="mt-0.5 text-[10px] text-red-400 w-full text-left truncate block underline leading-none">
+                                {m.absenceReason || "欠勤"}　詳細→
+                              </button>
+                            )}
+                            {currentStatus === "late" && (
+                              <button type="button" onClick={() => setDetailMember(m)}
+                                className="mt-0.5 text-[10px] text-amber-500 w-full text-left truncate block underline leading-none">
+                                {m.lateReason || "遅刻連絡あり"}　詳細→
+                              </button>
+                            )}
+                            {canRemind && (
+                              <button type="button" onClick={() => toggleSelect(m.staffId, "reminder")}
+                                className={["mt-1 w-full text-[10px] font-bold py-0.5 rounded border transition-colors",
+                                  isSelected ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
+                                ].join(" ")}>
+                                {isSelected ? "✓ 選択中" : "催促する"}
+                              </button>
+                            )}
+                            {isMoved && (
+                              <div className="flex items-center justify-between mt-0.5">
+                                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">← 移動</span>
+                                <button type="button"
+                                  onClick={e => { e.stopPropagation(); handleSectionRevert(m.staffId, m.section); }}
+                                  className="text-[9px] text-zinc-400 hover:text-zinc-600 underline">
+                                  元に戻す
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                        </React.Fragment>
+                      ))}
+
+                      {/* 空のドロップゾーン */}
+                      {allMembers.length === 0 && (
+                        <div className={[
+                          "flex-1 flex items-center justify-center py-6 rounded-xl border-2 border-dashed text-xs transition-colors",
+                          isDragTarget
+                            ? "border-blue-400 text-blue-400"
+                            : "border-zinc-200 dark:border-zinc-700 text-zinc-300 dark:text-zinc-600",
+                        ].join(" ")}>
+                          ここにドロップ
                         </div>
-                      </div>
-                    ))}
+                      )}
+                    </div>
                   </div>
-                </details>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
 
