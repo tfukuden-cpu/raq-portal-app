@@ -31,6 +31,8 @@ export async function createNoticeAction(
   const isPinned       = formData.get("isPinned")             === "true";
   const sendLine       = formData.get("sendLine")             === "true";
   const targetStaffId  = String(formData.get("targetStaffId") ?? "").trim() || null;
+  // "YYYY-MM-DDTHH:MM" (datetime-local の値、JST) または空文字
+  const customDateRaw  = String(formData.get("customDate")    ?? "").trim();
 
   if (!title || !body) {
     return { success: false, message: "タイトルと本文は必須です" };
@@ -44,13 +46,19 @@ export async function createNoticeAction(
   const projectId = await getCurrentProjectId();
   if (!projectId) return { success: false, message: "案件が選択されていません" };
 
+  // 過去日時指定：datetime-local の値（JST）を +09:00 ISO 文字列に変換
+  const createdAt = customDateRaw
+    ? `${customDateRaw}:00+09:00`
+    : new Date().toISOString();
+
   const { error } = await supabase.from("notices").insert({
-    project_id:     projectId,
+    project_id:      projectId,
     title,
     body,
-    is_pinned:      isPinned,
-    posted_by:      staffId,
+    is_pinned:       isPinned,
+    posted_by:       staffId,
     target_staff_id: targetStaffId,
+    created_at:      createdAt,
   });
 
   if (error) return { success: false, message: "投稿失敗：" + error.message };

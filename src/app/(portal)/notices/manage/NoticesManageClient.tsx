@@ -48,6 +48,8 @@ function NoticeModal({
   const [targetStaffId, setTargetStaffId] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [sendLine, setSendLine] = useState(true);
+  const [useCustomDate, setUseCustomDate] = useState(false);
+  const [customDate, setCustomDate] = useState("");
 
   const filteredMembers = useMemo(() => {
     if (!memberSearch.trim()) return members;
@@ -67,6 +69,7 @@ function NoticeModal({
     formData.set("isPinned", String(isPinned));
     formData.set("sendLine", String(sendLine));
     formData.set("targetStaffId", targetMode === "person" ? targetStaffId : "");
+    formData.set("customDate", useCustomDate ? customDate : "");
 
     startTransition(async () => {
       const r = await createNoticeAction(formData);
@@ -152,6 +155,25 @@ function NoticeModal({
               className="w-4 h-4 rounded accent-blue-600" />
             <span className="text-sm text-zinc-700 dark:text-zinc-300">上部に固定する</span>
           </label>
+
+          {/* 過去日時指定 */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer select-none mb-2">
+              <input type="checkbox" checked={useCustomDate} onChange={e => setUseCustomDate(e.target.checked)}
+                className="w-4 h-4 rounded accent-blue-600" />
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">過去の日時を指定する</span>
+            </label>
+            {useCustomDate && (
+              <input
+                type="datetime-local"
+                value={customDate}
+                onChange={e => setCustomDate(e.target.value)}
+                max={new Date().toISOString().slice(0, 16)}
+                required={useCustomDate}
+                className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm"
+              />
+            )}
+          </div>
 
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={sendLine} onChange={e => setSendLine(e.target.checked)}
