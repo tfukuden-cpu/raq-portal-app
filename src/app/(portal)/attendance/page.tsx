@@ -123,10 +123,16 @@ export default async function AttendancePage() {
 
   const currentMonth = today.slice(0, 7); // YYYY-MM
 
+  const last14Start = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 13);
+    return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  })();
+
   const [
     { data: project },
     { data: memberRows },
-    { data: todayShifts },
+    { data: allShiftRows },
     { data: punchLogs },
     { data: departureRows },
     { data: absenceRows },
@@ -135,19 +141,18 @@ export default async function AttendancePage() {
     { data: projectSettings },
     { data: monthStatus },
     { data: seatRows },
-    { data: assignmentRows },
+    { data: allAssignmentRows },
     { data: wallRows },
-    { data: tomorrowAssignmentRows },
-    { data: tomorrowShiftRows },
+    { data: recentAbsencesRaw },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
       .select("staff_id, section, churn_risk, staffs(id, name, display_name, account_number)")
       .eq("project_id", projectId),
     admin.from("shifts")
-      .select("staff_id, shift_name, shift_start, shift_end")
+      .select("staff_id, shift_name, shift_start, shift_end, shift_date")
       .eq("project_id", projectId)
-      .eq("shift_date", today),
+      .in("shift_date", [today, tomorrow]),
     admin.from("punch_logs")
       .select("staff_id, punch_type, recorded_at")
       .eq("project_id", projectId)
@@ -183,18 +188,24 @@ export default async function AttendancePage() {
       .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
       .eq("project_id", projectId).eq("is_active", true),
     admin.from("seat_assignments")
-      .select("seat_id, staff_id")
-      .eq("project_id", projectId).eq("assignment_date", today),
+      .select("seat_id, staff_id, assignment_date")
+      .eq("project_id", projectId)
+      .in("assignment_date", [today, tomorrow]),
     admin.from("seat_walls")
       .select("x1_pct, y1_pct, x2_pct, y2_pct")
       .eq("project_id", projectId),
-    admin.from("seat_assignments")
-      .select("seat_id, staff_id")
-      .eq("project_id", projectId).eq("assignment_date", tomorrow),
-    admin.from("shifts")
-      .select("staff_id, shift_name")
-      .eq("project_id", projectId).eq("shift_date", tomorrow),
+    admin.from("absence_reports")
+      .select("staff_id, absence_date")
+      .eq("project_id", projectId)
+      .gte("absence_date", last14Start)
+      .lte("absence_date", today),
   ]);
+
+  // 今日・明日でデータを分割
+  const todayShifts = (allShiftRows ?? []).filter(r => r.shift_date === today);
+  const tomorrowShiftRows = (allShiftRows ?? []).filter(r => r.shift_date === tomorrow);
+  const assignmentRows = (allAssignmentRows ?? []).filter(a => a.assignment_date === today);
+  const tomorrowAssignmentRows = (allAssignmentRows ?? []).filter(a => a.assignment_date === tomorrow);
 
   // シフトパターンの時刻マップ
   const patternTimeMap = new Map<string, { start: string; end: string }>(
@@ -227,18 +238,6 @@ export default async function AttendancePage() {
   );
 
   // 連続欠勤3日以上の検知（過去14日間）
-  const last14Start = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 13);
-    return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
-  })();
-  const { data: recentAbsencesRaw } = await admin
-    .from("absence_reports")
-    .select("staff_id, absence_date")
-    .eq("project_id", projectId)
-    .gte("absence_date", last14Start)
-    .lte("absence_date", today);
-
   const absencesByStaff = new Map<string, string[]>();
   for (const a of recentAbsencesRaw ?? []) {
     if (!absencesByStaff.has(a.staff_id)) absencesByStaff.set(a.staff_id, []);

@@ -129,7 +129,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from("punch_logs")
-      .select("id, punch_type, recorded_at")
+      .select("punch_type, recorded_at")
       .eq("staff_id", staffId)
       .eq("project_id", currentProjectId!)
       .gte("recorded_at", todayStart)
@@ -144,7 +144,7 @@ export default async function DashboardPage() {
       .maybeSingle(),
     supabase
       .from("departure_reports")
-      .select("id, reported_at, eta_minutes")
+      .select("reported_at, eta_minutes")
       .eq("staff_id", staffId)
       .eq("project_id", currentProjectId!)
       .gte("reported_at", todayStart)
@@ -154,7 +154,7 @@ export default async function DashboardPage() {
       .maybeSingle(),
     supabase
       .from("absence_reports")
-      .select("id, status")
+      .select("status")
       .eq("staff_id", staffId)
       .eq("project_id", currentProjectId!)
       .eq("absence_date", today)
@@ -192,7 +192,7 @@ export default async function DashboardPage() {
     // 前日欠勤チェック（軽快状況の表示判定用）
     supabase
       .from("absence_reports")
-      .select("id")
+      .select("absence_date")
       .eq("staff_id", staffId)
       .eq("project_id", currentProjectId!)
       .eq("absence_date", yesterdayStr)
@@ -200,7 +200,7 @@ export default async function DashboardPage() {
     // 翌日シフトチェック（翌日出勤予定の自動表示用）
     supabase
       .from("shifts")
-      .select("id")
+      .select("shift_date")
       .eq("staff_id", staffId)
       .eq("project_id", currentProjectId!)
       .eq("shift_date", tomorrowStr)

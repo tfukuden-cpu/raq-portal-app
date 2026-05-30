@@ -28,7 +28,6 @@ type DayRecord = {
 };
 
 type CorrectionSummary = {
-  id: string;
   target_date: string;
   status: string;
 };

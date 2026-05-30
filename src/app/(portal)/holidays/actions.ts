@@ -130,14 +130,19 @@ export async function submitHolidayAction(
 
   // E-3: 1日あたりの希望休上限チェック（プロジェクト全体）
   if (dailyLimitCount !== null) {
+    const { data: dailyExisting } = await adminClient()
+      .from("holiday_requests")
+      .select("request_date")
+      .eq("project_id", projectId)
+      .in("request_date", dates)
+      .eq("status", "approved");
+    const dailyCountMap = new Map<string, number>();
+    for (const r of dailyExisting ?? []) {
+      const d = r.request_date as string;
+      dailyCountMap.set(d, (dailyCountMap.get(d) ?? 0) + 1);
+    }
     for (const d of dates) {
-      const { count } = await adminClient()
-        .from("holiday_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("project_id", projectId)
-        .eq("request_date", d)
-        .eq("status", "approved");
-      if ((count ?? 0) >= dailyLimitCount) {
+      if ((dailyCountMap.get(d) ?? 0) >= dailyLimitCount) {
         const [, m, day] = d.split("-").map(Number);
         return {
           success: false,

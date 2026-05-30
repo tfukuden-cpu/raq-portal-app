@@ -74,7 +74,7 @@ export default async function RecordPage({
     await Promise.all([
       supabase
         .from("punch_logs")
-        .select("id, punch_type, recorded_at")
+        .select("punch_type, recorded_at")
         .eq("staff_id", staffId)
         .eq("project_id", projectId)
         .gte("recorded_at", rangeStart)
@@ -90,7 +90,7 @@ export default async function RecordPage({
         .order("shift_date"),
       supabase
         .from("punch_corrections")
-        .select("id, target_date, status")
+        .select("target_date, status")
         .eq("staff_id", staffId)
         .eq("project_id", projectId)
         .gte("target_date", monthStart)

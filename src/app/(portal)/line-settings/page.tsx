@@ -20,19 +20,12 @@ export default async function LineSettingsPage() {
 
   const isGlobalAdmin = myStaff?.global_role === "executive" || myStaff?.global_role === "admin";
 
-  if (!isGlobalAdmin) {
-    const { data: membership } = await supabase
-      .from("project_members").select("role")
-      .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle();
-    if (membership?.role !== "project_admin") redirect("/dashboard");
-  }
-
   const admin = createAdminClient();
 
   const [{ data: project }, { data: members }, { data: settings }] = await Promise.all([
     supabase.from("projects").select("name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
-      .select("staff_id, staffs(name, display_name, line_user_id)")
+      .select("staff_id, role, staffs(name, display_name, line_user_id)")
       .eq("project_id", projectId),
     admin.from("project_settings")
       .select("line_group_id, notification_settings")
@@ -40,6 +33,12 @@ export default async function LineSettingsPage() {
   ]);
 
   if (!project) redirect("/dashboard");
+
+  // アクセス制御: members 取得結果から自分の role を確認
+  if (!isGlobalAdmin) {
+    const myRole = (members ?? []).find(m => m.staff_id === staffId)?.role;
+    if (myRole !== "project_admin") redirect("/dashboard");
+  }
 
   const memberList = (members ?? []).map((m) => {
     const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
