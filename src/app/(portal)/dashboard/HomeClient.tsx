@@ -153,8 +153,8 @@ export default function HomeClient({
     });
   };
 
-  // 退勤済みでも hasAbsenceReport なら経過報告ボタンを表示する
-  const showReportRow = state !== "clocked_out" || hasAbsenceReport;
+  // 出発前・出勤前のみ欠勤・遅刻ボタンを表示（打刻後は不要）
+  const showReportRow = state === "pre_departure" || state === "pre_clock_in";
   const isHoliday = shift?.name === "公休" || shift?.name === "休" || shift?.name === "公休日";
 
   const [liveTime, setLiveTime] = useState(nowJST);
