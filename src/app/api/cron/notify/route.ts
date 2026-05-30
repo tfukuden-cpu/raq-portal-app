@@ -383,25 +383,29 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── holiday_open_notify：毎月1日の希望休受付開始通知 ─────────────────────
+    // ── holiday_open_notify：受付開始日（open_day）の希望休受付開始通知 ──────────
     if (settings.holiday_open_notify.enabled) {
       const cfg    = settings.holiday_open_notify;
       const jstDay = parseInt(today.split("-")[2], 10);
-      if (jstDay === 1 && isNearTime(cfg.time ?? "09:00")) {
+
+      // open_day・deadline_day を取得してトリガー判定
+      const { data: openRules } = await admin
+        .from("holiday_rules")
+        .select("rule_type, value")
+        .eq("project_id", projectId);
+      const openDay    = (openRules ?? []).find(r => r.rule_type === "open_day")?.value as number | null;
+      const deadlineDay = (openRules ?? []).find(r => r.rule_type === "deadline_day")?.value as number | null;
+
+      if (openDay && jstDay === openDay && isNearTime(cfg.time ?? "09:00")) {
         // 翌月（申請対象月）を計算
         const [y, m] = today.split("-").map(Number);
         const targetY = m === 12 ? y + 1 : y;
         const targetM = m === 12 ? 1 : m + 1;
         const targetMonth = `${targetY}/${String(targetM).padStart(2, "0")}`;
 
-        // 締切日を取得
-        const { data: rules } = await admin
-          .from("holiday_rules")
-          .select("rule_type, value")
-          .eq("project_id", projectId);
-        const deadlineDay = (rules ?? []).find(r => r.rule_type === "deadline_day")?.value as number | null;
+        // 締切日は今月の deadline_day
         const deadlineStr = deadlineDay
-          ? `${targetY}-${String(targetM).padStart(2, "0")}-${String(deadlineDay).padStart(2, "0")}`
+          ? `${y}-${String(m).padStart(2, "0")}-${String(deadlineDay).padStart(2, "0")}`
           : "（設定なし）";
 
         // 全プロジェクトメンバーのLINE IDを取得
