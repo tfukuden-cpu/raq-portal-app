@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-31（v56：出勤簿ボード セクション間ドラッグ自動DB反映・セクション×シフトカラーリング）
+最終更新：2026-05-31（v57：打刻ページ フロー全面刷新・離席タイマー追加）
 
 ---
 
@@ -106,6 +106,25 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | アバターシステム | 🔄 設計済み・パーツ未実装（低優先） |
 
 ### 次に優先すべきこと（新しいセッションはここから）
+
+**v57 完了内容**
+- **打刻ページ ボタンフロー全面刷新（`TerminalPunchClient.tsx`）**
+  - **出勤の自動判定**：シフト開始前 or 時刻なし → 定時出勤（即打刻）／開始後 → 遅刻として自動遷移（SV承認者入力）
+  - **退勤の自動判定**：時刻なし → 定時退勤（即打刻）／終了前 → 早退（SV承認）／終了後 → 定時 or 残業 の2択画面
+  - **同意書サイン後も同じ自動判定**を適用（`handleConsentConfirm` 更新）
+  - **承認者画面「戻る」**：遅刻/早退は `action` 画面へ、残業は `clock_kind` 画面へ
+  - **`clock_kind` 画面を退勤専用に整理**：早退ボタン削除（自動判定で行くため）、定時退勤 + 残業退勤の2択に
+  - ヘルパー関数 `isShiftStartPassed(shiftStart)` / `isShiftEndPassed(shiftEnd)` を追加
+- **離席メニュー：休憩取得状況で選択肢を切り替え**
+  - `hadBreak60: boolean` を `TerminalMember` に追加
+  - 未取得 → トレーニング / 離席 / 休憩（60分）、取得済み → トレーニング / 離席 / 小休憩（15分）
+  - 離席開始時・ポーリング時にオプティミスティック更新
+- **離席タイマー（`BreakTimer` コンポーネント）**
+  - `breakStartedAt: string | null` / `breakNote: string | null` を `TerminalMember` に追加
+  - 制限時間付き（休憩60分/小休憩15分）：超過したら赤色 + `animate-pulse`
+  - 制限なし（トレーニング/離席等）：秒単位でカウントアップのみ
+  - 表示場所：座席カード（compact）/ 名前ドロップダウン（compact）/ アクション画面（large・種別名付き）
+  - `page.tsx` と polling API（`/api/punch/[projectId]/statuses`）も対応、`break_start` のタイムスタンプと note を返す
 
 **v56 完了内容**
 - **出勤簿ボード：セクション間ドラッグ自動DB反映（`moveSectionAction`）**
@@ -1256,6 +1275,7 @@ export default async function Page({
 | 2026-05-27 | v37 | **スタッフ詳細設定に希望給追加** `project_members.desired_wage integer` カラム追加。メンバー設定モーダルの基本設定セクションに希望給（円/時）入力欄追加。メンバー一覧カードに¥1,200/h形式バッジ表示（設定済みのみ・アンバー色）。|
 | 2026-05-27 | v35 | **スタッフ設定モーダル再構成・研修設定UI刷新** ① `staff_trainings`に`training_name text`・`start_time time`・`end_time time`カラム追加（Supabase MCP）。② `TrainingSection.tsx`を全面リライト：「研修日を設定」ボタン→展開パネル（導入研修/研修/案件研修/カスタムの4タイプ選択・時間入力・複数日カレンダー選択・登録済みは半透明表示・タイプ別グループ表示+×削除チップ）。③ メンバー編集モーダルを4セクションに再構成（基本設定：氏名/所属会社/ロール/アカウント番号/セクション/アサイン日、シフト設定：稼働日数デフォルト月21日/優先セクション/優先パターン/連勤上限、研修設定：TrainingSection、離脱処理）。④ シフト設定折りたたみを廃止・常時表示化。⑤ 新規スタッフ追加のアサイン日を必須に変更（未入力時「作成して追加」ボタン無効）。⑥ 仮組みロジック（draft-actions.ts）のtrainingEntries生成でtraining_name/start_time/end_timeを使用、validShiftNamesに研修名を動的追加。|
 | 2026-05-29 | v53 | **シフト充足数インライン編集・シフトパターン並び替え・SV合計行・タスクLINE通知** ① ShiftEditGrid：充足行のパターン名セルに✎アイコン追加→モーダルで全日付の必要枠数を一括編集（slot_requirements upsert）。localSlotReqOverridesで保存前もグリッド即時反映。② SettingsClient：shift_patterns に sort_order カラム追加・ShiftPatternListにHTML5 Drag-and-Drop 並び替えUI追加（⠿ハンドル・ドラッグ時ハイライト・collapsedインデックスのリマップ）。③ SVパターン2件以上の場合に最後のSV行直後に「SV合計」行を自動追加（充足色ロジック適用）。④ addTaskManualAction/updateTaskAction：担当者設定時・変更時にLINEプッシュ。notify-config.ts に task_assigned 通知種別追加。⑤ /api/cron/notify に daily_task_remind セクション追加：当日期限・未完了・担当者ありタスクを当日8時に個人宛プッシュ。 |
+| 2026-05-31 | v57 | **打刻ページ フロー全面刷新・離席タイマー追加** ① 出勤自動判定：開始前or時刻なし→定時即打刻／開始後→遅刻（SV承認）。② 退勤自動判定：時刻なし→定時即打刻／終了前→早退（SV承認）／終了後→定時 or 残業 2択。③ `clock_kind` 画面を退勤専用に整理（定時退勤＋残業退勤のみ）。④ 同意書サイン後も自動判定適用。⑤ 承認者「戻る」ボタン：遅刻/早退→action画面、残業→clock_kind画面。⑥ 離席メニュー：`hadBreak60` フラグで選択肢切り替え（未取得→60分あり、取得済→15分あり）。⑦ `BreakTimer` コンポーネント新設：座席カード(compact)・名前リスト(compact)・アクション画面(large)に離席経過時間を表示。制限時間超過で赤アニメーション（休憩60分/小休憩15分）。`breakStartedAt`/`breakNote` を `TerminalMember` に追加、page.tsx・polling API も対応。 |
 | 2026-05-31 | v56 | **出勤簿ボード セクション間ドラッグ自動DB反映・カラーリング** ① `moveSectionAction` 追加：ドロップ時に `shift_patterns` から開始時刻最近傍のパターンを自動選択し `shifts` テーブルを即時更新（確定ボタン不要）。楽観的更新＋失敗時ロールバック＋トースト。「元に戻す」ボタンも DB を元セクションへ戻す。② `AttendanceClient.tsx` に `SECTION_COL` / `SECTION_CARD` カラーテーブルを追加（ShiftEditGrid と同一体系）。列コンテナ外枠ボーダー・列ヘッダー背景・名前カードを セクション×早遅番（早番=薄色・遅番=濃色）で色分け。欠勤（赤）・移動済（黄）はセクション色より優先。 |
 | 2026-05-30 | v55 | **LINE友達追加ゲート・Web Push VAPID修正・シフトグリッドSVグループ表示改善** ① `LineFriendGate.tsx` 新設：`line_friend` 未設定ユーザーに全画面ゲート表示。友達追加URLを開き `visibilitychange` で自動検知→`confirmLineFriendAction` で DB更新。手動確認ボタンも実装。LINE webhook（follow/unfollow）・OAuthコールバック（mode=link）でも `line_friend` を更新。② Web Push VAPID キーを再生成し `.env.local`・Vercel 環境変数を更新。`PushPermissionRequest.tsx` でサブスクリプションキーの不一致を検知し自動再登録。③ メンバー管理に「友達✓/友達未」チップ追加・「友達未 N」フィルターボタン追加（`line_friend` をDBから取得し `SettingsClient.tsx`・`members/page.tsx`・`admin/[projectId]/page.tsx` に反映）。④ ShiftEditGrid：充足テーブル2行表示（SUM_ROW_H=34px）・ツールバーに月表示・SV▲▼並び替えボタン・早番/遅番/中番グループ分け（色付け・小ヘッダー行）・SV表示順（早番→遅番→合計→中番）・早番＋遅番合計行（isEarlyLateTotal）。バグ修正：svSubType/SV_SUB_ORDER定義順TDZエラー・半透明背景による文字透け。 |
 | 2026-05-30 | v54 | **シフトLINE通知ボタン・個人向けお知らせ・お知らせ管理UI刷新** ① `ShiftLineNotifyButton.tsx` 新設：シフト管理に独立したLINE通知ボタン。テンプレート編集・名前検索・DB連動プレビュー（LINE風バブル）・個別/一括送信・アプリ内お知らせ同時投稿機能を搭載（シフト展開とは別・shift_month_statusを更新しない）。② `{シフト一覧}` 変数追加：notify-config.ts の shift_published テンプレートに追加、全シフト（公休含む）を `MM/DD（曜）シフト名 HH:MM〜HH:MM` 形式でフォーマット。③ `notices.target_staff_id text REFERENCES staffs(id)` カラム追加・RLS更新（target_staff_id IS NULL=全員閲覧可・値あり=本人+管理者のみ閲覧可）。④ `postShiftNoticeAction` 新設。⑤ `NoticesManageClient` をテーブルUIに全面刷新：`grid-cols-[6rem_7rem_1fr_auto]`（送信日時｜宛先｜お知らせ｜操作）・宛先検索・個人宛amber色表示・行クリック詳細モーダル。管理画面は adminClient でRLSバイパスし全お知らせ表示。 |
