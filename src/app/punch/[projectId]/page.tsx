@@ -94,22 +94,34 @@ export default async function PunchPage({
   // 欠勤セット
   const absenceIds = new Set((absenceRows ?? []).map(a => a.staff_id));
 
-  // 打刻マップ（clock_in/out + 最終 break 状態 + 休憩60分済みフラグ）
+  // 打刻マップ（clock_in/out + 最終 break 状態 + 休憩60分済みフラグ + タイマー用）
   const punchMap = new Map<string, {
     clockedIn: boolean;
     clockedOut: boolean;
     lastBreak: string | null;
     hadBreak60: boolean;
+    breakStartedAt: string | null;
+    breakNote: string | null;
   }>();
   for (const p of punchLogs ?? []) {
     if (!punchMap.has(p.staff_id)) {
-      punchMap.set(p.staff_id, { clockedIn: false, clockedOut: false, lastBreak: null, hadBreak60: false });
+      punchMap.set(p.staff_id, { clockedIn: false, clockedOut: false, lastBreak: null, hadBreak60: false, breakStartedAt: null, breakNote: null });
     }
     const e = punchMap.get(p.staff_id)!;
+    const note = (p as { note?: string | null }).note ?? null;
     if (p.punch_type === "clock_in")  e.clockedIn  = true;
     if (p.punch_type === "clock_out") e.clockedOut = true;
-    if (p.punch_type === "break_start" || p.punch_type === "break_end") e.lastBreak = p.punch_type;
-    if (p.punch_type === "break_start" && (p as { note?: string | null }).note === "休憩（60分）") e.hadBreak60 = true;
+    if (p.punch_type === "break_start") {
+      e.lastBreak     = "break_start";
+      e.breakStartedAt = p.recorded_at;
+      e.breakNote      = note;
+      if (note === "休憩（60分）") e.hadBreak60 = true;
+    }
+    if (p.punch_type === "break_end") {
+      e.lastBreak      = "break_end";
+      e.breakStartedAt = null;
+      e.breakNote      = null;
+    }
   }
 
   // シフトマップ（公休系除く）
@@ -141,23 +153,25 @@ export default async function PunchPage({
     } | null;
     const name  = s?.display_name ?? s?.name ?? staffId;
     const shift = shiftMap.get(staffId);
-    const punch = punchMap.get(staffId) ?? { clockedIn: false, clockedOut: false, lastBreak: null, hadBreak60: false };
+    const punch = punchMap.get(staffId) ?? { clockedIn: false, clockedOut: false, lastBreak: null, hadBreak60: false, breakStartedAt: null, breakNote: null };
 
     members.push({
       staffId,
       name,
-      shiftName:    shift?.shiftName  ?? null,
-      shiftStart:   shift?.shiftStart ?? null,
-      shiftEnd:     shift?.shiftEnd   ?? null,
-      clockedIn:    punch.clockedIn,
-      clockedOut:   punch.clockedOut,
-      onBreak:      punch.lastBreak === "break_start",
-      isAbsent:     absenceIds.has(staffId),
-      section:      (m as { section?: string | null }).section ?? null,
-      accountNumber: (s?.account_number as string | null | undefined) ?? null,
-      hasShiftToday: !!shift,
-      needsConsent:  !consentedIds.has(staffId),
-      hadBreak60:   punch.hadBreak60,
+      shiftName:      shift?.shiftName  ?? null,
+      shiftStart:     shift?.shiftStart ?? null,
+      shiftEnd:       shift?.shiftEnd   ?? null,
+      clockedIn:      punch.clockedIn,
+      clockedOut:     punch.clockedOut,
+      onBreak:        punch.lastBreak === "break_start",
+      isAbsent:       absenceIds.has(staffId),
+      section:        (m as { section?: string | null }).section ?? null,
+      accountNumber:  (s?.account_number as string | null | undefined) ?? null,
+      hasShiftToday:  !!shift,
+      needsConsent:   !consentedIds.has(staffId),
+      hadBreak60:     punch.hadBreak60,
+      breakStartedAt: punch.breakStartedAt,
+      breakNote:      punch.breakNote,
     });
   }
 

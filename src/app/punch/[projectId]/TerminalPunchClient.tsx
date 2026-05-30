@@ -19,7 +19,9 @@ export type TerminalMember = {
   accountNumber: string | null;
   hasShiftToday: boolean;
   needsConsent: boolean;
-  hadBreak60: boolean; // 本日「休憩（60分）」済み
+  hadBreak60: boolean;       // 本日「休憩（60分）」済み
+  breakStartedAt: string | null; // 現在の離席開始時刻（ISO）
+  breakNote: string | null;      // 現在の離席種別メモ
 };
 
 export type TerminalSeat = {
@@ -163,6 +165,82 @@ const CONSENT_TEXT = `1. 身元保証
 
 内容を十分に理解した上、自らの意思により承諾し貴社へ就業いたします。`;
 
+// ── 離席タイマー ─────────────────────────────────────────────
+const BREAK_LIMIT_MIN: Record<string, number> = {
+  "休憩（60分）": 60,
+  "小休憩（15分）": 15,
+};
+
+function BreakTimer({
+  startedAt,
+  breakNote,
+  size = "normal",
+}: {
+  startedAt: string;
+  breakNote: string | null;
+  size?: "compact" | "normal" | "large";
+}) {
+  const [elapsed, setElapsed] = useState(() =>
+    Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000))
+  );
+
+  useEffect(() => {
+    const base = new Date(startedAt).getTime();
+    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - base) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+
+  const limitMin = breakNote ? (BREAK_LIMIT_MIN[breakNote] ?? null) : null;
+  const isOver   = limitMin !== null && elapsed >= limitMin * 60;
+  const mm = Math.floor(elapsed / 60);
+  const ss = elapsed % 60;
+  const display = `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+
+  if (size === "compact") {
+    return (
+      <span className={[
+        "tabular-nums font-bold leading-none",
+        isOver ? "text-red-400 animate-pulse" : "text-amber-400",
+        "text-[9px]",
+      ].join(" ")}>
+        {display}
+      </span>
+    );
+  }
+
+  if (size === "large") {
+    return (
+      <div className="text-center space-y-1">
+        <p className={`text-5xl font-bold tabular-nums tracking-tight ${isOver ? "text-red-400 animate-pulse" : "text-amber-300"}`}>
+          {display}
+        </p>
+        {limitMin && (
+          <p className={`text-sm font-semibold ${isOver ? "text-red-400 animate-pulse" : "text-zinc-500"}`}>
+            {isOver ? `⚠ ${limitMin}分超過中` : `制限 ${limitMin}分`}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // normal
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`tabular-nums font-bold text-base ${isOver ? "text-red-400 animate-pulse" : "text-amber-300"}`}>
+        {display}
+      </span>
+      {limitMin && isOver && (
+        <span className="text-xs font-bold text-red-400 animate-pulse">超過中</span>
+      )}
+      {limitMin && !isOver && (
+        <span className="text-xs text-zinc-500">/ {limitMin}分</span>
+      )}
+    </div>
+  );
+}
+
 // ── ライブ時計 ────────────────────────────────────────────────
 function LiveClock() {
   const [time, setTime] = useState("--:--:--");
@@ -218,11 +296,12 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
         const data: {
           staffId: string; clockedIn: boolean; clockedOut: boolean;
           onBreak: boolean; isAbsent: boolean; hadBreak60: boolean;
+          breakStartedAt: string | null; breakNote: string | null;
         }[] = await res.json();
         setLocalMembers(prev => prev.map(m => {
           const s = data.find(d => d.staffId === m.staffId);
           if (!s) return m;
-          return { ...m, clockedIn: s.clockedIn, clockedOut: s.clockedOut, onBreak: s.onBreak, isAbsent: s.isAbsent, hadBreak60: s.hadBreak60 };
+          return { ...m, clockedIn: s.clockedIn, clockedOut: s.clockedOut, onBreak: s.onBreak, isAbsent: s.isAbsent, hadBreak60: s.hadBreak60, breakStartedAt: s.breakStartedAt, breakNote: s.breakNote };
         }));
       } catch { /* ignore */ }
     };
@@ -321,11 +400,14 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     startTransition(async () => {
       const res = await terminalBreakAction(projectId, member.staffId, breakNote);
       if (res.ok) {
+        const now = new Date().toISOString();
         setLocalMembers(prev => prev.map(m =>
           m.staffId !== member.staffId ? m : {
             ...m,
             onBreak: true,
             hadBreak60: m.hadBreak60 || breakNote === "休憩（60分）",
+            breakStartedAt: now,
+            breakNote,
           }
         ));
       }
@@ -340,7 +422,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
       const res = await terminalBreakAction(projectId, member.staffId);
       if (res.ok) {
         setLocalMembers(prev => prev.map(m =>
-          m.staffId !== member.staffId ? m : { ...m, onBreak: false }
+          m.staffId !== member.staffId ? m : { ...m, onBreak: false, breakStartedAt: null, breakNote: null }
         ));
       }
       setStep({ kind: "done", message: res.ok ? res.message : `⚠️ ${res.message}` });
@@ -538,7 +620,9 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                             <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${textCls}`}>
                               {member.name}
                             </span>
-                            {sectionLabel ? (
+                            {status === "on_break" && member.breakStartedAt ? (
+                              <BreakTimer startedAt={member.breakStartedAt} breakNote={member.breakNote} size="compact" />
+                            ) : sectionLabel ? (
                               <span className="text-[9px] leading-none text-zinc-500 truncate px-0.5 w-full text-center">
                                 {sectionLabel}
                               </span>
@@ -618,9 +702,14 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                                     </p>
                                   )}
                                 </div>
-                                <span className={`text-xs font-semibold flex-shrink-0 ${STATUS_COLOR[st]}`}>
-                                  {STATUS_LABEL[st]}
-                                </span>
+                                <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                                  <span className={`text-xs font-semibold ${STATUS_COLOR[st]}`}>
+                                    {STATUS_LABEL[st]}
+                                  </span>
+                                  {st === "on_break" && m.breakStartedAt && (
+                                    <BreakTimer startedAt={m.breakStartedAt} breakNote={m.breakNote} size="compact" />
+                                  )}
+                                </div>
                                 {m.needsConsent && (
                                   <span className="text-[10px] text-amber-400 font-semibold border border-amber-700/60 rounded px-1.5 py-0.5 flex-shrink-0">
                                     同意書
@@ -713,15 +802,25 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               </>
             )}
 
-            {/* 離席中 → 戻るボタン */}
+            {/* 離席中 → タイマー + 戻るボタン */}
             {status === "on_break" && (
-              <button
-                onClick={() => handleBreakEnd(latestMember)}
-                disabled={isPending}
-                className="w-full py-6 rounded-2xl bg-green-700 hover:bg-green-600 text-white text-xl font-bold transition-all active:scale-95 shadow-xl shadow-green-900/50 disabled:opacity-50"
-              >
-                {isPending ? "記録中…" : "戻る（離席終了）"}
-              </button>
+              <div className="space-y-4">
+                {latestMember.breakStartedAt && (
+                  <div className="py-3">
+                    {latestMember.breakNote && (
+                      <p className="text-zinc-500 text-sm text-center mb-2">{latestMember.breakNote}</p>
+                    )}
+                    <BreakTimer startedAt={latestMember.breakStartedAt} breakNote={latestMember.breakNote} size="large" />
+                  </div>
+                )}
+                <button
+                  onClick={() => handleBreakEnd(latestMember)}
+                  disabled={isPending}
+                  className="w-full py-6 rounded-2xl bg-green-700 hover:bg-green-600 text-white text-xl font-bold transition-all active:scale-95 shadow-xl shadow-green-900/50 disabled:opacity-50"
+                >
+                  {isPending ? "記録中…" : "戻る（離席終了）"}
+                </button>
+              </div>
             )}
 
             {/* 退勤済み */}
