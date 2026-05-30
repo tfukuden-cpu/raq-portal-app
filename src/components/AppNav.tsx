@@ -37,7 +37,11 @@ export default function AppNav({
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === href;
-    if (href === "/admin") return pathname.startsWith("/admin");
+    if (href === "/admin") {
+      if (pathname === "/admin") return true;
+      if (pathname.startsWith("/admin/operators") || pathname.startsWith("/admin/staffs")) return false;
+      return pathname.startsWith("/admin/");
+    }
     return pathname === href || pathname.startsWith(href + "/");
   };
 
