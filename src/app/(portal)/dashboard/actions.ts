@@ -43,6 +43,38 @@ export async function recordDepartureAction(
   }
 
   revalidatePath("/dashboard");
+
+  // LINE通知（fire-and-forget）
+  void (async () => {
+    try {
+      const { data: staffData } = await supabase
+        .from("staffs").select("display_name, name, line_user_id").eq("id", staffId).maybeSingle();
+      const name   = staffData?.display_name ?? staffData?.name ?? staffId;
+      const lineId = staffData?.line_user_id as string | null;
+
+      const admin = createAdminClient();
+      const { data: ps } = await admin
+        .from("project_settings").select("line_group_id")
+        .eq("project_id", projectId).maybeSingle();
+      const groupId = ps?.line_group_id as string | null;
+
+      const etaText = etaMinutes ? `約${etaMinutes}分後` : "不明";
+      const adminMsg = `【出発報告】\n${name}さんが出発しました。\n到着予定：${etaText}`;
+
+      // 管理者個人 + グループへ通知
+      const adminIds = await getAdminLineIds(projectId);
+      if (adminIds.length > 0) await multicastLine(adminIds, adminMsg);
+      if (groupId) await pushLine(groupId, adminMsg);
+
+      // 出発したスタッフ本人へ確認メッセージ
+      if (lineId) {
+        await pushLine(lineId, `出発報告を受け付けました。\n現場への移動中もお気をつけください。`);
+      }
+    } catch (e) {
+      console.error("[departure] LINE送信エラー:", e);
+    }
+  })();
+
   return { success: true, message: "出発報告を送信しました" };
 }
 

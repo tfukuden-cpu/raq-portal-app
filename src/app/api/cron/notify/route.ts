@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
   // 全案件の通知設定を一括取得
   const { data: projectSettings } = await admin
     .from("project_settings")
-    .select("project_id, notification_settings");
+    .select("project_id, notification_settings, line_group_id");
 
   if (!projectSettings?.length) {
     return NextResponse.json({ ok: true, sent: 0 });
@@ -325,6 +325,11 @@ export async function GET(req: NextRequest) {
         const adminIds = await getAdminLineIds(projectId);
         if (adminIds.length > 0) {
           await multicastLine(adminIds, message);
+          sent++;
+        }
+        const groupId = ps.line_group_id as string | null;
+        if (groupId) {
+          await pushLine(groupId, message);
           sent++;
         }
       }
