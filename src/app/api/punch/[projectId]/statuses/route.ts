@@ -23,7 +23,7 @@ export async function GET(
   const [{ data: punchLogs }, { data: absenceRows }] = await Promise.all([
     admin
       .from("punch_logs")
-      .select("staff_id, punch_type")
+      .select("staff_id, punch_type, note")
       .eq("project_id", projectId)
       .gte("recorded_at", todayStart)
       .lte("recorded_at", todayEnd)
@@ -42,17 +42,21 @@ export async function GET(
     clockedIn: boolean;
     clockedOut: boolean;
     lastBreak: string | null;
+    hadBreak60: boolean;
   }>();
 
   for (const p of punchLogs ?? []) {
     if (!map.has(p.staff_id)) {
-      map.set(p.staff_id, { clockedIn: false, clockedOut: false, lastBreak: null });
+      map.set(p.staff_id, { clockedIn: false, clockedOut: false, lastBreak: null, hadBreak60: false });
     }
     const e = map.get(p.staff_id)!;
     if (p.punch_type === "clock_in")  e.clockedIn  = true;
     if (p.punch_type === "clock_out") e.clockedOut = true;
     if (p.punch_type === "break_start" || p.punch_type === "break_end") {
       e.lastBreak = p.punch_type;
+    }
+    if (p.punch_type === "break_start" && (p as { note?: string | null }).note === "休憩（60分）") {
+      e.hadBreak60 = true;
     }
   }
 
@@ -62,12 +66,13 @@ export async function GET(
     clockedOut: v.clockedOut,
     onBreak:    v.lastBreak === "break_start",
     isAbsent:   absenceIds.has(staffId),
+    hadBreak60: v.hadBreak60,
   }));
 
   // absence_reportのみあるスタッフも追加
   for (const staffId of absenceIds) {
     if (!map.has(staffId)) {
-      result.push({ staffId, clockedIn: false, clockedOut: false, onBreak: false, isAbsent: true });
+      result.push({ staffId, clockedIn: false, clockedOut: false, onBreak: false, isAbsent: true, hadBreak60: false });
     }
   }
 

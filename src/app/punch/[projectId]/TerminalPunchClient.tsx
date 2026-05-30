@@ -19,6 +19,7 @@ export type TerminalMember = {
   accountNumber: string | null;
   hasShiftToday: boolean;
   needsConsent: boolean;
+  hadBreak60: boolean; // 本日「休憩（60分）」済み
 };
 
 export type TerminalSeat = {
@@ -93,12 +94,18 @@ const STATUS_AVATAR_BG: Record<StaffStatus, string> = {
 };
 
 // ── 離席メニュー選択肢 ──────────────────────────────────────────
-const BREAK_OPTIONS = [
+// hadBreak60=false → 休憩60分あり・小休憩なし
+// hadBreak60=true  → 小休憩15分あり・休憩60分なし
+const BREAK_OPTIONS_BEFORE: readonly { label: string; note: string; color: string }[] = [
   { label: "トレーニング", note: "トレーニング", color: "bg-blue-800 hover:bg-blue-700 shadow-blue-900/50" },
   { label: "離席",         note: "離席",         color: "bg-zinc-700 hover:bg-zinc-600 shadow-zinc-900/30" },
   { label: "休憩（60分）", note: "休憩（60分）", color: "bg-amber-700 hover:bg-amber-600 shadow-amber-900/50" },
-  { label: "小休憩（15分）",note: "小休憩（15分）",color: "bg-amber-800 hover:bg-amber-700 shadow-amber-900/30" },
-] as const;
+];
+const BREAK_OPTIONS_AFTER: readonly { label: string; note: string; color: string }[] = [
+  { label: "トレーニング",   note: "トレーニング",   color: "bg-blue-800 hover:bg-blue-700 shadow-blue-900/50" },
+  { label: "離席",           note: "離席",           color: "bg-zinc-700 hover:bg-zinc-600 shadow-zinc-900/30" },
+  { label: "小休憩（15分）", note: "小休憩（15分）", color: "bg-amber-800 hover:bg-amber-700 shadow-amber-900/30" },
+];
 
 // ── ステップ定義 ──────────────────────────────────────────────
 type Step =
@@ -196,12 +203,12 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
         if (!res.ok) return;
         const data: {
           staffId: string; clockedIn: boolean; clockedOut: boolean;
-          onBreak: boolean; isAbsent: boolean;
+          onBreak: boolean; isAbsent: boolean; hadBreak60: boolean;
         }[] = await res.json();
         setLocalMembers(prev => prev.map(m => {
           const s = data.find(d => d.staffId === m.staffId);
           if (!s) return m;
-          return { ...m, clockedIn: s.clockedIn, clockedOut: s.clockedOut, onBreak: s.onBreak, isAbsent: s.isAbsent };
+          return { ...m, clockedIn: s.clockedIn, clockedOut: s.clockedOut, onBreak: s.onBreak, isAbsent: s.isAbsent, hadBreak60: s.hadBreak60 };
         }));
       } catch { /* ignore */ }
     };
@@ -284,7 +291,11 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
       const res = await terminalBreakAction(projectId, member.staffId, breakNote);
       if (res.ok) {
         setLocalMembers(prev => prev.map(m =>
-          m.staffId !== member.staffId ? m : { ...m, onBreak: true }
+          m.staffId !== member.staffId ? m : {
+            ...m,
+            onBreak: true,
+            hadBreak60: m.hadBreak60 || breakNote === "休憩（60分）",
+          }
         ));
       }
       setStep({ kind: "done", message: res.ok ? res.message : `⚠️ ${res.message}` });
@@ -711,6 +722,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   if (step.kind === "break_menu") {
     const { member } = step;
     const latestMember = memberMap.get(member.staffId) ?? member;
+    const breakOptions = latestMember.hadBreak60 ? BREAK_OPTIONS_AFTER : BREAK_OPTIONS_BEFORE;
 
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
@@ -718,10 +730,13 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
           <div className="text-center">
             <p className="text-zinc-400 text-sm mb-1">{latestMember.name}</p>
             <p className="text-white text-2xl font-bold">離席の種類を選択</p>
+            {latestMember.hadBreak60 && (
+              <p className="text-zinc-500 text-xs mt-1">休憩取得済み</p>
+            )}
           </div>
 
           <div className="space-y-3">
-            {BREAK_OPTIONS.map(opt => (
+            {breakOptions.map(opt => (
               <button
                 key={opt.note}
                 onClick={() => handleBreakStart(latestMember, opt.note)}
