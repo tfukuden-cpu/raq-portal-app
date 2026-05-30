@@ -181,7 +181,7 @@ export default async function DashboardPage() {
       .eq("project_id", currentProjectId!)
       .gt("shift_date", today)
       .lte("shift_date", weekLaterStr)
-      .not("shift_name", "in", '("公休","休","公休日")')
+      .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休")')
       .order("shift_date")
       .limit(5),
     adminClient

@@ -146,7 +146,6 @@ export default function HomeClient({
     startTransition(async () => {
       const fd = new FormData();
       fd.set("reason", reason);
-      fd.set("expectedArrival", "");
       fd.set("etaMinutes", String(etaMinutes));
       const r = await submitLateAction(fd);
       setFeedback({ ok: r.success, msg: r.message ?? "遅刻報告しました" });

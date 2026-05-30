@@ -186,10 +186,18 @@ export async function submitAbsenceAction(
 
 /** 遅刻報告 */
 export async function submitLateAction(fd: FormData): Promise<ActionResult> {
-  const reason          = String(fd.get("reason")          ?? "").trim();
-  const expectedArrival = String(fd.get("expectedArrival") ?? "").trim();
+  const reason      = String(fd.get("reason")      ?? "").trim();
+  const etaMinutes  = Number(fd.get("etaMinutes")  ?? "");
 
   if (!reason) return { success: false, message: "理由を入力してください" };
+
+  // etaMinutes から期待到着時刻を計算（JST）
+  let expectedArrival = "";
+  if (etaMinutes > 0) {
+    const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+    now.setMinutes(now.getMinutes() + etaMinutes);
+    expectedArrival = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

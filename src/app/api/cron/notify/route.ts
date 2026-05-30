@@ -401,7 +401,7 @@ export async function GET(req: NextRequest) {
           .eq("project_id", projectId);
         const deadlineDay = (rules ?? []).find(r => r.rule_type === "deadline_day")?.value as number | null;
         const deadlineStr = deadlineDay
-          ? `${y}-${String(m).padStart(2, "0")}-${String(deadlineDay).padStart(2, "0")}`
+          ? `${targetY}-${String(targetM).padStart(2, "0")}-${String(deadlineDay).padStart(2, "0")}`
           : "（設定なし）";
 
         // 全プロジェクトメンバーのLINE IDを取得
