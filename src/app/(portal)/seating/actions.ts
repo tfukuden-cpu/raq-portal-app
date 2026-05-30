@@ -118,14 +118,15 @@ export async function autoAssignSeatsAction(
       .eq("project_id", projectId),
   ]);
 
-  // 当日出勤予定スタッフ（シフト名からセクション解決）
+  // 当日出勤予定スタッフ（シフト名からセクション解決・SVは自動配置対象外）
   const memberSectionMap = new Map((members ?? []).map(m => [m.staff_id, m.section ?? ""]));
   const workingStaff = (shifts ?? [])
     .filter(s => s.shift_name && !OFF_NAMES.includes(s.shift_name as string))
     .map(s => ({
       staffId:  s.staff_id as string,
       section:  parseSection(s.shift_name as string, memberSectionMap.get(s.staff_id) ?? ""),
-    }));
+    }))
+    .filter(s => s.section !== "SV"); // SV は自動配置しない
 
   // 既存配置を起点にする
   const assignments: { seatId: string; staffId: string }[] = [...existingAssignments];

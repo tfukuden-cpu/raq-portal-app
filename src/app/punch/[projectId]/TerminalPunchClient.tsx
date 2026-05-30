@@ -73,7 +73,7 @@ const STATUS_TEXT: Record<StaffStatus, string> = {
 const STATUS_LABEL: Record<StaffStatus, string> = {
   not_arrived: "未出勤",
   working:     "勤務中",
-  on_break:    "休憩中",
+  on_break:    "離席中",
   clocked_out: "退勤済",
   absent:      "欠勤",
 };
@@ -92,13 +92,21 @@ const STATUS_AVATAR_BG: Record<StaffStatus, string> = {
   absent:      "bg-red-900",
 };
 
+// ── 離席メニュー選択肢 ──────────────────────────────────────────
+const BREAK_OPTIONS = [
+  { label: "トレーニング", note: "トレーニング", color: "bg-blue-800 hover:bg-blue-700 shadow-blue-900/50" },
+  { label: "離席",         note: "離席",         color: "bg-zinc-700 hover:bg-zinc-600 shadow-zinc-900/30" },
+  { label: "休憩（60分）", note: "休憩（60分）", color: "bg-amber-700 hover:bg-amber-600 shadow-amber-900/50" },
+  { label: "小休憩（15分）",note: "小休憩（15分）",color: "bg-amber-800 hover:bg-amber-700 shadow-amber-900/30" },
+] as const;
+
 // ── ステップ定義 ──────────────────────────────────────────────
 type Step =
   | { kind: "list" }
-  | { kind: "seat_action"; member: TerminalMember }
+  | { kind: "action"; member: TerminalMember }
+  | { kind: "break_menu"; member: TerminalMember }
   | { kind: "consent"; member: TerminalMember }
-  | { kind: "punch"; member: TerminalMember }
-  | { kind: "kind"; member: TerminalMember; punchType: "clock_in" | "clock_out" }
+  | { kind: "clock_kind"; member: TerminalMember; punchType: "clock_in" | "clock_out" }
   | { kind: "approver"; member: TerminalMember; punchType: "clock_in" | "clock_out"; punchKind: Exclude<PunchKind, "normal"> }
   | { kind: "done"; message: string };
 
@@ -180,40 +188,37 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   const hasSeatData = seats.length > 0;
   const [activeTab, setActiveTab] = useState<"seat" | "name">(hasSeatData ? "seat" : "name");
 
-  // ── 30秒ポーリング：他の人の打刻を反映 ───────────────────────
+  // ── 30秒ポーリング ───────────────────────────────────────────
   useEffect(() => {
     const poll = async () => {
       try {
         const res = await fetch(`/api/punch/${projectId}/statuses`);
         if (!res.ok) return;
         const data: {
-          staffId: string;
-          clockedIn: boolean;
-          clockedOut: boolean;
-          onBreak: boolean;
-          isAbsent: boolean;
+          staffId: string; clockedIn: boolean; clockedOut: boolean;
+          onBreak: boolean; isAbsent: boolean;
         }[] = await res.json();
         setLocalMembers(prev => prev.map(m => {
           const s = data.find(d => d.staffId === m.staffId);
           if (!s) return m;
           return { ...m, clockedIn: s.clockedIn, clockedOut: s.clockedOut, onBreak: s.onBreak, isAbsent: s.isAbsent };
         }));
-      } catch { /* ネットワークエラーは無視 */ }
+      } catch { /* ignore */ }
     };
     const id = setInterval(poll, 30_000);
     return () => clearInterval(id);
   }, [projectId]);
 
-  // memberMap: staffId → TerminalMember（最新状態）
   const memberMap = useMemo(() => {
     const m = new Map<string, TerminalMember>();
     localMembers.forEach(mem => m.set(mem.staffId, mem));
     return m;
   }, [localMembers]);
 
-  // ドロップダウン用：当日シフトがあり、未打刻の人のみ
-  const unclockedMembers = localMembers.filter(m => m.hasShiftToday && !m.clockedIn);
-  const filtered = unclockedMembers.filter(m =>
+  // 名前タブ：今日シフトがある全員を表示
+  const membersToday = localMembers.filter(m => m.hasShiftToday);
+  const unclockedCount = membersToday.filter(m => !m.clockedIn && !m.isAbsent).length;
+  const filteredMembers = membersToday.filter(m =>
     search === "" || m.name.includes(search)
   );
 
@@ -244,28 +249,61 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     }
   }, [step.kind]);
 
-  function openDropdown() {
-    setDropdownOpen(true);
-    setSearch("");
-  }
-
   // ── 座席タップ ──────────────────────────────────────────────
   function handleSeatTap(seat: TerminalSeat) {
     if (!seat.staffId) return;
     const member = memberMap.get(seat.staffId);
     if (!member) return;
-    setStep({ kind: "seat_action", member });
+    setStep({ kind: "action", member });
   }
 
-  // ── 名前選択（ドロップダウン）────────────────────────────────
+  // ── 名前選択 ─────────────────────────────────────────────────
   function handleMemberSelect(member: TerminalMember) {
     setDropdownOpen(false);
     setSearch("");
+    setStep({ kind: "action", member });
+  }
+
+  // ── 出勤アクション開始 ──────────────────────────────────────
+  function handleClockIn(member: TerminalMember) {
     if (member.needsConsent) {
       setStep({ kind: "consent", member });
     } else {
-      setStep({ kind: "punch", member });
+      setStep({ kind: "clock_kind", member, punchType: "clock_in" });
     }
+  }
+
+  // ── 退勤アクション開始 ──────────────────────────────────────
+  function handleClockOut(member: TerminalMember) {
+    setStep({ kind: "clock_kind", member, punchType: "clock_out" });
+  }
+
+  // ── 離席開始 ─────────────────────────────────────────────────
+  function handleBreakStart(member: TerminalMember, breakNote: string) {
+    startTransition(async () => {
+      const res = await terminalBreakAction(projectId, member.staffId, breakNote);
+      if (res.ok) {
+        setLocalMembers(prev => prev.map(m =>
+          m.staffId !== member.staffId ? m : { ...m, onBreak: true }
+        ));
+      }
+      setStep({ kind: "done", message: res.ok ? res.message : `⚠️ ${res.message}` });
+      setTimeout(() => setStep({ kind: "list" }), 2000);
+    });
+  }
+
+  // ── 離席終了（戻る） ─────────────────────────────────────────
+  function handleBreakEnd(member: TerminalMember) {
+    startTransition(async () => {
+      const res = await terminalBreakAction(projectId, member.staffId);
+      if (res.ok) {
+        setLocalMembers(prev => prev.map(m =>
+          m.staffId !== member.staffId ? m : { ...m, onBreak: false }
+        ));
+      }
+      setStep({ kind: "done", message: res.ok ? res.message : `⚠️ ${res.message}` });
+      setTimeout(() => setStep({ kind: "list" }), 2000);
+    });
   }
 
   // ── 同意書確認 ──────────────────────────────────────────────
@@ -273,18 +311,15 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     if (!consentName.trim()) return;
     startTransition(async () => {
       await saveConsentAction(projectId, member.staffId, consentName.trim());
+      const updated = { ...member, needsConsent: false };
       setLocalMembers(prev => prev.map(m =>
         m.staffId === member.staffId ? { ...m, needsConsent: false } : m
       ));
-      setStep({ kind: "punch", member: { ...member, needsConsent: false } });
+      setStep({ kind: "clock_kind", member: updated, punchType: "clock_in" });
     });
   }
 
-  // ── 出退勤種別選択 ──────────────────────────────────────────
-  function handlePunchTypeSelect(member: TerminalMember, punchType: "clock_in" | "clock_out") {
-    setStep({ kind: "kind", member, punchType });
-  }
-
+  // ── 種別選択 → 承認者へ or 直接打刻 ─────────────────────────
   function handleKindSelect(member: TerminalMember, punchType: "clock_in" | "clock_out", punchKind: PunchKind) {
     if (punchKind === "normal") {
       handleConfirm(member, punchType, "normal", undefined);
@@ -315,30 +350,13 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     });
   }
 
-  // ── 休憩トグル ──────────────────────────────────────────────
-  function handleBreakToggle(member: TerminalMember) {
-    startTransition(async () => {
-      const res = await terminalBreakAction(projectId, member.staffId);
-      if (res.ok && res.newStatus) {
-        setLocalMembers(prev => prev.map(m =>
-          m.staffId !== member.staffId ? m : {
-            ...m,
-            onBreak: res.newStatus === "on_break",
-          }
-        ));
-      }
-      setStep({ kind: "done", message: res.ok ? res.message : `⚠️ ${res.message}` });
-      setTimeout(() => setStep({ kind: "list" }), 2000);
-    });
-  }
-
   // ══════════════════════════════════════════════════════════
   // ── メイン画面（座席表 + 名前選択）────────────────────────
   // ══════════════════════════════════════════════════════════
   if (step.kind === "list") {
-    // 出勤統計
     const withShift    = localMembers.filter(m => m.hasShiftToday);
     const arrivedCount = withShift.filter(m => m.clockedIn || m.isAbsent).length;
+    void arrivedCount;
 
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col">
@@ -348,8 +366,6 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             {projectName}
           </p>
           <LiveClock />
-
-          {/* 出勤統計バー */}
           <div className="flex justify-center gap-6 text-sm tabular-nums">
             {(["working", "on_break", "not_arrived", "clocked_out", "absent"] as StaffStatus[]).map(s => {
               const cnt = withShift.filter(m => memberStatus(m) === s).length;
@@ -365,27 +381,21 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
           </div>
         </div>
 
-        {/* タブ（座席データがあるときのみ表示） */}
+        {/* タブ */}
         {hasSeatData && (
           <div className="flex border-b border-zinc-800 px-6">
             <button
               onClick={() => setActiveTab("seat")}
-              className={[
-                "flex-1 py-2.5 text-sm font-semibold transition-colors",
-                activeTab === "seat"
-                  ? "text-white border-b-2 border-blue-500"
-                  : "text-zinc-500 hover:text-zinc-300",
+              className={["flex-1 py-2.5 text-sm font-semibold transition-colors",
+                activeTab === "seat" ? "text-white border-b-2 border-blue-500" : "text-zinc-500 hover:text-zinc-300",
               ].join(" ")}
             >
               座席表で打刻
             </button>
             <button
               onClick={() => setActiveTab("name")}
-              className={[
-                "flex-1 py-2.5 text-sm font-semibold transition-colors",
-                activeTab === "name"
-                  ? "text-white border-b-2 border-blue-500"
-                  : "text-zinc-500 hover:text-zinc-300",
+              className={["flex-1 py-2.5 text-sm font-semibold transition-colors",
+                activeTab === "name" ? "text-white border-b-2 border-blue-500" : "text-zinc-500 hover:text-zinc-300",
               ].join(" ")}
             >
               名前で打刻
@@ -397,11 +407,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
           {/* ── 座席表タブ ─────────────────────────────────── */}
           {activeTab === "seat" && hasSeatData && (
             <div>
-              <p className="text-zinc-600 text-xs mb-3 text-center">
-                自分の席をタップして打刻してください
-              </p>
-
-              {/* 凡例 */}
+              <p className="text-zinc-600 text-xs mb-3 text-center">自分の席をタップして打刻してください</p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-1">
                 {(["not_arrived", "working", "on_break", "clocked_out", "absent"] as StaffStatus[]).map(s => (
                   <div key={s} className="flex items-center gap-1">
@@ -410,8 +416,6 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                   </div>
                 ))}
               </div>
-
-              {/* キャンバス */}
               <div className="overflow-x-auto rounded-2xl">
                 <div
                   className="relative bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden"
@@ -422,8 +426,6 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       <p className="text-zinc-500 text-sm">座席が設定されていません</p>
                     </div>
                   )}
-
-                  {/* 壁 */}
                   {walls.length > 0 && (
                     <svg className="absolute inset-0 w-full h-full pointer-events-none">
                       {walls.map((w, i) => (
@@ -435,8 +437,6 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       ))}
                     </svg>
                   )}
-
-                  {/* 席 */}
                   {seats.map(seat => {
                     const isDisabled = seat.seatType === "disabled";
                     const isFree     = seat.seatType === "free";
@@ -455,12 +455,10 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       );
                     }
 
-                    const bgCls   = status ? STATUS_BG[status]
-                      : isFree    ? "bg-emerald-900/30 border-emerald-700"
+                    const bgCls = status ? STATUS_BG[status]
+                      : isFree  ? "bg-emerald-900/30 border-emerald-700"
                       : "bg-zinc-800 border-zinc-600";
                     const textCls = status ? STATUS_TEXT[status] : "text-zinc-400";
-
-                    // セクション色バー（上部）
                     const effectiveSection = member
                       ? resolveShiftSection(member.shiftName, seat.section)
                       : seat.section;
@@ -481,11 +479,9 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                           isPending ? "opacity-60" : "",
                         ].join(" ")}
                       >
-                        {/* セクション色バー */}
                         {!isFree && effectiveSection && (
                           <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(effectiveSection, member?.shiftName ?? seat.shiftSlot)}`} />
                         )}
-
                         <span className="text-[9px] text-zinc-500 leading-none">{seat.label}</span>
                         {member ? (
                           <>
@@ -523,20 +519,17 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             <div className="max-w-md mx-auto w-full">
               <div ref={dropdownRef} className="relative">
                 <button
-                  onClick={openDropdown}
-                  disabled={unclockedMembers.length === 0}
-                  className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-6 py-5 flex items-center justify-between gap-3 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-default"
+                  onClick={() => { setDropdownOpen(true); setSearch(""); }}
+                  disabled={membersToday.length === 0}
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-6 py-5 flex items-center justify-between gap-3 transition-colors active:scale-[0.98] disabled:opacity-50"
                 >
                   <span className="text-zinc-400 text-lg">
-                    {unclockedMembers.length === 0 ? "全員打刻済み" : "名前を選択してください"}
+                    {membersToday.length === 0 ? "本日のシフトがありません" : "名前を選択してください"}
                   </span>
-                  {unclockedMembers.length > 0 && (
-                    <svg
-                      className={`w-5 h-5 text-zinc-400 flex-shrink-0 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`}
+                  {membersToday.length > 0 && (
+                    <svg className={`w-5 h-5 text-zinc-400 flex-shrink-0 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`}
                       xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                      fill="none" stroke="currentColor" strokeWidth={2}
-                      strokeLinecap="round" strokeLinejoin="round"
-                    >
+                      fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M6 9l6 6 6-6" />
                     </svg>
                   )}
@@ -555,37 +548,41 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       />
                     </div>
                     <ul className="max-h-80 overflow-y-auto overscroll-contain divide-y divide-zinc-700/50">
-                      {filtered.length === 0 ? (
-                        <li className="px-5 py-6 text-center text-zinc-500 text-sm">
-                          該当するスタッフがいません
-                        </li>
+                      {filteredMembers.length === 0 ? (
+                        <li className="px-5 py-6 text-center text-zinc-500 text-sm">該当するスタッフがいません</li>
                       ) : (
-                        filtered.map(m => (
-                          <li key={m.staffId}>
-                            <button
-                              onClick={() => handleMemberSelect(m)}
-                              className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-zinc-700/60 transition-colors"
-                            >
-                              <div className="w-10 h-10 rounded-full bg-zinc-600 flex items-center justify-center text-white font-bold text-base flex-shrink-0">
-                                {m.name.charAt(0)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-white font-bold text-base leading-tight">{m.name}</p>
-                                {m.shiftName && (
-                                  <p className="text-zinc-400 text-xs mt-0.5">
-                                    {m.shiftName}
-                                    {m.shiftStart && m.shiftEnd && `　${m.shiftStart}〜${m.shiftEnd}`}
-                                  </p>
-                                )}
-                              </div>
-                              {m.needsConsent && (
-                                <span className="text-[10px] text-amber-400 font-semibold border border-amber-700/60 rounded px-1.5 py-0.5 flex-shrink-0">
-                                  同意書
+                        filteredMembers.map(m => {
+                          const st = memberStatus(m);
+                          return (
+                            <li key={m.staffId}>
+                              <button
+                                onClick={() => handleMemberSelect(m)}
+                                className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-zinc-700/60 transition-colors"
+                              >
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0 ${STATUS_AVATAR_BG[st]}`}>
+                                  {m.name.charAt(0)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-white font-bold text-base leading-tight">{m.name}</p>
+                                  {m.shiftName && (
+                                    <p className="text-zinc-400 text-xs mt-0.5">
+                                      {m.shiftName}
+                                      {m.shiftStart && m.shiftEnd && `　${m.shiftStart}〜${m.shiftEnd}`}
+                                    </p>
+                                  )}
+                                </div>
+                                <span className={`text-xs font-semibold flex-shrink-0 ${STATUS_COLOR[st]}`}>
+                                  {STATUS_LABEL[st]}
                                 </span>
-                              )}
-                            </button>
-                          </li>
-                        ))
+                                {m.needsConsent && (
+                                  <span className="text-[10px] text-amber-400 font-semibold border border-amber-700/60 rounded px-1.5 py-0.5 flex-shrink-0">
+                                    同意書
+                                  </span>
+                                )}
+                              </button>
+                            </li>
+                          );
+                        })
                       )}
                     </ul>
                   </div>
@@ -593,9 +590,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               </div>
 
               <p className="text-center text-zinc-600 text-sm tabular-nums mt-4">
-                {unclockedMembers.length > 0
-                  ? `未打刻 ${unclockedMembers.length}名`
-                  : "本日の出勤打刻が完了しました"}
+                {unclockedCount > 0 ? `未出勤 ${unclockedCount}名` : "全員出勤済み"}
               </p>
             </div>
           )}
@@ -605,86 +600,84 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   }
 
   // ══════════════════════════════════════════════════════════
-  // ── 座席タップ → アクション選択 ────────────────────────────
+  // ── 統合アクション画面 ────────────────────────────────────
+  //    未出勤→出勤のみ  出勤中→離席+退勤  離席中→戻る
   // ══════════════════════════════════════════════════════════
-  if (step.kind === "seat_action") {
+  if (step.kind === "action") {
     const { member } = step;
-    // ローカル状態から最新メンバーを取得
     const latestMember = memberMap.get(member.staffId) ?? member;
     const status = memberStatus(latestMember);
 
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
-        <div className="w-full max-w-sm space-y-6">
+        <div className="w-full max-w-sm space-y-8">
 
           {/* スタッフ情報 */}
           <div className="text-center">
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3 ${STATUS_AVATAR_BG[status]}`}>
+            <div className={`w-24 h-24 rounded-full flex items-center justify-center text-white text-4xl font-bold mx-auto mb-4 ${STATUS_AVATAR_BG[status]}`}>
               {latestMember.name.charAt(0)}
             </div>
-            <p className="text-white text-2xl font-bold">{latestMember.name}</p>
+            <p className="text-white text-3xl font-bold">{latestMember.name}</p>
             {latestMember.accountNumber && (
               <p className="text-zinc-500 text-sm tabular-nums mt-0.5">{latestMember.accountNumber}</p>
             )}
             {latestMember.shiftName && (
-              <p className="text-zinc-400 text-sm mt-1">
+              <p className="text-zinc-400 text-sm mt-1.5">
                 {latestMember.shiftName}
                 {latestMember.shiftStart && latestMember.shiftEnd && `　${latestMember.shiftStart}〜${latestMember.shiftEnd}`}
               </p>
             )}
-            <p className={`text-xl font-bold mt-3 ${STATUS_COLOR[status]}`}>
+            <p className={`text-2xl font-bold mt-3 ${STATUS_COLOR[status]}`}>
               {STATUS_LABEL[status]}
             </p>
           </div>
 
-          {/* アクションボタン */}
+          {/* ── アクションボタン ── */}
           <div className="space-y-3">
+
+            {/* 未出勤 → 出勤ボタンのみ */}
             {status === "not_arrived" && (
               <button
-                onClick={() => {
-                  if (latestMember.needsConsent) {
-                    setStep({ kind: "consent", member: latestMember });
-                  } else {
-                    setStep({ kind: "punch", member: latestMember });
-                  }
-                }}
+                onClick={() => handleClockIn(latestMember)}
                 disabled={isPending}
-                className="w-full py-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-lg font-bold transition-all active:scale-95 shadow-lg shadow-blue-900/50"
+                className="w-full py-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xl font-bold transition-all active:scale-95 shadow-xl shadow-blue-900/50 disabled:opacity-50"
               >
-                出勤打刻
+                出勤
               </button>
             )}
 
-            {(status === "working" || status === "on_break") && (
+            {/* 出勤中 → 離席 + 退勤 */}
+            {status === "working" && (
               <>
                 <button
-                  onClick={() => handleBreakToggle(latestMember)}
+                  onClick={() => setStep({ kind: "break_menu", member: latestMember })}
                   disabled={isPending}
-                  className={[
-                    "w-full py-5 rounded-2xl text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-50",
-                    status === "on_break"
-                      ? "bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-900/50"
-                      : "bg-amber-700 hover:bg-amber-600 shadow-lg shadow-amber-900/30",
-                  ].join(" ")}
+                  className="w-full py-5 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white text-xl font-bold transition-all active:scale-95 shadow-xl shadow-amber-900/50 disabled:opacity-50"
                 >
-                  {isPending ? "記録中…" : status === "on_break" ? "休憩終了" : "休憩開始"}
+                  離席
                 </button>
                 <button
-                  onClick={() => {
-                    if (latestMember.needsConsent) {
-                      setStep({ kind: "consent", member: latestMember });
-                    } else {
-                      setStep({ kind: "punch", member: latestMember });
-                    }
-                  }}
+                  onClick={() => handleClockOut(latestMember)}
                   disabled={isPending}
-                  className="w-full py-5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-rose-900/50"
+                  className="w-full py-5 rounded-2xl bg-rose-700 hover:bg-rose-600 text-white text-xl font-bold transition-all active:scale-95 shadow-xl shadow-rose-900/50 disabled:opacity-50"
                 >
-                  退勤打刻
+                  退勤
                 </button>
               </>
             )}
 
+            {/* 離席中 → 戻るボタン */}
+            {status === "on_break" && (
+              <button
+                onClick={() => handleBreakEnd(latestMember)}
+                disabled={isPending}
+                className="w-full py-6 rounded-2xl bg-green-700 hover:bg-green-600 text-white text-xl font-bold transition-all active:scale-95 shadow-xl shadow-green-900/50 disabled:opacity-50"
+              >
+                {isPending ? "記録中…" : "戻る（離席終了）"}
+              </button>
+            )}
+
+            {/* 退勤済み */}
             {status === "clocked_out" && (
               <div className="py-6 text-center space-y-2">
                 <p className="text-zinc-300 text-lg font-semibold">退勤済みです</p>
@@ -692,6 +685,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               </div>
             )}
 
+            {/* 欠勤 */}
             {status === "absent" && (
               <div className="py-6 text-center space-y-2">
                 <p className="text-red-400 text-lg font-semibold">欠勤登録済み</p>
@@ -702,6 +696,45 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
 
           <button
             onClick={() => setStep({ kind: "list" })}
+            className="w-full py-3 rounded-2xl border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            ← 戻る
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // ── 離席メニュー ──────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  if (step.kind === "break_menu") {
+    const { member } = step;
+    const latestMember = memberMap.get(member.staffId) ?? member;
+
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="text-center">
+            <p className="text-zinc-400 text-sm mb-1">{latestMember.name}</p>
+            <p className="text-white text-2xl font-bold">離席の種類を選択</p>
+          </div>
+
+          <div className="space-y-3">
+            {BREAK_OPTIONS.map(opt => (
+              <button
+                key={opt.note}
+                onClick={() => handleBreakStart(latestMember, opt.note)}
+                disabled={isPending}
+                className={`w-full py-5 rounded-2xl text-white text-xl font-bold transition-all active:scale-95 shadow-lg disabled:opacity-50 ${opt.color}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => setStep({ kind: "action", member: latestMember })}
             className="w-full py-3 rounded-2xl border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
           >
             ← 戻る
@@ -725,9 +758,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             <p className="text-zinc-500 text-sm mt-1">今月初めての打刻です。内容をご確認ください。</p>
           </div>
           <div className="bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-5">
-            <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-line">
-              {CONSENT_TEXT}
-            </p>
+            <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-line">{CONSENT_TEXT}</p>
           </div>
           <div className="space-y-2">
             <p className="text-zinc-400 text-sm font-semibold">お名前を入力して同意を確認してください</p>
@@ -737,9 +768,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               placeholder="例：山田 太郎"
               value={consentName}
               onChange={e => setConsentName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter" && consentName.trim()) handleConsentConfirm(member);
-              }}
+              onKeyDown={e => { if (e.key === "Enter" && consentName.trim()) handleConsentConfirm(member); }}
               className="w-full bg-zinc-900 border-2 border-zinc-600 rounded-2xl px-5 py-4 text-white text-xl placeholder-zinc-600 focus:outline-none focus:border-blue-500 text-center"
             />
           </div>
@@ -749,7 +778,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               disabled={!consentName.trim() || isPending}
               className="w-full py-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-40"
             >
-              {isPending ? "保存中…" : "同意して打刻へ進む"}
+              {isPending ? "保存中…" : "同意して出勤へ進む"}
             </button>
             <button
               onClick={() => setStep({ kind: "list" })}
@@ -764,72 +793,9 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   }
 
   // ══════════════════════════════════════════════════════════
-  // ── 出勤 / 退勤 選択 ────────────────────────────────────
+  // ── 出退勤種別選択（定時/遅刻/早退/残業）─────────────────
   // ══════════════════════════════════════════════════════════
-  if (step.kind === "punch") {
-    const { member } = step;
-    const latestMember = memberMap.get(member.staffId) ?? member;
-    const canClockIn  = !latestMember.clockedIn;
-    const canClockOut = latestMember.clockedIn && !latestMember.clockedOut;
-
-    return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
-        <div className="w-full max-w-sm space-y-6">
-          <div className="text-center">
-            <div className="w-20 h-20 rounded-full bg-zinc-700 flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3">
-              {latestMember.name.charAt(0)}
-            </div>
-            <p className="text-white text-2xl font-bold">{latestMember.name}</p>
-            {latestMember.shiftName && (
-              <p className="text-zinc-400 text-sm mt-1">
-                {latestMember.shiftName}
-                {latestMember.shiftStart && latestMember.shiftEnd && `　${latestMember.shiftStart}〜${latestMember.shiftEnd}`}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <button
-              onClick={() => canClockIn && handlePunchTypeSelect(latestMember, "clock_in")}
-              disabled={!canClockIn}
-              className={`w-full py-5 rounded-2xl text-lg font-bold transition-all active:scale-95 ${
-                canClockIn
-                  ? "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/50"
-                  : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
-              }`}
-            >
-              出勤打刻
-              {latestMember.clockedIn && <span className="text-sm font-normal ml-2">（打刻済）</span>}
-            </button>
-            <button
-              onClick={() => canClockOut && handlePunchTypeSelect(latestMember, "clock_out")}
-              disabled={!canClockOut}
-              className={`w-full py-5 rounded-2xl text-lg font-bold transition-all active:scale-95 ${
-                canClockOut
-                  ? "bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-900/50"
-                  : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
-              }`}
-            >
-              退勤打刻
-              {latestMember.clockedOut && <span className="text-sm font-normal ml-2">（打刻済）</span>}
-            </button>
-          </div>
-
-          <button
-            onClick={() => setStep({ kind: "list" })}
-            className="w-full py-3 rounded-2xl border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            ← 戻る
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════
-  // ── 定時 / 遅刻 / 早退 選択 ─────────────────────────────
-  // ══════════════════════════════════════════════════════════
-  if (step.kind === "kind") {
+  if (step.kind === "clock_kind") {
     const { member, punchType } = step;
     const isClockIn = punchType === "clock_in";
 
@@ -845,7 +811,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             <button
               onClick={() => handleKindSelect(member, punchType, "normal")}
               disabled={isPending}
-              className="w-full py-5 rounded-2xl bg-zinc-700 hover:bg-zinc-600 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-50"
+              className="w-full py-5 rounded-2xl bg-zinc-700 hover:bg-zinc-600 text-white text-xl font-bold transition-all active:scale-95 disabled:opacity-50"
             >
               {isClockIn ? "定時出勤" : "定時退勤"}
               <span className="block text-xs font-normal text-zinc-400 mt-0.5">
@@ -854,37 +820,40 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                   : (member.shiftEnd   ? `→ ${member.shiftEnd.slice(0, 5)} で記録`   : "シフト終了時刻で記録")}
               </span>
             </button>
+
             {isClockIn ? (
               <button
                 onClick={() => handleKindSelect(member, punchType, "late")}
                 disabled={isPending}
-                className="w-full py-5 rounded-2xl bg-amber-700 hover:bg-amber-600 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-50"
+                className="w-full py-5 rounded-2xl bg-amber-700 hover:bg-amber-600 text-white text-xl font-bold transition-all active:scale-95 disabled:opacity-50"
               >
                 遅刻出勤
                 <span className="block text-xs font-normal text-amber-200 mt-0.5">実打刻時刻を15分繰り上げ　SV承認必要</span>
               </button>
-            ) : (<>
-              <button
-                onClick={() => handleKindSelect(member, punchType, "early")}
-                disabled={isPending}
-                className="w-full py-5 rounded-2xl bg-amber-700 hover:bg-amber-600 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-50"
-              >
-                早退退勤
-                <span className="block text-xs font-normal text-amber-200 mt-0.5">実打刻時刻を15分切り下げ　SV承認必要</span>
-              </button>
-              <button
-                onClick={() => handleKindSelect(member, punchType, "overtime")}
-                disabled={isPending}
-                className="w-full py-5 rounded-2xl bg-blue-800 hover:bg-blue-700 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-50"
-              >
-                残業退勤
-                <span className="block text-xs font-normal text-blue-200 mt-0.5">実打刻時刻を15分切り下げ　SV承認必要</span>
-              </button>
-            </>)}
+            ) : (
+              <>
+                <button
+                  onClick={() => handleKindSelect(member, punchType, "early")}
+                  disabled={isPending}
+                  className="w-full py-5 rounded-2xl bg-amber-700 hover:bg-amber-600 text-white text-xl font-bold transition-all active:scale-95 disabled:opacity-50"
+                >
+                  早退退勤
+                  <span className="block text-xs font-normal text-amber-200 mt-0.5">実打刻時刻を15分切り下げ　SV承認必要</span>
+                </button>
+                <button
+                  onClick={() => handleKindSelect(member, punchType, "overtime")}
+                  disabled={isPending}
+                  className="w-full py-5 rounded-2xl bg-blue-800 hover:bg-blue-700 text-white text-xl font-bold transition-all active:scale-95 disabled:opacity-50"
+                >
+                  残業退勤
+                  <span className="block text-xs font-normal text-blue-200 mt-0.5">実打刻時刻を15分切り下げ　SV承認必要</span>
+                </button>
+              </>
+            )}
           </div>
 
           <button
-            onClick={() => setStep({ kind: "punch", member })}
+            onClick={() => setStep({ kind: "action", member })}
             className="w-full py-3 rounded-2xl border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
           >
             ← 戻る
@@ -933,7 +902,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               {isPending ? "記録中…" : "打刻を確定する"}
             </button>
             <button
-              onClick={() => setStep({ kind: "kind", member, punchType })}
+              onClick={() => setStep({ kind: "clock_kind", member, punchType })}
               className="w-full py-3 rounded-2xl border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
             >
               ← 戻る
@@ -958,7 +927,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
           <p className={`text-2xl font-bold ${isError ? "text-red-400" : "text-emerald-400"}`}>
             {step.message}
           </p>
-          <p className="text-zinc-500 text-sm">{isError ? "3秒後に戻ります…" : "2秒後に戻ります…"}</p>
+          <p className="text-zinc-500 text-sm">2秒後に戻ります…</p>
         </div>
       </div>
     );

@@ -135,6 +135,7 @@ export async function terminalPunchAction(
 export async function terminalBreakAction(
   projectId: string,
   staffId: string,
+  breakNote?: string,
 ): Promise<{ ok: boolean; message: string; newStatus?: "on_break" | "working" }> {
   if (!projectId || !staffId) {
     return { ok: false, message: "パラメータが不正です" };
@@ -163,13 +164,14 @@ export async function terminalBreakAction(
     staff_id:    staffId,
     punch_type:  newType,
     recorded_at: new Date().toISOString(),
+    note:        !isOnBreak && breakNote ? breakNote : null,
   });
 
   if (error) return { ok: false, message: error.message };
   revalidatePath(`/punch/${projectId}`);
   return {
     ok: true,
-    message: isOnBreak ? "休憩終了を記録しました" : "休憩開始を記録しました",
+    message: isOnBreak ? "離席を終了しました" : `${breakNote ?? "離席"}を記録しました`,
     newStatus: isOnBreak ? "working" : "on_break",
   };
 }
