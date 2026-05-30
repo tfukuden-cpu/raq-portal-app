@@ -476,7 +476,7 @@ export function MemberList({
   const [shiftSettingsOpen, setShiftSettingsOpen]   = useState(false);
   const [editHolidayRequests, setEditHolidayRequests] = useState<HolidayRequestEntry[]>([]);
   const [editTrainingDates, setEditTrainingDates]   = useState<TrainingEntry[]>([]);
-  const [departStep, setDepartStep] = useState<"hidden" | "input">("hidden");
+  const [departStep, setDepartStep] = useState<"hidden" | "input" | "confirm">("hidden");
   const [editChurnRisk, setEditChurnRisk] = useState(false);
   const [departType, setDepartType] = useState<"immediate" | "dated">("immediate");
   const [departDate, setDepartDate] = useState(() =>
@@ -1347,7 +1347,7 @@ export function MemberList({
                   >
                     離脱処理…
                   </button>
-                ) : (
+                ) : departStep === "input" ? (
                   <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50/40 dark:bg-red-950/20 p-3 space-y-3">
                     <p className="text-xs font-semibold text-red-600 dark:text-red-400">離脱処理</p>
                     <div className="space-y-2">
@@ -1379,8 +1379,40 @@ export function MemberList({
                         className="flex-1 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                         戻る
                       </button>
+                      {/* 確認ステップへ進む（まだ実行しない） */}
                       <button type="button"
-                        disabled={isPending || (departType === "dated" && !departDate)}
+                        disabled={departType === "dated" && !departDate}
+                        onClick={() => setDepartStep("confirm")}
+                        className="flex-1 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold disabled:opacity-40"
+                      >
+                        次へ
+                      </button>
+                    </div>
+                  </div>
+                ) : departStep === "confirm" ? (
+                  /* ── 確認ステップ ── */
+                  <div className="rounded-xl border-2 border-red-400 dark:border-red-600 bg-red-50/60 dark:bg-red-950/30 p-3 space-y-3">
+                    <p className="text-sm font-bold text-red-600 dark:text-red-400 text-center">
+                      ⚠ 本当に離脱処理を実行しますか？
+                    </p>
+                    <div className="bg-white dark:bg-zinc-900 rounded-lg px-3 py-2 space-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+                      <p>
+                        <span className="font-semibold">{editingMember?.name ?? editId}</span> を離脱処理します
+                      </p>
+                      <p className="text-zinc-400">
+                        {departType === "immediate"
+                          ? "本日以降のシフトがすべて削除されます"
+                          : `${departDate} の翌日以降のシフトがすべて削除されます`}
+                      </p>
+                      <p className="text-red-500 font-semibold">削除したシフトは復元できません</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setDepartStep("input")}
+                        className="flex-1 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                        やっぱりやめる
+                      </button>
+                      <button type="button"
+                        disabled={isPending}
                         onClick={() => {
                           if (!editId) return;
                           const finalDate = departType === "immediate"
@@ -1397,13 +1429,13 @@ export function MemberList({
                             }
                           });
                         }}
-                        className="flex-1 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold disabled:opacity-40"
+                        className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold disabled:opacity-40"
                       >
-                        {isPending ? "処理中…" : "離脱を確定"}
+                        {isPending ? "処理中…" : "実行する"}
                       </button>
                     </div>
                   </div>
-                )}
+                ) : null}
 
                 <div className="flex gap-2">
                   <button type="button" onClick={() => setEditId(null)}
