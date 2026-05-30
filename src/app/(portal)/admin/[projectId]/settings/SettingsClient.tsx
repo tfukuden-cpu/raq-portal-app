@@ -1010,70 +1010,82 @@ export function MemberList({
       {/* メンバー一覧 */}
       {addMode === "none" && (
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/70 dark:border-zinc-800 shadow-sm overflow-hidden">
-          {/* 横スクロール対応：列を固定幅で揃える */}
+          {/* CSS grid で各列を全行で揃える */}
           <div className="overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-            <div className="min-w-[520px]">
+            <div className="min-w-[600px]">
               {filtered.map((m, i) => {
                 const av = avatarStyle(m.company_name);
                 const isDeparted = !!m.end_date;
                 const memberSections = m.sections.length > 0 ? m.sections : m.section ? [m.section] : [];
 
                 return (
-                  <div key={m.staffId}
-                    className={`flex items-center gap-2 px-4 py-3 cursor-pointer active:bg-zinc-50 dark:active:bg-zinc-800/50 transition-colors ${
+                  <div
+                    key={m.staffId}
+                    className={`grid items-center px-4 py-3 cursor-pointer active:bg-zinc-50 dark:active:bg-zinc-800/50 transition-colors ${
                       i > 0 ? "border-t border-zinc-100 dark:border-zinc-800/60" : ""
                     } ${isDeparted ? "opacity-50" : ""}`}
+                    style={{ gridTemplateColumns: "36px 96px 104px 52px 88px 52px 60px 40px 1fr 16px", gap: "8px" }}
                     onClick={() => startEdit(m)}
                   >
-                    {/* ① アイコン（36px固定） */}
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${av.bg} ${av.text}`}>
+                    {/* ① アイコン */}
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${av.bg} ${av.text}`}>
                       {m.name[0]}
                     </div>
 
-                    {/* ② 名前（96px固定） */}
-                    <div className="w-24 flex-shrink-0 overflow-hidden">
-                      <p className="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 truncate leading-tight">{m.name}</p>
+                    {/* ② 名前 */}
+                    <div className="overflow-hidden">
+                      <p className="text-[15px] font-bold text-zinc-900 dark:text-zinc-100 truncate leading-tight">{m.name}</p>
                       {m.churn_risk && !isDeparted && (
-                        <p className="text-[9px] text-red-500 font-semibold leading-tight">離脱リスク</p>
+                        <p className="text-[9px] text-red-500 font-semibold leading-none mt-0.5">離脱リスク</p>
                       )}
                       {isDeparted && (
-                        <p className="text-[9px] text-zinc-400 font-semibold leading-tight">離脱済</p>
+                        <p className="text-[9px] text-zinc-400 leading-none mt-0.5">離脱済</p>
                       )}
                     </div>
 
-                    {/* ③ 会社名（108px固定） */}
-                    <div className="w-[108px] flex-shrink-0 overflow-hidden">
+                    {/* ③ 会社名 */}
+                    <div className="overflow-hidden">
                       {m.company_name
                         ? <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{m.company_name}</p>
                         : <p className="text-[11px] text-amber-500 font-semibold">未設定</p>
                       }
                     </div>
 
-                    {/* ④ 口座番号（52px固定） */}
-                    <div className="w-[52px] flex-shrink-0 overflow-hidden">
+                    {/* ④ 口座番号 */}
+                    <div className="overflow-hidden">
                       <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 truncate tabular-nums">
                         {m.account_number ?? "―"}
                       </p>
                     </div>
 
-                    {/* ⑤ バッジ群（左端位置揃え・flex-shrink-0） */}
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {memberSections.map(s => (
-                        <span key={s} className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 whitespace-nowrap">
-                          {s}
-                        </span>
-                      ))}
+                    {/* ⑤ セクション（最大2件、超過は +N） */}
+                    <div className="flex items-center gap-1 overflow-hidden">
+                      {memberSections.length === 0
+                        ? <span className="text-[10px] text-zinc-300 dark:text-zinc-700">―</span>
+                        : <>
+                            {memberSections.slice(0, 2).map(s => (
+                              <span key={s} className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 whitespace-nowrap flex-shrink-0">
+                                {s}
+                              </span>
+                            ))}
+                            {memberSections.length > 2 && (
+                              <span className="text-[10px] text-zinc-400 flex-shrink-0">+{memberSections.length - 2}</span>
+                            )}
+                          </>
+                      }
+                    </div>
+
+                    {/* ⑥ ロール（管理者のみ表示・スタッフは空欄） */}
+                    <div className="flex items-center">
                       {m.role === "project_admin" && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-violet-900 whitespace-nowrap">
                           管理者
                         </span>
                       )}
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 tabular-nums whitespace-nowrap">
-                        {m.work_days_count != null && m.work_days_type
-                          ? `${m.work_days_type === "monthly" ? "月" : "週"}${m.work_days_count}日`
-                          : "月21日"
-                        }
-                      </span>
+                    </div>
+
+                    {/* ⑦ LINE状態 */}
+                    <div className="flex items-center">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap ${
                         m.lineLinked && m.line_friend
                           ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-100 dark:border-green-900"
@@ -1083,6 +1095,10 @@ export function MemberList({
                       }`}>
                         {m.lineLinked && m.line_friend ? "LINE済" : m.lineLinked ? "友達未" : "LINE未"}
                       </span>
+                    </div>
+
+                    {/* ⑧ 順守率（nullの場合は空欄） */}
+                    <div className="flex items-center">
                       {m.compliance != null && (
                         <span className={[
                           "text-[10px] px-1.5 py-0.5 rounded-full font-semibold border tabular-nums whitespace-nowrap",
@@ -1098,10 +1114,10 @@ export function MemberList({
                     </div>
 
                     {/* スペーサー */}
-                    <div className="flex-1" />
+                    <div />
 
-                    {/* ⑥ トグル（シェブロン） */}
-                    <svg className="w-4 h-4 text-zinc-300 dark:text-zinc-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    {/* ⑨ トグル */}
+                    <svg className="w-4 h-4 text-zinc-300 dark:text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
