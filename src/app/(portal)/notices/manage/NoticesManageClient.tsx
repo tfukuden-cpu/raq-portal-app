@@ -20,32 +20,12 @@ type ModalState =
   | { type: "none" }
   | { type: "create" }
   | { type: "edit"; notice: Notice }
-  | { type: "delete"; notice: Notice }
-  | { type: "detail"; notice: Notice };
-
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(d);
-}
-
-function formatTime(iso: string) {
-  const d = new Date(iso);
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
-}
+  | { type: "delete"; notice: Notice };
 
 function formatDateTime(iso: string) {
   const d = new Date(iso);
   return new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo",
-    year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -53,6 +33,7 @@ function formatDateTime(iso: string) {
   }).format(d);
 }
 
+// ── 投稿・編集モーダル ──────────────────────────────────────────
 function NoticeModal({
   modal, members, onClose,
 }: {
@@ -68,7 +49,6 @@ function NoticeModal({
   const [title, setTitle] = useState(existing?.title ?? "");
   const [body, setBody] = useState(existing?.body ?? "");
   const [isPinned, setIsPinned] = useState(existing?.is_pinned ?? false);
-  // 新規投稿のみの追加フィールド
   const [targetMode, setTargetMode] = useState<"all" | "person">("all");
   const [targetStaffId, setTargetStaffId] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
@@ -181,10 +161,9 @@ function NoticeModal({
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={isPinned} onChange={e => setIsPinned(e.target.checked)}
               className="w-4 h-4 rounded accent-blue-600" />
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">📌 上部に固定する</span>
+            <span className="text-sm text-zinc-700 dark:text-zinc-300">上部に固定する</span>
           </label>
 
-          {/* LINE通知（新規のみ） */}
           {!isEdit && (
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" checked={sendLine} onChange={e => setSendLine(e.target.checked)}
@@ -215,19 +194,38 @@ function NoticeModal({
   );
 }
 
-export default function NoticesManageClient({ notices, members }: { notices: Notice[]; members: { id: string; name: string }[] }) {
+// ── メインコンポーネント ──────────────────────────────────────────
+export default function NoticesManageClient({
+  notices,
+  members,
+}: {
+  notices: Notice[];
+  members: { id: string; name: string }[];
+}) {
   const [modal, setModal] = useState<ModalState>({ type: "none" });
   const [isPending, startTransition] = useTransition();
   const [recipientSearch, setRecipientSearch] = useState("");
+  // 展開中のカードID集合
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     const q = recipientSearch.trim();
     if (!q) return notices;
     return notices.filter(n => {
       const target = n.target_name ?? "全員";
-      return target.includes(q);
+      const poster = n.poster_name;
+      return target.includes(q) || poster.includes(q) || n.title.includes(q);
     });
   }, [notices, recipientSearch]);
+
+  function toggleExpand(id: string) {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const handleDeleteConfirm = (notice: Notice) => {
     const fd = new FormData();
@@ -251,7 +249,7 @@ export default function NoticesManageClient({ notices, members }: { notices: Not
             type="text"
             value={recipientSearch}
             onChange={e => setRecipientSearch(e.target.value)}
-            placeholder="宛先で検索…（名前 または「全員」）"
+            placeholder="宛先・送信者・件名で検索…"
             className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           {recipientSearch && (
@@ -269,130 +267,113 @@ export default function NoticesManageClient({ notices, members }: { notices: Not
         </button>
       </div>
 
-      {/* ヘッダー行 */}
+      {/* 件数 */}
       {filtered.length > 0 && (
-        <div className="grid grid-cols-[6rem_7rem_1fr_auto] gap-x-3 px-3 py-1.5 mb-1">
-          <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">送信日時</span>
-          <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">宛先</span>
-          <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">お知らせ</span>
-          <span />
-        </div>
+        <p className="text-[11px] text-zinc-400 mb-2 tabular-nums">
+          {filtered.length} 件
+        </p>
       )}
 
-      {/* 一覧 */}
-      <div className="space-y-1.5">
+      {/* 送信履歴一覧 */}
+      <div className="space-y-2">
         {filtered.length > 0 ? (
-          filtered.map(n => (
-            <div
-              key={n.id}
-              className={`grid grid-cols-[6rem_7rem_1fr_auto] gap-x-3 items-start px-3 py-3 rounded-xl border bg-white dark:bg-zinc-950 transition-colors cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
-                n.is_pinned
-                  ? "border-blue-200 dark:border-blue-800"
-                  : "border-zinc-100 dark:border-zinc-800"
-              }`}
-              onClick={() => setModal({ type: "detail", notice: n })}
-            >
-              {/* 送信日時 */}
-              <div className="flex flex-col tabular-nums">
-                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{formatDate(n.created_at)}</span>
-                <span className="text-[11px] text-zinc-400">{formatTime(n.created_at)}</span>
-              </div>
-
-              {/* 宛先 */}
-              <div className="flex items-start pt-0.5">
-                {n.target_name ? (
-                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 truncate">
-                    {n.target_name}
+          filtered.map(n => {
+            const isExpanded = expandedIds.has(n.id);
+            return (
+              <div
+                key={n.id}
+                className={`rounded-xl border bg-white dark:bg-zinc-950 transition-colors overflow-hidden ${
+                  n.is_pinned
+                    ? "border-blue-200 dark:border-blue-800"
+                    : "border-zinc-100 dark:border-zinc-800"
+                }`}
+              >
+                {/* 行1: 送信時間 · 送信先 · 送信者 */}
+                <div className="flex items-center gap-2 px-3 pt-2.5 pb-0 flex-wrap">
+                  <span className="text-[11px] text-zinc-400 tabular-nums font-medium">
+                    {formatDateTime(n.created_at)}
                   </span>
-                ) : (
-                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">全員</span>
+                  <span className="text-zinc-300 dark:text-zinc-600 text-[11px]">·</span>
+                  {n.target_name ? (
+                    <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                      {n.target_name}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-zinc-400">全員</span>
+                  )}
+                  <span className="text-zinc-300 dark:text-zinc-600 text-[11px]">·</span>
+                  <span className="text-[11px] text-zinc-400">{n.poster_name}</span>
+                  {n.is_pinned && (
+                    <span className="text-[10px] font-semibold text-blue-500 border border-blue-200 dark:border-blue-700 rounded px-1.5 py-0.5 leading-none ml-auto">
+                      固定
+                    </span>
+                  )}
+                </div>
+
+                {/* 行2: 件名 + トグル */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(n.id)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+                >
+                  <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate flex-1">
+                    {n.title}
+                  </span>
+                  <svg
+                    className={`w-4 h-4 text-zinc-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {/* 行3: 投稿内容（展開時） */}
+                {isExpanded && (
+                  <div className="px-3 pb-3 border-t border-zinc-100 dark:border-zinc-800">
+                    <pre className="text-sm whitespace-pre-wrap text-zinc-600 dark:text-zinc-300 leading-relaxed font-sans py-3 max-h-60 overflow-y-auto">
+                      {n.body}
+                    </pre>
+                    <div className="flex justify-end gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setModal({ type: "edit", notice: n })}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                      >
+                        編集
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModal({ type: "delete", notice: n })}
+                        disabled={isPending}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-red-100 dark:border-red-900/50 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 disabled:opacity-50 transition-colors"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
-
-              {/* お知らせ */}
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  {n.is_pinned && (
-                    <span className="text-[10px] text-blue-500 flex-shrink-0">📌</span>
-                  )}
-                  <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100 truncate">{n.title}</p>
-                </div>
-                <p className="text-[11px] text-zinc-400 truncate mt-0.5">{n.body.split("\n")[0]}</p>
-              </div>
-
-              {/* 操作 */}
-              <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-                <button type="button" onClick={() => setModal({ type: "edit", notice: n })}
-                  className="text-[11px] text-zinc-400 hover:text-blue-600 px-2 py-1 rounded">
-                  編集
-                </button>
-                <button type="button" onClick={() => setModal({ type: "delete", notice: n })}
-                  disabled={isPending}
-                  className="text-[11px] text-zinc-400 hover:text-red-500 disabled:opacity-50 px-2 py-1 rounded">
-                  削除
-                </button>
-              </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-10 text-center">
             {recipientSearch ? (
-              <p className="text-sm text-zinc-500">「{recipientSearch}」に該当するお知らせがありません</p>
+              <p className="text-sm text-zinc-500">「{recipientSearch}」に該当する送信履歴がありません</p>
             ) : (
               <>
-                <p className="text-sm text-zinc-500">まだお知らせがありません</p>
+                <p className="text-sm text-zinc-500">まだ周知事項がありません</p>
                 <button type="button" onClick={() => setModal({ type: "create" })}
                   className="text-sm text-blue-600 hover:text-blue-700 mt-2 inline-block">
-                  <span className="inline-flex items-center gap-1">最初のお知らせを投稿する <ChevronRightIcon className="w-3.5 h-3.5" /></span>
+                  <span className="inline-flex items-center gap-1">
+                    最初のお知らせを投稿する
+                    <ChevronRightIcon className="w-3.5 h-3.5" />
+                  </span>
                 </button>
               </>
             )}
           </div>
         )}
       </div>
-
-      {/* 詳細モーダル */}
-      {modal.type === "detail" && (
-        <div className="fixed inset-0 bg-black/50 z-20 flex items-center justify-center p-4" onClick={() => setModal({ type: "none" })}>
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl max-w-lg w-full p-5 shadow-xl space-y-3" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="space-y-1 flex-1 min-w-0">
-                <p className="text-xs text-zinc-400">
-                  {formatDateTime(modal.notice.created_at)} · {modal.notice.poster_name}
-                </p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-50">{modal.notice.title}</h3>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                    modal.notice.target_name
-                      ? "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
-                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
-                  }`}>
-                    宛先：{modal.notice.target_name ?? "全員"}
-                  </span>
-                </div>
-              </div>
-              <button onClick={() => setModal({ type: "none" })} className="text-zinc-400 hover:text-zinc-600 p-1 flex-shrink-0">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <pre className="text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300 leading-relaxed font-sans bg-zinc-50 dark:bg-zinc-800 rounded-xl px-4 py-3 max-h-64 overflow-y-auto">
-              {modal.notice.body}
-            </pre>
-            <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setModal({ type: "edit", notice: modal.notice })}
-                className="text-xs px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                編集
-              </button>
-              <button type="button" onClick={() => setModal({ type: "delete", notice: modal.notice })}
-                className="text-xs px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20">
-                削除
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 投稿・編集モーダル */}
       {(modal.type === "create" || modal.type === "edit") && (
