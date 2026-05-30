@@ -27,14 +27,17 @@ type Inquiry = {
   created_at: string;
 };
 
+type Member = { id: string; name: string };
+
 type Tab = "notices" | "inquiries";
 
 interface Props {
   notices: Notice[];
   inquiries: Inquiry[];
+  members: Member[];
 }
 
-export default function CommunicationsManageClient({ notices, inquiries }: Props) {
+export default function CommunicationsManageClient({ notices, inquiries, members }: Props) {
   const [tab, setTab] = useState<Tab>("notices");
 
   const openCount = inquiries.filter(i => i.status === "open").length;
@@ -75,7 +78,7 @@ export default function CommunicationsManageClient({ notices, inquiries }: Props
       </div>
 
       {tab === "notices" ? (
-        <NoticesManageClient notices={notices} />
+        <NoticesManageClient notices={notices} members={members} />
       ) : (
         <InquiryManageClient inquiries={inquiries} />
       )}

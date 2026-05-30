@@ -33,11 +33,12 @@ export default async function ManageNoticesPage() {
 
   const admin = createAdminClient();
 
-  // 案件情報・周知事項・問い合わせを並列取得
+  // 案件情報・周知事項・問い合わせ・メンバーを並列取得
   const [
     { data: project },
     { data: rawNotices },
     { data: rawInquiries },
+    { data: rawMembers },
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("notices")
@@ -49,6 +50,10 @@ export default async function ManageNoticesPage() {
       .select("id, title, body, status, reply, replied_by, replied_at, created_at, staff_id")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false }),
+    admin.from("project_members")
+      .select("staff_id, staffs(display_name, name)")
+      .eq("project_id", projectId)
+      .is("end_date", null),
   ]);
 
   // 個人宛お知らせの宛先スタッフ名を取得
@@ -99,6 +104,17 @@ export default async function ManageNoticesPage() {
     created_at: inq.created_at,
   }));
 
+  // メンバー一覧（投稿先選択用）
+  const members = (rawMembers ?? []).map(m => {
+    const s = Array.isArray(m.staffs) ? m.staffs[0] : m.staffs;
+    return {
+      id: m.staff_id as string,
+      name: (s as { display_name?: string; name?: string } | null)?.display_name
+        ?? (s as { display_name?: string; name?: string } | null)?.name
+        ?? (m.staff_id as string),
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name, "ja"));
+
   return (
     <main className="min-h-screen bg-white dark:bg-zinc-950">
       <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
@@ -108,7 +124,7 @@ export default async function ManageNoticesPage() {
         </div>
       </div>
       <div className="max-w-5xl mx-auto px-4 pt-4 pb-10">
-        <CommunicationsManageClient notices={notices} inquiries={inquiries} />
+        <CommunicationsManageClient notices={notices} inquiries={inquiries} members={members} />
       </div>
     </main>
   );

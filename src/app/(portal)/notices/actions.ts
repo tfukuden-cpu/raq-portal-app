@@ -26,9 +26,11 @@ export type NoticeResult = {
 export async function createNoticeAction(
   formData: FormData
 ): Promise<NoticeResult> {
-  const title = String(formData.get("title") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
-  const isPinned = formData.get("isPinned") === "true";
+  const title          = String(formData.get("title")         ?? "").trim();
+  const body           = String(formData.get("body")          ?? "").trim();
+  const isPinned       = formData.get("isPinned")             === "true";
+  const sendLine       = formData.get("sendLine")             === "true";
+  const targetStaffId  = String(formData.get("targetStaffId") ?? "").trim() || null;
 
   if (!title || !body) {
     return { success: false, message: "タイトルと本文は必須です" };
@@ -43,11 +45,12 @@ export async function createNoticeAction(
   if (!projectId) return { success: false, message: "案件が選択されていません" };
 
   const { error } = await supabase.from("notices").insert({
-    project_id: projectId,
+    project_id:     projectId,
     title,
     body,
-    is_pinned: isPinned,
-    posted_by: staffId,
+    is_pinned:      isPinned,
+    posted_by:      staffId,
+    target_staff_id: targetStaffId,
   });
 
   if (error) return { success: false, message: "投稿失敗：" + error.message };
@@ -56,11 +59,15 @@ export async function createNoticeAction(
   revalidatePath("/notices/manage");
   revalidatePath("/dashboard");
 
-  // LINE通知（案件の全スタッフへ）
-  void sendEventNotify(projectId, "announcement", {
-    "タイトル": title,
-    "本文":     body.length > 100 ? body.slice(0, 100) + "…" : body,
-  });
+  // LINE通知（sendLine=trueの場合のみ）
+  if (sendLine) {
+    void sendEventNotify(
+      projectId,
+      "announcement",
+      { "タイトル": title, "本文": body.length > 100 ? body.slice(0, 100) + "…" : body },
+      targetStaffId ?? undefined,  // null → 全員、値 → 特定スタッフのみ
+    );
+  }
 
   return { success: true };
 }

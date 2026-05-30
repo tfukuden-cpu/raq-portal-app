@@ -53,7 +53,13 @@ function formatDateTime(iso: string) {
   }).format(d);
 }
 
-function NoticeModal({ modal, onClose }: { modal: ModalState; onClose: () => void }) {
+function NoticeModal({
+  modal, members, onClose,
+}: {
+  modal: ModalState;
+  members: { id: string; name: string }[];
+  onClose: () => void;
+}) {
   const isEdit = modal.type === "edit";
   const existing = isEdit ? (modal as { type: "edit"; notice: Notice }).notice : null;
 
@@ -62,13 +68,34 @@ function NoticeModal({ modal, onClose }: { modal: ModalState; onClose: () => voi
   const [title, setTitle] = useState(existing?.title ?? "");
   const [body, setBody] = useState(existing?.body ?? "");
   const [isPinned, setIsPinned] = useState(existing?.is_pinned ?? false);
+  // 新規投稿のみの追加フィールド
+  const [targetMode, setTargetMode] = useState<"all" | "person">("all");
+  const [targetStaffId, setTargetStaffId] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [sendLine, setSendLine] = useState(true);
+
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch.trim()) return members;
+    return members.filter(m => m.name.includes(memberSearch.trim()));
+  }, [members, memberSearch]);
+
+  const selectedMember = members.find(m => m.id === targetStaffId);
 
   const handleSubmit = (formData: FormData) => {
     setError(null);
+    if (!isEdit && targetMode === "person" && !targetStaffId) {
+      setError("送信先のスタッフを選択してください");
+      return;
+    }
     formData.set("title", title);
     formData.set("body", body);
     formData.set("isPinned", String(isPinned));
-    if (isEdit) formData.set("id", existing!.id);
+    if (isEdit) {
+      formData.set("id", existing!.id);
+    } else {
+      formData.set("sendLine", String(sendLine));
+      formData.set("targetStaffId", targetMode === "person" ? targetStaffId : "");
+    }
 
     startTransition(async () => {
       const r = isEdit ? await updateNoticeAction(formData) : await createNoticeAction(formData);
@@ -78,12 +105,67 @@ function NoticeModal({ modal, onClose }: { modal: ModalState; onClose: () => voi
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-20 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl max-w-lg w-full p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 z-20 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl max-w-lg w-full p-5 shadow-xl max-h-[92dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <h2 className="text-base font-bold mb-4 text-zinc-900 dark:text-zinc-50">
           {isEdit ? "お知らせを編集" : "お知らせを投稿"}
         </h2>
         <form action={handleSubmit} className="space-y-4">
+          {/* 宛先選択（新規のみ） */}
+          {!isEdit && (
+            <div>
+              <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1.5">宛先</label>
+              <div className="flex gap-2 mb-2">
+                <button type="button"
+                  onClick={() => { setTargetMode("all"); setTargetStaffId(""); }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                    targetMode === "all"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  }`}>
+                  全員
+                </button>
+                <button type="button"
+                  onClick={() => setTargetMode("person")}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                    targetMode === "person"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  }`}>
+                  特定のスタッフ
+                </button>
+              </div>
+              {targetMode === "person" && (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={memberSearch}
+                    onChange={e => setMemberSearch(e.target.value)}
+                    placeholder="名前で検索…"
+                    className="w-full px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm"
+                  />
+                  {selectedMember && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <span className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex-1">{selectedMember.name}</span>
+                      <button type="button" onClick={() => setTargetStaffId("")} className="text-blue-400 hover:text-blue-600 text-xs">✕</button>
+                    </div>
+                  )}
+                  {!selectedMember && filteredMembers.length > 0 && (
+                    <div className="border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden max-h-36 overflow-y-auto">
+                      {filteredMembers.map(m => (
+                        <button key={m.id} type="button"
+                          onClick={() => { setTargetStaffId(m.id); setMemberSearch(""); }}
+                          className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 text-zinc-700 dark:text-zinc-300">
+                          {m.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">タイトル</label>
             <input type="text" value={title} onChange={e => setTitle(e.target.value)}
@@ -101,6 +183,21 @@ function NoticeModal({ modal, onClose }: { modal: ModalState; onClose: () => voi
               className="w-4 h-4 rounded accent-blue-600" />
             <span className="text-sm text-zinc-700 dark:text-zinc-300">📌 上部に固定する</span>
           </label>
+
+          {/* LINE通知（新規のみ） */}
+          {!isEdit && (
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={sendLine} onChange={e => setSendLine(e.target.checked)}
+                className="w-4 h-4 rounded accent-blue-600" />
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                LINEでも通知する
+                <span className="text-xs text-zinc-400 ml-1">
+                  （{targetMode === "all" ? "全LINE連携スタッフ" : selectedMember ? selectedMember.name : "選択中の1人"}へ）
+                </span>
+              </span>
+            </label>
+          )}
+
           {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose}
@@ -118,7 +215,7 @@ function NoticeModal({ modal, onClose }: { modal: ModalState; onClose: () => voi
   );
 }
 
-export default function NoticesManageClient({ notices }: { notices: Notice[] }) {
+export default function NoticesManageClient({ notices, members }: { notices: Notice[]; members: { id: string; name: string }[] }) {
   const [modal, setModal] = useState<ModalState>({ type: "none" });
   const [isPending, startTransition] = useTransition();
   const [recipientSearch, setRecipientSearch] = useState("");
@@ -299,7 +396,7 @@ export default function NoticesManageClient({ notices }: { notices: Notice[] }) 
 
       {/* 投稿・編集モーダル */}
       {(modal.type === "create" || modal.type === "edit") && (
-        <NoticeModal modal={modal} onClose={() => setModal({ type: "none" })} />
+        <NoticeModal modal={modal} members={members} onClose={() => setModal({ type: "none" })} />
       )}
 
       {/* 削除確認モーダル */}
