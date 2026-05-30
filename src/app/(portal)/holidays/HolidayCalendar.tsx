@@ -8,7 +8,7 @@ const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
 type AppliedRequest = {
   id: string;
-  request_date: string; // YYYY-MM-DD
+  request_date: string;
   status: string;
   note: string | null;
 };
@@ -36,6 +36,7 @@ export default function HolidayCalendar({
   deadlineDay = null,
   maxDaysPerMonth = null,
   weekendLimit = null,
+  hideNav = false,
 }: {
   initialYear: number;
   initialMonth: number;
@@ -44,6 +45,7 @@ export default function HolidayCalendar({
   deadlineDay?: number | null;
   maxDaysPerMonth?: number | null;
   weekendLimit?: number | null;
+  hideNav?: boolean;
 }) {
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
@@ -58,30 +60,20 @@ export default function HolidayCalendar({
   const todayYear = today.getFullYear();
   const todayMonth = today.getMonth() + 1;
 
-  // 申請可能な最大月：締切日を過ぎていれば翌月まで、それ以外は今月のみ
   const afterDeadline = deadlineDay !== null && todayDay > deadlineDay;
-  const maxApplyYear  = afterDeadline
-    ? (todayMonth === 12 ? todayYear + 1 : todayYear)
-    : todayYear;
-  const maxApplyMonth = afterDeadline
-    ? (todayMonth === 12 ? 1 : todayMonth + 1)
-    : todayMonth;
+  const maxApplyYear  = afterDeadline ? (todayMonth === 12 ? todayYear + 1 : todayYear) : todayYear;
+  const maxApplyMonth = afterDeadline ? (todayMonth === 12 ? 1 : todayMonth + 1) : todayMonth;
   const canGoNext = !(year === maxApplyYear && month >= maxApplyMonth);
 
-  // 申請受付前チェック：今月は open_day を過ぎていないと申請不可
   const beforeOpen = openDay !== null && todayDay < openDay;
-
-  // 申請済み日付マップ
   const appliedMap = new Map(appliedRequests.map((r) => [r.request_date, r]));
 
-  // 月のapproved件数（上限チェック用）
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
   const approvedThisMonth = appliedRequests.filter(
     r => r.request_date.startsWith(monthStr) && r.status === "approved"
   ).length;
   const remaining = maxDaysPerMonth !== null ? maxDaysPerMonth - approvedThisMonth : null;
 
-  // 土日のapproved件数（土日上限チェック用）
   const approvedWeekendThisMonth = appliedRequests.filter(r => {
     if (!r.request_date.startsWith(monthStr) || r.status !== "approved") return false;
     const dow = new Date(r.request_date + "T00:00:00").getDay();
@@ -89,15 +81,11 @@ export default function HolidayCalendar({
   }).length;
   const remainingWeekend = weekendLimit !== null ? weekendLimit - approvedWeekendThisMonth : null;
 
-  // 締切チェック：表示中の月が今月で、今日 > deadline_day なら締切済み
   const isCurrentMonth = year === todayYear && month === todayMonth;
   const pastDeadline = deadlineDay !== null && isCurrentMonth && todayDay > deadlineDay;
-
-  // 表示月が申請可能範囲外か（今月より前 or 最大月より後）
   const isFutureBlocked = year > maxApplyYear || (year === maxApplyYear && month > maxApplyMonth);
   const isPastMonth = year < todayYear || (year === todayYear && month < todayMonth);
 
-  // 月の日数・開始曜日
   const firstDow = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -169,93 +157,103 @@ export default function HolidayCalendar({
     });
   };
 
+  // 優先度付きバナー（最高優先度1件のみ表示）
+  type Banner = { msg: string; cls: string };
+  let banner: Banner | null = null;
+  if (beforeOpen && isCurrentMonth) {
+    banner = {
+      msg: `申請受付は毎月${openDay}日から開始します（現在${todayDay}日）`,
+      cls: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20",
+    };
+  } else if (pastDeadline) {
+    banner = {
+      msg: `申請終了期日（${deadlineDay}日）を過ぎているため、今月分の新規申請・取り下げはできません`,
+      cls: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20",
+    };
+  } else if (remaining !== null && remaining <= 0) {
+    banner = {
+      msg: `この月の申請上限（${maxDaysPerMonth}日）に達しています`,
+      cls: "text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20",
+    };
+  } else if (remainingWeekend !== null && remainingWeekend <= 0) {
+    banner = {
+      msg: `この月の土日申請上限（${weekendLimit}日）に達しています`,
+      cls: "text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20",
+    };
+  }
+
+  // バナーがない場合の締切情報（控えめ表示）
+  const deadlineInfo = !banner && !pastDeadline && !beforeOpen && deadlineDay !== null && isCurrentMonth
+    ? `申請受付: 毎月${openDay !== null ? `${openDay}日〜` : ""}${deadlineDay}日`
+    : null;
+
   return (
     <>
       <div className="space-y-3">
-        {/* 月切替 */}
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => goMonth(-1)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors"
-          >
-            <ChevronLeftIcon className="w-4 h-4" />
-          </button>
-          <div className="text-center">
-            <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50">{year}年 {month}月</p>
+
+        {/* 月切替（hideNav=false の場合のみ） */}
+        {!hideNav && (
+          <div className="flex items-center justify-between">
+            <button type="button" onClick={() => goMonth(-1)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors">
+              <ChevronLeftIcon className="w-4 h-4" />
+            </button>
+            <div className="text-center">
+              <p className="text-sm font-bold text-zinc-900 dark:text-zinc-50">{year}年 {month}月</p>
+              {maxDaysPerMonth !== null && (
+                <p className={`text-[11px] tabular-nums ${(remaining ?? 0) <= 0 ? "text-red-500 font-bold" : "text-zinc-400"}`}>
+                  申請枠: 残{remaining ?? 0}/{maxDaysPerMonth}日
+                </p>
+              )}
+              {weekendLimit !== null && (
+                <p className={`text-[11px] tabular-nums ${(remainingWeekend ?? 0) <= 0 ? "text-amber-500 font-bold" : "text-zinc-400"}`}>
+                  土日枠: 残{remainingWeekend ?? 0}/{weekendLimit}日
+                </p>
+              )}
+            </div>
+            <button type="button" onClick={() => canGoNext && goMonth(1)} disabled={!canGoNext}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-20">
+              <ChevronRightIcon className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* hideNav 時の枠残表示（月ナビは親が担うため枠数だけ表示） */}
+        {hideNav && (maxDaysPerMonth !== null || weekendLimit !== null) && (
+          <div className="flex gap-3 justify-center text-[11px] tabular-nums">
             {maxDaysPerMonth !== null && (
-              <p className={`text-[11px] tabular-nums ${
-                (remaining ?? 0) <= 0
-                  ? "text-red-500 dark:text-red-400 font-bold"
-                  : "text-zinc-400"
-              }`}>
+              <span className={(remaining ?? 0) <= 0 ? "text-red-500 font-bold" : "text-zinc-400"}>
                 申請枠: 残{remaining ?? 0}/{maxDaysPerMonth}日
-              </p>
+              </span>
             )}
             {weekendLimit !== null && (
-              <p className={`text-[11px] tabular-nums ${
-                (remainingWeekend ?? 0) <= 0
-                  ? "text-amber-500 dark:text-amber-400 font-bold"
-                  : "text-zinc-400"
-              }`}>
+              <span className={(remainingWeekend ?? 0) <= 0 ? "text-amber-500 font-bold" : "text-zinc-400"}>
                 土日枠: 残{remainingWeekend ?? 0}/{weekendLimit}日
-              </p>
+              </span>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => canGoNext && goMonth(1)}
-            disabled={!canGoNext}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-          >
-            <ChevronRightIcon className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* 申請受付前 */}
-        {beforeOpen && isCurrentMonth && (
-          <div className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-xl px-3 py-2.5">
-            申請受付は毎月{openDay}日から開始します（現在{todayDay}日）
-          </div>
-        )}
-        {/* 期限・上限警告 */}
-        {pastDeadline && (
-          <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-xl px-3 py-2.5">
-            申請終了期日（{deadlineDay}日）を過ぎているため、今月分の新規申請・取り下げはできません
-          </div>
-        )}
-        {!pastDeadline && !beforeOpen && deadlineDay !== null && isCurrentMonth && (
-          <div className="text-xs text-zinc-400 px-1">
-            今月の申請締切: {month}/{deadlineDay}
-          </div>
-        )}
-        {!pastDeadline && !beforeOpen && openDay !== null && isCurrentMonth && (
-          <div className="text-xs text-zinc-400 px-1">
-            申請受付: 毎月{openDay}日〜{deadlineDay !== null ? `${deadlineDay}日` : ""}
-          </div>
-        )}
-        {remaining !== null && remaining <= 0 && !pastDeadline && (
-          <div className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2.5">
-            この月の申請上限（{maxDaysPerMonth}日）に達しています
-          </div>
-        )}
-        {remainingWeekend !== null && remainingWeekend <= 0 && !pastDeadline && (
-          <div className="text-xs text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-xl px-3 py-2.5">
-            この月の土日申請上限（{weekendLimit}日）に達しています
-          </div>
         )}
 
-        {/* カレンダー */}
+        {/* バナー（優先度最高1件） */}
+        {banner && (
+          <div className={`text-xs rounded-xl px-3 py-2.5 ${banner.cls}`}>
+            {banner.msg}
+          </div>
+        )}
+        {deadlineInfo && (
+          <div className="text-xs text-zinc-400 px-1">{deadlineInfo}</div>
+        )}
+
+        {/* カレンダー曜日行 */}
         <div className="grid grid-cols-7 gap-1 text-center mb-1">
           {WEEKDAY_JP.map((w, i) => (
-            <div
-              key={w}
-              className={`text-xs font-bold pb-1 ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-zinc-500"}`}
-            >
-              {w}
-            </div>
+            <div key={w} className={`text-xs font-bold pb-1 ${
+              i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-zinc-500"
+            }`}>{w}</div>
           ))}
         </div>
+
+        {/* カレンダー本体 */}
         <div className="grid grid-cols-7 gap-1 text-center">
           {Array.from({ length: firstDow }).map((_, i) => <div key={`e${i}`} />)}
           {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
@@ -267,14 +265,12 @@ export default function HolidayCalendar({
             const isWd = dow === 0 || dow === 6;
             const atWeekendLimit = isWd && remainingWeekend !== null && remainingWeekend <= 0 && !isSelected;
 
-            let cellClass =
-              "rounded-lg py-2 text-sm font-medium transition-colors cursor-pointer select-none ";
+            let cellClass = "rounded-lg py-2 text-sm font-medium transition-colors cursor-pointer select-none ";
             if (applied) {
-              const st = applied.status;
               cellClass +=
-                st === "approved"
+                applied.status === "approved"
                   ? "bg-green-500 text-white"
-                  : st === "rejected"
+                  : applied.status === "rejected"
                   ? "bg-red-200 dark:bg-red-900/40 text-red-700 dark:text-red-300"
                   : "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900";
             } else if (isSelected) {
@@ -283,20 +279,21 @@ export default function HolidayCalendar({
               cellClass += "text-zinc-300 dark:text-zinc-600 cursor-default";
             } else {
               cellClass +=
-                dow === 0
-                  ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  : dow === 6
-                  ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                  : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800";
+                dow === 0 ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                : dow === 6 ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800";
             }
 
             return (
               <div key={ds} className={cellClass} onClick={() => toggleDate(ds)}>
                 {d}
+                {/* 状態ドット（9px文字ラベルの代替） */}
                 {applied && (
-                  <div className="text-[9px] mt-0.5 font-bold opacity-80">
-                    {applied.status === "approved" ? "承認" : applied.status === "rejected" ? "却下" : "申請中"}
-                  </div>
+                  <div className={`w-1.5 h-1.5 rounded-full mx-auto mt-0.5 ${
+                    applied.status === "approved" ? "bg-white/60"
+                    : applied.status === "rejected" ? "bg-red-500 dark:bg-red-400"
+                    : "bg-yellow-300 dark:bg-yellow-400"
+                  }`} />
                 )}
               </div>
             );
@@ -313,11 +310,8 @@ export default function HolidayCalendar({
 
         {/* 申請ボタン */}
         {selected.length > 0 && (
-          <button
-            type="button"
-            onClick={handleApply}
-            className="w-full py-3 rounded-2xl bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-sm font-bold transition-colors"
-          >
+          <button type="button" onClick={handleApply}
+            className="w-full py-3 rounded-2xl bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-sm font-bold transition-colors">
             希望休を申請する（{selected.length}日選択中）
           </button>
         )}
@@ -326,8 +320,10 @@ export default function HolidayCalendar({
 
       {/* 申請確認モーダル */}
       {modal.type === "apply" && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-20 flex items-end sm:items-center justify-center p-4" onClick={() => setModal({ type: "none" })}>
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-5 shadow-2xl shadow-black/20" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-20 flex items-end sm:items-center justify-center p-4"
+          onClick={() => setModal({ type: "none" })}>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-5 shadow-2xl"
+            onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-3 text-zinc-900 dark:text-zinc-50">希望休を申請する</h2>
             <div className="flex flex-wrap gap-1.5 mb-4">
               {modal.dates.map((ds) => {
@@ -340,13 +336,9 @@ export default function HolidayCalendar({
               })}
             </div>
             <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">備考（任意）</label>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="特記事項があれば入力..."
-              rows={3}
-              className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm resize-none mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            />
+            <textarea value={note} onChange={e => setNote(e.target.value)}
+              placeholder="特記事項があれば入力..." rows={3}
+              className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm resize-none mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
             {error && <p className="text-sm text-red-600 dark:text-red-400 mb-2">{error}</p>}
             <div className="flex gap-2">
               <button type="button" onClick={() => setModal({ type: "none" })}
@@ -364,8 +356,10 @@ export default function HolidayCalendar({
 
       {/* 申請詳細・取り下げモーダル */}
       {modal.type === "detail" && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-20 flex items-end sm:items-center justify-center p-4" onClick={() => setModal({ type: "none" })}>
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-5 shadow-2xl shadow-black/20" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-20 flex items-end sm:items-center justify-center p-4"
+          onClick={() => setModal({ type: "none" })}>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-t-3xl sm:rounded-3xl max-w-sm w-full p-5 shadow-2xl"
+            onClick={e => e.stopPropagation()}>
             {(() => {
               const r = modal.request;
               const d = new Date(r.request_date + "T00:00:00+09:00");

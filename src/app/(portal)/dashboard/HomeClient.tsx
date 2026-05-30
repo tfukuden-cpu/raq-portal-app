@@ -7,6 +7,10 @@ import {
   submitLateAction,
 } from "./actions";
 import { BellIcon, ChevronRightIcon } from "@/components/icons";
+import { DepartureModal } from "./DepartureModal";
+import { AbsenceModal } from "./AbsenceModal";
+import { LateModal } from "./LateModal";
+import type { Symptoms } from "@/components/SymptomRow";
 
 type HomeState = "pre_departure" | "pre_clock_in" | "working" | "clocked_out";
 type ModalType = "none" | "departure" | "absence" | "late";
@@ -37,6 +41,7 @@ function nowJST(): string {
     timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
   });
 }
+
 function reportBadge(s: string | null) {
   if (s === "approved") return "承認済";
   if (s === "rejected") return "却下";
@@ -51,12 +56,6 @@ function DepartureIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-
-const ETA_OPTS = [
-  { label: "すぐ着く", value: 5 },  { label: "10分", value: 10 },
-  { label: "20分",     value: 20 },  { label: "30分", value: 30 },
-  { label: "45分",     value: 45 },  { label: "1時間以上", value: 60 },
-];
 
 function StatusBadge({ state }: { state: HomeState }) {
   const map = {
@@ -77,27 +76,10 @@ function StatusBadge({ state }: { state: HomeState }) {
   );
 }
 
-function ModalWrap({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center"
-      onClick={onClose}>
-      <div className="bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl w-full max-w-sm mx-4 p-6 shadow-2xl"
-        onClick={e => e.stopPropagation()}>
-        {children}
-      </div>
-    </div>
-  );
-}
-function YesNo({ onYes, onNo, pending }: { onYes: () => void; onNo: () => void; pending?: boolean }) {
-  return (
-    <div className="grid grid-cols-2 gap-3 mt-6">
-      <button onClick={onYes} disabled={pending}
-        className="py-4 rounded-2xl bg-blue-600 text-white text-[17px] font-semibold active:opacity-70 disabled:opacity-50">できます</button>
-      <button onClick={onNo} disabled={pending}
-        className="py-4 rounded-2xl bg-zinc-100 text-zinc-800 text-[17px] font-semibold active:opacity-70 disabled:opacity-50">できません</button>
-    </div>
-  );
-}
+const stamp = (time: string | null | undefined) =>
+  time
+    ? <span className="text-[32px] font-light tabular-nums leading-none text-zinc-900 dark:text-zinc-100">{time}</span>
+    : <span className="text-[16px] font-medium text-zinc-300 dark:text-zinc-700">未打刻</span>;
 
 const WD = ["日","月","火","水","木","金","土"];
 function fmtDate(iso: string) {
@@ -106,40 +88,6 @@ function fmtDate(iso: string) {
 }
 
 const HR = () => <div className="border-t border-zinc-100 dark:border-zinc-800" />;
-
-type Symptoms = {
-  fever: boolean; fever_temp: string;
-  headache: boolean; cough: boolean; fatigue: boolean;
-  nausea: boolean; other: boolean; other_detail: string;
-};
-const initSymptoms: Symptoms = {
-  fever: false, fever_temp: "", headache: false, cough: false,
-  fatigue: false, nausea: false, other: false, other_detail: "",
-};
-
-function SymptomRow({ label, value, onChange }: {
-  label: string; value: boolean; onChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-[14px] text-zinc-700 dark:text-zinc-300">{label}</span>
-      <div className="flex gap-1.5">
-        <button type="button" onClick={() => onChange(true)}
-          className={`px-3 py-1 rounded-lg text-[13px] font-semibold transition-colors ${
-            value
-              ? "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300"
-              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
-          }`}>有</button>
-        <button type="button" onClick={() => onChange(false)}
-          className={`px-3 py-1 rounded-lg text-[13px] font-semibold transition-colors ${
-            !value
-              ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
-              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
-          }`}>無</button>
-      </div>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function HomeClient({
@@ -153,70 +101,60 @@ export default function HomeClient({
   const [modal, setModal]            = useState<ModalType>("none");
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback]      = useState<{ ok: boolean; msg: string } | null>(null);
-
   const [optDeparture, setOptDeparture] = useState(departureTime);
-  const optClockIn  = clockInTime;
-  const optClockOut = clockOutTime;
 
   const state: HomeState =
-    optClockOut ? "clocked_out"
-    : optClockIn ? "working"
+    clockOutTime ? "clocked_out"
+    : clockInTime ? "working"
     : (optDeparture || !enableDeparture) ? "pre_clock_in"
     : "pre_departure";
 
-  const [etaDep, setEtaDep]         = useState(30);
-  const [absReason, setAbsReason]   = useState("");
-  const [symptoms, setSymptoms]     = useState<Symptoms>(initSymptoms);
-  const [recoveryStatus, setRecoveryStatus] = useState<"改善"|"横ばい"|"悪化"|null>(null);
-  const [hasConsultation, setHasConsultation] = useState<boolean|null>(null);
-  const [absError, setAbsError]     = useState<string|null>(null);
-  const [lateStep, setLateStep]     = useState<1|2>(1);
-  const [lateReason, setLateReason] = useState("");
-  const [lateEta, setLateEta]       = useState(30);
+  const closeModal = () => setModal("none");
 
-  const closeModal = () => {
-    setModal("none");
-    setAbsReason(""); setSymptoms(initSymptoms);
-    setRecoveryStatus(null); setHasConsultation(null); setAbsError(null);
-    setLateStep(1); setLateReason(""); setLateEta(30);
-  };
-
-  const handleDeparture = () => {
-    const fd = new FormData(); fd.set("etaMinutes", String(etaDep));
+  const handleDeparture = (etaMinutes: number) => {
     closeModal();
     startTransition(async () => {
+      const fd = new FormData();
+      fd.set("etaMinutes", String(etaMinutes));
       const r = await recordDepartureAction(fd);
       if (r.success) { setOptDeparture(nowJST()); setFeedback({ ok: true, msg: r.message ?? "出発報告しました" }); }
       else setFeedback({ ok: false, msg: r.message ?? "エラー" });
     });
   };
-  const handleAbsenceSubmit = () => {
-    if (!absReason.trim()) { setAbsError("理由を入力してください"); return; }
-    if (hasConsultation === null) { setAbsError("当日受診予定を選択してください"); return; }
-    setAbsError(null);
-    const fd = new FormData();
-    fd.set("reason", absReason);
-    fd.set("symptomsJson", JSON.stringify(symptoms));
-    fd.set("hasConsultation", String(hasConsultation));
-    fd.set("nextDayHasShift", String(nextDayHasShift));
-    if (recoveryStatus) fd.set("recoveryStatus", recoveryStatus);
+
+  const handleAbsence = (data: {
+    reason: string;
+    symptoms: Symptoms;
+    recoveryStatus: string | null;
+    hasConsultation: boolean;
+  }) => {
     closeModal();
     startTransition(async () => {
+      const fd = new FormData();
+      fd.set("reason", data.reason);
+      fd.set("symptomsJson", JSON.stringify(data.symptoms));
+      fd.set("hasConsultation", String(data.hasConsultation));
+      fd.set("nextDayHasShift", String(nextDayHasShift));
+      if (data.recoveryStatus) fd.set("recoveryStatus", data.recoveryStatus);
       const r = await submitAbsenceAction(fd);
       setFeedback({ ok: r.success, msg: r.message ?? "欠勤報告しました" });
     });
   };
-  const handleLate = () => {
-    const fd = new FormData();
-    fd.set("reason", lateReason); fd.set("expectedArrival", ""); fd.set("etaMinutes", String(lateEta));
+
+  const handleLate = (reason: string, etaMinutes: number) => {
     closeModal();
     startTransition(async () => {
+      const fd = new FormData();
+      fd.set("reason", reason);
+      fd.set("expectedArrival", "");
+      fd.set("etaMinutes", String(etaMinutes));
       const r = await submitLateAction(fd);
       setFeedback({ ok: r.success, msg: r.message ?? "遅刻報告しました" });
     });
   };
 
-  const canReport = state === "pre_departure" || state === "pre_clock_in";
+  // 退勤済みでも hasAbsenceReport なら経過報告ボタンを表示する
+  const showReportRow = state !== "clocked_out" || hasAbsenceReport;
   const isHoliday = shift?.name === "公休" || shift?.name === "休" || shift?.name === "公休日";
 
   const [liveTime, setLiveTime] = useState(nowJST);
@@ -237,12 +175,6 @@ export default function HomeClient({
     const t = setTimeout(() => setFeedback(null), 4000);
     return () => clearTimeout(t);
   }, [feedback]);
-
-  // 打刻表示ヘルパー
-  const stamp = (time: string | null | undefined) =>
-    time
-      ? <span className="text-[32px] font-light tabular-nums leading-none text-zinc-900 dark:text-zinc-100">{time}</span>
-      : <span className="text-[16px] font-medium text-zinc-300 dark:text-zinc-700">未打刻</span>;
 
   return (
     <>
@@ -272,105 +204,86 @@ export default function HomeClient({
           <StatusBadge state={state} />
         </div>
 
-        {/* ══════════ enableDeparture あり ══════════ */}
-        {enableDeparture && (<>
-
-          {/* 日付 + シフト */}
-          <p className="text-[13px] text-zinc-400 tabular-nums mb-1">{todayLabel}</p>
-          {shift && !isHoliday && (
-            <p className="text-[17px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-              {shift.name}
-              {shift.start && <span className="ml-2 text-[14px] font-normal text-zinc-400 tabular-nums">{shift.start.slice(0,5)}–{shift.end?.slice(0,5) ?? "--:--"}</span>}
-            </p>
-          )}
-          {shift && isHoliday && <p className="text-[17px] font-medium text-zinc-400 mb-1">公休日</p>}
-          {!shift && <p className="text-[15px] text-zinc-300 mb-1">シフト未登録</p>}
-
-          {/* 出発ボタン */}
-          {state === "pre_departure" && (
-            <button onClick={() => !isPending && setModal("departure")} disabled={isPending}
-              className="mt-5 w-full h-[52px] rounded-2xl bg-blue-600 active:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 text-white text-[17px] font-semibold mb-2">
-              <DepartureIcon className="w-[18px] h-[18px]" />
-              {isPending ? "処理中..." : "出発報告する"}
-            </button>
-          )}
-
-          <div className="mt-6 mb-6"><HR /></div>
-
-          {/* 出発 / 出勤 / 退勤 タイムスタンプ */}
-          <div className="flex gap-8 mb-6">
-            {[
-              { label: "出発", time: optDeparture },
-              { label: "出勤", time: optClockIn },
-              { label: "退勤", time: optClockOut },
-            ].map(({ label, time }) => (
-              <div key={label} className="flex flex-col gap-1.5">
-                <span className="text-[11px] text-zinc-400 tracking-wide">{label}</span>
-                {stamp(time)}
-              </div>
-            ))}
-          </div>
-
-        </>)}
-
-        {/* ══════════ enableDeparture なし ══════════ */}
-        {!enableDeparture && (<>
-
-          {/* ライブクロック */}
+        {/* ── ライブクロック（出発報告なし案件のみ） ── */}
+        {!enableDeparture && (
           <p className="text-[54px] font-extralight tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white mb-1">
             {liveTime}
           </p>
-          <p className="text-[13px] text-zinc-400 tabular-nums mb-1">{todayLabel}</p>
-          {shift && !isHoliday && (
-            <p className="text-[16px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-              {shift.name}
-              {shift.start && <span className="ml-2 text-[14px] font-normal text-zinc-400 tabular-nums">{shift.start.slice(0,5)}–{shift.end?.slice(0,5) ?? "--:--"}</span>}
-            </p>
+        )}
+
+        {/* ── 日付・シフト ── */}
+        <p className="text-[13px] text-zinc-400 tabular-nums mb-1">{todayLabel}</p>
+        {shift && !isHoliday && (
+          <p className="text-[17px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+            {shift.name}
+            {shift.start && (
+              <span className="ml-2 text-[14px] font-normal text-zinc-400 tabular-nums">
+                {shift.start.slice(0,5)}–{shift.end?.slice(0,5) ?? "--:--"}
+              </span>
+            )}
+          </p>
+        )}
+        {shift && isHoliday && <p className="text-[17px] font-medium text-zinc-400 mb-1">公休日</p>}
+        {!shift && <p className="text-[15px] text-zinc-300 mb-1">シフト未登録</p>}
+
+        {/* ── 出発ボタン（出発報告あり + 未出発状態のみ） ── */}
+        {enableDeparture && state === "pre_departure" && (
+          <button
+            onClick={() => !isPending && setModal("departure")}
+            disabled={isPending}
+            className="mt-5 w-full h-[52px] rounded-2xl bg-blue-600 active:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 text-white text-[17px] font-semibold mb-2"
+          >
+            <DepartureIcon className="w-[18px] h-[18px]" />
+            {isPending ? "処理中..." : "出発報告する"}
+          </button>
+        )}
+
+        <div className="mt-6 mb-6"><HR /></div>
+
+        {/* ── タイムスタンプ（出発・出勤・退勤） ── */}
+        <div className="flex gap-8 mb-6">
+          {enableDeparture && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11px] text-zinc-400 tracking-wide">出発</span>
+              {stamp(optDeparture)}
+            </div>
           )}
-          {shift && isHoliday && <p className="text-[16px] font-medium text-zinc-400 mb-1">公休日</p>}
-          {!shift && <p className="text-[15px] text-zinc-300 mb-1">シフト未登録</p>}
-
-          <div className="mt-6 mb-6"><HR /></div>
-
-          {/* 出勤 / 退勤 タイムスタンプ */}
-          <div className="flex gap-10 mb-6">
-            {[
-              { label: "出勤", time: optClockIn },
-              { label: "退勤", time: optClockOut },
-            ].map(({ label, time }) => (
-              <div key={label} className="flex flex-col gap-1.5">
-                <span className="text-[11px] text-zinc-400 tracking-wide">{label}</span>
-                {stamp(time)}
-              </div>
-            ))}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] text-zinc-400 tracking-wide">出勤</span>
+            {stamp(clockInTime)}
           </div>
-
-        </>)}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] text-zinc-400 tracking-wide">退勤</span>
+            {stamp(clockOutTime)}
+          </div>
+        </div>
 
         {/* ── 欠勤・遅刻ボタン ── */}
-        {canReport && (<>
+        {showReportRow && (<>
           <HR />
           <div className="flex gap-3 mt-6 mb-6">
             {hasAbsenceReport ? (
-              <a href="/absence-followup"
-                className="flex-1 h-11 rounded-xl border border-blue-200 dark:border-blue-800 text-[14px] font-medium text-blue-600 dark:text-blue-400 active:bg-blue-50 dark:active:bg-blue-900/20 flex items-center justify-center transition-colors">
-                経過報告
-              </a>
+              <a
+                href="/absence-followup"
+                className="flex-1 h-11 rounded-xl border border-blue-200 dark:border-blue-800 text-[14px] font-medium text-blue-600 dark:text-blue-400 active:bg-blue-50 dark:active:bg-blue-900/20 flex items-center justify-center transition-colors"
+              >経過報告</a>
             ) : (
-              <button onClick={() => !isPending && setModal("absence")} disabled={isPending}
-                className="flex-1 h-11 rounded-xl border border-zinc-200 dark:border-zinc-800 text-[14px] font-medium text-red-500 active:bg-red-50 disabled:opacity-40 transition-colors">
-                欠勤報告
-              </button>
+              <button
+                onClick={() => !isPending && setModal("absence")}
+                disabled={isPending}
+                className="flex-1 h-11 rounded-xl border border-zinc-200 dark:border-zinc-800 text-[14px] font-medium text-red-500 active:bg-red-50 disabled:opacity-40 transition-colors"
+              >欠勤報告</button>
             )}
             {hasLateReport ? (
               <div className="flex-1 h-11 rounded-xl bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center">
                 <span className="text-[12px] text-zinc-400">遅刻済 · {reportBadge(lateStatus)}</span>
               </div>
             ) : (
-              <button onClick={() => !isPending && setModal("late")} disabled={isPending}
-                className="flex-1 h-11 rounded-xl border border-zinc-200 dark:border-zinc-800 text-[14px] font-medium text-amber-500 active:bg-amber-50 disabled:opacity-40 transition-colors">
-                遅刻報告
-              </button>
+              <button
+                onClick={() => !isPending && setModal("late")}
+                disabled={isPending}
+                className="flex-1 h-11 rounded-xl border border-zinc-200 dark:border-zinc-800 text-[14px] font-medium text-amber-500 active:bg-amber-50 disabled:opacity-40 transition-colors"
+              >遅刻報告</button>
             )}
           </div>
         </>)}
@@ -380,12 +293,19 @@ export default function HomeClient({
           <HR />
           <div className="mt-6">
             {upcomingShifts.map((s) => (
-              <a key={s.date} href="/shifts"
-                className="flex items-center justify-between py-3.5 border-b border-zinc-100 dark:border-zinc-800/60 last:border-b-0 active:opacity-60">
+              <a
+                key={s.date}
+                href={`/shifts?month=${s.date.slice(0, 7)}`}
+                className="flex items-center justify-between py-3.5 border-b border-zinc-100 dark:border-zinc-800/60 last:border-b-0 active:opacity-60"
+              >
                 <span className="text-[15px] text-zinc-700 dark:text-zinc-300">{fmtDate(s.date)}</span>
                 <div className="flex items-center gap-1.5">
                   {s.name && <span className="text-[13px] font-semibold text-zinc-500">{s.name}</span>}
-                  {s.start && <span className="text-[13px] tabular-nums text-zinc-400">{s.start.slice(0,5)}–{s.end?.slice(0,5) ?? "--:--"}</span>}
+                  {s.start && (
+                    <span className="text-[13px] tabular-nums text-zinc-400">
+                      {s.start.slice(0,5)}–{s.end?.slice(0,5) ?? "--:--"}
+                    </span>
+                  )}
                   <ChevronRightIcon className="w-4 h-4 text-zinc-300" />
                 </div>
               </a>
@@ -396,7 +316,7 @@ export default function HomeClient({
       </div>
     </main>
 
-    {/* トースト */}
+    {/* ── トースト ── */}
     {feedback && (
       <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-40 whitespace-nowrap px-5 py-3 rounded-2xl text-[14px] font-semibold shadow-xl ${
         feedback.ok ? "bg-zinc-900 text-white" : "bg-red-500 text-white"
@@ -405,197 +325,23 @@ export default function HomeClient({
       </div>
     )}
 
-    {/* ════════ MODALS ════════ */}
+    {/* ── モーダル ── */}
     {modal === "departure" && (
-      <ModalWrap onClose={closeModal}>
-        <h2 className="text-[20px] font-bold text-zinc-900 dark:text-zinc-50 mb-1">出発を報告する</h2>
-        <p className="text-[13px] text-zinc-400 mb-5">到着予定を選んでください</p>
-        <div className="grid grid-cols-3 gap-2 mb-5">
-          {ETA_OPTS.map(({ label, value }) => (
-            <button key={value} onClick={() => setEtaDep(value)}
-              className={`py-2.5 rounded-xl text-[15px] font-semibold active:opacity-70 ${
-                etaDep === value ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-800"
-              }`}>{label}</button>
-          ))}
-        </div>
-        <div className="flex gap-3">
-          <button onClick={closeModal} className="flex-1 py-3 rounded-2xl bg-zinc-100 text-[17px] font-semibold text-zinc-600">キャンセル</button>
-          <button onClick={handleDeparture} disabled={isPending} className="flex-1 py-3 rounded-2xl bg-blue-600 text-white text-[17px] font-semibold disabled:opacity-50">報告する</button>
-        </div>
-      </ModalWrap>
+      <DepartureModal onClose={closeModal} onSubmit={handleDeparture} isPending={isPending} />
     )}
-
     {modal === "absence" && (
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center"
-        onClick={closeModal}>
-        <div className="bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl w-full max-w-sm mx-0 sm:mx-4 shadow-2xl max-h-[92dvh] flex flex-col"
-          onClick={e => e.stopPropagation()}>
-          {/* ヘッダー（固定） */}
-          <div className="px-5 pt-5 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
-            <h2 className="text-[17px] font-bold text-zinc-900 dark:text-zinc-50">欠員報告フォーマット</h2>
-            <p className="text-[11px] text-red-500 mt-0.5">※当日9:00までに必ずご報告ください※</p>
-          </div>
-          {/* スクロール本体 */}
-          <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
-            {/* 自動項目 */}
-            <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl px-4 py-3 space-y-1.5 text-[13px]">
-              {[
-                ["報告日",   todayLabel],
-                ["報告者",   displayName],
-                ["報告区分", "欠勤"],
-              ].map(([k, v]) => (
-                <div key={k} className="flex gap-3">
-                  <span className="text-zinc-400 w-16 flex-shrink-0">{k}</span>
-                  <span className="font-medium text-zinc-700 dark:text-zinc-200">{v}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* 理由 */}
-            <div>
-              <label className="block text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                理由 <span className="text-red-500">*</span>
-              </label>
-              <textarea value={absReason} onChange={e => setAbsReason(e.target.value)}
-                placeholder="例：発熱のため" rows={2}
-                className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-            </div>
-
-            {/* 症状 */}
-            <div>
-              <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">症状等（可能な範囲で回答）</p>
-              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                <SymptomRow label="発熱" value={symptoms.fever}
-                  onChange={v => setSymptoms(s => ({ ...s, fever: v, fever_temp: v ? s.fever_temp : "" }))} />
-                {symptoms.fever && (
-                  <div className="flex items-center gap-2 py-2 pl-4">
-                    <input type="number" value={symptoms.fever_temp}
-                      onChange={e => setSymptoms(s => ({ ...s, fever_temp: e.target.value }))}
-                      placeholder="36.5" step="0.1" min="35" max="42"
-                      className="w-20 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[15px] text-center focus:outline-none focus:ring-1 focus:ring-blue-500/40" />
-                    <span className="text-[13px] text-zinc-400">度</span>
-                  </div>
-                )}
-                <SymptomRow label="頭痛" value={symptoms.headache}
-                  onChange={v => setSymptoms(s => ({ ...s, headache: v }))} />
-                <SymptomRow label="咳や喉の痛み" value={symptoms.cough}
-                  onChange={v => setSymptoms(s => ({ ...s, cough: v }))} />
-                <SymptomRow label="だるさ倦怠感" value={symptoms.fatigue}
-                  onChange={v => setSymptoms(s => ({ ...s, fatigue: v }))} />
-                <SymptomRow label="吐き気や嘔吐" value={symptoms.nausea}
-                  onChange={v => setSymptoms(s => ({ ...s, nausea: v }))} />
-                <SymptomRow label="その他" value={symptoms.other}
-                  onChange={v => setSymptoms(s => ({ ...s, other: v, other_detail: v ? s.other_detail : "" }))} />
-                {symptoms.other && (
-                  <div className="py-2 pl-4">
-                    <input type="text" value={symptoms.other_detail}
-                      onChange={e => setSymptoms(s => ({ ...s, other_detail: e.target.value }))}
-                      placeholder="内容を入力"
-                      className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[15px] focus:outline-none focus:ring-1 focus:ring-blue-500/40" />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 軽快状況（前日欠勤のみ） */}
-            {hasPrevAbsence && (
-              <div>
-                <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 mb-2">軽快状況</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["改善", "横ばい", "悪化"] as const).map(v => (
-                    <button key={v} type="button"
-                      onClick={() => setRecoveryStatus(prev => prev === v ? null : v)}
-                      className={`py-2 rounded-xl text-[14px] font-semibold border-2 transition-colors ${
-                        recoveryStatus === v
-                          ? v === "改善"  ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-300"
-                          : v === "悪化"  ? "bg-red-50 dark:bg-red-900/30 border-red-500 text-red-700 dark:text-red-300"
-                          : "bg-amber-50 dark:bg-amber-900/30 border-amber-500 text-amber-700 dark:text-amber-300"
-                          : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
-                      }`}>{v}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 当日受診予定 */}
-            <div>
-              <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 mb-2">当日受診予定 <span className="text-red-500">*</span></p>
-              <div className="grid grid-cols-2 gap-2">
-                {([true, false] as const).map(v => (
-                  <button key={String(v)} type="button" onClick={() => setHasConsultation(v)}
-                    className={`py-2.5 rounded-xl text-[14px] font-semibold border-2 transition-colors ${
-                      hasConsultation === v
-                        ? v ? "bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300"
-                           : "bg-zinc-100 dark:bg-zinc-800 border-zinc-400 text-zinc-700 dark:text-zinc-200"
-                        : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
-                    }`}>{v ? "有" : "無"}</button>
-                ))}
-              </div>
-            </div>
-
-            {/* 自動項目（翌日） */}
-            <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl px-4 py-3 space-y-1.5 text-[13px]">
-              <div className="flex gap-3">
-                <span className="text-zinc-400 flex-1">翌日出勤予定</span>
-                <span className={`font-semibold ${nextDayHasShift ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>
-                  {nextDayHasShift ? "有" : "無"}
-                </span>
-                <span className="text-zinc-300 dark:text-zinc-600 text-[11px]">自動</span>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-zinc-400 flex-1">翌日出勤可否報告予定</span>
-                <span className="font-medium text-zinc-700 dark:text-zinc-200">17:00</span>
-              </div>
-            </div>
-
-            {absError && <p className="text-[13px] text-red-500">{absError}</p>}
-          </div>
-
-          {/* フッターボタン（固定） */}
-          <div className="px-5 py-4 border-t border-zinc-100 dark:border-zinc-800 flex gap-3 flex-shrink-0">
-            <button onClick={closeModal}
-              className="flex-1 py-3 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-[16px] font-semibold text-zinc-600 dark:text-zinc-300">
-              キャンセル
-            </button>
-            <button onClick={handleAbsenceSubmit} disabled={isPending}
-              className="flex-1 py-3 rounded-2xl bg-red-500 hover:bg-red-600 text-white text-[16px] font-semibold disabled:opacity-50 transition-colors">
-              {isPending ? "送信中..." : "報告する"}
-            </button>
-          </div>
-        </div>
-      </div>
+      <AbsenceModal
+        onClose={closeModal}
+        onSubmit={handleAbsence}
+        isPending={isPending}
+        hasPrevAbsence={hasPrevAbsence}
+        nextDayHasShift={nextDayHasShift}
+        todayLabel={todayLabel}
+        displayName={displayName}
+      />
     )}
-
     {modal === "late" && (
-      <ModalWrap onClose={closeModal}>
-        {lateStep === 1 && (<>
-          <h2 className="text-[20px] font-bold text-zinc-900 dark:text-zinc-50 mb-1">遅刻を報告する</h2>
-          <p className="text-[13px] text-zinc-400 mb-5">1 / 2</p>
-          <textarea value={lateReason} onChange={e => setLateReason(e.target.value)}
-            placeholder="遅刻の理由を入力..." rows={4}
-            className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 text-[16px] resize-none mb-4 focus:outline-none focus:ring-2 focus:ring-amber-500/30" />
-          <div className="flex gap-3">
-            <button onClick={closeModal} className="flex-1 py-3 rounded-2xl bg-zinc-100 text-[17px] font-semibold text-zinc-600">キャンセル</button>
-            <button onClick={() => setLateStep(2)} disabled={!lateReason.trim()} className="flex-1 py-3 rounded-2xl bg-amber-500 text-white text-[17px] font-semibold disabled:opacity-50">次へ</button>
-          </div>
-        </>)}
-        {lateStep === 2 && (<>
-          <h2 className="text-[20px] font-bold text-zinc-900 dark:text-zinc-50 mb-1">到着予定</h2>
-          <p className="text-[13px] text-zinc-400 mb-5">2 / 2</p>
-          <div className="grid grid-cols-3 gap-2 mb-5">
-            {ETA_OPTS.map(({ label, value }) => (
-              <button key={value} onClick={() => setLateEta(value)}
-                className={`py-2.5 rounded-xl text-[15px] font-semibold active:opacity-70 ${
-                  lateEta === value ? "bg-amber-500 text-white" : "bg-zinc-100 text-zinc-800"
-                }`}>{label}</button>
-            ))}
-          </div>
-          <div className="flex gap-3">
-            <button onClick={() => setLateStep(1)} className="flex-1 py-3 rounded-2xl bg-zinc-100 text-[17px] font-semibold text-zinc-600">戻る</button>
-            <button onClick={handleLate} disabled={isPending} className="flex-1 py-3 rounded-2xl bg-amber-500 text-white text-[17px] font-semibold disabled:opacity-50">{isPending ? "送信中..." : "報告する"}</button>
-          </div>
-        </>)}
-      </ModalWrap>
+      <LateModal onClose={closeModal} onSubmit={handleLate} isPending={isPending} />
     )}
     </>
   );

@@ -2,78 +2,28 @@
 
 import { useState, useTransition } from "react";
 import { submitFollowupAction } from "./actions";
-
-type Symptoms = {
-  fever: boolean; fever_temp: string;
-  headache: boolean; cough: boolean; fatigue: boolean;
-  nausea: boolean; other: boolean; other_detail: string;
-};
-
-const initSymptoms: Symptoms = {
-  fever: false, fever_temp: "",
-  headache: false, cough: false, fatigue: false,
-  nausea: false, other: false, other_detail: "",
-};
-
-function SymptomRow({
-  label,
-  checked,
-  onToggle,
-  children,
-}: {
-  label: string;
-  checked: boolean;
-  onToggle: () => void;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-zinc-700 dark:text-zinc-300">{label}</span>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => !checked && onToggle()}
-            className={[
-              "px-3 py-1 rounded-lg text-xs font-semibold border transition-colors",
-              checked
-                ? "bg-red-50 dark:bg-red-900/30 border-red-400 text-red-700 dark:text-red-300"
-                : "border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:border-zinc-300",
-            ].join(" ")}
-          >
-            有
-          </button>
-          <button
-            type="button"
-            onClick={() => checked && onToggle()}
-            className={[
-              "px-3 py-1 rounded-lg text-xs font-semibold border transition-colors",
-              !checked
-                ? "bg-zinc-100 dark:bg-zinc-800 border-zinc-400 text-zinc-700 dark:text-zinc-200"
-                : "border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:border-zinc-300",
-            ].join(" ")}
-          >
-            無
-          </button>
-        </div>
-      </div>
-      {checked && children}
-    </div>
-  );
-}
+import { SymptomRow, initSymptoms, type Symptoms } from "@/components/SymptomRow";
 
 export default function FollowupClient({
   absenceDate,
   absenceReason,
+  initialSymptoms,
   tomorrowHasShift,
   alreadySubmitted,
 }: {
   absenceDate: string;
   absenceReason: string | null;
+  initialSymptoms?: Record<string, unknown> | null;
   tomorrowHasShift: boolean;
   alreadySubmitted: boolean;
 }) {
-  const [symptoms, setSymptoms]         = useState<Symptoms>(initSymptoms);
+  // 欠勤報告時の症状をプリフィル（型安全にマージ）
+  const prefill: Symptoms = {
+    ...initSymptoms,
+    ...(initialSymptoms as Partial<Symptoms> ?? {}),
+  };
+
+  const [symptoms, setSymptoms]         = useState<Symptoms>(prefill);
   const [recoveryStatus, setRecovery]   = useState<"改善" | "横ばい" | "悪化" | "">("");
   const [consultStatus, setConsult]     = useState<"受診済み" | "未受診" | "">("");
   const [nextDayAvail, setNextDayAvail] = useState<"出勤可能" | "出勤困難" | "">("");
@@ -86,7 +36,6 @@ export default function FollowupClient({
   const setSym = <K extends keyof Symptoms>(k: K, v: Symptoms[K]) =>
     setSymptoms(prev => ({ ...prev, [k]: v }));
 
-  // MM/DD 表示
   const [, mm, dd] = absenceDate.split("-");
   const dateLabel = `${parseInt(mm)}/${parseInt(dd)}`;
 
@@ -142,10 +91,11 @@ export default function FollowupClient({
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-10">
       <div className="max-w-2xl mx-auto px-4 pt-6 space-y-5">
+
         {/* ヘッダー */}
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">経過報告</h1>
-          <p className="text-sm text-zinc-500 mt-1">
+          <p className="text-sm text-red-500 mt-1">
             ※当日「17:00」までに必ずご報告お願いいたします
           </p>
         </div>
@@ -158,15 +108,21 @@ export default function FollowupClient({
           {absenceReason && <InfoRow label="当日欠勤理由" value={absenceReason} />}
         </div>
 
-        {/* 症状等 */}
+        {/* 症状等（欠勤報告時の内容をプリフィル） */}
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-4">
-          <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">症状等</h2>
-          <p className="text-xs text-zinc-400 -mt-2">可能な範囲でお答えください</p>
+          <div>
+            <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">症状等</h2>
+            <p className="text-xs text-zinc-400 mt-0.5">欠勤報告時から変化があれば更新してください</p>
+          </div>
 
           <SymptomRow
             label="発熱"
             checked={symptoms.fever}
-            onToggle={() => setSym("fever", !symptoms.fever)}
+            onToggle={() => {
+              const next = !symptoms.fever;
+              setSym("fever", next);
+              if (!next) setSym("fever_temp", "");
+            }}
           >
             <input
               type="text"
@@ -177,15 +133,19 @@ export default function FollowupClient({
             />
           </SymptomRow>
 
-          <SymptomRow label="頭痛"          checked={symptoms.headache} onToggle={() => setSym("headache", !symptoms.headache)} />
-          <SymptomRow label="咳や喉の痛み"   checked={symptoms.cough}    onToggle={() => setSym("cough",    !symptoms.cough)} />
-          <SymptomRow label="だるさ倦怠感"   checked={symptoms.fatigue}  onToggle={() => setSym("fatigue",  !symptoms.fatigue)} />
-          <SymptomRow label="吐き気や嘔吐"   checked={symptoms.nausea}   onToggle={() => setSym("nausea",   !symptoms.nausea)} />
+          <SymptomRow label="頭痛"         checked={symptoms.headache} onToggle={() => setSym("headache", !symptoms.headache)} />
+          <SymptomRow label="咳や喉の痛み"  checked={symptoms.cough}    onToggle={() => setSym("cough",    !symptoms.cough)} />
+          <SymptomRow label="だるさ倦怠感"  checked={symptoms.fatigue}  onToggle={() => setSym("fatigue",  !symptoms.fatigue)} />
+          <SymptomRow label="吐き気や嘔吐"  checked={symptoms.nausea}   onToggle={() => setSym("nausea",   !symptoms.nausea)} />
 
           <SymptomRow
             label="その他"
             checked={symptoms.other}
-            onToggle={() => setSym("other", !symptoms.other)}
+            onToggle={() => {
+              const next = !symptoms.other;
+              setSym("other", next);
+              if (!next) setSym("other_detail", "");
+            }}
           >
             <input
               type="text"
@@ -216,9 +176,7 @@ export default function FollowupClient({
                       : "bg-red-50 dark:bg-red-900/30 border-red-500 text-red-700 dark:text-red-300"
                     : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300",
                 ].join(" ")}
-              >
-                {v}
-              </button>
+              >{v}</button>
             ))}
           </div>
         </div>
@@ -238,9 +196,7 @@ export default function FollowupClient({
                     ? "bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-300"
                     : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300",
                 ].join(" ")}
-              >
-                {v}
-              </button>
+              >{v}</button>
             ))}
           </div>
         </div>
@@ -251,11 +207,9 @@ export default function FollowupClient({
             <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
               翌日出勤可否 <span className="text-red-500">*</span>
             </h2>
-            {tomorrowHasShift ? (
-              <p className="text-xs text-zinc-400 mt-0.5">翌日シフトがあります</p>
-            ) : (
-              <p className="text-xs text-zinc-400 mt-0.5">翌日のシフトはありません</p>
-            )}
+            <p className="text-xs text-zinc-400 mt-0.5">
+              {tomorrowHasShift ? "翌日シフトがあります" : "翌日のシフトはありません"}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {(["出勤可能", "出勤困難"] as const).map(v => (
@@ -271,13 +225,10 @@ export default function FollowupClient({
                       : "bg-red-50 dark:bg-red-900/30 border-red-500 text-red-700 dark:text-red-300"
                     : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300",
                 ].join(" ")}
-              >
-                {v}
-              </button>
+              >{v}</button>
             ))}
           </div>
 
-          {/* 出勤困難の場合：次回報告予定 */}
           {nextDayAvail === "出勤困難" && (
             <div className="pt-2 space-y-3 border-t border-zinc-100 dark:border-zinc-800">
               <p className="text-xs font-semibold text-zinc-500">

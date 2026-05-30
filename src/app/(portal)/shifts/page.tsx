@@ -12,7 +12,12 @@ function dateKey(d: Date) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(d).slice(0, 10);
 }
 
-export default async function ShiftsPage() {
+export default async function ShiftsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const { month: monthParam } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -23,6 +28,17 @@ export default async function ShiftsPage() {
 
   const today = new Date();
   const todayStr = dateKey(today);
+
+  // ?month=YYYY-MM パラメータで初期表示月を制御
+  let initialYear  = today.getFullYear();
+  let initialMonth = today.getMonth() + 1;
+  if (monthParam) {
+    const [py, pm] = monthParam.split("-").map(Number);
+    if (py && pm && pm >= 1 && pm <= 12) {
+      initialYear  = py;
+      initialMonth = pm;
+    }
+  }
 
   // シフト：前後3ヶ月
   const rangeStart = new Date(today.getFullYear(), today.getMonth() - 3, 1);
@@ -120,8 +136,8 @@ export default async function ShiftsPage() {
         shifts={shiftsRes.data ?? []}
         changeLogs={changeLogs}
         todayStr={todayStr}
-        initialYear={today.getFullYear()}
-        initialMonth={today.getMonth() + 1}
+        initialYear={initialYear}
+        initialMonth={initialMonth}
         minMonth={minMonth}
         maxMonth={maxMonth}
         holidayRequests={holidaysRes.data ?? []}

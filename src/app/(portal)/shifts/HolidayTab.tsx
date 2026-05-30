@@ -55,11 +55,6 @@ export default function HolidayTab({
   const todayMonth = today.getMonth() + 1;
   const todayDay   = today.getDate();
 
-  // 申請画面の初期表示月：締切後は翌月、それ以外は今月
-  const afterDeadline = deadlineDay !== null && todayDay > deadlineDay;
-  const applyInitialYear  = afterDeadline ? (todayMonth === 12 ? todayYear + 1 : todayYear) : todayYear;
-  const applyInitialMonth = afterDeadline ? (todayMonth === 12 ? 1 : todayMonth + 1) : todayMonth;
-
   function handleWithdraw(id: string) {
     const fd = new FormData();
     fd.set("id", id);
@@ -70,7 +65,7 @@ export default function HolidayTab({
     });
   }
 
-  // 申請画面（カレンダー）
+  // 申請画面：月ナビは親（ShiftsTabs）が担うので hideNav=true
   if (view === "apply") {
     return (
       <div className="h-full overflow-y-auto">
@@ -83,13 +78,14 @@ export default function HolidayTab({
           一覧に戻る
         </button>
         <HolidayCalendar
-          initialYear={applyInitialYear}
-          initialMonth={applyInitialMonth}
+          initialYear={initialYear}
+          initialMonth={initialMonth}
           appliedRequests={localRequests}
           openDay={openDay}
           deadlineDay={deadlineDay}
           maxDaysPerMonth={maxDaysPerMonth}
           weekendLimit={weekendLimit}
+          hideNav={true}
         />
       </div>
     );
@@ -109,7 +105,7 @@ export default function HolidayTab({
         initialMonth={initialMonth}
       />
 
-      {/* 欠勤申請ボタン */}
+      {/* 申請ボタン */}
       <button
         type="button"
         onClick={() => setView("apply")}
@@ -137,7 +133,7 @@ export default function HolidayTab({
               <li key={r.id}>
                 <button
                   type="button"
-                  onClick={() => canWithdraw ? setSelected(r) : null}
+                  onClick={() => canWithdraw ? setSelected(r) : undefined}
                   className={`w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-left transition-colors ${
                     canWithdraw ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/60 active:bg-zinc-100" : ""
                   }`}
@@ -195,17 +191,13 @@ export default function HolidayTab({
                       type="button"
                       onClick={() => setSelected(null)}
                       className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400"
-                    >
-                      キャンセル
-                    </button>
+                    >キャンセル</button>
                     <button
                       type="button"
                       onClick={() => handleWithdraw(selected.id)}
                       disabled={isPending}
                       className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold"
-                    >
-                      {isPending ? "処理中..." : "取り下げる"}
-                    </button>
+                    >{isPending ? "処理中..." : "取り下げる"}</button>
                   </div>
                 </>
               );

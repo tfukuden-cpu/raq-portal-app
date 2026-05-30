@@ -6,7 +6,6 @@ import HolidayTab from "./HolidayTab";
 import RequestClient from "./request/RequestClient";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
-// ── 型定義 ──────────────────────────────────────────────
 type ShiftData = {
   shift_date: string;
   shift_name: string | null;
@@ -76,7 +75,6 @@ export default function ShiftsTabs({
   holidayOpenDay = null, holidayDeadlineDay = null, holidayMaxDaysPerMonth = null, holidayWeekendLimit = null,
 }: Props) {
   const [tab, setTab] = useState<TabKey>("shift");
-  // シフトタブの月ナビ状態（ShiftCalendar に渡す制御値）
   const [year, setYear]   = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
 
@@ -90,17 +88,20 @@ export default function ShiftsTabs({
     setMonth(d.getMonth() + 1);
   };
 
+  // 月ナビはシフト・希望休タブで共有（追加申請タブは不要）
+  const showMonthNav = tab === "shift" || tab === "holiday";
+
   return (
     <div className="flex flex-col h-full">
 
-      {/* ── 固定ヘッダー（タイトル・タブ・月ナビ） ── */}
+      {/* ── 固定ヘッダー ── */}
       <div className="sticky top-0 z-30 shrink-0 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
         {/* タイトル行 */}
         <div className="max-w-5xl mx-auto px-4 pt-5 pb-0">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">シフト</h1>
         </div>
         {/* タブバー */}
-        <div className="max-w-5xl mx-auto flex overflow-x-auto px-4 -mx-0 mt-2" style={{ scrollbarWidth: "none" }}>
+        <div className="max-w-5xl mx-auto flex overflow-x-auto px-4 mt-2" style={{ scrollbarWidth: "none" }}>
           {TABS.map(({ key, label }) => (
             <button
               key={key}
@@ -112,13 +113,11 @@ export default function ShiftsTabs({
                   ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
                   : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
               ].join(" ")}
-            >
-              {label}
-            </button>
+            >{label}</button>
           ))}
         </div>
-        {/* シフトタブ：月ナビ固定エリア */}
-        {tab === "shift" && (
+        {/* 月ナビ（シフト・希望休タブで共有） */}
+        {showMonthNav && (
           <div className="max-w-5xl mx-auto flex items-center justify-center gap-3 px-4 py-2 border-t border-zinc-100 dark:border-zinc-800">
             <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
@@ -157,8 +156,8 @@ export default function ShiftsTabs({
           <HolidayTab
             projectId={projectId}
             holidayRequests={holidayRequests}
-            initialYear={initialYear}
-            initialMonth={initialMonth}
+            initialYear={year}
+            initialMonth={month}
             openDay={holidayOpenDay}
             deadlineDay={holidayDeadlineDay}
             maxDaysPerMonth={holidayMaxDaysPerMonth}

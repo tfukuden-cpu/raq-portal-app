@@ -128,11 +128,18 @@ export default async function PortalLayout({ children }: { children: React.React
         items: OPS_MENU_ITEMS },
     ];
   } else if (viewMode === "admin") {
+    // project_admin（非グローバル）は案件設定を直リンクにする
+    const settingsHref = (!isGlobalAdmin && isProjectAdmin && projectId)
+      ? `/admin/${projectId}`
+      : "/admin";
+    const adminItems = ADMIN_MENU_ITEMS.map(item =>
+      item.href === "/admin" ? { ...item, href: settingsHref } : item
+    );
     sections = [
       { mobileLabel: "メイン", icon: "Home",
         items: [...STAFF_ITEMS, MY_ITEM] },
       { title: "管理", icon: "Settings",
-        items: ADMIN_MENU_ITEMS },
+        items: adminItems },
     ];
   } else {
     sections = [{ items: [...STAFF_ITEMS, MY_ITEM] }];

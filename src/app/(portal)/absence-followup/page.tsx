@@ -21,10 +21,10 @@ export default async function AbsenceFollowupPage() {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowStr = tomorrow.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
-  // 当日欠勤レコードを取得
+  // 当日欠勤レコードを取得（症状はFollowupClientのプリフィル用）
   const { data: absence } = await supabase
     .from("absence_reports")
-    .select("reason, followup_recovery_status")
+    .select("reason, symptoms, followup_recovery_status")
     .eq("staff_id", staffId)
     .eq("project_id", projectId)
     .eq("absence_date", today)
@@ -47,6 +47,7 @@ export default async function AbsenceFollowupPage() {
     <FollowupClient
       absenceDate={today}
       absenceReason={absence?.reason ?? null}
+      initialSymptoms={absence?.symptoms ?? null}
       tomorrowHasShift={!!tomorrowShift}
       alreadySubmitted={alreadySubmitted}
     />
