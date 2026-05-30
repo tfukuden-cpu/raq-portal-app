@@ -999,6 +999,28 @@ export async function departStaffAction(
   return { success: true };
 }
 
+/** 離脱処理を取り消す（end_date を null にリセット）
+ *  ※ 削除済みシフトは復元されません */
+export async function cancelDepartStaffAction(
+  projectId: string,
+  staffId: string,
+): Promise<SettingsResult> {
+  await assertAdmin(projectId);
+  const admin = adminSupa();
+
+  const { error } = await admin
+    .from("project_members")
+    .update({ end_date: null })
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId);
+
+  if (error) return { success: false, message: error.message };
+
+  revalidatePath(`/admin/${projectId}`);
+  revalidatePath(`/shifts/manage`);
+  return { success: true };
+}
+
 // ── LINE連携解除 ───────────────────────────────────────────
 
 export async function unlinkLineAction(fd: FormData): Promise<SettingsResult> {

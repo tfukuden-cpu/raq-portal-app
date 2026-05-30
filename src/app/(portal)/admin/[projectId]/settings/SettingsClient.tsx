@@ -23,6 +23,7 @@ import {
   saveLineGroupAction,
   saveDepartureSettingAction,
   departStaffAction,
+  cancelDepartStaffAction,
   testNotifyAction,
   testLinePushToSelfAction,
 } from "./actions";
@@ -1293,7 +1294,49 @@ export function MemberList({
                 <div className="border-t border-zinc-100 dark:border-zinc-800" />
 
                 {/* ── 離脱処理 ── */}
-                {departStep === "hidden" ? (
+                {editingMember?.end_date && departStep === "hidden" ? (
+                  /* 離脱済み：取り消しUIを表示 */
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">離脱済</span>
+                      <span className="text-xs text-zinc-400 tabular-nums">{editingMember.end_date}</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400">
+                      ※ 取り消しても削除済みシフトは復元されません。シフトは手動で再登録してください。
+                    </p>
+                    <div className="flex gap-2">
+                      <button type="button"
+                        onClick={() => {
+                          setDepartType("immediate");
+                          setDepartDate(new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }));
+                          setDepartStep("input");
+                        }}
+                        className="flex-1 py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      >
+                        離脱日を変更…
+                      </button>
+                      <button type="button"
+                        disabled={isPending}
+                        onClick={() => {
+                          if (!editId) return;
+                          start(async () => {
+                            const r = await cancelDepartStaffAction(projectId, editId);
+                            if (r.success) {
+                              setEditId(null);
+                              setDepartStep("hidden");
+                              setResult({ ok: true, msg: "離脱処理を取り消しました" });
+                            } else {
+                              setResult({ ok: false, msg: r.message ?? "エラーが発生しました" });
+                            }
+                          });
+                        }}
+                        className="flex-1 py-1.5 rounded-lg bg-zinc-600 hover:bg-zinc-700 text-white text-xs font-bold disabled:opacity-40"
+                      >
+                        {isPending ? "処理中…" : "離脱を取り消す"}
+                      </button>
+                    </div>
+                  </div>
+                ) : departStep === "hidden" ? (
                   <button type="button"
                     onClick={() => {
                       setDepartType("immediate");
