@@ -98,14 +98,14 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
   return (
     <>
       {/* ── Sticky header ── */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 pt-5 pb-4 flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">お知らせ</h1>
+      <div className="sticky top-0 z-30 bg-[#F5F5F7]/90 dark:bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-200/60 dark:border-zinc-800">
+        <div className="max-w-5xl mx-auto px-5 pt-5 pb-4 flex items-center justify-between gap-3">
+          <h1 className="text-[26px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">お知らせ</h1>
           {isAdmin && (
             <button
               type="button"
               onClick={openAdd}
-              className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-700 dark:hover:bg-zinc-300 text-white dark:text-zinc-900 transition-colors"
+              className="text-[13px] font-semibold px-4 py-1.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 transition-colors active:bg-zinc-700"
             >
               ＋ 追加
             </button>
@@ -113,22 +113,22 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 pt-4 pb-24 space-y-2">
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-24 space-y-2.5">
       {notices.length === 0 ? (
-        <div className="bg-zinc-50 dark:bg-zinc-900 rounded-2xl p-10 text-center">
-          <p className="text-sm text-zinc-400">お知らせはありません</p>
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-2xl p-12 text-center shadow-sm">
+          <p className="text-[14px] text-zinc-400">お知らせはありません</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {notices.map((n) => {
             const isRead = confirmed.has(n.id);
             return (
               <article
                 key={n.id}
-                className={`rounded-2xl p-5 transition-opacity ${
+                className={`rounded-2xl p-5 border shadow-sm transition-opacity ${
                   n.is_pinned
-                    ? "bg-blue-50 dark:bg-blue-950/30"
-                    : "bg-zinc-50 dark:bg-zinc-900"
+                    ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200/70 dark:border-blue-900"
+                    : "bg-white dark:bg-zinc-900 border-zinc-200/70 dark:border-zinc-800"
                 } ${isRead ? "opacity-50" : ""}`}
               >
                 {/* タイトル行 */}

@@ -150,7 +150,7 @@ export default async function ManualStaffPage() {
   if (!user) redirect("/login");
 
   return (
-    <main className="min-h-screen bg-white dark:bg-zinc-950">
+    <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
       <div className="max-w-4xl mx-auto px-4 pt-6 pb-28 space-y-1">
         {/* ヘッダー */}
         <div className="mb-6">

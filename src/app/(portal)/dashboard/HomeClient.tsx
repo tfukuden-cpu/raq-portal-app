@@ -59,27 +59,27 @@ function DepartureIcon({ className }: { className?: string }) {
 
 function StatusBadge({ state }: { state: HomeState }) {
   const map = {
-    pre_departure: { label: "未出発", textCls: "text-orange-500", dotCls: "bg-orange-400", pulse: false },
-    pre_clock_in:  { label: "未出勤", textCls: "text-blue-500",   dotCls: "bg-blue-400",   pulse: false },
-    working:       { label: "勤務中", textCls: "text-emerald-600",dotCls: "bg-emerald-500", pulse: true  },
-    clocked_out:   { label: "退勤済", textCls: "text-zinc-400",   dotCls: "bg-zinc-300",   pulse: false },
+    pre_departure: { label: "未出発", cls: "bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900", pulse: false },
+    pre_clock_in:  { label: "未出勤", cls: "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900", pulse: false },
+    working:       { label: "勤務中", cls: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900", pulse: true },
+    clocked_out:   { label: "退勤済", cls: "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700", pulse: false },
   };
   const c = map[state];
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="relative flex h-3 w-3">
+    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-semibold ${c.cls}`}>
+      <span className="relative flex h-2 w-2 flex-shrink-0">
         {c.pulse && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />}
-        <span className={`relative inline-flex h-3 w-3 rounded-full ${c.dotCls}`} />
+        <span className={`relative inline-flex h-2 w-2 rounded-full ${c.pulse ? "bg-emerald-500" : "bg-current opacity-60"}`} />
       </span>
-      <span className={`text-[22px] font-bold tracking-tight ${c.textCls}`}>{c.label}</span>
+      {c.label}
     </div>
   );
 }
 
 const stamp = (time: string | null | undefined) =>
   time
-    ? <span className="text-[32px] font-light tabular-nums leading-none text-zinc-900 dark:text-zinc-100">{time}</span>
-    : <span className="text-[16px] font-medium text-zinc-300 dark:text-zinc-700">未打刻</span>;
+    ? <span className="text-[28px] font-light tabular-nums leading-none text-zinc-900 dark:text-zinc-100">{time}</span>
+    : <span className="text-[20px] font-light text-zinc-200 dark:text-zinc-700">—</span>;
 
 const WD = ["日","月","火","水","木","金","土"];
 function fmtDate(iso: string) {
@@ -177,131 +177,138 @@ export default function HomeClient({
 
   return (
     <>
-    <main className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="max-w-lg mx-auto px-5 pt-8 pb-32 flex flex-col gap-0">
+    <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
+      <div className="max-w-lg mx-auto px-4 pt-8 pb-32 flex flex-col gap-3">
 
         {/* ── ヘッダー ── */}
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start justify-between px-1 mb-1">
           <div>
             {greeting && <p className="text-[12px] text-zinc-400 mb-0.5">{greeting}</p>}
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            <h1 className="text-[26px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
               {displayName}
             </h1>
           </div>
-          <a href="/notices" className="relative mt-1">
-            <BellIcon className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
+          <a href="/notices" className="relative mt-2 p-1.5 -mr-1.5">
+            <BellIcon className="w-[22px] h-[22px] text-zinc-400 dark:text-zinc-500" />
             {noticeCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center tabular-nums">
+              <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center tabular-nums">
                 {noticeCount > 99 ? "99+" : noticeCount}
               </span>
             )}
           </a>
         </div>
 
-        {/* ── ステータスバッジ ── */}
-        <div className="mb-5">
-          <StatusBadge state={state} />
-        </div>
-
         {/* ── ライブクロック（出発報告なし案件のみ） ── */}
         {!enableDeparture && (
-          <p className="text-[54px] font-extralight tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white mb-1">
+          <p className="px-1 text-[60px] font-thin tabular-nums leading-none tracking-tight text-zinc-900 dark:text-white">
             {liveTime}
           </p>
         )}
 
-        {/* ── 日付・シフト ── */}
-        <p className="text-[13px] text-zinc-400 tabular-nums mb-1">{todayLabel}</p>
-        {shift && !isHoliday && (
-          <p className="text-[17px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-            {shift.name}
-            {shift.start && (
-              <span className="ml-2 text-[14px] font-normal text-zinc-400 tabular-nums">
-                {shift.start.slice(0,5)}–{shift.end?.slice(0,5) ?? "--:--"}
-              </span>
-            )}
-          </p>
-        )}
-        {shift && isHoliday && <p className="text-[17px] font-medium text-zinc-400 mb-1">公休日</p>}
-        {!shift && <p className="text-[15px] text-zinc-300 mb-1">シフト未登録</p>}
+        {/* ── ステータス＋シフトカード ── */}
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/70 dark:border-zinc-800 overflow-hidden shadow-sm">
+
+          {/* 上段: 日付・シフト・ステータス */}
+          <div className="px-5 pt-5 pb-4 flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-1 min-w-0">
+              <p className="text-[12px] font-medium text-zinc-400 tabular-nums">{todayLabel}</p>
+              {shift && !isHoliday && (
+                <p className="text-[18px] font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+                  {shift.name}
+                  {shift.start && (
+                    <span className="ml-2 text-[14px] font-normal text-zinc-400 tabular-nums">
+                      {shift.start.slice(0,5)}–{shift.end?.slice(0,5) ?? "--:--"}
+                    </span>
+                  )}
+                </p>
+              )}
+              {shift && isHoliday && <p className="text-[16px] font-medium text-zinc-400">公休日</p>}
+              {!shift && <p className="text-[15px] text-zinc-300">シフト未登録</p>}
+            </div>
+            <div className="flex-shrink-0 pt-0.5">
+              <StatusBadge state={state} />
+            </div>
+          </div>
+
+          {/* 下段: タイムスタンプ */}
+          <div className="border-t border-zinc-100 dark:border-zinc-800 px-5 py-4">
+            <div className="flex gap-8">
+              {enableDeparture && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">出発</span>
+                  {stamp(optDeparture)}
+                </div>
+              )}
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">出勤</span>
+                {stamp(clockInTime)}
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">退勤</span>
+                {stamp(clockOutTime)}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* ── 出発ボタン（出発報告あり + 未出発状態のみ） ── */}
         {enableDeparture && state === "pre_departure" && (
           <button
             onClick={() => !isPending && setModal("departure")}
             disabled={isPending}
-            className="mt-5 w-full h-[52px] rounded-2xl bg-blue-600 active:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 text-white text-[17px] font-semibold mb-2"
+            className="w-full h-[52px] rounded-2xl bg-blue-600 active:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 text-white text-[16px] font-semibold shadow-sm"
           >
-            <DepartureIcon className="w-[18px] h-[18px]" />
+            <DepartureIcon className="w-[17px] h-[17px]" />
             {isPending ? "処理中..." : "出発報告する"}
           </button>
         )}
 
-        <div className="mt-6 mb-6"><HR /></div>
-
-        {/* ── タイムスタンプ（出発・出勤・退勤） ── */}
-        <div className="flex gap-8 mb-6">
-          {enableDeparture && (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] text-zinc-400 tracking-wide">出発</span>
-              {stamp(optDeparture)}
-            </div>
-          )}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] text-zinc-400 tracking-wide">出勤</span>
-            {stamp(clockInTime)}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] text-zinc-400 tracking-wide">退勤</span>
-            {stamp(clockOutTime)}
-          </div>
-        </div>
-
         {/* ── 欠勤・遅刻ボタン ── */}
-        {showReportRow && (<>
-          <HR />
-          <div className="flex gap-3 mt-6 mb-6">
+        {showReportRow && (
+          <div className="flex gap-2.5">
             {hasAbsenceReport ? (
               <a
                 href="/absence-followup"
-                className="flex-1 h-11 rounded-xl border border-blue-200 dark:border-blue-800 text-[14px] font-medium text-blue-600 dark:text-blue-400 active:bg-blue-50 dark:active:bg-blue-900/20 flex items-center justify-center transition-colors"
+                className="flex-1 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/60 text-[14px] font-semibold text-blue-600 dark:text-blue-400 flex items-center justify-center transition-colors active:bg-blue-100 dark:active:bg-blue-900/60"
               >経過報告</a>
             ) : (
               <button
                 onClick={() => !isPending && setModal("absence")}
                 disabled={isPending}
-                className="flex-1 h-11 rounded-xl border border-zinc-200 dark:border-zinc-800 text-[14px] font-medium text-red-500 active:bg-red-50 disabled:opacity-40 transition-colors"
+                className="flex-1 h-12 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 text-[14px] font-semibold text-red-500 disabled:opacity-40 transition-colors active:bg-red-100"
               >欠勤報告</button>
             )}
             {hasLateReport ? (
-              <div className="flex-1 h-11 rounded-xl bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center">
-                <span className="text-[12px] text-zinc-400">遅刻済 · {reportBadge(lateStatus)}</span>
+              <div className="flex-1 h-12 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 flex items-center justify-center">
+                <span className="text-[12px] font-medium text-zinc-400">遅刻済 · {reportBadge(lateStatus)}</span>
               </div>
             ) : (
               <button
                 onClick={() => !isPending && setModal("late")}
                 disabled={isPending}
-                className="flex-1 h-11 rounded-xl border border-zinc-200 dark:border-zinc-800 text-[14px] font-medium text-amber-500 active:bg-amber-50 disabled:opacity-40 transition-colors"
+                className="flex-1 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/50 text-[14px] font-semibold text-amber-600 disabled:opacity-40 transition-colors active:bg-amber-100"
               >遅刻報告</button>
             )}
           </div>
-        </>)}
+        )}
 
-        {/* ── 次回出勤 ── */}
-        {upcomingShifts && upcomingShifts.length > 0 && (<>
-          <HR />
-          <div className="mt-6">
+        {/* ── 次回出勤カード ── */}
+        {upcomingShifts && upcomingShifts.length > 0 && (
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/70 dark:border-zinc-800 overflow-hidden shadow-sm">
+            <div className="px-5 pt-4 pb-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400">次回出勤</p>
+            </div>
             {upcomingShifts.map((s) => (
               <a
                 key={s.date}
                 href={`/shifts?month=${s.date.slice(0, 7)}`}
-                className="flex items-center justify-between py-3.5 border-b border-zinc-100 dark:border-zinc-800/60 last:border-b-0 active:opacity-60"
+                className="flex items-center justify-between px-5 py-3.5 border-t border-zinc-100 dark:border-zinc-800 active:bg-zinc-50 dark:active:bg-zinc-800/50 transition-colors"
               >
-                <span className="text-[15px] text-zinc-700 dark:text-zinc-300">{fmtDate(s.date)}</span>
-                <div className="flex items-center gap-1.5">
+                <span className="text-[15px] font-medium text-zinc-800 dark:text-zinc-200">{fmtDate(s.date)}</span>
+                <div className="flex items-center gap-2">
                   {s.name && <span className="text-[13px] font-semibold text-zinc-500">{s.name}</span>}
                   {s.start && (
-                    <span className="text-[13px] tabular-nums text-zinc-400">
+                    <span className="text-[12px] tabular-nums text-zinc-400">
                       {s.start.slice(0,5)}–{s.end?.slice(0,5) ?? "--:--"}
                     </span>
                   )}
@@ -310,15 +317,15 @@ export default function HomeClient({
               </a>
             ))}
           </div>
-        </>)}
+        )}
 
       </div>
     </main>
 
     {/* ── トースト ── */}
     {feedback && (
-      <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-40 whitespace-nowrap px-5 py-3 rounded-2xl text-[14px] font-semibold shadow-xl ${
-        feedback.ok ? "bg-zinc-900 text-white" : "bg-red-500 text-white"
+      <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap px-5 py-3 rounded-2xl text-[14px] font-semibold shadow-2xl ${
+        feedback.ok ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" : "bg-red-500 text-white"
       }`}>
         {feedback.msg}
       </div>

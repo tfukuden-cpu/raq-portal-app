@@ -212,7 +212,7 @@ export default function AppNav({
       </div>
 
       {/* ── モバイル bottom nav ── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/85 dark:bg-zinc-900/85 backdrop-blur-xl border-t border-zinc-200/60 dark:border-zinc-800/60" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
 
         {/* セクション切り替えタブ */}
         {showSectionTabs && (
@@ -256,14 +256,16 @@ export default function AppNav({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex-shrink-0 flex flex-col items-center justify-center py-1.5 px-2.5 gap-0.5 min-w-[58px] rounded-xl transition-colors ${
+                className={`flex-shrink-0 flex flex-col items-center justify-center py-2 px-2.5 gap-1 min-w-[58px] transition-colors ${
                   active ? "text-blue-600 dark:text-blue-400" : "text-zinc-400 dark:text-zinc-500"
                 }`}
               >
-                <div className={`p-1.5 rounded-xl transition-colors ${active ? "bg-blue-50 dark:bg-blue-950/60" : ""}`}>
-                  <Icon className="w-5 h-5" />
+                <div className={`w-10 h-7 flex items-center justify-center rounded-xl transition-all ${
+                  active ? "bg-blue-100 dark:bg-blue-950/70" : ""
+                }`}>
+                  <Icon className={`w-[22px] h-[22px] transition-transform ${active ? "scale-105" : ""}`} />
                 </div>
-                <span className={`text-[10px] leading-none ${active ? "font-semibold" : "font-medium"}`}>
+                <span className={`text-[10px] leading-none tracking-tight ${active ? "font-bold" : "font-medium"}`}>
                   {item.label}
                 </span>
               </Link>

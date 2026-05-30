@@ -52,7 +52,7 @@ export default async function HolidayManagePage() {
   });
 
   return (
-    <main className="min-h-screen bg-white dark:bg-zinc-950">
+    <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 pt-5 pb-4">

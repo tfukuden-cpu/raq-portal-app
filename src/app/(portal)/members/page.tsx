@@ -84,7 +84,7 @@ export default async function MembersPage(props: {
     .filter(Boolean) as string[];
 
   return (
-    <main className="min-h-screen bg-white dark:bg-zinc-950">
+    <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
       <div className="max-w-5xl mx-auto px-4 pb-20">
         <Suspense>
           <MemberList

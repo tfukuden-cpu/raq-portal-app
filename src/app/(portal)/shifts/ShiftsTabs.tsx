@@ -95,10 +95,10 @@ export default function ShiftsTabs({
     <div className="flex flex-col h-full">
 
       {/* ── 固定ヘッダー ── */}
-      <div className="sticky top-0 z-30 shrink-0 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="sticky top-0 z-30 shrink-0 bg-[#F5F5F7]/90 dark:bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-200/60 dark:border-zinc-800">
         {/* タイトル行 */}
-        <div className="max-w-5xl mx-auto px-4 pt-5 pb-0">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">シフト</h1>
+        <div className="max-w-5xl mx-auto px-5 pt-5 pb-0">
+          <h1 className="text-[26px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">シフト</h1>
         </div>
         {/* タブバー */}
         <div className="max-w-5xl mx-auto flex overflow-x-auto px-4 mt-2" style={{ scrollbarWidth: "none" }}>
@@ -108,7 +108,7 @@ export default function ShiftsTabs({
               type="button"
               onClick={() => setTab(key)}
               className={[
-                "px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex-shrink-0",
+                "px-4 py-2.5 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-colors flex-shrink-0",
                 tab === key
                   ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
                   : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
@@ -118,16 +118,16 @@ export default function ShiftsTabs({
         </div>
         {/* 月ナビ（シフト・希望休タブで共有） */}
         {showMonthNav && (
-          <div className="max-w-5xl mx-auto flex items-center justify-center gap-3 px-4 py-2 border-t border-zinc-100 dark:border-zinc-800">
+          <div className="max-w-5xl mx-auto flex items-center justify-center gap-2 px-4 py-2">
             <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 disabled:opacity-30 transition-colors shadow-sm active:bg-zinc-50">
               <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
             </button>
-            <span className="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-50 w-24 text-center">
+            <span className="text-[14px] font-bold tabular-nums text-zinc-900 dark:text-zinc-50 w-28 text-center">
               {year}年 {month}月
             </span>
             <button type="button" onClick={() => goMonth(1)} disabled={!canNext}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 disabled:opacity-30 transition-colors shadow-sm active:bg-zinc-50">
               <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
             </button>
           </div>
@@ -135,7 +135,7 @@ export default function ShiftsTabs({
       </div>
 
       {/* ── タブコンテンツ ── */}
-      <div className="flex-1 min-h-0 px-4 pt-2">
+      <div className="flex-1 min-h-0 bg-[#F5F5F7] dark:bg-zinc-950 px-4 pt-3">
 
         {tab === "shift" && (
           <ShiftCalendar

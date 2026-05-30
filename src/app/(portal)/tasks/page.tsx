@@ -1,4 +1,4 @@
-/**
+﻿/**
  * タスク管理ページ
  * LINEグループから自動抽出されたタスクを管理する
  */
@@ -131,7 +131,7 @@ export default async function TasksPage() {
   }));
 
   return (
-    <main className="min-h-screen bg-white dark:bg-zinc-950">
+    <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
       <div className="max-w-5xl mx-auto px-4 pb-24">
         <TasksClient
           tasks={tasks}

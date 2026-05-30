@@ -9,9 +9,9 @@ import MyOffRequestsCard from "./MyOffRequestsCard";
 const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
 const STATUS_STYLE: Record<string, string> = {
-  pending:  "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300",
-  approved: "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300",
-  rejected: "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300",
+  pending:  "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800",
+  approved: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800",
+  rejected: "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800",
 };
 const STATUS_LABEL: Record<string, string> = {
   pending: "申請中", approved: "承認済", rejected: "却下",
@@ -109,19 +109,19 @@ export default function HolidayTab({
       <button
         type="button"
         onClick={() => setView("apply")}
-        className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors"
+        className="w-full h-12 rounded-2xl bg-blue-600 active:bg-blue-700 text-white text-[15px] font-semibold transition-colors shadow-sm"
       >
         希望休を申請する
       </button>
 
       {/* 一覧 */}
       {upcoming.length === 0 ? (
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-10 text-center text-sm text-zinc-400">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-2xl py-12 text-center text-[14px] text-zinc-400 shadow-sm">
           申請済みの希望休はありません
         </div>
       ) : (
-        <ul className="space-y-2">
-          {upcoming.map(r => {
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/70 dark:border-zinc-800 overflow-hidden shadow-sm">
+          {upcoming.map((r, i) => {
             const d = new Date(r.request_date + "T00:00:00+09:00");
             const m = d.getMonth() + 1;
             const day = d.getDate();
@@ -130,31 +130,30 @@ export default function HolidayTab({
             const pastDeadline = deadlineDay !== null && isCurrentMonth && todayDay > deadlineDay;
             const canWithdraw = (r.status === "pending" || r.status === "approved") && !pastDeadline;
             return (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => canWithdraw ? setSelected(r) : undefined}
-                  className={`w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-left transition-colors ${
-                    canWithdraw ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/60 active:bg-zinc-100" : ""
-                  }`}
-                >
-                  <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tabular-nums flex-1">
-                    {m}月{day}日
-                    <span className={`ml-1 text-xs font-medium ${d.getDay() === 0 ? "text-red-500" : d.getDay() === 6 ? "text-blue-500" : "text-zinc-400"}`}>
-                      （{dow}）
-                    </span>
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => canWithdraw ? setSelected(r) : undefined}
+                className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors ${
+                  i > 0 ? "border-t border-zinc-100 dark:border-zinc-800" : ""
+                } ${canWithdraw ? "active:bg-zinc-50 dark:active:bg-zinc-800/50" : ""}`}
+              >
+                <span className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums flex-1">
+                  {m}月{day}日
+                  <span className={`ml-1.5 text-[13px] font-medium ${d.getDay() === 0 ? "text-red-500" : d.getDay() === 6 ? "text-blue-500" : "text-zinc-400"}`}>
+                    ({dow})
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded font-medium ${STATUS_STYLE[r.status] ?? ""}`}>
-                    {STATUS_LABEL[r.status] ?? r.status}
-                  </span>
-                  {canWithdraw && (
-                    <span className="text-xs text-zinc-300 dark:text-zinc-600">取り下げ →</span>
-                  )}
-                </button>
-              </li>
+                </span>
+                <span className={`text-[11px] px-2.5 py-1 rounded-full font-semibold ${STATUS_STYLE[r.status] ?? ""}`}>
+                  {STATUS_LABEL[r.status] ?? r.status}
+                </span>
+                {canWithdraw && (
+                  <span className="text-[12px] font-medium text-zinc-300 dark:text-zinc-600">取消</span>
+                )}
+              </button>
             );
           })}
-        </ul>
+        </div>
       )}
 
       {/* 取り下げ確認ボトムシート */}

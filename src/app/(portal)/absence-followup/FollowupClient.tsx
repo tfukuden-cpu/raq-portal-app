@@ -71,7 +71,7 @@ export default function FollowupClient({
 
   if (done) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-4">
+      <main className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-zinc-950 p-4">
         <div className="w-full max-w-sm text-center space-y-4">
           <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto">
             <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -89,7 +89,7 @@ export default function FollowupClient({
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-10">
+    <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950 pb-10">
       <div className="max-w-2xl mx-auto px-4 pt-6 space-y-5">
 
         {/* ヘッダー */}
@@ -101,7 +101,7 @@ export default function FollowupClient({
         </div>
 
         {/* 固定情報 */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-2.5">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-2.5">
           <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">報告内容（自動入力）</h2>
           <InfoRow label="報告日" value={dateLabel} />
           <InfoRow label="報告区分" value="体調経過" />
@@ -109,7 +109,7 @@ export default function FollowupClient({
         </div>
 
         {/* 症状等（欠勤報告時の内容をプリフィル） */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-4">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-4">
           <div>
             <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">症状等</h2>
             <p className="text-xs text-zinc-400 mt-0.5">欠勤報告時から変化があれば更新してください</p>
@@ -158,7 +158,7 @@ export default function FollowupClient({
         </div>
 
         {/* 軽快状況 */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-3">
           <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">軽快状況 <span className="text-red-500">*</span></h2>
           <div className="grid grid-cols-3 gap-2">
             {(["改善", "横ばい", "悪化"] as const).map(v => (
@@ -182,7 +182,7 @@ export default function FollowupClient({
         </div>
 
         {/* 当日受診状況 */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-3">
           <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">当日受診状況 <span className="text-red-500">*</span></h2>
           <div className="grid grid-cols-2 gap-2">
             {(["受診済み", "未受診"] as const).map(v => (
@@ -202,7 +202,7 @@ export default function FollowupClient({
         </div>
 
         {/* 翌日出勤可否 */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-3">
           <div>
             <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
               翌日出勤可否 <span className="text-red-500">*</span>
