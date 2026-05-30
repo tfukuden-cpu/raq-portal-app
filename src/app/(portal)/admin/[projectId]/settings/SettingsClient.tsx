@@ -1014,100 +1014,88 @@ export function MemberList({
             const av = avatarStyle(m.company_name);
             const isDeparted = !!m.end_date;
             const memberSections = m.sections.length > 0 ? m.sections : m.section ? [m.section] : [];
+            const lineLabel = !m.lineLinked ? "LINE未連携"
+              : !m.line_friend ? "友達追加未"
+              : "LINE追加済";
+            const lineCls = !m.lineLinked
+              ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500"
+              : !m.line_friend
+              ? "bg-orange-50 dark:bg-orange-900/30 text-orange-500 dark:text-orange-400"
+              : "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400";
 
             return (
               <div key={m.staffId}
-                className={`bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/70 dark:border-zinc-800 p-4 shadow-sm cursor-pointer active:scale-[0.99] transition-all ${isDeparted ? "opacity-50" : ""}`}
+                className={`bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/70 dark:border-zinc-800 px-4 py-3.5 shadow-sm cursor-pointer active:scale-[0.99] transition-all ${isDeparted ? "opacity-50" : ""}`}
                 onClick={() => startEdit(m)}
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                   {/* アバター */}
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-bold flex-shrink-0 ${av.bg} ${av.text}`}>
                     {m.name[0]}
                   </div>
 
-                  {/* 情報 */}
+                  {/* 情報エリア */}
                   <div className="flex-1 min-w-0">
-                    {/* 名前行 */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[15px] font-bold text-zinc-900 dark:text-zinc-100 leading-tight">{m.name}</span>
-                      {m.churn_risk && !isDeparted && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 font-semibold">
-                          離脱リスク
-                        </span>
-                      )}
-                      {isDeparted && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 font-semibold">
-                          離脱済
-                        </span>
-                      )}
-                    </div>
-
-                    {/* 会社名 + 社員ID */}
-                    <div className="flex items-center gap-2 mt-0.5">
+                    {/* 上段：メタ情報（固定順） */}
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      {/* 会社名 */}
                       {m.company_name
-                        ? <span className="text-[12px] text-zinc-500 dark:text-zinc-400 truncate">{m.company_name}</span>
-                        : <span className="text-[12px] text-amber-500 font-medium">会社名未設定</span>
+                        ? <span className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate max-w-[120px]">{m.company_name}</span>
+                        : <span className="text-[11px] text-amber-500 font-medium">会社名未設定</span>
                       }
-                      <span className="text-[10px] text-zinc-300 dark:text-zinc-600 font-mono flex-shrink-0">{m.staffId}</span>
+                      {/* アカウント番号 */}
                       {m.account_number && (
-                        <span className="text-[10px] text-zinc-300 dark:text-zinc-600 font-mono flex-shrink-0">{m.account_number}</span>
+                        <>
+                          <span className="text-zinc-200 dark:text-zinc-700 text-[10px]">·</span>
+                          <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 tabular-nums">{m.account_number}</span>
+                        </>
                       )}
-                    </div>
-
-                    {/* バッジ行 */}
-                    <div className="flex items-center gap-1.5 flex-wrap mt-2">
                       {/* セクション */}
-                      {memberSections.map(s => (
-                        <span key={s} className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900">
-                          {s}
+                      {memberSections.length > 0 && (
+                        <>
+                          <span className="text-zinc-200 dark:text-zinc-700 text-[10px]">·</span>
+                          {memberSections.map(s => (
+                            <span key={s} className="text-[11px] font-semibold text-blue-500 dark:text-blue-400">{s}</span>
+                          ))}
+                        </>
+                      )}
+                      {/* LINE */}
+                      <>
+                        <span className="text-zinc-200 dark:text-zinc-700 text-[10px]">·</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${lineCls}`}>
+                          {lineLabel}
                         </span>
-                      ))}
+                      </>
                       {/* ロール */}
                       {m.role === "project_admin" && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-violet-900">
-                          管理者
-                        </span>
+                        <>
+                          <span className="text-zinc-200 dark:text-zinc-700 text-[10px]">·</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-violet-50 dark:bg-violet-900/30 text-violet-500 dark:text-violet-400">管理者</span>
+                        </>
                       )}
-                      {/* 稼働日数 */}
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 tabular-nums">
-                        {m.work_days_count != null && m.work_days_type
-                          ? `${m.work_days_type === "monthly" ? "月" : "週"}${m.work_days_count}日`
-                          : "月21日"
-                        }
-                      </span>
-                      {/* LINE連携 */}
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
-                        m.lineLinked
-                          ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-100 dark:border-green-900"
-                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-zinc-700"
-                      }`}>
-                        LINE {m.lineLinked ? "連携済" : "未連携"}
-                      </span>
-                      {/* 友達 */}
-                      {m.lineLinked && !m.line_friend && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-orange-50 dark:bg-orange-900/30 text-orange-500 dark:text-orange-400 border border-orange-100 dark:border-orange-900">
-                          友達未
-                        </span>
+                      {/* 離脱リスク / 離脱済 */}
+                      {m.churn_risk && !isDeparted && (
+                        <>
+                          <span className="text-zinc-200 dark:text-zinc-700 text-[10px]">·</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400">離脱リスク</span>
+                        </>
                       )}
-                      {/* 順守率 */}
-                      {m.compliance != null && (
-                        <span className={[
-                          "text-[10px] px-2 py-0.5 rounded-full font-semibold border tabular-nums",
-                          m.compliance >= 90
-                            ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900"
-                            : m.compliance >= 70
-                            ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900"
-                            : "bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 border-red-100 dark:border-red-900",
-                        ].join(" ")}>
-                          順守{m.compliance}%
-                        </span>
+                      {isDeparted && (
+                        <>
+                          <span className="text-zinc-200 dark:text-zinc-700 text-[10px]">·</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-400">離脱済</span>
+                        </>
                       )}
                     </div>
+
+                    {/* 下段：名前（大きく） */}
+                    <span className="text-[18px] font-bold text-zinc-900 dark:text-zinc-50 leading-tight tracking-tight">
+                      {m.name}
+                    </span>
                   </div>
 
-                  {/* 矢印 */}
-                  <svg className="w-4 h-4 text-zinc-300 dark:text-zinc-600 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  {/* シェブロン */}
+                  <svg className="w-4 h-4 text-zinc-300 dark:text-zinc-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
