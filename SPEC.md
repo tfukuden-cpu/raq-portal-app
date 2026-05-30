@@ -1,4 +1,4 @@
-# Raq Portal アプリ 全機能仕様書
+# Raq Works 全機能仕様書
 
 > 最終更新: 2026-05-31（v59）  
 > 対象: 全メニュー（スタッフ / 管理 / 運営）
@@ -545,13 +545,16 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ## 8. 開発環境・再開手順
 
-### 起動
+### デプロイ（本番環境）
+
+Vercel に接続済み。コードを push すると自動デプロイされる。
 
 ```powershell
-cd C:\dev\raq-portal-app
-npm run dev
-# → http://localhost:3000
+git push
+# → GitHub → Vercel が自動ビルド・デプロイ
 ```
+
+ローカル開発サーバーは使用しない。動作確認は本番 URL で行う。
 
 ### テストアカウント
 
