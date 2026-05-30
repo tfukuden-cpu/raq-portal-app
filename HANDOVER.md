@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-30（v55：LINE友達追加ゲート・Web Push VAPID修正・シフトグリッドSVグループ表示改善）
+最終更新：2026-05-31（v56：出勤簿ボード セクション間ドラッグ自動DB反映・セクション×シフトカラーリング）
 
 ---
 
@@ -106,6 +106,20 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | アバターシステム | 🔄 設計済み・パーツ未実装（低優先） |
 
 ### 次に優先すべきこと（新しいセッションはここから）
+
+**v56 完了内容**
+- **出勤簿ボード：セクション間ドラッグ自動DB反映（`moveSectionAction`）**
+  - ドラッグ＆ドロップでセクションを移動すると、確定ボタン不要で即時 `shifts` テーブルを更新
+  - `moveSectionAction(projectId, staffId, shiftDate, targetSection)` を `actions.ts` に追加
+  - 処理フロー：現在のシフト取得 → ターゲットセクションの `shift_patterns` を全取得 → 開始時刻が最も近いパターンを自動選択（早番→早番、遅番→遅番に自動マッチ） → `shift_name` / `shift_start` / `shift_end` を更新
+  - 楽観的更新（ドロップ瞬間に画面反映）＋失敗時自動ロールバック＋トースト通知
+  - 「元に戻す」ボタンも DB を元セクションへ戻す（`handleSectionRevert`）
+- **出勤簿ボード：セクション×シフトパターン カラーリング**
+  - ShiftEditGrid と同一のカラーテーブル（`SECTION_CARD` / `SECTION_COL`）を `AttendanceClient.tsx` に追加
+  - 列コンテナ外枠ボーダー・列ヘッダー背景・名前カードの背景＋ボーダーをセクション色で統一
+  - 早番（シフト名に「早番」or 開始時刻 < 12時）= 薄色、遅番 = 濃色（ShiftEditGrid と同じ判定ロジック）
+  - SV=青、査定=緑、販売=オレンジ、MOTA=赤、リメイク=ピンク、ローン=紫
+  - 欠勤カード（赤）・移動済みカード（黄）はセクション色より優先
 
 **v55 完了内容**
 - **LINE友達追加ゲート（LineFriendGate）**
@@ -1242,5 +1256,6 @@ export default async function Page({
 | 2026-05-27 | v37 | **スタッフ詳細設定に希望給追加** `project_members.desired_wage integer` カラム追加。メンバー設定モーダルの基本設定セクションに希望給（円/時）入力欄追加。メンバー一覧カードに¥1,200/h形式バッジ表示（設定済みのみ・アンバー色）。|
 | 2026-05-27 | v35 | **スタッフ設定モーダル再構成・研修設定UI刷新** ① `staff_trainings`に`training_name text`・`start_time time`・`end_time time`カラム追加（Supabase MCP）。② `TrainingSection.tsx`を全面リライト：「研修日を設定」ボタン→展開パネル（導入研修/研修/案件研修/カスタムの4タイプ選択・時間入力・複数日カレンダー選択・登録済みは半透明表示・タイプ別グループ表示+×削除チップ）。③ メンバー編集モーダルを4セクションに再構成（基本設定：氏名/所属会社/ロール/アカウント番号/セクション/アサイン日、シフト設定：稼働日数デフォルト月21日/優先セクション/優先パターン/連勤上限、研修設定：TrainingSection、離脱処理）。④ シフト設定折りたたみを廃止・常時表示化。⑤ 新規スタッフ追加のアサイン日を必須に変更（未入力時「作成して追加」ボタン無効）。⑥ 仮組みロジック（draft-actions.ts）のtrainingEntries生成でtraining_name/start_time/end_timeを使用、validShiftNamesに研修名を動的追加。|
 | 2026-05-29 | v53 | **シフト充足数インライン編集・シフトパターン並び替え・SV合計行・タスクLINE通知** ① ShiftEditGrid：充足行のパターン名セルに✎アイコン追加→モーダルで全日付の必要枠数を一括編集（slot_requirements upsert）。localSlotReqOverridesで保存前もグリッド即時反映。② SettingsClient：shift_patterns に sort_order カラム追加・ShiftPatternListにHTML5 Drag-and-Drop 並び替えUI追加（⠿ハンドル・ドラッグ時ハイライト・collapsedインデックスのリマップ）。③ SVパターン2件以上の場合に最後のSV行直後に「SV合計」行を自動追加（充足色ロジック適用）。④ addTaskManualAction/updateTaskAction：担当者設定時・変更時にLINEプッシュ。notify-config.ts に task_assigned 通知種別追加。⑤ /api/cron/notify に daily_task_remind セクション追加：当日期限・未完了・担当者ありタスクを当日8時に個人宛プッシュ。 |
+| 2026-05-31 | v56 | **出勤簿ボード セクション間ドラッグ自動DB反映・カラーリング** ① `moveSectionAction` 追加：ドロップ時に `shift_patterns` から開始時刻最近傍のパターンを自動選択し `shifts` テーブルを即時更新（確定ボタン不要）。楽観的更新＋失敗時ロールバック＋トースト。「元に戻す」ボタンも DB を元セクションへ戻す。② `AttendanceClient.tsx` に `SECTION_COL` / `SECTION_CARD` カラーテーブルを追加（ShiftEditGrid と同一体系）。列コンテナ外枠ボーダー・列ヘッダー背景・名前カードを セクション×早遅番（早番=薄色・遅番=濃色）で色分け。欠勤（赤）・移動済（黄）はセクション色より優先。 |
 | 2026-05-30 | v55 | **LINE友達追加ゲート・Web Push VAPID修正・シフトグリッドSVグループ表示改善** ① `LineFriendGate.tsx` 新設：`line_friend` 未設定ユーザーに全画面ゲート表示。友達追加URLを開き `visibilitychange` で自動検知→`confirmLineFriendAction` で DB更新。手動確認ボタンも実装。LINE webhook（follow/unfollow）・OAuthコールバック（mode=link）でも `line_friend` を更新。② Web Push VAPID キーを再生成し `.env.local`・Vercel 環境変数を更新。`PushPermissionRequest.tsx` でサブスクリプションキーの不一致を検知し自動再登録。③ メンバー管理に「友達✓/友達未」チップ追加・「友達未 N」フィルターボタン追加（`line_friend` をDBから取得し `SettingsClient.tsx`・`members/page.tsx`・`admin/[projectId]/page.tsx` に反映）。④ ShiftEditGrid：充足テーブル2行表示（SUM_ROW_H=34px）・ツールバーに月表示・SV▲▼並び替えボタン・早番/遅番/中番グループ分け（色付け・小ヘッダー行）・SV表示順（早番→遅番→合計→中番）・早番＋遅番合計行（isEarlyLateTotal）。バグ修正：svSubType/SV_SUB_ORDER定義順TDZエラー・半透明背景による文字透け。 |
 | 2026-05-30 | v54 | **シフトLINE通知ボタン・個人向けお知らせ・お知らせ管理UI刷新** ① `ShiftLineNotifyButton.tsx` 新設：シフト管理に独立したLINE通知ボタン。テンプレート編集・名前検索・DB連動プレビュー（LINE風バブル）・個別/一括送信・アプリ内お知らせ同時投稿機能を搭載（シフト展開とは別・shift_month_statusを更新しない）。② `{シフト一覧}` 変数追加：notify-config.ts の shift_published テンプレートに追加、全シフト（公休含む）を `MM/DD（曜）シフト名 HH:MM〜HH:MM` 形式でフォーマット。③ `notices.target_staff_id text REFERENCES staffs(id)` カラム追加・RLS更新（target_staff_id IS NULL=全員閲覧可・値あり=本人+管理者のみ閲覧可）。④ `postShiftNoticeAction` 新設。⑤ `NoticesManageClient` をテーブルUIに全面刷新：`grid-cols-[6rem_7rem_1fr_auto]`（送信日時｜宛先｜お知らせ｜操作）・宛先検索・個人宛amber色表示・行クリック詳細モーダル。管理画面は adminClient でRLSバイパスし全お知らせ表示。 |
