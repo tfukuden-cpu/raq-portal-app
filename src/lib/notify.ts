@@ -7,6 +7,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { multicastLine, pushLine } from "@/lib/line";
 import {
+  pushWebToStaff,
+  pushWebToStaffs,
+  pushWebToAdmins,
+  pushWebToProject,
+} from "@/lib/webpush";
+import {
   buildDefaultNotificationSettings,
   DEFAULT_NOTIFY_MESSAGES,
   type NotificationSettings,
@@ -120,16 +126,26 @@ export async function sendEventNotify(
       try { await fn(); } catch (e) { console.error(`[notify] send failed:`, e); }
     };
 
+    // 通知タイトル（最初の改行前 or 全文の先頭30文字）
+    const webTitle = message.split("\n")[0].slice(0, 40) || "Raq ポータル";
+    const webBody  = message.split("\n").slice(1).join("\n").trim() || message.slice(0, 80);
+
     if (item.recipient === "admin") {
       const ids = await getAdminLineIds(projectId);
       if (ids.length > 0) await send(() => multicastLine(ids, message));
+      // Web Push: 案件管理者
+      await send(() => pushWebToAdmins(projectId, { title: webTitle, body: webBody }));
     } else {
       if (targetStaffId) {
         const lineId = await getStaffLineId(targetStaffId);
         if (lineId) await send(() => pushLine(lineId, message));
+        // Web Push: 特定スタッフ
+        await send(() => pushWebToStaff(targetStaffId, { title: webTitle, body: webBody }));
       } else {
         const ids = await getAllStaffLineIds(projectId);
         if (ids.length > 0) await send(() => multicastLine(ids, message));
+        // Web Push: 全スタッフ
+        await send(() => pushWebToProject(projectId, { title: webTitle, body: webBody }));
       }
     }
 

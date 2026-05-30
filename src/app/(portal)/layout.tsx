@@ -7,6 +7,7 @@ import AppNav from "@/components/AppNav";
 import { logoutAction } from "@/app/login/actions";
 import { switchProjectAction } from "./switch-project-action";
 import type { IconKey } from "@/components/icons";
+import PushPermissionRequest from "./PushPermissionRequest";
 
 export type NavItem = { href: string; icon: IconKey; label: string };
 export type NavSection = {
@@ -137,15 +138,18 @@ export default async function PortalLayout({ children }: { children: React.React
   const staffName = staff?.display_name ?? staff?.name ?? staffId;
 
   return (
-    <AppNav
-      sections={sections}
-      staffName={staffName}
-      projectName={projectName}
-      logoutAction={logoutAction}
-      switchProjectAction={switchProjectAction}
-      initialCollapsed={initialCollapsed}
-    >
-      {children}
-    </AppNav>
+    <>
+      <PushPermissionRequest />
+      <AppNav
+        sections={sections}
+        staffName={staffName}
+        projectName={projectName}
+        logoutAction={logoutAction}
+        switchProjectAction={switchProjectAction}
+        initialCollapsed={initialCollapsed}
+      >
+        {children}
+      </AppNav>
+    </>
   );
 }

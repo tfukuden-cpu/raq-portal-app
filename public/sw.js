@@ -103,3 +103,41 @@ async function networkFirst(request, cacheName) {
     return cached ?? new Response("Offline", { status: 503 });
   }
 }
+
+// ── プッシュ通知受信 ──────────────────────────────────────────────────────────
+self.addEventListener("push", (event) => {
+  let data = { title: "Raq ポータル", body: "", url: "/dashboard", icon: "/icons/icon-192.png" };
+  try {
+    if (event.data) Object.assign(data, event.data.json());
+  } catch {}
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body:  data.body,
+      icon:  data.icon,
+      badge: "/icons/icon-192.png",
+      tag:   "raq-notify",
+      renotify: true,
+      data:  { url: data.url },
+    })
+  );
+});
+
+// ── 通知タップでページを開く ──────────────────────────────────────────────────
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url ?? "/dashboard";
+
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.startsWith(self.location.origin) && "focus" in client) {
+          client.focus();
+          if ("navigate" in client) client.navigate(url);
+          return;
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
+});

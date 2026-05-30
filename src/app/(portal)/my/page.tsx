@@ -10,6 +10,7 @@ import { unlinkLineAction } from "./actions";
 import { ChevronRightIcon, UserCircleIcon } from "@/components/icons";
 import AvatarEditor from "@/app/(portal)/admin/my/AvatarEditor";
 import type { AvatarConfig } from "@/app/(portal)/admin/my/avatar-types";
+import PushNotifyToggle from "./PushNotifyToggle";
 
 export default async function MyPage({
   searchParams,
@@ -210,6 +211,17 @@ export default async function MyPage({
           </div>
           <p className="text-[10px] text-zinc-400 px-1 mt-1.5">
             連携するとLINEでログインしたり、各種通知をLINEで受け取れます
+          </p>
+        </div>
+
+        {/* 通知設定 */}
+        <div>
+          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-1 mb-2">通知設定</p>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
+            <PushNotifyToggle />
+          </div>
+          <p className="text-[10px] text-zinc-400 px-1 mt-1.5">
+            有効にするとLINEと同じ内容がこの端末に届きます（PWAインストール後はiOSでも利用可能）
           </p>
         </div>
 
