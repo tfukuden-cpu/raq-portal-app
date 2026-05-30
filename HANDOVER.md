@@ -1,6 +1,6 @@
 # Raq 社内ポータル PWA — 引継ぎ資料
 
-最終更新：2026-05-31（v58：経過報告フォーム全面刷新・17時LINE通知ボタン追加）
+最終更新：2026-05-31（v59：UI/UX全面改善・バグ修正・クエリ最適化）
 
 ---
 
@@ -106,6 +106,34 @@ GASからの移行を進めており、**コア機能はほぼ揃った状態**�
 | アバターシステム | 🔄 設計済み・パーツ未実装（低優先） |
 
 ### 次に優先すべきこと（新しいセッションはここから）
+
+**v59 完了内容**
+
+- **UI/UX 全面改善（11項目）**
+  - ホーム画面を大幅リファクタ（600行 → 230行）：DepartureModal・AbsenceModal・LateModal に分離
+  - AbsenceModal：3ステップ構成（理由 → 症状チェック → 受診/翌日出勤確認）
+  - LateModal：2ステップ構成（理由 → ETA選択）
+  - DepartureModal：ETA選択グリッド（すぐ着く〜1時間以上）
+  - 症状チェックコンポーネント（SymptomRow）を `src/components/SymptomRow.tsx` に共通化
+  - 経過報告フォームで前回欠勤報告の症状を自動プリフィル
+  - 希望休カレンダー：バナーを優先度付き1件表示に整理、申請ドットをセル内小ドットに変更
+  - 希望休タブ：月ナビをシフトタブと共有（ShiftsTabs が制御）
+  - 案件管理者の「案件設定」リンクを直接 `/admin/[projectId]` に設定
+  - 次回出勤リンクに `?month=YYYY-MM` クエリパラメータ追加（シフトページの初期表示月を制御）
+  - `ShiftsPage` に searchParams 対応を追加（`?month=YYYY-MM` で初期表示月を変更可能）
+  - 欠勤・遅刻ボタンは `pre_departure` または `pre_clock_in` 状態のみ表示（打刻後は非表示）
+  
+- **バグ修正 3件**
+  - 遅刻報告の到着予定時刻（ETA）がDB・LINE通知に反映されていなかった → `etaMinutes` から現在時刻を加算して `expected_arrival` を計算し保存
+  - 希望休受付開始通知が毎月1日固定だったのを `holiday_rules.open_day` 設定値に変更。締切日も翌月ではなく今月の `deadline_day` を表示するよう修正
+  - 「次回出勤」リストに有休・欠勤・振替休日等が含まれていたのを除外フィルターに追加
+
+- **クエリ最適化**
+  - `holidays/actions.ts`：1日ずつ個別COUNT していた上限チェックを `.in()` 一括取得に変更（N+1解消）
+  - `attendance/page.tsx`：shifts（今日・明日）を1クエリに統合、seat_assignments（今日・明日）を1クエリに統合、recentAbsences を Promise.all に移動（合計3クエリ削減）
+  - `line-settings/page.tsx`：project_members の二重取得を解消（roleをmembersクエリに統合）
+  - `dashboard/page.tsx` / `record/page.tsx`：未使用の `id` カラムを select から削除
+  - `record/RecordClient.tsx`：`CorrectionSummary` 型から未使用の `id` フィールドを削除
 
 **v58 完了内容**
 - **経過報告フォーム（`/absence-followup`）全面刷新**
@@ -723,7 +751,7 @@ src/
 | `rest_day_remind` | 定時 | 翌日出勤アナウンス | スタッフ本人 |
 | `daily_summary` | 定時 | 当日出勤状況サマリー | 管理者グループ |
 | `holiday_reminder` | 定時 | 希望休締切リマインド | スタッフ全員 |
-| `holiday_open_notify` | 定時 | 毎月1日 希望休申請開始通知 ★v27新設 | スタッフ全員 |
+| `holiday_open_notify` | 定時 | `holiday_rules.open_day` の日に希望休申請開始通知 ★v27新設（v59修正：毎月1日→open_day） | スタッフ全員 |
 | `absence_followup_remind` | 定時 | 欠勤者への翌日出勤可否確認（17時） ★v27新設 | スタッフ本人 |
 | `absence_followup_notify` | イベント | 経過報告受信通知 ★v27新設 | 管理者グループ |
 | `shift_published` | イベント | シフト展開（個人シフト送信） ★v27新設 | スタッフ本人 |
