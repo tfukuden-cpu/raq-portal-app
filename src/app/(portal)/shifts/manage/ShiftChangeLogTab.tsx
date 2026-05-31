@@ -22,21 +22,13 @@ type Props = {
   monthNavBase: string;
 };
 
-function formatTime(iso: string): string {
+function formatDateTime(iso: string): string {
   const d = new Date(iso);
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   const hh = String(d.getHours()).padStart(2, "0");
   const mi = String(d.getMinutes()).padStart(2, "0");
   return `${mm}/${dd} ${hh}:${mi}`;
-}
-
-function actionLabel(action: string): { label: string; cls: string } {
-  if (action === "confirm")  return { label: "確定",   cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300" };
-  if (action === "delete")   return { label: "削除",   cls: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300" };
-  if (action === "update")   return { label: "変更",   cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300" };
-  if (action === "add")      return { label: "追加",   cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300" };
-  return { label: action, cls: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400" };
 }
 
 export default function ShiftChangeLogTab({ logs, year, month, prevMonth, nextMonth, monthNavBase }: Props) {
@@ -79,61 +71,51 @@ export default function ShiftChangeLogTab({ logs, year, month, prevMonth, nextMo
         type="text"
         value={search}
         onChange={e => setSearch(e.target.value)}
-        placeholder="スタッフ名・日付・シフト名で絞り込み…"
+        placeholder="スタッフ名・変更者・シフト名で絞り込み…"
         className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
       />
 
       {/* 件数 */}
-      <p className="text-xs text-zinc-400">
-        {filtered.length} 件{search && `（絞り込み中）`}
-      </p>
+      <p className="text-xs text-zinc-400">{filtered.length} 件{search && "（絞り込み中）"}</p>
 
-      {/* ログ一覧 */}
+      {/* テーブル */}
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-zinc-400 text-sm">変更ログがありません</div>
       ) : (
-        <div className="space-y-1.5">
-          {filtered.map((log, i) => {
-            const { label, cls } = actionLabel(log.action);
-            const hasChange = log.before_shift_name !== null || log.after_shift_name !== null;
-            return (
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+          {/* ヘッダー */}
+          <div className="grid grid-cols-[120px_1fr_1fr_1fr] gap-px bg-zinc-200 dark:bg-zinc-700 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+            <div className="bg-zinc-50 dark:bg-zinc-800 px-3 py-2">変更日時</div>
+            <div className="bg-zinc-50 dark:bg-zinc-800 px-3 py-2">シフト変更者</div>
+            <div className="bg-zinc-50 dark:bg-zinc-800 px-3 py-2">当該スタッフ</div>
+            <div className="bg-zinc-50 dark:bg-zinc-800 px-3 py-2">変更前⇒変更後</div>
+          </div>
+          {/* 行 */}
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {filtered.map((log, i) => (
               <div key={i}
-                className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700/50">
-                {/* 日付 */}
-                <div className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400 w-12 shrink-0 pt-0.5">
-                  {log.shift_date.slice(5).replace("-", "/")}
+                className="grid grid-cols-[120px_1fr_1fr_1fr] gap-px bg-zinc-200 dark:bg-zinc-700 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors">
+                <div className="bg-white dark:bg-zinc-900 px-3 py-2 tabular-nums text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+                  {formatDateTime(log.changed_at)}
                 </div>
-                {/* スタッフ名 */}
-                <div className="font-semibold text-sm text-zinc-800 dark:text-zinc-100 w-20 shrink-0 truncate">
+                <div className="bg-white dark:bg-zinc-900 px-3 py-2 text-zinc-700 dark:text-zinc-300 truncate">
+                  {log.changed_by_name}
+                </div>
+                <div className="bg-white dark:bg-zinc-900 px-3 py-2 font-semibold text-zinc-800 dark:text-zinc-100 truncate">
                   {log.staff_name}
                 </div>
-                {/* アクション + 変更内容 */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${cls}`}>{label}</span>
-                    {hasChange && (
-                      <span className="text-xs text-zinc-600 dark:text-zinc-300">
-                        {log.before_shift_name
-                          ? <span className="text-red-500 dark:text-red-400 line-through mr-1">{log.before_shift_name}</span>
-                          : <span className="text-zinc-300 mr-1">—</span>
-                        }
-                        <span className="text-zinc-300 dark:text-zinc-600 mr-1">→</span>
-                        {log.after_shift_name
-                          ? <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{log.after_shift_name}</span>
-                          : <span className="text-zinc-300">—</span>
-                        }
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {/* 変更者・日時 */}
-                <div className="text-right shrink-0">
-                  <div className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">{log.changed_by_name}</div>
-                  <div className="text-[10px] tabular-nums text-zinc-400 dark:text-zinc-500">{formatTime(log.changed_at)}</div>
+                <div className="bg-white dark:bg-zinc-900 px-3 py-2 flex items-center gap-1 flex-wrap">
+                  <span className={log.before_shift_name ? "text-red-500 dark:text-red-400 line-through" : "text-zinc-300 dark:text-zinc-600"}>
+                    {log.before_shift_name ?? "—"}
+                  </span>
+                  <span className="text-zinc-400">⇒</span>
+                  <span className={log.after_shift_name ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-zinc-300 dark:text-zinc-600"}>
+                    {log.after_shift_name ?? "—"}
+                  </span>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
     </div>

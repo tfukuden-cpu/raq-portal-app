@@ -1184,42 +1184,6 @@ export default function ShiftDayList({
         })()}
       </div>
 
-      {/* ── 選択日の変更ログ ── */}
-      {(() => {
-        const logs = logsByDate.get(selectedDate) ?? [];
-        if (logs.length === 0) return null;
-        const staffById = new Map(activeMembers.map(m => [m.id, m.name]));
-        return (
-          <div className="mx-4 mt-3 mb-2 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/20 overflow-hidden">
-            <div className="px-3 py-2 flex items-center gap-1.5 border-b border-orange-200 dark:border-orange-800">
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />
-              <p className="text-[11px] font-bold text-orange-700 dark:text-orange-300">
-                {selectedDate} の変更ログ（{logs.length}件）
-              </p>
-            </div>
-            <div className="divide-y divide-orange-100 dark:divide-orange-900/40">
-              {logs.map((log, i) => {
-                const name = staffById.get(log.staff_id) ?? log.staff_id;
-                const from = log.before_shift_name ?? "（なし）";
-                const to   = log.after_shift_name  ?? "（削除）";
-                const at   = new Date(log.changed_at).toLocaleString("ja-JP", {
-                  timeZone: "Asia/Tokyo", month: "numeric", day: "numeric",
-                  hour: "2-digit", minute: "2-digit",
-                });
-                return (
-                  <div key={i} className="px-3 py-1.5 flex items-baseline gap-2 text-[11px]">
-                    <span className="font-semibold text-zinc-700 dark:text-zinc-300 flex-shrink-0">{name}</span>
-                    <span className="text-zinc-500">
-                      {from} → {to}
-                    </span>
-                    <span className="ml-auto text-zinc-400 flex-shrink-0 tabular-nums">{log.changed_by_name} {at}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* スタッフ情報パネル */}
       {staffInfoTarget && (
