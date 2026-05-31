@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import LineConnectionSection from "./LineConnectionSection";
+import RankingTab from "@/app/(portal)/members/RankingTab";
 import TrainingSection, { type TrainingDate, type TrainingEntry } from "@/components/TrainingSection";
 import HolidayRequestSection, { type HolidayRequestEntry } from "@/components/HolidayRequestSection";
 import { fetchTrainingDatesAction } from "./training-actions";
@@ -433,6 +434,7 @@ export function MemberList({
   shiftPatternNames = [],
   initialEditStaffId,
   projectName,
+  initialRankingPeriods = [],
 }: {
   projectId: string;
   members: Member[];
@@ -440,7 +442,9 @@ export function MemberList({
   shiftPatternNames?: string[];
   initialEditStaffId?: string;
   projectName?: string;
+  initialRankingPeriods?: string[];
 }) {
+  const [memberTab, setMemberTab] = useState<"list" | "ranking">("list");
   const [addMode, setAddMode]       = useState<AddMode>("none");
   const [newLast, setNewLast]         = useState("");
   const [newFirst, setNewFirst]       = useState("");
@@ -673,12 +677,32 @@ export function MemberList({
         : "contents"
       }>
         {projectName !== undefined && (
-          <div className="pt-5 pb-0">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">メンバー管理</h1>
-            <p className="text-sm font-semibold text-zinc-400 mt-0.5">{projectName}</p>
-          </div>
+          <>
+            <div className="pt-5 pb-0">
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">メンバー管理</h1>
+              <p className="text-sm font-semibold text-zinc-400 mt-0.5">{projectName}</p>
+            </div>
+            {/* タブバー */}
+            <div className="flex mt-2 border-b border-zinc-100 dark:border-zinc-800">
+              {(["list", "ranking"] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setMemberTab(t)}
+                  className={[
+                    "flex-shrink-0 px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px",
+                    t === memberTab
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
+                      : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
+                  ].join(" ")}
+                >
+                  {t === "list" ? "メンバー" : "番付"}
+                </button>
+              ))}
+            </div>
+          </>
         )}
-        <div className={projectName !== undefined ? "space-y-3 py-3" : "contents"}>
+        <div className={projectName !== undefined ? (memberTab === "list" ? "space-y-3 py-3" : "hidden") : "contents"}>
 
       {/* ヘッダー：統計 + 追加ボタン */}
       <div className="flex items-center justify-between gap-2">
@@ -880,8 +904,13 @@ export function MemberList({
         </div>{/* end space-y-3/contents inner wrapper */}
       </div>{/* end sticky/contents controls wrapper */}
 
+      {/* ── 番付タブ ── */}
+      {memberTab === "ranking" && projectName !== undefined && (
+        <RankingTab projectId={projectId} initialPeriods={initialRankingPeriods} />
+      )}
+
       {/* ── Scrollable content (form, list, modal) ── */}
-      <div className={projectName !== undefined ? "space-y-4 pt-4" : "contents"}>
+      <div className={projectName !== undefined ? `space-y-4 pt-4${memberTab === "ranking" ? " hidden" : ""}` : "contents"}>
 
       {/* 追加パネル群 */}
       {addMode === "new" && (
