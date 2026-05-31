@@ -26,6 +26,7 @@ export type SeatData = {
   shiftSlot: string | null;
   shiftName: string | null;
   status: "not_arrived" | "working" | "on_break" | "clocked_out" | "absent" | null;
+  motaSlot?: string | null;
 };
 
 export type StaffInfo = {
@@ -483,7 +484,10 @@ export default function SeatingClient({
                 ].join(" ")}
               >
                 {/* セクション色バー */}
-                {!isFree && effectiveSection && (
+                {!isFree && seat.motaSlot && (
+                  <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-[10px] bg-purple-500" />
+                )}
+                {!isFree && !seat.motaSlot && effectiveSection && (
                   <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(effectiveSection, sfShift ?? seat.shiftSlot)}`} />
                 )}
 
@@ -497,7 +501,11 @@ export default function SeatingClient({
                     <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${!editMode && status ? STATUS_TEXT[status] : "text-zinc-700 dark:text-zinc-200"}`}>
                       {sfName}
                     </span>
-                    {sectionLabel ? (
+                    {seat.motaSlot ? (
+                      <span className="text-[9px] leading-none text-purple-600 dark:text-purple-400 font-bold truncate px-0.5 w-full text-center">
+                        H {seat.motaSlot}
+                      </span>
+                    ) : sectionLabel ? (
                       <span className="text-[9px] leading-none text-zinc-500 dark:text-zinc-400 truncate px-0.5 w-full text-center">
                         {sectionLabel}
                       </span>

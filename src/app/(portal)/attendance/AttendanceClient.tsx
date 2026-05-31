@@ -6,6 +6,8 @@ import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, sendBulkFol
 import type { SendResult } from "./actions";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/app/(portal)/seating/SeatingClient";
 import SeatingPlanClient, { type PlanSeat, type PlanStaff } from "@/app/(portal)/seating/plan/SeatingPlanClient";
+import HMotaPanel, { type MotaRow } from "./HMotaPanel";
+import type { MotaAssignment } from "./mota-actions";
 
 // ── 型定義 ────────────────────────────────────────────────
 export type StatusKey = "working" | "clocked_out" | "departed" | "absent" | "late" | "not_departed";
@@ -162,6 +164,8 @@ interface Props {
   tomorrow: string;
   planSeatData: PlanSeat[];
   planStaffData: PlanStaff[];
+  hMotaRows: MotaRow[];
+  initialMotaAssignments: MotaAssignment[];
 }
 
 type SelectionMode = "reminder" | "request" | "followup";
@@ -176,6 +180,7 @@ export default function AttendanceClient({
   myStaffId, churnRiskAlerts,
   seatData, wallData, seatStaffList,
   tomorrow, planSeatData, planStaffData,
+  hMotaRows, initialMotaAssignments,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
   const [seatSubTab, setSeatSubTab] = useState<"today" | "tomorrow">("today");
@@ -761,6 +766,18 @@ export default function AttendanceClient({
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* H MOTA スロット配置パネル */}
+        {activeTab === "today" && hMotaRows.length > 0 && (
+          <div className="mt-4">
+            <HMotaPanel
+              projectId={projectId}
+              date={today}
+              rows={hMotaRows}
+              initialAssignments={initialMotaAssignments}
+            />
           </div>
         )}
 

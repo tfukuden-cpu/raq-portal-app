@@ -9,6 +9,8 @@ import AttendanceClient from "./AttendanceClient";
 import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry, ChurnRiskAlert } from "./AttendanceClient";
 import type { SeatData, WallData, StaffInfo } from "../seating/SeatingClient";
 import type { PlanSeat, PlanStaff } from "../seating/plan/SeatingPlanClient";
+import type { MotaRow } from "./HMotaPanel";
+import type { MotaAssignment } from "./mota-actions";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -161,6 +163,7 @@ export default async function AttendancePage({
     { data: allAssignmentRows },
     { data: wallRows },
     { data: recentAbsencesRaw },
+    { data: motaAssignmentRows },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -216,6 +219,10 @@ export default async function AttendancePage({
       .eq("project_id", projectId)
       .gte("absence_date", last14Start)
       .lte("absence_date", realToday),
+    admin.from("mota_slot_assignments")
+      .select("id, account_number, slot, is_fixed")
+      .eq("project_id", projectId)
+      .eq("assignment_date", today),
   ]);
 
   // 今日・明日でデータを分割
@@ -445,6 +452,7 @@ export default async function AttendancePage({
     const seatType = (s as { seat_type?: string }).seat_type ?? "normal";
     const sId  = seatType === "disabled" ? null : (seatAssignMap.get(s.id) ?? null);
     const mInfo = sId ? memberMap.get(sId) : null;
+    const motaSlots = mInfo?.accountNumber ? motaAccountSlotMap.get(mInfo.accountNumber) : undefined;
     return {
       id:            s.id,
       label:         s.label,
@@ -458,6 +466,7 @@ export default async function AttendancePage({
       accountNumber: mInfo?.accountNumber ?? null,
       shiftName:     sId ? (seatShiftMap.get(sId) ?? null) : null,
       status:        sId ? deriveSeatStatus(sId) : null,
+      motaSlot:      motaSlots ? motaSlots.join(" / ") : null,
     };
   });
 
@@ -484,6 +493,45 @@ export default async function AttendancePage({
         shiftName:     seatShiftMap.get(m.staff_id) ?? null,
       };
     });
+
+  // ── H MOTA スロット配置 ────────────────────────────────────
+  const FIXED_MOTA_NUMBERS = [
+    "ASS 130", "ASS 131", "ASS 132", "ASS 133", "ASS 134",
+    "ASS 196", "ASS 197", "ASS 198", "ASS 199", "ASS 200",
+  ];
+
+  const todayShiftIds = new Set(
+    (todayShifts ?? [])
+      .filter(s => !OFF_SHIFT_NAMES.includes((s.shift_name ?? "") as string))
+      .map(s => s.staff_id),
+  );
+
+  const hMotaRows: MotaRow[] = [
+    ...(memberRows ?? [])
+      .filter(m => (m.section as string | null) === "H MOTA" && !todayShiftIds.has(m.staff_id))
+      .map(m => {
+        const info = memberMap.get(m.staff_id);
+        return info?.accountNumber
+          ? { accountNumber: info.accountNumber, name: info.name, isFixed: false }
+          : null;
+      })
+      .filter((r): r is MotaRow => r !== null),
+    ...FIXED_MOTA_NUMBERS.map(n => ({ accountNumber: n, name: n, isFixed: true })),
+  ];
+
+  const initialMotaAssignments: MotaAssignment[] = (motaAssignmentRows ?? []).map(r => ({
+    id: r.id as string,
+    accountNumber: r.account_number as string,
+    slot: r.slot as string,
+    isFixed: (r.is_fixed as boolean) ?? false,
+  }));
+
+  // アカウント番号 → スロット（座席表用）
+  const motaAccountSlotMap = new Map<string, string[]>();
+  for (const a of initialMotaAssignments) {
+    if (!motaAccountSlotMap.has(a.accountNumber)) motaAccountSlotMap.set(a.accountNumber, []);
+    motaAccountSlotMap.get(a.accountNumber)!.push(a.slot);
+  }
 
   // ── 翌日配置データ ─────────────────────────────────────────
   const OFF_NAMES_PLAN = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
@@ -566,6 +614,8 @@ export default async function AttendancePage({
       tomorrow={tomorrow}
       planSeatData={planSeatData}
       planStaffData={planStaffData}
+      hMotaRows={hMotaRows}
+      initialMotaAssignments={initialMotaAssignments}
     />
   );
 }
