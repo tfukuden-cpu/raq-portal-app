@@ -1,6 +1,6 @@
 # Raq Works 全機能仕様書
 
-> 最終更新: 2026-05-31（v61）  
+> 最終更新: 2026-05-31（v62）  
 > 対象: 全メニュー（スタッフ / 管理 / 運営）
 
 ---
@@ -330,8 +330,13 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 追加申請（`shift_requests`）の承認・却下
 - 希望休申請（`holiday_requests`）の一覧・承認
 
+**シフト変更通知（`notifyShiftChangesAction`）:**
+- 確定後に変更対象スタッフへ個別LINE通知を送信
+- 送信内容は `notification_logs` に記録される（LINE設定 → 通知履歴で確認可）
+- 日付フォーマットは `new Date(d)` + UTC メソッドで処理（サーバーが UTC でも正しく JST 日付を表示）
+
 **関連テーブル:**
-`shifts`, `shift_change_logs`, `shift_openings`, `shift_requests`, `holiday_requests`, `shift_patterns`
+`shifts`, `shift_change_logs`, `shift_openings`, `shift_requests`, `holiday_requests`, `shift_patterns`, `notification_logs`
 
 ---
 
