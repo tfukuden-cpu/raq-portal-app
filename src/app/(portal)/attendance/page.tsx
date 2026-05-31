@@ -441,7 +441,10 @@ export default async function AttendancePage({
 
   const hMotaRows: MotaRow[] = [
     ...(memberRows ?? [])
-      .filter(m => (m.section as string | null) === "H MOTA" && !todayShiftIds.has(m.staff_id))
+      .filter(m => {
+        const sec = (m.section as string | null) ?? "";
+        return (sec === "MOTA" || sec === "H MOTA") && !todayShiftIds.has(m.staff_id);
+      })
       .map(m => {
         const info = memberMap.get(m.staff_id);
         return info?.accountNumber

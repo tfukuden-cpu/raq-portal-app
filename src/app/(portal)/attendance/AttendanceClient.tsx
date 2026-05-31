@@ -593,7 +593,7 @@ export default function AttendanceClient({
                 const secCol = SECTION_COL[section] ?? SECTION_COL_FALLBACK;
 
                 // H MOTA セクション：スロット配置テーブルをカラム内に表示
-                if (section === "H MOTA" && hMotaRows.length > 0) {
+                if ((section === "H MOTA" || section === "H　MOTA") && hMotaRows.length > 0) {
                   return (
                     <div
                       key={section}
