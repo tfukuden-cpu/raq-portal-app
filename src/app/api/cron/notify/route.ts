@@ -116,6 +116,7 @@ export async function GET(req: NextRequest) {
 
   for (const ps of projectSettings) {
     const projectId = ps.project_id as string;
+    const groupId   = ps.line_group_id as string | null;
     const settings  = buildDefaultNotificationSettings(
       (ps.notification_settings as Record<string, unknown>) ?? {}
     );
@@ -156,6 +157,7 @@ export async function GET(req: NextRequest) {
             { "名前": name, "シフト": formatShift(shift.shift_name, shift.shift_start, shift.shift_end) }
           );
           await pushLine(staff.line_user_id, message);
+          if (groupId) await pushLine(groupId, message);
           sent++;
         }
       }
@@ -231,6 +233,7 @@ export async function GET(req: NextRequest) {
             }
           );
           await pushLine(staff.line_user_id, message);
+          if (groupId) await pushLine(groupId, message);
           sent++;
         }
       }
@@ -270,6 +273,7 @@ export async function GET(req: NextRequest) {
               }
             );
             await pushLine(staff.line_user_id, message);
+            if (groupId) await pushLine(groupId, message);
             sent++;
           }
         }
@@ -381,6 +385,7 @@ export async function GET(req: NextRequest) {
                 "経過報告を入力する",
                 `${appUrl}/absence-followup`,
               );
+              if (groupId) await pushLineWithButton(groupId, message, "経過報告を入力する", `${appUrl}/absence-followup`);
               sent++;
             }
           }
@@ -434,6 +439,7 @@ export async function GET(req: NextRequest) {
               { "名前": name, "対象月": targetMonth, "締切日": deadlineStr }
             );
             await pushLine(staff.line_user_id, message);
+            if (groupId) await pushLine(groupId, message);
             sent++;
           }
         }
@@ -491,6 +497,7 @@ export async function GET(req: NextRequest) {
               "タスクを確認する",
               `${appUrl}/tasks`,
             );
+            if (groupId) await pushLineWithButton(groupId, message, "タスクを確認する", `${appUrl}/tasks`);
             sent++;
           }
         }
@@ -537,6 +544,7 @@ export async function GET(req: NextRequest) {
                   { "残日数": String(daysUntil), "締切日": deadlineDate }
                 );
                 await multicastLine(lineIds, message);
+                if (groupId) await pushLine(groupId, message);
                 sent++;
               }
             }
