@@ -1655,7 +1655,7 @@ export default function ShiftEditGrid({
   const TOT_W = 52;     // 合計列幅
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
   const SUM_ROW_H = 22; // 22px (充足サマリー行の高さ)
-  const GRAND_TOTAL_EXCLUDE = ["ローン", "リメイク"]; // 全体合計から除外するセクション
+  const GRAND_TOTAL_EXCLUDE = ["ローン", "リメイク", "H MOTA"]; // 全体合計から除外するセクション
 
   // 前月末5日間の日付リスト
   const prevDates = useMemo(() => {

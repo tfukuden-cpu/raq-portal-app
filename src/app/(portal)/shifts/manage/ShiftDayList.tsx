@@ -672,8 +672,8 @@ export default function ShiftDayList({
                   {/* 編集モードと同デザインの充足サマリーテーブル */}
                   {(() => {
                     const SUM_H = 22; // px（編集モードと同じ高さ）
-                    const GRAY_SECTIONS = ["ローン", "リメイク"]; // グレーアウトセクション
-                    const EXCLUDE_TOTAL = ["ローン", "リメイク"]; // 全体合計から除外（セクション）
+                    const GRAY_SECTIONS = ["ローン", "リメイク", "H MOTA"]; // グレーアウトセクション
+                    const EXCLUDE_TOTAL = ["ローン", "リメイク", "H MOTA"]; // 全体合計から除外（セクション）
                     const isGrandExcluded = (p: typeof visibleShiftPatterns[0]) =>
                       EXCLUDE_TOTAL.includes(p.section ?? "") ||
                       (p.section === "SV" && p.name.includes("中"));
