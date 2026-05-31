@@ -1,6 +1,6 @@
 # Raq Works 全機能仕様書
 
-> 最終更新: 2026-05-31（v62）  
+> 最終更新: 2026-06-01（v63）  
 > 対象: 全メニュー（スタッフ / 管理 / 運営）
 
 ---
@@ -288,6 +288,8 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - **CSV出力ボタン**（出勤簿タブ）: セクション順×アカウント番号順で「セクション・アカウント番号・名前・シフト」をダウンロード（UTF-8 BOM付きでExcel対応）
 - **確定後変更タブ（比較ビュー）**: セクション別×アカウント番号順で全スタッフを一覧表示し、確定版と当日版を並列表示。差分行はアンバー強調。
 - 座席表インライン表示（`/seating` 統合）
+- **休憩管理タブ**: 査定・販売セクションの休憩スロット（①②③）割り当てを一覧表示。スロット変更・再割り振りが可能。
+- 出勤ボードのスタッフカードに休憩スロットバッジ（①②③）を表示
 
 **セクション順（固定優先 + 動的追加）:**
 `["SV", "査定", "販売", "MOTA", "ローン", "リメイク"]` → `shift_patterns.section` から取得した追加セクション → "その他"
@@ -316,7 +318,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 座席表でも配置済みスタッフのカードに紫バーと時間帯が表示される（`assigned_account` で連携）
 
 **関連テーブル:**
-`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `project_members`, `staffs`, `shift_patterns`, `shift_change_logs`, `shift_month_status`, `seats`, `seat_assignments`, `seat_walls`, `mota_slot_assignments`
+`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `project_members`, `staffs`, `shift_patterns`, `shift_change_logs`, `shift_month_status`, `seats`, `seat_assignments`, `seat_walls`, `mota_slot_assignments`, `break_slot_settings`, `break_slot_assignments`
 
 ---
 
@@ -355,9 +357,25 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
   - 銀行口座番号（`account_number`）
 - LINE連携状態・友達追加状態の確認
 - 研修日程管理
+- **番付タブ**: ASS査定・ASS販売の番付データをExcelインポート。セクション別（査定/販売）に順位表示。休憩スロット割り当てのランク付けに使用。
 
 **関連テーブル:**
-`project_members`, `staffs`, `shift_patterns`
+`project_members`, `staffs`, `shift_patterns`, `rankings`
+
+---
+
+### 4-3b. 座席表 (`/seating`)
+
+**機能:**
+- 当日の着席状況をリアルタイム表示（座席カードにステータス色）
+- 休憩開始/終了トグル（座席タップ）
+- 席替えモード: 座席にスタッフをドラッグ・アサイン→保存時に休憩スロットも自動割り振り
+- **休憩スロットバッジ（①②③）**: 査定・販売スタッフの座席右下に表示
+- **「休憩割り振り」ボタン**: 番付順に基づき Bresenham 分配でスロットを自動割り当て
+- 同時編集セッション管理（ハートビート・ロック機能）
+
+**関連テーブル:**
+`seats`, `seat_assignments`, `seat_walls`, `punch_logs`, `shifts`, `absence_reports`, `break_slot_settings`, `break_slot_assignments`
 
 ---
 
@@ -437,6 +455,11 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 #### 座席レイアウト
 - 座席・壁の配置をドラッグ操作で設定（`SeatLayoutEditor`）
 - `SeatItem`, `WallItem` の配置情報をJSONで保存
+
+#### 休憩設定
+- 休憩スロット（①②③）の時間帯・対象シフト・割合を編集
+- `break_slot_settings` テーブルに保存（設定なし時はデフォルト値を使用）
+- デフォルト: ①12:00-13:00 早番20% / ②13:15-14:15 両方40% / ③14:30-15:30 遅番40%
 
 #### 希望休ルール設定
 - 6種類のルール設定（`holiday_rules` テーブル）:
@@ -574,6 +597,9 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 | `line_groups` | LINEグループ情報（group_id, joined_at） |
 | `line_name_mappings` | LINEユーザー名 → 社員ID マッピング |
 | `mota_slot_assignments` | H MOTAスロット配置（account_number=ポジションキー, slot, staff_name, assigned_account, is_fixed） |
+| `break_slot_settings` | 休憩スロット設定（slot_number, label, start_time, end_time, target_shift: early/late/both, ratio, sort_order） |
+| `break_slot_assignments` | 休憩スロット割り当て（project_id, assignment_date, staff_id, slot_number, UNIQUE(project_id,assignment_date,staff_id)） |
+| `rankings` | 番付データ（project_id, staff_name, account_number=ASS査定/ASS販売, rank, period） |
 
 ---
 

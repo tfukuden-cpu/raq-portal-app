@@ -43,6 +43,11 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 import SeatLayoutEditor, { type SeatItem, type WallItem } from "./SeatLayoutEditor";
+import {
+  getBreakSlotSettingsAction,
+  saveBreakSlotSettingsAction,
+  type BreakSlotSetting,
+} from "@/app/(portal)/seating/break-actions";
 
 type Member = { staffId: string; name: string; company_name: string | null; role: string; lineLinked: boolean; line_user_id: string | null; line_friend: boolean | null; section: string | null; sections: string[]; account_number: string | null; work_days_type: string | null; work_days_count: number | null; preferred_shift: string | null; preferred_section: string | null; max_consecutive_days: number | null; start_date: string | null; end_date: string | null; churn_risk: boolean; churn_risk_since: string | null; compliance: number | null; trainingDates: TrainingEntry[] };
 type ShiftPattern = {
@@ -54,7 +59,7 @@ type ShiftPattern = {
   section: string;
   target_role: string; // "all" | "admin" | "staff"
 };
-type TabId = "basic" | "members" | "seats" | "danger";
+type TabId = "basic" | "members" | "seats" | "break" | "danger";
 
 // ── 共通フィードバック ──────────────────────────────────
 
@@ -122,6 +127,7 @@ export function SettingsContainer({
     { id: "basic",   label: "基本設定" },
     { id: "members", label: "メンバー", count: members.length },
     { id: "seats",   label: "座席" },
+    { id: "break",   label: "休憩設定" },
     ...(canArchive ? [{ id: "danger" as TabId, label: "危険操作", red: true }] : []),
   ];
 
@@ -209,6 +215,14 @@ export function SettingsContainer({
         </div>
       )}
 
+      {/* ── 休憩設定タブ ── */}
+      {tab === "break" && (
+        <div className="space-y-4">
+          <SectionHeading title="休憩スロット設定" sub="査定・販売セクションの休憩時間帯と割合を設定します" />
+          <BreakSlotEditor projectId={projectId} />
+        </div>
+      )}
+
       {/* ── 危険操作タブ ── */}
       {tab === "danger" && (
         <div className="space-y-4">
@@ -216,6 +230,115 @@ export function SettingsContainer({
           <ArchiveButton projectName={projectName} archiveAction={archiveAction} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ── 休憩スロット編集 ─────────────────────────────────────
+
+function BreakSlotEditor({ projectId }: { projectId: string }) {
+  const [slots, setSlots] = useState<BreakSlotSetting[] | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    startTransition(async () => {
+      const data = await getBreakSlotSettingsAction(projectId);
+      setSlots(data);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function update<K extends keyof BreakSlotSetting>(idx: number, field: K, value: BreakSlotSetting[K]) {
+    setSlots(prev => prev?.map((s, i) => i === idx ? { ...s, [field]: value } : s) ?? null);
+  }
+
+  function handleSave() {
+    if (!slots) return;
+    startTransition(async () => {
+      const res = await saveBreakSlotSettingsAction(
+        projectId,
+        slots.map((s, i) => ({
+          slot_number: s.slot_number,
+          label:       s.label,
+          start_time:  s.start_time,
+          end_time:    s.end_time,
+          target_shift: s.target_shift,
+          ratio:       s.ratio,
+          sort_order:  i,
+        }))
+      );
+      setMsg({ ok: res.success, text: res.success ? "保存しました" : (res.error ?? "エラー") });
+      setTimeout(() => setMsg(null), 3000);
+    });
+  }
+
+  if (!slots) return <p className="text-sm text-zinc-400">読み込み中…</p>;
+
+  const totalRatio = slots.reduce((a, s) => a + s.ratio, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+        <div className="grid grid-cols-[3rem_5rem_5rem_1fr_4rem] gap-0 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+          <span>記号</span>
+          <span>開始</span>
+          <span>終了</span>
+          <span>対象シフト</span>
+          <span>割合</span>
+        </div>
+        <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {slots.map((slot, idx) => (
+            <div key={slot.slot_number} className="grid grid-cols-[3rem_5rem_5rem_1fr_4rem] gap-2 items-center px-3 py-2">
+              <input
+                className="w-10 text-center text-sm font-bold px-1 py-0.5 border rounded-lg border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
+                value={slot.label}
+                onChange={e => update(idx, "label", e.target.value)}
+              />
+              <input type="time"
+                className="text-xs px-2 py-0.5 border rounded-lg border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
+                value={slot.start_time}
+                onChange={e => update(idx, "start_time", e.target.value)}
+              />
+              <input type="time"
+                className="text-xs px-2 py-0.5 border rounded-lg border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
+                value={slot.end_time}
+                onChange={e => update(idx, "end_time", e.target.value)}
+              />
+              <select
+                className="text-xs px-2 py-0.5 border rounded-lg border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
+                value={slot.target_shift}
+                onChange={e => update(idx, "target_shift", e.target.value as "early" | "late" | "both")}
+              >
+                <option value="early">早番のみ</option>
+                <option value="late">遅番のみ</option>
+                <option value="both">早番・遅番</option>
+              </select>
+              <div className="flex items-center gap-1">
+                <input type="number" min="0" max="100"
+                  className="w-12 text-xs px-1 py-0.5 border rounded-lg border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 tabular-nums"
+                  value={slot.ratio}
+                  onChange={e => update(idx, "ratio", Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                />
+                <span className="text-xs text-zinc-400">%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className={`px-3 py-1.5 text-xs font-semibold border-t border-zinc-100 dark:border-zinc-800 ${totalRatio === 100 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+          合計: {totalRatio}%{totalRatio !== 100 && " （100%にしてください）"}
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleSave}
+          disabled={isPending}
+          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+        >
+          {isPending ? "保存中…" : "保存する"}
+        </button>
+        {msg && <Flash ok={msg.ok} msg={msg.text} />}
+      </div>
     </div>
   );
 }

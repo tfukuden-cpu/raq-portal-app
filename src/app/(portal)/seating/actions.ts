@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { assignBreakSlotsAction } from "./break-actions";
 
 function tokyoToday() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -78,6 +79,10 @@ export async function saveSeatAssignmentsAction(
 
   revalidatePath("/seating");
   revalidatePath("/seating/plan");
+
+  // 座席保存後に休憩スロットを自動割り振り（非同期・エラーは無視）
+  assignBreakSlotsAction(projectId, date).catch(() => undefined);
+
   return { success: true };
 }
 

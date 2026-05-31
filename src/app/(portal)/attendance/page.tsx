@@ -11,6 +11,10 @@ import type { SeatData, WallData, StaffInfo } from "../seating/SeatingClient";
 import type { PlanSeat, PlanStaff } from "../seating/plan/SeatingPlanClient";
 import type { MotaRow } from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
+import {
+  getBreakSlotSettingsAction,
+  getBreakSlotAssignmentsAction,
+} from "@/app/(portal)/seating/break-actions";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -167,6 +171,8 @@ export default async function AttendancePage({
     { data: wallRows },
     { data: recentAbsencesRaw },
     { data: motaAssignmentRows },
+    breakSlots,
+    breakAssignments,
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -226,6 +232,8 @@ export default async function AttendancePage({
       .select("id, account_number, slot, is_fixed")
       .eq("project_id", projectId)
       .eq("assignment_date", today),
+    getBreakSlotSettingsAction(projectId),
+    getBreakSlotAssignmentsAction(projectId, today),
   ]);
 
   // 今日・明日でデータを分割
@@ -626,6 +634,8 @@ export default async function AttendancePage({
       planStaffData={planStaffData}
       hMotaRows={hMotaRows}
       initialMotaAssignments={initialMotaAssignments}
+      breakSlots={breakSlots}
+      breakAssignments={breakAssignments}
     />
   );
 }

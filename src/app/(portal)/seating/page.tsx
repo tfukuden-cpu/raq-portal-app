@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "./SeatingClient";
+import { getBreakSlotAssignmentsAction } from "./break-actions";
 
 function tokyoToday() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -29,6 +30,7 @@ export default async function SeatingPage() {
     { data: absenceRows },
     { data: shiftRows },
     { data: wallRows },
+    breakAssignmentRows,
   ] = await Promise.all([
     admin.from("seats")
       .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
@@ -54,6 +56,7 @@ export default async function SeatingPage() {
     admin.from("seat_walls")
       .select("x1_pct, y1_pct, x2_pct, y2_pct")
       .eq("project_id", projectId),
+    getBreakSlotAssignmentsAction(projectId, today),
   ]);
 
   // メンバーマップ
@@ -138,6 +141,12 @@ export default async function SeatingPage() {
       };
     });
 
+  // 休憩スロット割り当てマップ（staffId → slotNumber）
+  const breakAssignmentMap: Record<string, number> = {};
+  for (const a of breakAssignmentRows) {
+    breakAssignmentMap[a.staff_id] = a.slot_number;
+  }
+
   const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const [{ data: myMembership }, { data: myStaff }] = await Promise.all([
     supabase.from("project_members").select("role").eq("staff_id", myStaffId).eq("project_id", projectId).maybeSingle(),
@@ -157,6 +166,7 @@ export default async function SeatingPage() {
       isAdmin={isAdmin}
       myStaffId={myStaffId}
       staffList={staffList}
+      breakAssignmentMap={breakAssignmentMap}
     />
   );
 }

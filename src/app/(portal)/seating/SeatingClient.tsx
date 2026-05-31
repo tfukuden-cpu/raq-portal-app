@@ -8,6 +8,7 @@ import {
   getSeatingEditorsAction,
   type SeatingEditor,
 } from "./actions";
+import { assignBreakSlotsAction } from "./break-actions";
 import { getSeatBgClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 import { createClient } from "@/lib/supabase/client";
 
@@ -67,6 +68,13 @@ const STATUS_LABEL: Record<NonNullable<SeatData["status"]>, string> = {
 };
 
 const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "リメイク", "ローン"];
+
+const BREAK_BADGE_CLASS: Record<number, string> = {
+  1: "bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300",
+  2: "bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300",
+  3: "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300",
+};
+const BREAK_SLOT_LABEL: Record<number, string> = { 1: "①", 2: "②", 3: "③" };
 function accNum(s: string | null | undefined): number {
   if (!s) return Infinity;
   const m = s.match(/(\d+)/);
@@ -75,7 +83,7 @@ function accNum(s: string | null | undefined): number {
 
 export default function SeatingClient({
   projectId, today, seats, walls = [], isAdmin, myStaffId,
-  staffList = [], embedded = false,
+  staffList = [], embedded = false, breakAssignmentMap = {},
 }: {
   projectId: string;
   today: string;
@@ -85,6 +93,7 @@ export default function SeatingClient({
   myStaffId: string;
   staffList?: StaffInfo[];
   embedded?: boolean;
+  breakAssignmentMap?: Record<string, number>;
 }) {
   const [statuses, setStatuses] = useState<Map<string, NonNullable<SeatData["status"]>>>(() => {
     const m = new Map<string, NonNullable<SeatData["status"]>>();
@@ -291,6 +300,20 @@ export default function SeatingClient({
     return () => { supabase.removeChannel(channel); };
   }, [projectId]);
 
+  // 休憩スロット自動割り振り
+  function handleAssignBreaks() {
+    startTransition(async () => {
+      const res = await assignBreakSlotsAction(projectId, today);
+      if (res.success) {
+        setToast(`休憩割り振り完了（${res.count}名）`);
+        router.refresh();
+      } else {
+        setToast(`⚠️ ${res.error ?? "休憩割り振りに失敗しました"}`);
+      }
+      setTimeout(() => setToast(null), 2500);
+    });
+  }
+
   // 通常モードのタップ（休憩トグル）
   function handleTap(seat: SeatData) {
     if (!seat.staffId) return;
@@ -342,6 +365,13 @@ export default function SeatingClient({
                 >
                   配置編集
                 </a>
+                <button
+                  onClick={handleAssignBreaks}
+                  disabled={isPending}
+                  className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-100 transition-colors disabled:opacity-50"
+                >
+                  休憩割り振り
+                </button>
               </>
             )}
             {editMode ? (
@@ -601,6 +631,11 @@ export default function SeatingClient({
                         {sectionLabel}
                       </span>
                     ) : null}
+                    {!editMode && sfId && breakAssignmentMap[sfId] && (
+                      <span className={`absolute bottom-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold ${BREAK_BADGE_CLASS[breakAssignmentMap[sfId]] ?? ""}`}>
+                        {BREAK_SLOT_LABEL[breakAssignmentMap[sfId]] ?? ""}
+                      </span>
+                    )}
                   </>
                 ) : (
                   <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-400 dark:text-emerald-600" : editMode ? "text-amber-400" : "text-zinc-300 dark:text-zinc-600"}`}>

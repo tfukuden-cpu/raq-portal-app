@@ -8,6 +8,8 @@ import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/a
 import SeatingPlanClient, { type PlanSeat, type PlanStaff } from "@/app/(portal)/seating/plan/SeatingPlanClient";
 import HMotaPanel, { type MotaRow } from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
+import BreakManagementTab from "./BreakManagementTab";
+import type { BreakSlotSetting, BreakSlotAssignment } from "@/app/(portal)/seating/break-actions";
 
 // ── 型定義 ────────────────────────────────────────────────
 export type StatusKey = "working" | "clocked_out" | "departed" | "absent" | "late" | "not_departed";
@@ -109,6 +111,14 @@ function getCardBg(section: string, shiftName: string, shiftStart: string | null
   return entry.def;
 }
 
+// ── 休憩スロット用定数 ────────────────────────────────────
+const BREAK_BADGE_CLASS: Record<number, string> = {
+  1: "bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300",
+  2: "bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300",
+  3: "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300",
+};
+const BREAK_SLOT_LABEL: Record<number, string> = { 1: "①", 2: "②", 3: "③" };
+
 // ── 定数 ──────────────────────────────────────────────────
 const STATUS_LABEL: Record<StatusKey, string> = {
   working:      "勤務中",
@@ -166,6 +176,8 @@ interface Props {
   planStaffData: PlanStaff[];
   hMotaRows: MotaRow[];
   initialMotaAssignments: MotaAssignment[];
+  breakSlots?: BreakSlotSetting[];
+  breakAssignments?: BreakSlotAssignment[];
 }
 
 type SelectionMode = "reminder" | "request" | "followup";
@@ -181,8 +193,15 @@ export default function AttendanceClient({
   seatData, wallData, seatStaffList,
   tomorrow, planSeatData, planStaffData,
   hMotaRows, initialMotaAssignments,
+  breakSlots = [], breakAssignments = [],
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
+  const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating" | "break">("today");
+
+  // 休憩スロット割り当てマップ（staffId → slotNumber）
+  const breakAssignmentMap: Record<string, number> = {};
+  for (const a of breakAssignments) {
+    breakAssignmentMap[a.staff_id] = a.slot_number;
+  }
   const [seatSubTab, setSeatSubTab] = useState<"today" | "tomorrow">("today");
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
@@ -473,6 +492,25 @@ export default function AttendanceClient({
           >
             座席表
           </button>
+          <button
+            onClick={() => setActiveTab("break")}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === "break"
+                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            }`}
+          >
+            休憩管理
+            {breakAssignments.length > 0 && (
+              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full tabular-nums ${
+                activeTab === "break"
+                  ? "bg-white/20 text-white dark:bg-zinc-900/20 dark:text-zinc-900"
+                  : "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300"
+              }`}>
+                {breakAssignments.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
       <div className="max-w-5xl mx-auto px-4 pt-4 pb-32">
@@ -538,6 +576,20 @@ export default function AttendanceClient({
                 embedded
               />
             )}
+          </div>
+        )}
+
+        {/* ── 休憩管理タブ ── */}
+        {activeTab === "break" && (
+          <div>
+            <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} />
+            <BreakManagementTab
+              projectId={projectId}
+              today={today}
+              breakSlots={breakSlots}
+              breakAssignments={breakAssignments}
+              grouped={grouped}
+            />
           </div>
         )}
 
@@ -702,7 +754,7 @@ export default function AttendanceClient({
                                 : getCardBg(section, m.shiftName, m.shiftStart),
                             ].join(" ")}
                           >
-                            {/* 1行：番号 ＋ 名前 ＋ ステータス */}
+                            {/* 1行：番号 ＋ 名前 ＋ 休憩スロット ＋ ステータス */}
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="text-[10px] font-mono text-zinc-400 tabular-nums shrink-0 leading-none">
                                 {m.accountNumber ?? "—"}
@@ -716,6 +768,11 @@ export default function AttendanceClient({
                                   {m.name}
                                 </span>
                               </button>
+                              {breakAssignmentMap[m.staffId] && (
+                                <span className={`text-[9px] font-bold px-1 py-0.5 rounded leading-none shrink-0 ${BREAK_BADGE_CLASS[breakAssignmentMap[m.staffId]] ?? ""}`}>
+                                  {BREAK_SLOT_LABEL[breakAssignmentMap[m.staffId]] ?? ""}
+                                </span>
+                              )}
                               <div className="relative shrink-0">
                                 <button
                                   onClick={e => { e.stopPropagation(); setStatusMenuId(isMenuOpen ? null : m.staffId); }}
