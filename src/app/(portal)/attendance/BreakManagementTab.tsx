@@ -101,14 +101,13 @@ export default function BreakManagementTab({
     });
   }
 
-  function handleShortMinutesToggle(staffId: string, current: number) {
-    const next = current === 15 ? 30 : 15;
+  function handleShortMinutesToggle(staffId: string, minutes: number) {
     startTransition(async () => {
-      const res = await updateBreakShortSettingAction(projectId, today, staffId, next);
+      const res = await updateBreakShortSettingAction(projectId, today, staffId, minutes);
       if (res.success) {
         setShortSettings(prev => [
           ...prev.filter(s => s.staff_id !== staffId),
-          { staff_id: staffId, short_break_minutes: next },
+          { staff_id: staffId, short_break_minutes: minutes },
         ]);
       }
     });
@@ -227,34 +226,33 @@ export default function BreakManagementTab({
                               className="text-[10px] px-1 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 disabled:opacity-50 shrink-0"
                             >
                               {breakSlots.map(s => (
-                                <option key={s.slot_number} value={s.slot_number}>{s.label}</option>
+                                <option key={s.slot_number} value={s.slot_number}>
+                                  {s.label} {s.start_time.slice(0, 5)}〜{s.end_time.slice(0, 5)}
+                                </option>
                               ))}
                             </select>
-                            {/* 小休憩トグル */}
-                            <button
-                              onClick={() => handleShortMinutesToggle(m.staffId, shortMin)}
+                            {/* 小休憩 */}
+                            <select
+                              value={shortMin}
+                              onChange={e => handleShortMinutesToggle(m.staffId, parseInt(e.target.value))}
                               disabled={isPending}
-                              className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
-                                shortMin === 30
-                                  ? "bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-600"
-                                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
-                              }`}
-                              title="小休憩時間をタップで切り替え（15分 / 30分）"
+                              className="text-[10px] px-1 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 disabled:opacity-50 shrink-0"
                             >
-                              小{shortMin}
-                            </button>
+                              <option value={15}>小休憩15分</option>
+                              <option value={30}>小休憩30分</option>
+                            </select>
                           </div>
 
                           {/* 実績 */}
-                          {records.length > 0 && (
-                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-12">
-                              {records.map((r, i) => (
-                                <span key={i} className="text-[10px] text-zinc-400 dark:text-zinc-500 tabular-nums">
-                                  {r.break_type ? `[${r.break_type}] ` : ""}{fmtTime(r.started_at)}〜{r.ended_at ? fmtTime(r.ended_at) : "…"}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-12">
+                            {records.length === 0 ? (
+                              <span className="text-[10px] text-zinc-300 dark:text-zinc-600">—</span>
+                            ) : records.map((r, i) => (
+                              <span key={i} className="text-[10px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                                {r.break_type ? `[${r.break_type}] ` : ""}{fmtTime(r.started_at)}〜{r.ended_at ? fmtTime(r.ended_at) : "…"}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       );
                     })}
