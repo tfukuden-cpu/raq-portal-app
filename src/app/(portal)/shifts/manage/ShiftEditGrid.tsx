@@ -2116,22 +2116,30 @@ export default function ShiftEditGrid({
                   const isLateTotal  = false;
                   const isFirst = patIdx === 0;
                   const isLast  = patIdx === arr.length - 1;
+                  // SV中番 または ローン/リメイク はグレーアウト表示
+                  const isGrayedRow =
+                    (pattern.section === "SV" && pattern.name.includes("中")) ||
+                    GRAND_TOTAL_EXCLUDE.includes(pattern.section ?? "");
                   return (
                     <React.Fragment key={`sum-frag-${pattern.name}`}>
-                    <tr style={{ height: `${SUM_ROW_H}px` }} className="bg-zinc-50 dark:bg-zinc-900">
-                      <td className={["p-0 overflow-hidden bg-zinc-200 dark:bg-zinc-700 border-r-2 border-zinc-400 dark:border-zinc-500 cursor-pointer hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors",
+                    <tr style={{ height: `${SUM_ROW_H}px` }} className={isGrayedRow ? "bg-zinc-100 dark:bg-zinc-800/70" : "bg-zinc-50 dark:bg-zinc-900"}>
+                      <td className={["p-0 overflow-hidden border-r-2 border-zinc-400 dark:border-zinc-500 cursor-pointer transition-colors",
+                        isGrayedRow
+                          ? "bg-zinc-300 dark:bg-zinc-600 hover:bg-zinc-400 dark:hover:bg-zinc-500"
+                          : "bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600",
                         isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
                         isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
                       ].join(" ")} style={{ position: "sticky", left: 0, zIndex: 10 }}
                         onClick={() => { setReqEditPattern(pattern); setReqEditValues(new Map()); setReqSaveMsg(null); }}
                         title="クリックして必要枠数を編集">
                         <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-2 gap-1">
-                          <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200 leading-none truncate block">{pattern.name}</span>
+                          <span className={["text-[10px] font-bold leading-none truncate block", isGrayedRow ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-700 dark:text-zinc-200"].join(" ")}>{pattern.name}</span>
                           <span className="text-[9px] text-zinc-400 dark:text-zinc-500 shrink-0">✎</span>
                         </div>
                       </td>
                       {prevDates.map((d, pi) => (
-                        <td key={`prev-sum-${d}`} className={["p-0 bg-zinc-200 dark:bg-zinc-700",
+                        <td key={`prev-sum-${d}`} className={["p-0",
+                          isGrayedRow ? "bg-zinc-300 dark:bg-zinc-600" : "bg-zinc-200 dark:bg-zinc-700",
                           isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
                           isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
                           pi === prevDates.length - 1 ? "border-r-2 border-r-zinc-400 dark:border-r-zinc-500" : "border-r border-r-zinc-300 dark:border-r-zinc-600",
@@ -2148,20 +2156,20 @@ export default function ShiftEditGrid({
                         const showSubLine = required > 0;
                         if (required === 0) {
                           netDisplay = assigned > 0 ? String(assigned) : "";
-                          netCls = "text-zinc-400 dark:text-zinc-500";
-                          bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
+                          netCls = isGrayedRow ? "text-zinc-300 dark:text-zinc-600" : "text-zinc-400 dark:text-zinc-500";
+                          bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : isGrayedRow ? "bg-zinc-200 dark:bg-zinc-800" : "bg-zinc-100 dark:bg-zinc-800";
                         } else if (net > 0) {
                           netDisplay = `-${net}`;
-                          netCls = isSelected ? "text-white font-bold" : "text-red-600 dark:text-red-400 font-bold";
-                          bgCls = isSelected ? "bg-red-500 dark:bg-red-600" : isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950";
+                          netCls = isSelected ? "text-white font-bold" : isGrayedRow ? "text-red-400 dark:text-red-500 font-bold opacity-70" : "text-red-600 dark:text-red-400 font-bold";
+                          bgCls = isSelected ? "bg-red-500 dark:bg-red-600" : isToday ? "bg-red-200 dark:bg-red-950" : isGrayedRow ? "bg-red-50 dark:bg-red-950/40" : "bg-red-100 dark:bg-red-950";
                         } else if (net < 0) {
                           netDisplay = `+${-net}`;
-                          netCls = "text-emerald-700 dark:text-emerald-400 font-bold";
-                          bgCls = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950";
+                          netCls = isGrayedRow ? "text-emerald-500 dark:text-emerald-600 font-bold opacity-70" : "text-emerald-700 dark:text-emerald-400 font-bold";
+                          bgCls = isToday ? "bg-emerald-200 dark:bg-emerald-950" : isGrayedRow ? "bg-emerald-50 dark:bg-emerald-950/40" : "bg-emerald-100 dark:bg-emerald-950";
                         } else {
                           netDisplay = "✓";
-                          netCls = "text-emerald-400 dark:text-emerald-500 font-bold";
-                          bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800";
+                          netCls = isGrayedRow ? "text-zinc-300 dark:text-zinc-600 font-bold" : "text-emerald-400 dark:text-emerald-500 font-bold";
+                          bgCls = isToday ? "bg-blue-100 dark:bg-blue-950" : isGrayedRow ? "bg-zinc-200 dark:bg-zinc-800" : "bg-zinc-100 dark:bg-zinc-800";
                         }
                         return (
                           <td key={date}
