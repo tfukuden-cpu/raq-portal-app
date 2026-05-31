@@ -167,6 +167,123 @@ export async function autoAssignSeatsAction(
   return { success: true, assignments };
 }
 
+// ──────────────────────────────────────────────────
+// 同時編集セッション管理
+// TTL: 2分間 heartbeat がなければ期限切れとみなす
+// ──────────────────────────────────────────────────
+const SESSION_TTL_MINUTES = 2;
+
+export type SeatingEditor = {
+  staffId: string;
+  staffName: string;
+  startedAt: string;
+};
+
+/** 編集セッション取得（期限切れは除外） */
+export async function getSeatingEditorsAction(
+  projectId: string,
+  date: string,
+): Promise<{ editors: SeatingEditor[] }> {
+  const admin = createAdminClient();
+  const cutoff = new Date(Date.now() - SESSION_TTL_MINUTES * 60 * 1000).toISOString();
+  const { data } = await admin
+    .from("seating_edit_sessions")
+    .select("staff_id, staff_name, started_at")
+    .eq("project_id", projectId)
+    .eq("edit_date", date)
+    .gte("last_heartbeat", cutoff);
+  return {
+    editors: (data ?? []).map(r => ({
+      staffId:   r.staff_id   as string,
+      staffName: r.staff_name as string,
+      startedAt: r.started_at as string,
+    })),
+  };
+}
+
+/** 編集開始（セッション取得・upsert） */
+export async function acquireSeatingEditAction(
+  projectId: string,
+  date: string,
+): Promise<{ ok: boolean; staffId?: string; staffName?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "未ログイン" };
+
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+  const admin = createAdminClient();
+
+  // スタッフ名取得
+  const { data: member } = await admin
+    .from("staff_members")
+    .select("name")
+    .eq("staff_id", staffId)
+    .single();
+  const staffName = (member?.name as string | null) ?? staffId;
+
+  const now = new Date().toISOString();
+  const { error } = await admin
+    .from("seating_edit_sessions")
+    .upsert(
+      {
+        project_id:      projectId,
+        edit_date:       date,
+        staff_id:        staffId,
+        staff_name:      staffName,
+        started_at:      now,
+        last_heartbeat:  now,
+      },
+      { onConflict: "project_id,edit_date,staff_id" },
+    );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, staffId, staffName };
+}
+
+/** heartbeat（編集継続中を通知） */
+export async function heartbeatSeatingEditAction(
+  projectId: string,
+  date: string,
+): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+  const admin = createAdminClient();
+
+  await admin
+    .from("seating_edit_sessions")
+    .update({ last_heartbeat: new Date().toISOString() })
+    .eq("project_id", projectId)
+    .eq("edit_date", date)
+    .eq("staff_id", staffId);
+
+  return { ok: true };
+}
+
+/** 編集終了（セッション解放） */
+export async function releaseSeatingEditAction(
+  projectId: string,
+  date: string,
+): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+  const admin = createAdminClient();
+
+  await admin
+    .from("seating_edit_sessions")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("edit_date", date)
+    .eq("staff_id", staffId);
+
+  return { ok: true };
+}
+
 /** 壁レイアウト保存 */
 export async function saveSeatWallsAction(
   projectId: string,

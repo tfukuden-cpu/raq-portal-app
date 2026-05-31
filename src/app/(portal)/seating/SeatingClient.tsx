@@ -2,7 +2,12 @@
 
 import { useState, useEffect, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { toggleBreakAction, saveSeatAssignmentsAction, autoAssignSeatsAction } from "./actions";
+import {
+  toggleBreakAction, saveSeatAssignmentsAction, autoAssignSeatsAction,
+  acquireSeatingEditAction, releaseSeatingEditAction, heartbeatSeatingEditAction,
+  getSeatingEditorsAction,
+  type SeatingEditor,
+} from "./actions";
 import { getSeatBgClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 import { createClient } from "@/lib/supabase/client";
 
@@ -99,15 +104,56 @@ export default function SeatingClient({
   const [staffSearch, setStaffSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
-  function enterEditMode() {
-    setDraftMap(new Map());
-    setEditMode(true);
+  // ── 同時編集セッション ─────────────────────────────────────
+  const [otherEditors, setOtherEditors] = useState<SeatingEditor[]>([]);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /** 他の編集者リストを更新（自分は除く） */
+  async function refreshEditors(myId: string) {
+    const { editors } = await getSeatingEditorsAction(projectId, today);
+    setOtherEditors(editors.filter(e => e.staffId !== myId));
   }
+
+  async function enterEditMode() {
+    setDraftMap(new Map());
+    const res = await acquireSeatingEditAction(projectId, today);
+    const myId = res.staffId ?? myStaffId;
+    await refreshEditors(myId);
+    setEditMode(true);
+
+    // ハートビート（30秒ごと）
+    heartbeatRef.current = setInterval(() => {
+      heartbeatSeatingEditAction(projectId, today);
+    }, 30_000);
+
+    // 他の編集者ポーリング（15秒ごと）
+    pollRef.current = setInterval(() => {
+      refreshEditors(myId);
+    }, 15_000);
+  }
+
+  function stopEditSession() {
+    if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+    if (pollRef.current)      { clearInterval(pollRef.current);      pollRef.current = null; }
+    releaseSeatingEditAction(projectId, today);
+    setOtherEditors([]);
+  }
+
   function cancelEditMode() {
+    stopEditSession();
     setEditMode(false);
     setDraftMap(new Map());
     setPickSeatId(null);
   }
+
+  // アンマウント時にセッション解放
+  useEffect(() => {
+    return () => {
+      if (editMode) stopEditSession();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode]);
 
   // ドラフト適用後の有効な staffId を返す
   function effectiveStaffId(seatId: string, original: string | null): string | null {
@@ -186,6 +232,7 @@ export default function SeatingClient({
       }
       const res = await saveSeatAssignmentsAction(projectId, today, assignments);
       if (res.success) {
+        stopEditSession();
         setToast("席替えを保存しました");
         setEditMode(false);
         setDraftMap(new Map());
@@ -196,6 +243,25 @@ export default function SeatingClient({
       setTimeout(() => setToast(null), 2500);
     });
   }
+
+  // 非編集モードでも他の編集者を定期ポーリング
+  const viewPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (editMode) return; // 編集中は pollRef で管理
+    // 初回取得
+    getSeatingEditorsAction(projectId, today).then(({ editors }) => {
+      setOtherEditors(editors.filter(e => e.staffId !== myStaffId));
+    });
+    viewPollRef.current = setInterval(() => {
+      getSeatingEditorsAction(projectId, today).then(({ editors }) => {
+        setOtherEditors(editors.filter(e => e.staffId !== myStaffId));
+      });
+    }, 15_000);
+    return () => {
+      if (viewPollRef.current) { clearInterval(viewPollRef.current); viewPollRef.current = null; }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode, projectId, today]);
 
   // Realtime
   useEffect(() => {
@@ -342,6 +408,17 @@ export default function SeatingClient({
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* 他ユーザー編集中バナー */}
+      {otherEditors.length > 0 && (
+        <div className="bg-rose-50 dark:bg-rose-950/30 border-b border-rose-200 dark:border-rose-800 px-4 py-2 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse flex-shrink-0" />
+          <p className="text-xs text-rose-700 dark:text-rose-300 font-medium">
+            {otherEditors.map(e => e.staffName).join("・")}
+            {otherEditors.length === 1 ? " が" : " たちが"}編集中です
+          </p>
         </div>
       )}
 
