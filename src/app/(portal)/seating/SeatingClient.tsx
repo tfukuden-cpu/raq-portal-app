@@ -324,10 +324,17 @@ export default function SeatingClient({
             {isAdmin && !editMode && (
               <>
                 <button
-                  onClick={enterEditMode}
-                  className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-colors"
+                  onClick={otherEditors.length > 0 ? undefined : enterEditMode}
+                  disabled={otherEditors.length > 0}
+                  title={otherEditors.length > 0 ? `${otherEditors.map(e => e.staffName).join("・")}が編集中のため操作できません` : undefined}
+                  className={[
+                    "text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors",
+                    otherEditors.length > 0
+                      ? "text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 cursor-not-allowed opacity-60"
+                      : "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 hover:bg-amber-100",
+                  ].join(" ")}
                 >
-                  席替え
+                  {otherEditors.length > 0 ? "🔒 席替え" : "席替え"}
                 </button>
                 <a
                   href="/seating/plan"
@@ -378,10 +385,17 @@ export default function SeatingClient({
         <div className="flex items-center gap-2 mb-2 flex-wrap">
           {!editMode ? (
             <button
-              onClick={enterEditMode}
-              className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-colors"
+              onClick={otherEditors.length > 0 ? undefined : enterEditMode}
+              disabled={otherEditors.length > 0}
+              title={otherEditors.length > 0 ? `${otherEditors.map(e => e.staffName).join("・")}が編集中のため操作できません` : undefined}
+              className={[
+                "text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors",
+                otherEditors.length > 0
+                  ? "text-zinc-400 dark:text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 cursor-not-allowed opacity-60"
+                  : "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 hover:bg-amber-100",
+              ].join(" ")}
             >
-              席替え
+              {otherEditors.length > 0 ? "🔒 席替え" : "席替え"}
             </button>
           ) : (
             <>
@@ -411,13 +425,13 @@ export default function SeatingClient({
         </div>
       )}
 
-      {/* 他ユーザー編集中バナー */}
-      {otherEditors.length > 0 && (
+      {/* 他ユーザー編集中バナー（同時編集ロック） */}
+      {otherEditors.length > 0 && !editMode && (
         <div className="bg-rose-50 dark:bg-rose-950/30 border-b border-rose-200 dark:border-rose-800 px-4 py-2 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse flex-shrink-0" />
           <p className="text-xs text-rose-700 dark:text-rose-300 font-medium">
-            {otherEditors.map(e => e.staffName).join("・")}
-            {otherEditors.length === 1 ? " が" : " たちが"}編集中です
+            🔒 {otherEditors.map(e => e.staffName).join("・")}
+            {otherEditors.length === 1 ? " が" : " たちが"}席替え編集中のため、編集できません
           </p>
         </div>
       )}
