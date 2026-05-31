@@ -69,7 +69,7 @@ export default function RankingTab({
               staffName: String(r[2] ?? "").trim(),
             };
           })
-          .filter(r => r.rank > 0 && r.staffName);
+          .filter(r => r.rank > 0 && r.staffName && (r.section === "ASS査定" || r.section === "ASS販売"));
         setPreview(parsed);
       };
       reader.readAsArrayBuffer(file);
