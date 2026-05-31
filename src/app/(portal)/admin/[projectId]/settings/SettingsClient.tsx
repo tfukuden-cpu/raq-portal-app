@@ -1954,7 +1954,6 @@ function NotifyCard({
   extra,
   onToggle,
   onRecipient,
-  onMessage,
   projectId,
 }: {
   notifyKey: NotifyKey;
@@ -1965,17 +1964,15 @@ function NotifyCard({
   extra?: React.ReactNode;
   onToggle: () => void;
   onRecipient: (v: "admin" | "staff") => void;
-  onMessage: (v: string) => void;
   projectId: string;
 }) {
   const [open, setOpen] = useState(false);
   const [testStatus, setTestStatus] = useState<"idle" | "sending" | "ok" | "err">("idle");
   const [testMsg,    setTestMsg]    = useState<string>("");
   const [isPendingTest, startTest]  = useTransition();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleTestSend = () => {
-    const message = config.message ?? DEFAULT_NOTIFY_MESSAGES[notifyKey] ?? label;
+    const message = DEFAULT_NOTIFY_MESSAGES[notifyKey] ?? label;
     startTest(async () => {
       setTestStatus("sending");
       const res = await testNotifyAction(projectId, message, notifyKey);
@@ -1985,18 +1982,6 @@ function NotifyCard({
     });
   };
 
-  const insertVar = (v: string) => {
-    const el = textareaRef.current;
-    if (!el) { onMessage((config.message ?? "") + v); return; }
-    const start = el.selectionStart;
-    const end   = el.selectionEnd;
-    const cur   = config.message ?? "";
-    onMessage(cur.slice(0, start) + v + cur.slice(end));
-    requestAnimationFrame(() => {
-      el.selectionStart = el.selectionEnd = start + v.length;
-      el.focus();
-    });
-  };
 
   const defaultMsg = DEFAULT_NOTIFY_MESSAGES[notifyKey];
 
@@ -2082,35 +2067,12 @@ function NotifyCard({
           </div>
           {/* タイミング設定（定時通知など） */}
           {extra}
-          {/* メッセージ本文 */}
+          {/* メッセージ本文（プレビューのみ） */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-zinc-500">メッセージ本文</span>
-              {(config.message ?? defaultMsg) !== defaultMsg && (
-                <button
-                  type="button"
-                  onClick={() => onMessage(defaultMsg)}
-                  className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-                >
-                  デフォルトに戻す
-                </button>
-              )}
+            <span className="text-[11px] font-semibold text-zinc-500">メッセージ本文</span>
+            <div className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/60 text-xs text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap">
+              {defaultMsg}
             </div>
-            <textarea
-              ref={textareaRef}
-              value={config.message ?? defaultMsg}
-              onChange={e => onMessage(e.target.value)}
-              rows={4}
-              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-800 dark:text-zinc-100 resize-y font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition"
-            />
-            {vars.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] text-zinc-400 flex-shrink-0">挿入：</span>
-                {vars.map(v => (
-                  <VarChip key={v.label} label={v.label} note={v.note} onInsert={insertVar} />
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -2163,7 +2125,6 @@ export function LineNotifySettings({
             vars={NOTIFY_VARS[item.key]}
             onToggle={() => updateItem(item.key, { enabled: !settings[item.key].enabled })}
             onRecipient={v => updateItem(item.key, { recipient: v })}
-            onMessage={v => updateItem(item.key, { message: v })}
             projectId={projectId}
           />
         ))}
@@ -2184,7 +2145,6 @@ export function LineNotifySettings({
           vars={NOTIFY_VARS.shift_start_remind}
           onToggle={() => updateItem("shift_start_remind", { enabled: !settings.shift_start_remind.enabled })}
           onRecipient={v => updateItem("shift_start_remind", { recipient: v })}
-          onMessage={v => updateItem("shift_start_remind", { message: v })}
           projectId={projectId}
           extra={
             <div className="flex items-center gap-2 flex-wrap">
@@ -2208,7 +2168,6 @@ export function LineNotifySettings({
           vars={NOTIFY_VARS.shift_end_remind}
           onToggle={() => updateItem("shift_end_remind", { enabled: !settings.shift_end_remind.enabled })}
           onRecipient={v => updateItem("shift_end_remind", { recipient: v })}
-          onMessage={v => updateItem("shift_end_remind", { message: v })}
           projectId={projectId}
           extra={
             <div className="flex items-center gap-2 flex-wrap">
@@ -2232,7 +2191,6 @@ export function LineNotifySettings({
           vars={NOTIFY_VARS.rest_day_remind}
           onToggle={() => updateItem("rest_day_remind", { enabled: !settings.rest_day_remind.enabled })}
           onRecipient={v => updateItem("rest_day_remind", { recipient: v })}
-          onMessage={v => updateItem("rest_day_remind", { message: v })}
           projectId={projectId}
           extra={
             <div className="flex items-center gap-2">
@@ -2255,7 +2213,6 @@ export function LineNotifySettings({
           vars={NOTIFY_VARS.daily_summary}
           onToggle={() => updateItem("daily_summary", { enabled: !settings.daily_summary.enabled })}
           onRecipient={v => updateItem("daily_summary", { recipient: v })}
-          onMessage={v => updateItem("daily_summary", { message: v })}
           projectId={projectId}
           extra={
             <div className="flex items-center gap-2">
@@ -2278,7 +2235,6 @@ export function LineNotifySettings({
           vars={NOTIFY_VARS.holiday_reminder}
           onToggle={() => updateItem("holiday_reminder", { enabled: !settings.holiday_reminder.enabled })}
           onRecipient={v => updateItem("holiday_reminder", { recipient: v })}
-          onMessage={v => updateItem("holiday_reminder", { message: v })}
           projectId={projectId}
           extra={
             <div className="flex items-center gap-2 flex-wrap">
@@ -2311,7 +2267,6 @@ export function LineNotifySettings({
           vars={NOTIFY_VARS.holiday_open_notify}
           onToggle={() => updateItem("holiday_open_notify", { enabled: !settings.holiday_open_notify.enabled })}
           onRecipient={v => updateItem("holiday_open_notify", { recipient: v })}
-          onMessage={v => updateItem("holiday_open_notify", { message: v })}
           projectId={projectId}
           extra={
             <div className="flex items-center gap-2">
@@ -2334,7 +2289,6 @@ export function LineNotifySettings({
           vars={NOTIFY_VARS.absence_followup_remind}
           onToggle={() => updateItem("absence_followup_remind", { enabled: !settings.absence_followup_remind.enabled })}
           onRecipient={v => updateItem("absence_followup_remind", { recipient: v })}
-          onMessage={v => updateItem("absence_followup_remind", { message: v })}
           projectId={projectId}
           extra={
             <div className="flex items-center gap-2">
@@ -2357,7 +2311,6 @@ export function LineNotifySettings({
           vars={NOTIFY_VARS.absence_followup_notify}
           onToggle={() => updateItem("absence_followup_notify", { enabled: !settings.absence_followup_notify.enabled })}
           onRecipient={v => updateItem("absence_followup_notify", { recipient: v })}
-          onMessage={v => updateItem("absence_followup_notify", { message: v })}
           projectId={projectId}
         />
 
@@ -2370,7 +2323,6 @@ export function LineNotifySettings({
           vars={NOTIFY_VARS.shift_published}
           onToggle={() => updateItem("shift_published", { enabled: !settings.shift_published.enabled })}
           onRecipient={v => updateItem("shift_published", { recipient: v })}
-          onMessage={v => updateItem("shift_published", { message: v })}
           projectId={projectId}
         />
       </div>
