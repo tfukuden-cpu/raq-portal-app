@@ -92,16 +92,31 @@ const HMotaPanel = forwardRef<HMotaPanelRef, Props>(function HMotaPanel(
   // Used by parent to drop a staff card anywhere on the H MOTA column
   useImperativeHandle(ref, () => ({
     async dropStaffCard(staffName, accountNumber) {
+      // まず空きスロットを探す、なければ最初のスロットに上書き
+      let targetRow = rows[0];
+      let targetSlot: Slot = SLOTS[0];
+      let found = false;
       for (const row of rows) {
         for (const slot of SLOTS) {
           if (!getAssignment(row.accountNumber, slot)) {
-            const ok = await assignToSlot(row.accountNumber, slot, row.isFixed, staffName, accountNumber);
-            return ok ? "ok" : "error";
+            targetRow = row;
+            targetSlot = slot;
+            found = true;
+            break;
           }
         }
+        if (found) break;
       }
-      showToast("⚠️ H MOTAのスロットが全て埋まっています");
-      return "full";
+      if (!targetRow) {
+        showToast("⚠️ H MOTAのスロットが全て埋まっています");
+        return "full";
+      }
+      // 既存エントリがある場合は先に楽観的に削除
+      setAssignments(prev => prev.filter(
+        a => !(a.accountNumber === targetRow.accountNumber && a.slot === targetSlot)
+      ));
+      const ok = await assignToSlot(targetRow.accountNumber, targetSlot, targetRow.isFixed, staffName, accountNumber);
+      return ok ? "ok" : "error";
     },
   }));
 
@@ -234,7 +249,7 @@ function MotaTableRow({
               {assignment ? (
                 <div className="flex items-center gap-0.5 px-1 py-px bg-purple-100 dark:bg-purple-900/50 rounded border border-purple-200 dark:border-purple-700 w-full mx-0.5">
                   <span className="flex-1 text-[10px] font-semibold text-purple-700 dark:text-purple-300 truncate">
-                    {assignment.staffName || assignment.accountNumber}
+                    {assignment.staffName || "（名前なし）"}
                   </span>
                   <button
                     type="button"

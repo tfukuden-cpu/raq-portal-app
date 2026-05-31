@@ -60,6 +60,15 @@ export async function addMotaAssignmentAction(
     await assertAdmin(projectId);
     const admin = createAdminClient();
 
+    // 既存エントリを削除してから再挿入（同一スロットへの上書きを許容）
+    await admin
+      .from("mota_slot_assignments")
+      .delete()
+      .eq("project_id", projectId)
+      .eq("assignment_date", date)
+      .eq("account_number", accountNumber)
+      .eq("slot", slot);
+
     const { data, error } = await admin
       .from("mota_slot_assignments")
       .insert({
