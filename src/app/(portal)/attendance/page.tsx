@@ -14,15 +14,17 @@ function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
 
-const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク"];
+// 優先順位付きの固定セクション順（これ以外のセクションはこの後ろに追加される）
+const BASE_SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク"];
 const OFF_SHIFT_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤"];
 const STATUS_SORT: StatusKey[] = ["absent", "late", "working", "departed", "clocked_out", "not_departed"];
 
-function resolveSection(shiftName: string, memberSection: string | null): string {
-  for (const sec of SECTION_ORDER) {
+function resolveSection(shiftName: string, memberSection: string | null, sectionOrder: string[]): string {
+  for (const sec of sectionOrder) {
+    if (sec === "その他") continue;
     if (shiftName.startsWith(sec)) return sec;
   }
-  return SECTION_ORDER.includes(memberSection ?? "") ? (memberSection as string) : "その他";
+  return sectionOrder.includes(memberSection ?? "") ? (memberSection as string) : "その他";
 }
 
 type InternalMember = MemberRow & {
@@ -35,59 +37,58 @@ type InternalMember = MemberRow & {
   lateReportedAt: string | null;
 };
 
-function buildGrouped(members: InternalMember[]): SectionGroup[] {
-  const sections = [...SECTION_ORDER, "その他"];
-  return sections
-    .map(sec => {
-      const secMembers = members.filter(m => m.section === sec);
-      if (secMembers.length === 0) return null;
+function buildGrouped(members: InternalMember[], sectionOrder: string[]): SectionGroup[] {
+  return sectionOrder.map(sec => {
+    const secMembers = members.filter(m => m.section === sec);
 
-      // セクション内をシフト名でグループ化
-      const shiftOrderMap = new Map<string, InternalMember[]>();
-      const shiftOrder: string[] = [];
-      for (const m of secMembers) {
-        const key = m.shiftName || "その他";
-        if (!shiftOrderMap.has(key)) { shiftOrderMap.set(key, []); shiftOrder.push(key); }
-        shiftOrderMap.get(key)!.push(m);
-      }
-      // 各グループ内をステータス順にソート
-      for (const [, list] of shiftOrderMap) {
-        list.sort((a, b) => STATUS_SORT.indexOf(a.status) - STATUS_SORT.indexOf(b.status));
-      }
-      // グループ自体をシフト開始時刻順にソート
-      shiftOrder.sort((a, b) => {
-        const ta = shiftOrderMap.get(a)![0].shiftStart ?? "99:99";
-        const tb = shiftOrderMap.get(b)![0].shiftStart ?? "99:99";
-        return ta.localeCompare(tb);
-      });
+    // スタッフ0のセクションも「空の箱」として返す
+    if (secMembers.length === 0) return { section: sec, shiftGroups: [] };
 
-      const shiftGroups: ShiftGroup[] = shiftOrder.map(name => ({
-        shiftName:  name,
-        shiftStart: shiftOrderMap.get(name)![0].shiftStart,
-        shiftEnd:   shiftOrderMap.get(name)![0].shiftEnd,
-        members:    shiftOrderMap.get(name)!.map(m => ({
-          staffId:           m.staffId,
-          name:              m.name,
-          accountNumber:     m.accountNumber,
-          section:           m.section,
-          status:            m.status,
-          clockIn:           m.clockIn,
-          clockOut:          m.clockOut,
-          departureTime:     m.departureTime,
-          etaMinutes:        m.etaMinutes,
-          absenceReason:     m.absenceReason,
-          absenceReportedAt: m.absenceReportedAt,
-          absenceNextDay:    m.absenceNextDay,
-          absenceDayAfter:   m.absenceDayAfter,
-          lateReason:        m.lateReason,
-          lateReportedAt:    m.lateReportedAt,
-          expectedArrival:   m.expectedArrival,
-        })),
-      }));
+    // セクション内をシフト名でグループ化
+    const shiftOrderMap = new Map<string, InternalMember[]>();
+    const shiftOrder: string[] = [];
+    for (const m of secMembers) {
+      const key = m.shiftName || "その他";
+      if (!shiftOrderMap.has(key)) { shiftOrderMap.set(key, []); shiftOrder.push(key); }
+      shiftOrderMap.get(key)!.push(m);
+    }
+    // 各グループ内をステータス順にソート
+    for (const [, list] of shiftOrderMap) {
+      list.sort((a, b) => STATUS_SORT.indexOf(a.status) - STATUS_SORT.indexOf(b.status));
+    }
+    // グループ自体をシフト開始時刻順にソート
+    shiftOrder.sort((a, b) => {
+      const ta = shiftOrderMap.get(a)![0].shiftStart ?? "99:99";
+      const tb = shiftOrderMap.get(b)![0].shiftStart ?? "99:99";
+      return ta.localeCompare(tb);
+    });
 
-      return { section: sec, shiftGroups };
-    })
-    .filter((g): g is SectionGroup => g !== null);
+    const shiftGroups: ShiftGroup[] = shiftOrder.map(name => ({
+      shiftName:  name,
+      shiftStart: shiftOrderMap.get(name)![0].shiftStart,
+      shiftEnd:   shiftOrderMap.get(name)![0].shiftEnd,
+      members:    shiftOrderMap.get(name)!.map(m => ({
+        staffId:           m.staffId,
+        name:              m.name,
+        accountNumber:     m.accountNumber,
+        section:           m.section,
+        status:            m.status,
+        clockIn:           m.clockIn,
+        clockOut:          m.clockOut,
+        departureTime:     m.departureTime,
+        etaMinutes:        m.etaMinutes,
+        absenceReason:     m.absenceReason,
+        absenceReportedAt: m.absenceReportedAt,
+        absenceNextDay:    m.absenceNextDay,
+        absenceDayAfter:   m.absenceDayAfter,
+        lateReason:        m.lateReason,
+        lateReportedAt:    m.lateReportedAt,
+        expectedArrival:   m.expectedArrival,
+      })),
+    }));
+
+    return { section: sec, shiftGroups };
+  });
 }
 
 export default async function AttendancePage({
@@ -246,6 +247,19 @@ export default async function AttendancePage({
     });
   }
 
+  // project_members.section の全ユニーク値から動的にセクション順を構築
+  // BASE_SECTION_ORDER を優先し、それ以外のセクションを後ろに追加
+  const allMemberSections = [...new Set(
+    (memberRows ?? [])
+      .map(m => (m.section as string | null) ?? null)
+      .filter((s): s is string => !!s)
+  )];
+  const sectionOrderFull: string[] = [
+    ...BASE_SECTION_ORDER.filter(s => allMemberSections.includes(s)),
+    ...allMemberSections.filter(s => !BASE_SECTION_ORDER.includes(s) && s !== "その他"),
+    "その他",
+  ];
+
   // 離脱リスクフラグ付きスタッフIDセット
   const churnRiskStaffIds = new Set(
     (memberRows ?? [])
@@ -379,7 +393,7 @@ export default async function AttendancePage({
       staffId:        shift.staff_id,
       name:           member.name,
       accountNumber:  member.accountNumber,
-      section:        resolveSection(shiftName, member.section),
+      section:        resolveSection(shiftName, member.section, sectionOrderFull),
       status,
       clockIn:        punch?.clockIn  ?? null,
       clockOut:       punch?.clockOut ?? null,
@@ -399,7 +413,7 @@ export default async function AttendancePage({
     });
   }
 
-  const grouped = buildGrouped(allInternal);
+  const grouped = buildGrouped(allInternal, sectionOrderFull);
 
   // ── 座席データ ─────────────────────────────────────────
   const seatAssignMap = new Map((assignmentRows ?? []).map(a => [a.seat_id, a.staff_id]));
@@ -521,6 +535,7 @@ export default async function AttendancePage({
 
   return (
     <AttendanceClient
+      key={today}
       projectId={projectId}
       today={today}
       prevDate={prevDate}
