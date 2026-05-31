@@ -12,11 +12,12 @@ import ShiftHolidayTab from "./ShiftHolidayTab";
 import ShiftTrainingTab, { type TrainingMember } from "./ShiftTrainingTab";
 import { fetchTrainingSessionsAction } from "./training-session-actions";
 import type { ChangeLog } from "./ShiftEditGrid";
+import ShiftChangeLogTab from "./ShiftChangeLogTab";
 import type { GridDraftEntry } from "../actions";
 import { buildDefaultNotificationSettings } from "@/app/(portal)/admin/[projectId]/settings/notify-config";
 import HeaderHeightSetter from "./HeaderHeightSetter";
 
-type Tab = "shift" | "settings" | "holiday" | "training";
+type Tab = "shift" | "settings" | "holiday" | "training" | "logs";
 
 function dateKey(d: Date) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" })
@@ -80,7 +81,7 @@ export default async function ManageShiftsPage(props: {
   const monthParam   = `year=${targetYear}&month=${targetMonth}`;
 
   function tabUrl(t: Tab) {
-    if (t === "shift") return `/shifts/manage?${projectParam}tab=shift&${monthParam}`;
+    if (t === "shift" || t === "logs") return `/shifts/manage?${projectParam}tab=${t}&${monthParam}`;
     return `/shifts/manage?${projectParam}tab=${t}`;
   }
   function projectTabUrl(pid: string) {
@@ -242,6 +243,72 @@ export default async function ManageShiftsPage(props: {
             members={trainingMembers}
             initialSessions={initialSessions}
             targetMonth={targetMonthStr}
+          />
+        </div>
+      </main>
+    );
+  }
+
+  // ── 変更ログタブ ──
+  if (tab === "logs") {
+    const startDate = dateKey(new Date(targetYear, targetMonth - 1, 1));
+    const endDate   = dateKey(new Date(targetYear, targetMonth,     0));
+
+    const [{ data: changeLogsRaw }, { data: staffsRaw }] = await Promise.all([
+      admin.from("shift_change_logs")
+        .select("staff_id, shift_date, action, before_data, after_data, changed_by, changed_at")
+        .eq("project_id", selectedProjectId)
+        .gte("shift_date", startDate)
+        .lte("shift_date", endDate)
+        .order("changed_at", { ascending: false })
+        .limit(500),
+      admin.from("staffs").select("id, display_name, name"),
+    ]);
+
+    const nameMap = new Map(
+      (staffsRaw ?? []).map(s => [s.id as string, (s.display_name ?? s.name ?? s.id) as string])
+    );
+
+    const logs = (changeLogsRaw ?? []).map(l => {
+      const before = l.before_data as { shift_name?: string | null } | null;
+      const after  = l.after_data  as { shift_name?: string | null } | null;
+      return {
+        staff_id:          l.staff_id as string,
+        staff_name:        nameMap.get(l.staff_id as string) ?? (l.staff_id as string),
+        shift_date:        l.shift_date as string,
+        action:            l.action as string,
+        before_shift_name: before?.shift_name ?? null,
+        after_shift_name:  after?.shift_name  ?? null,
+        changed_by_name:   nameMap.get(l.changed_by as string) ?? (l.changed_by as string),
+        changed_at:        l.changed_at as string,
+      };
+    });
+
+    const prevMonth = (() => { const d = new Date(targetYear, targetMonth - 2, 1); return { year: d.getFullYear(), month: d.getMonth() + 1 }; })();
+    const nextMonth = (() => { const d = new Date(targetYear, targetMonth,     1); return { year: d.getFullYear(), month: d.getMonth() + 1 }; })();
+    const monthNavBase = isGlobalAdmin
+      ? `/shifts/manage?project=${selectedProjectId}&tab=logs&year=`
+      : `/shifts/manage?tab=logs&year=`;
+
+    return (
+      <main className="bg-white dark:bg-zinc-950 max-w-5xl mx-auto pb-24">
+        <HeaderHeightSetter className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
+          <div className="flex items-end justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">シフト管理</h1>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-0.5 font-semibold">{project?.name}</p>
+            </div>
+          </div>
+          <TabBar tab={tab} tabUrl={tabUrl} />
+        </HeaderHeightSetter>
+        <div className="px-4 pt-6 pb-8">
+          <ShiftChangeLogTab
+            logs={logs}
+            year={targetYear}
+            month={targetMonth}
+            prevMonth={prevMonth}
+            nextMonth={nextMonth}
+            monthNavBase={monthNavBase}
           />
         </div>
       </main>
@@ -580,6 +647,7 @@ function TabBar({
     { id: "settings", label: "シフト設定" },
     { id: "holiday",  label: "希望休" },
     { id: "training", label: "研修設定" },
+    { id: "logs",     label: "変更ログ" },
   ];
   return (
     <div className="flex overflow-x-auto -mx-4 px-4 border-b border-zinc-100 dark:border-zinc-800 -mb-2" style={{ scrollbarWidth: "none" }}>
