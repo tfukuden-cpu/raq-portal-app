@@ -303,6 +303,7 @@ export default async function AttendancePage({
     shiftChanges = (changeLogs ?? []).map(l => ({
       staffId:       l.staff_id as string,
       staffName:     memberMap.get(l.staff_id as string)?.name ?? (l.staff_id as string),
+      accountNumber: memberMap.get(l.staff_id as string)?.accountNumber ?? null,
       action:        l.action as string,
       beforeShift:   ((l.before_data as Record<string, string | null> | null)?.shift_name) ?? null,
       afterShift:    ((l.after_data  as Record<string, string | null> | null)?.shift_name) ?? null,

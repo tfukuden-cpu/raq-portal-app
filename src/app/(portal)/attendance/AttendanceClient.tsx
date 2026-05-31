@@ -58,6 +58,7 @@ export type OffMember = {
 export type ShiftChangeEntry = {
   staffId: string;
   staffName: string;
+  accountNumber: string | null;
   action: string;
   beforeShift: string | null;
   afterShift: string | null;
@@ -176,7 +177,6 @@ export default function AttendanceClient({
   seatData, wallData, seatStaffList,
   tomorrow, planSeatData, planStaffData,
 }: Props) {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
   const [seatSubTab, setSeatSubTab] = useState<"today" | "tomorrow">("today");
   // 催促・依頼の選択（トグル式）
@@ -406,26 +406,7 @@ export default function AttendanceClient({
               </div>
               <p className="text-sm font-semibold text-zinc-400 mt-0.5">{projectName}</p>
             </div>
-            {/* 日付ナビゲーション */}
-            <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => router.push(`/attendance?date=${prevDate}`)}
-                className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                aria-label="前日"
-              >
-                <ChevronLeft className="w-4 h-4 text-zinc-400" />
-              </button>
-              <span className="text-sm font-semibold text-zinc-500 tabular-nums px-1">{dateLabel}</span>
-              <button
-                type="button"
-                onClick={() => router.push(`/attendance?date=${nextDate}`)}
-                className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                aria-label="翌日"
-              >
-                <ChevronRight className="w-4 h-4 text-zinc-400" />
-              </button>
-            </div>
+            <span className="text-sm font-semibold text-zinc-500 tabular-nums">{dateLabel}</span>
           </div>
         </div>
         {/* サマリー（固定） */}
@@ -481,15 +462,19 @@ export default function AttendanceClient({
 
         {/* ── 確定後変更タブ ── */}
         {activeTab === "changes" && (
-          <ShiftChangesTab
-            publishedAt={publishedAt}
-            shiftChanges={shiftChanges}
-          />
+          <div>
+            <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} />
+            <ShiftChangesTab
+              publishedAt={publishedAt}
+              shiftChanges={shiftChanges}
+            />
+          </div>
         )}
 
         {/* ── 座席表タブ ── */}
         {activeTab === "seating" && (
           <div>
+            <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} />
             {/* サブタブ */}
             <div className="flex gap-1 mb-3">
               <button
@@ -536,6 +521,11 @@ export default function AttendanceClient({
               />
             )}
           </div>
+        )}
+
+        {/* ── 出勤簿タブ：日付ナビ ── */}
+        {activeTab === "today" && (
+          <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} />
         )}
 
         {/* ── 離脱リスク候補アラート ── */}
@@ -1093,6 +1083,44 @@ function ChevronLeft({ className }: { className?: string }) {
   );
 }
 
+// ── 日付ナビゲーション（各タブ内に配置） ──────────────────────
+function DateNav({ prevDate, nextDate, dateLabel }: { prevDate: string; nextDate: string; dateLabel: string }) {
+  const router = useRouter();
+  return (
+    <div className="flex items-center justify-between mb-4 bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-xl px-3 py-2 shadow-sm">
+      <button
+        type="button"
+        onClick={() => router.push(`/attendance?date=${prevDate}`)}
+        className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+        aria-label="前日"
+      >
+        <ChevronLeft className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+      </button>
+      <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 tabular-nums">{dateLabel}</span>
+      <button
+        type="button"
+        onClick={() => router.push(`/attendance?date=${nextDate}`)}
+        className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+        aria-label="翌日"
+      >
+        <ChevronRight className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+      </button>
+    </div>
+  );
+}
+
+// ── アカウント番号＋名前チップ ──────────────────────────────
+function StaffRefChip({ staff, muted }: { staff: { name: string; accountNumber: string | null }; muted?: boolean }) {
+  return (
+    <span className={`flex items-baseline gap-1 ${muted ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-800 dark:text-zinc-100"}`}>
+      {staff.accountNumber && (
+        <span className="text-[10px] font-mono text-zinc-400 tabular-nums">{staff.accountNumber}</span>
+      )}
+      <span className={`text-sm font-semibold ${muted ? "" : ""}`}>{staff.name}</span>
+    </span>
+  );
+}
+
 // ── 確定後変更タブ ────────────────────────────────────────
 function ShiftChangesTab({
   publishedAt,
@@ -1117,8 +1145,9 @@ function ShiftChangesTab({
 
   // シフトパターン軸に変換
   // パターンごとに「外れた人」「入った人」を収集し、ペアは「変更 A⇒B」で表示
-  const patternAdded   = new Map<string, string[]>(); // パターン → 入った人リスト
-  const patternRemoved = new Map<string, string[]>(); // パターン → 外れた人リスト
+  type StaffRef = { name: string; accountNumber: string | null };
+  const patternAdded   = new Map<string, StaffRef[]>(); // パターン → 入った人リスト
+  const patternRemoved = new Map<string, StaffRef[]>(); // パターン → 外れた人リスト
 
   for (const c of shiftChanges) {
     const before = c.beforeShift;
@@ -1126,13 +1155,14 @@ function ShiftChangesTab({
     if (!before && !after) continue;
     if (before === after) continue;
 
+    const ref: StaffRef = { name: c.staffName, accountNumber: c.accountNumber };
     if (before) {
       if (!patternRemoved.has(before)) patternRemoved.set(before, []);
-      patternRemoved.get(before)!.push(c.staffName);
+      patternRemoved.get(before)!.push(ref);
     }
     if (after) {
       if (!patternAdded.has(after)) patternAdded.set(after, []);
-      patternAdded.get(after)!.push(c.staffName);
+      patternAdded.get(after)!.push(ref);
     }
   }
 
@@ -1141,9 +1171,9 @@ function ShiftChangesTab({
 
   // パターンごとに表示行を生成
   type DisplayRow =
-    | { kind: "swap";   patternName: string; from: string; to: string }
-    | { kind: "add";    patternName: string; name: string }
-    | { kind: "remove"; patternName: string; name: string };
+    | { kind: "swap";   patternName: string; from: StaffRef; to: StaffRef }
+    | { kind: "add";    patternName: string; staff: StaffRef }
+    | { kind: "remove"; patternName: string; staff: StaffRef };
 
   const displayRows: DisplayRow[] = [];
   for (const pat of allPatterns) {
@@ -1154,9 +1184,9 @@ function ShiftChangesTab({
       displayRows.push({ kind: "swap", patternName: pat, from: removed.shift()!, to: added.shift()! });
     }
     // 余った追加
-    for (const name of added)   displayRows.push({ kind: "add",    patternName: pat, name });
+    for (const staff of added)   displayRows.push({ kind: "add",    patternName: pat, staff });
     // 余った削除
-    for (const name of removed) displayRows.push({ kind: "remove", patternName: pat, name });
+    for (const staff of removed) displayRows.push({ kind: "remove", patternName: pat, staff });
   }
 
   return (
@@ -1182,23 +1212,23 @@ function ShiftChangesTab({
                 {row.kind === "swap" && (
                   <>
                     <span className="shrink-0 text-xs font-semibold text-amber-600 dark:text-amber-400 w-8">変更</span>
-                    <span className="text-sm text-zinc-800 dark:text-zinc-100 flex items-center gap-1">
-                      <span className="text-zinc-500 dark:text-zinc-400">{row.from}</span>
+                    <span className="text-sm text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5 flex-wrap">
+                      <StaffRefChip staff={row.from} muted />
                       <span className="text-zinc-400">⇒</span>
-                      <span className="font-semibold">{row.to}</span>
+                      <StaffRefChip staff={row.to} />
                     </span>
                   </>
                 )}
                 {row.kind === "add" && (
                   <>
                     <span className="shrink-0 text-xs font-semibold text-emerald-600 dark:text-emerald-400 w-8">追加</span>
-                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{row.name}</span>
+                    <StaffRefChip staff={row.staff} />
                   </>
                 )}
                 {row.kind === "remove" && (
                   <>
                     <span className="shrink-0 text-xs font-semibold text-red-500 dark:text-red-400 w-8">削除</span>
-                    <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">{row.name}</span>
+                    <StaffRefChip staff={row.staff} muted />
                   </>
                 )}
               </div>
