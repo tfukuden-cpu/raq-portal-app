@@ -26,6 +26,7 @@ import {
   cancelDepartStaffAction,
   testNotifyAction,
   testLinePushToSelfAction,
+  sendRestDayRemindNowAction,
 } from "./actions";
 import {
   buildDefaultNotificationSettings,
@@ -1940,6 +1941,40 @@ function VarChip({
   );
 }
 
+function SendNowButton({ projectId }: { projectId: string }) {
+  const [status, setStatus] = useState<"idle" | "sending" | "ok" | "err">("idle");
+  const [msg, setMsg] = useState("");
+  const [, start] = useTransition();
+
+  const handleSend = () => {
+    start(async () => {
+      setStatus("sending");
+      const res = await sendRestDayRemindNowAction(projectId);
+      setStatus(res.success ? "ok" : "err");
+      setMsg(res.message ?? "");
+      setTimeout(() => { setStatus("idle"); setMsg(""); }, 5000);
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={handleSend}
+        disabled={status === "sending"}
+        className="px-3 py-1 rounded-lg text-[11px] font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 disabled:opacity-50 transition-colors"
+      >
+        {status === "sending" ? "送信中…" : "今すぐ送信"}
+      </button>
+      {msg && (
+        <span className={`text-[10px] font-medium ${status === "ok" ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
+          {msg}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** 1通知のカード */
 function NotifyCard({
   notifyKey,
@@ -2143,13 +2178,19 @@ export function LineNotifySettings({
           onRecipient={v => updateItem("rest_day_remind", { recipient: v })}
           projectId={projectId}
           extra={
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">送信時刻</span>
-              <TimeInput
-                value={settings.rest_day_remind.time ?? "20:00"}
-                onChange={v => updateItem("rest_day_remind", { time: v })}
-              />
-              <span className="text-[11px] text-zinc-400">に送信（前日）</span>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">送信時刻</span>
+                <TimeInput
+                  value={settings.rest_day_remind.time ?? "20:00"}
+                  onChange={v => updateItem("rest_day_remind", { time: v })}
+                />
+                <span className="text-[11px] text-zinc-400">に送信（前日）</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">手動送信</span>
+                <SendNowButton projectId={projectId} />
+              </div>
             </div>
           }
         />

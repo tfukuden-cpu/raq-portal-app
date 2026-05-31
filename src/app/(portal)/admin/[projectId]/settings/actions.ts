@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { pushLine, pushLineTestButton, pushLineWithButton, multicastLine } from "@/lib/line";
-import { getAdminLineIds, resolveMessage } from "@/lib/notify";
+import { getAdminLineIds, logNotify, resolveMessage } from "@/lib/notify";
 import { redirect } from "next/navigation";
 import {
   createSpreadsheet,
@@ -17,6 +17,10 @@ import {
   syncHolidaySheet,
 } from "@/lib/gsheets";
 import { getRuleConfig } from "../../holiday-rule-config";
+import {
+  buildDefaultNotificationSettings,
+  DEFAULT_NOTIFY_MESSAGES,
+} from "./notify-config";
 import type { NotificationSettings } from "./notify-config";
 
 function adminSupa() {
@@ -1181,6 +1185,89 @@ export async function testNotifyAction(
  * 自分自身（現在ログイン中の管理者）に直接 push テスト送信
  * 結果に診断情報を含めて返す
  */
+// ── 翌日出勤リマインド即時送信 ────────────────────────────────────────────────
+
+export async function sendRestDayRemindNowAction(
+  projectId: string,
+): Promise<SettingsResult & { sent?: number }> {
+  await assertAdmin(projectId);
+  const admin = adminSupa();
+
+  const { data: ps } = await admin
+    .from("project_settings")
+    .select("notification_settings, line_group_id")
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  const settings = buildDefaultNotificationSettings(
+    (ps?.notification_settings as Record<string, unknown>) ?? {}
+  );
+  const groupId = (ps?.line_group_id as string | null) ?? null;
+  const cfg = settings.rest_day_remind;
+
+  const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const tmrw = new Date(Date.UTC(y, m - 1, d + 1))
+    .toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+
+  const { data: tShifts } = await admin
+    .from("shifts")
+    .select("staff_id, shift_start, shift_end, shift_name")
+    .eq("project_id", projectId)
+    .eq("shift_date", tmrw)
+    .not("shift_start", "is", null);
+
+  if (!tShifts || tShifts.length === 0) {
+    return { success: true, message: "翌日出勤予定のスタッフがいません", sent: 0 };
+  }
+
+  const staffIds = [...new Set(tShifts.map(s => s.staff_id as string))];
+  const { data: staffRows } = await admin
+    .from("staffs")
+    .select("id, display_name, name, line_user_id")
+    .in("id", staffIds);
+
+  const staffMap = Object.fromEntries(
+    (staffRows ?? []).map(s => [s.id as string, s as {
+      display_name: string | null; name: string | null; line_user_id: string | null
+    }])
+  );
+
+  function fmtShift(n: string | null, s: string | null, e: string | null): string {
+    if (n && s && e) return `${n}（${s}〜${e}）`;
+    if (s && e) return `${s}〜${e}`;
+    return n ?? "";
+  }
+
+  let sent = 0;
+  for (const shift of tShifts) {
+    const staff = staffMap[shift.staff_id as string];
+    if (!staff?.line_user_id) continue;
+    const name = staff.display_name ?? staff.name ?? (shift.staff_id as string);
+    const message = resolveMessage(
+      cfg.message ?? DEFAULT_NOTIFY_MESSAGES.rest_day_remind,
+      {
+        "名前": name,
+        "翌日": tmrw,
+        "シフト": fmtShift(shift.shift_name as string | null, shift.shift_start as string | null, shift.shift_end as string | null),
+      }
+    );
+    await pushLine(staff.line_user_id, message);
+    if (groupId) await pushLine(groupId, message);
+    void logNotify({
+      projectId,
+      notifyType: "rest_day_remind",
+      recipientType: "staff",
+      recipientId: shift.staff_id as string,
+      recipientName: name,
+      message,
+    });
+    sent++;
+  }
+
+  return { success: true, message: `${sent}名に送信しました`, sent };
+}
+
 export async function testLinePushToSelfAction(
   projectId: string,
 ): Promise<{ success: boolean; message: string; detail?: string }> {
