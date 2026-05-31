@@ -20,6 +20,18 @@ export type BreakSlotAssignment = {
   slot_number: number;
 };
 
+export type BreakShortSetting = {
+  staff_id: string;
+  short_break_minutes: number;
+};
+
+export type BreakRecord = {
+  staff_id: string;
+  break_type: string | null;
+  started_at: string;
+  ended_at: string | null;
+};
+
 const DEFAULT_SLOTS: Omit<BreakSlotSetting, "id">[] = [
   { slot_number: 1, label: "①", start_time: "12:00", end_time: "13:00", target_shift: "early", ratio: 20, sort_order: 0 },
   { slot_number: 2, label: "②", start_time: "13:15", end_time: "14:15", target_shift: "both",  ratio: 40, sort_order: 1 },
@@ -61,6 +73,35 @@ function spreadInterleave(
     for (let j = 0; j < slotCounts.length; j++) errors[j] += slotCounts[j].count / total;
   }
   return result;
+}
+
+export async function getBreakShortSettingsAction(
+  projectId: string,
+  date: string,
+): Promise<BreakShortSetting[]> {
+  const admin = createAdminClient();
+  const { data } = await admin.from("break_short_settings")
+    .select("staff_id, short_break_minutes")
+    .eq("project_id", projectId)
+    .eq("assignment_date", date);
+  return (data ?? []) as BreakShortSetting[];
+}
+
+export async function updateBreakShortSettingAction(
+  projectId: string,
+  date: string,
+  staffId: string,
+  minutes: number,
+): Promise<{ success: boolean }> {
+  const admin = createAdminClient();
+  const { error } = await admin.from("break_short_settings")
+    .upsert(
+      { project_id: projectId, assignment_date: date, staff_id: staffId, short_break_minutes: minutes },
+      { onConflict: "project_id,assignment_date,staff_id" },
+    );
+  if (error) return { success: false };
+  revalidatePath("/attendance");
+  return { success: true };
 }
 
 export async function getBreakSlotSettingsAction(projectId: string): Promise<BreakSlotSetting[]> {

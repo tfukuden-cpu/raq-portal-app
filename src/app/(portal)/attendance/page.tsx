@@ -13,7 +13,9 @@ import type { MotaAssignment } from "./mota-actions";
 import {
   getBreakSlotSettingsAction,
   getBreakSlotAssignmentsAction,
+  getBreakShortSettingsAction,
 } from "@/app/(portal)/seating/break-actions";
+import type { BreakRecord } from "@/app/(portal)/seating/break-actions";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -172,6 +174,7 @@ export default async function AttendancePage({
     { data: motaAssignmentRows },
     breakSlots,
     breakAssignments,
+    breakShortSettings,
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -182,7 +185,7 @@ export default async function AttendancePage({
       .eq("project_id", projectId)
       .in("shift_date", [today, tomorrow]),
     admin.from("punch_logs")
-      .select("staff_id, punch_type, recorded_at")
+      .select("staff_id, punch_type, recorded_at, note")
       .eq("project_id", projectId)
       .gte("recorded_at", todayStart)
       .lte("recorded_at", todayEnd)
@@ -233,6 +236,7 @@ export default async function AttendancePage({
       .eq("assignment_date", today),
     getBreakSlotSettingsAction(projectId),
     getBreakSlotAssignmentsAction(projectId, today),
+    getBreakShortSettingsAction(projectId, today),
   ]);
 
   // 今日・明日でデータを分割
@@ -550,6 +554,28 @@ export default async function AttendancePage({
       };
     });
 
+  // ── 休憩実績（break_start/end ペア）────────────────────
+  const breakRecordMap = new Map<string, { started_at: string; break_type: string | null; ended_at: string | null }[]>();
+  for (const p of punchLogs ?? []) {
+    const note = (p as { note?: string | null }).note ?? null;
+    if (p.punch_type === "break_start") {
+      if (!breakRecordMap.has(p.staff_id)) breakRecordMap.set(p.staff_id, []);
+      breakRecordMap.get(p.staff_id)!.push({ started_at: p.recorded_at, break_type: note, ended_at: null });
+    } else if (p.punch_type === "break_end") {
+      const list = breakRecordMap.get(p.staff_id);
+      if (list && list.length > 0) {
+        const last = list[list.length - 1];
+        if (last.ended_at === null) last.ended_at = p.recorded_at;
+      }
+    }
+  }
+  const breakRecords: BreakRecord[] = [];
+  for (const [staffId, records] of breakRecordMap) {
+    for (const r of records) {
+      breakRecords.push({ staff_id: staffId, break_type: r.break_type, started_at: r.started_at, ended_at: r.ended_at });
+    }
+  }
+
   // ── 全体サマリー ─────────────────────────────────────────
   const total      = allInternal.length;
   const departed   = allInternal.filter(m => m.departureTime || m.clockIn).length;
@@ -593,6 +619,8 @@ export default async function AttendancePage({
       initialMotaAssignments={initialMotaAssignments}
       breakSlots={breakSlots}
       breakAssignments={breakAssignments}
+      breakShortSettings={breakShortSettings}
+      breakRecords={breakRecords}
     />
   );
 }

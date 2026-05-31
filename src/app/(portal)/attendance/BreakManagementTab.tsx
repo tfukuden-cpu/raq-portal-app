@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import {
   updateBreakSlotAssignmentAction,
   assignBreakSlotsAction,
+  updateBreakShortSettingAction,
 } from "@/app/(portal)/seating/break-actions";
-import type { BreakSlotSetting, BreakSlotAssignment } from "@/app/(portal)/seating/break-actions";
+import type { BreakSlotSetting, BreakSlotAssignment, BreakShortSetting, BreakRecord } from "@/app/(portal)/seating/break-actions";
 import type { SectionGroup } from "./AttendanceClient";
 
 const SLOT_BG: Record<number, string> = {
@@ -14,11 +15,7 @@ const SLOT_BG: Record<number, string> = {
   2: "bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700",
   3: "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700",
 };
-const SLOT_HEADER_BG: Record<number, string> = {
-  1: "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800",
-  2: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800",
-  3: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800",
-};
+
 const TARGET_SHIFT_LABEL: Record<string, string> = {
   early: "早番のみ",
   late:  "遅番のみ",
@@ -32,6 +29,7 @@ interface BreakMemberInfo {
   name: string;
   accountNumber: string | null;
   shiftName: string;
+  section: string;
 }
 
 interface Props {
@@ -39,19 +37,29 @@ interface Props {
   today: string;
   breakSlots: BreakSlotSetting[];
   breakAssignments: BreakSlotAssignment[];
+  breakShortSettings: BreakShortSetting[];
+  breakRecords: BreakRecord[];
   grouped: SectionGroup[];
 }
 
+function fmtTime(ts: string): string {
+  return new Date(ts).toLocaleTimeString("ja-JP", {
+    timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+}
+
 export default function BreakManagementTab({
-  projectId, today, breakSlots, breakAssignments, grouped,
+  projectId, today, breakSlots, breakAssignments,
+  breakShortSettings, breakRecords, grouped,
 }: Props) {
   const router = useRouter();
   const [assignments, setAssignments] = useState<BreakSlotAssignment[]>(breakAssignments);
+  const [shortSettings, setShortSettings] = useState<BreakShortSetting[]>(breakShortSettings);
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<string | null>(null);
 
-  // メンバー情報マップ（staffId → info + section）
-  const memberInfoMap = new Map<string, BreakMemberInfo & { section: string }>();
+  // メンバー情報マップ
+  const memberInfoMap = new Map<string, BreakMemberInfo>();
   for (const sec of grouped) {
     for (const sg of sec.shiftGroups) {
       for (const m of sg.members) {
@@ -66,8 +74,19 @@ export default function BreakManagementTab({
     }
   }
 
+  // 休憩実績マップ（staffId → records）
+  const breakRecordsByStaff = new Map<string, BreakRecord[]>();
+  for (const r of breakRecords) {
+    if (!breakRecordsByStaff.has(r.staff_id)) breakRecordsByStaff.set(r.staff_id, []);
+    breakRecordsByStaff.get(r.staff_id)!.push(r);
+  }
+
   function getSlotNumber(staffId: string): number | null {
     return assignments.find(a => a.staff_id === staffId)?.slot_number ?? null;
+  }
+
+  function getShortMinutes(staffId: string): number {
+    return shortSettings.find(s => s.staff_id === staffId)?.short_break_minutes ?? 15;
   }
 
   function handleSlotChange(staffId: string, newSlot: number) {
@@ -77,6 +96,19 @@ export default function BreakManagementTab({
         setAssignments(prev => [
           ...prev.filter(a => a.staff_id !== staffId),
           { staff_id: staffId, slot_number: newSlot },
+        ]);
+      }
+    });
+  }
+
+  function handleShortMinutesToggle(staffId: string, current: number) {
+    const next = current === 15 ? 30 : 15;
+    startTransition(async () => {
+      const res = await updateBreakShortSettingAction(projectId, today, staffId, next);
+      if (res.success) {
+        setShortSettings(prev => [
+          ...prev.filter(s => s.staff_id !== staffId),
+          { staff_id: staffId, short_break_minutes: next },
         ]);
       }
     });
@@ -104,32 +136,7 @@ export default function BreakManagementTab({
     return <p className="text-sm text-zinc-400 py-6 text-center">休憩スロットが設定されていません</p>;
   }
 
-  // スロット × セクション → メンバーリスト
-  const slotSectionMap = new Map<number, Map<string, BreakMemberInfo[]>>();
-  for (const slot of breakSlots) {
-    const secMap = new Map<string, BreakMemberInfo[]>();
-    for (const sec of BREAK_SECTIONS) secMap.set(sec, []);
-    slotSectionMap.set(slot.slot_number, secMap);
-  }
-  for (const a of assignments) {
-    const info = memberInfoMap.get(a.staff_id);
-    if (!info) continue;
-    if (!BREAK_SECTIONS.includes(info.section as (typeof BREAK_SECTIONS)[number])) continue;
-    const secMap = slotSectionMap.get(a.slot_number);
-    if (!secMap) continue;
-    const list = secMap.get(info.section);
-    if (list && !list.some(m => m.staffId === info.staffId)) list.push(info);
-  }
-
-  // セクション別合計人数
-  const sectionTotals: Record<string, number> = {};
-  for (const sec of BREAK_SECTIONS) {
-    sectionTotals[sec] = 0;
-    for (const [, secMap] of slotSectionMap) {
-      sectionTotals[sec] += secMap.get(sec)?.length ?? 0;
-    }
-  }
-
+  // セクション × スロットごとのメンバーリスト
   const totalAssigned = assignments.filter(a => {
     const info = memberInfoMap.get(a.staff_id);
     return info && BREAK_SECTIONS.includes(info.section as (typeof BREAK_SECTIONS)[number]);
@@ -159,65 +166,60 @@ export default function BreakManagementTab({
         </div>
       )}
 
-      {totalAssigned > 0 && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-          {/* テーブルヘッダー */}
-          <div className="grid border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60"
-               style={{ gridTemplateColumns: "minmax(100px,auto) 1fr 1fr" }}>
-            <div className="px-3 py-2.5 text-xs font-bold text-zinc-500 dark:text-zinc-400">スロット</div>
-            {BREAK_SECTIONS.map(sec => (
-              <div key={sec} className="px-3 py-2.5 border-l border-zinc-200 dark:border-zinc-700">
-                <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200">{sec}</span>
-                <span className="ml-1.5 text-[11px] text-zinc-400 tabular-nums">{sectionTotals[sec]}名</span>
-              </div>
-            ))}
-          </div>
+      {totalAssigned > 0 && BREAK_SECTIONS.map(section => {
+        // このセクションのメンバー（スロット割り当て済み）
+        const sectionMembers = assignments
+          .filter(a => memberInfoMap.get(a.staff_id)?.section === section)
+          .map(a => ({ ...memberInfoMap.get(a.staff_id)!, slotNumber: a.slot_number }))
+          .filter(m => !!m.staffId);
 
-          {/* スロット行 */}
-          {breakSlots.map((slot, idx) => {
-            const secMap = slotSectionMap.get(slot.slot_number);
-            const isLast = idx === breakSlots.length - 1;
+        if (sectionMembers.length === 0) return null;
 
-            return (
-              <div
-                key={slot.slot_number}
-                className={`grid ${!isLast ? "border-b border-zinc-200 dark:border-zinc-700" : ""}`}
-                style={{ gridTemplateColumns: "minmax(100px,auto) 1fr 1fr" }}
-              >
-                {/* スロット情報セル */}
-                <div className={`px-3 py-3 flex flex-col gap-0.5 ${SLOT_HEADER_BG[slot.slot_number] ?? ""}`}>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[11px] font-bold ${SLOT_BG[slot.slot_number] ?? ""}`}>
+        return (
+          <div key={section} className="rounded-2xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+            {/* セクションヘッダー */}
+            <div className="px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-700">
+              <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200">{section}</span>
+              <span className="ml-2 text-[11px] text-zinc-400 tabular-nums">{sectionMembers.length}名</span>
+            </div>
+
+            {/* スロット別グループ */}
+            {breakSlots.map((slot, slotIdx) => {
+              const slotMembers = sectionMembers.filter(m => m.slotNumber === slot.slot_number);
+              if (slotMembers.length === 0) return null;
+              const isLast = slotIdx === breakSlots.length - 1;
+
+              return (
+                <div key={slot.slot_number} className={!isLast ? "border-b border-zinc-100 dark:border-zinc-800" : ""}>
+                  {/* スロット行ヘッダー */}
+                  <div className="flex items-center gap-2 px-3 py-2 bg-zinc-50/60 dark:bg-zinc-900/40">
+                    <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[11px] font-bold shrink-0 ${SLOT_BG[slot.slot_number] ?? ""}`}>
                       {slot.label}
                     </span>
-                    <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200 tabular-nums">
-                      {slot.start_time.slice(0, 5)}
+                    <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 tabular-nums">
+                      {slot.start_time.slice(0, 5)}〜{slot.end_time.slice(0, 5)}
                     </span>
+                    <span className="text-[10px] text-zinc-400">{TARGET_SHIFT_LABEL[slot.target_shift] ?? slot.target_shift}</span>
+                    <span className="ml-auto text-[11px] text-zinc-400 tabular-nums">{slotMembers.length}名</span>
                   </div>
-                  <div className="pl-0.5 text-[10px] text-zinc-400 tabular-nums">
-                    〜{slot.end_time.slice(0, 5)}
-                  </div>
-                  <div className="text-[9px] text-zinc-400 leading-tight">
-                    {TARGET_SHIFT_LABEL[slot.target_shift] ?? slot.target_shift}
-                  </div>
-                </div>
 
-                {/* セクション別メンバーセル */}
-                {BREAK_SECTIONS.map(sec => {
-                  const members = secMap?.get(sec) ?? [];
-                  return (
-                    <div key={sec} className="px-2 py-2 border-l border-zinc-200 dark:border-zinc-700 divide-y divide-zinc-50 dark:divide-zinc-800/60">
-                      {members.length === 0 ? (
-                        <p className="text-[11px] text-zinc-300 dark:text-zinc-600 py-1 text-center">—</p>
-                      ) : (
-                        members.map(m => (
-                          <div key={m.staffId} className="flex items-center gap-1.5 py-1.5 min-w-0">
+                  {/* メンバー行 */}
+                  <div className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                    {slotMembers.map(m => {
+                      const shortMin = getShortMinutes(m.staffId);
+                      const records = breakRecordsByStaff.get(m.staffId) ?? [];
+
+                      return (
+                        <div key={m.staffId} className="px-3 py-2.5 space-y-1.5">
+                          {/* メンバー情報行 */}
+                          <div className="flex items-center gap-2 min-w-0">
                             <span className="text-[10px] font-mono text-zinc-400 tabular-nums shrink-0 w-10 truncate">
                               {m.accountNumber ?? "—"}
                             </span>
                             <span className="text-xs text-zinc-700 dark:text-zinc-200 flex-1 min-w-0 truncate">
                               {m.name}
                             </span>
+                            {/* スロット変更 */}
                             <select
                               value={getSlotNumber(m.staffId) ?? slot.slot_number}
                               onChange={e => handleSlotChange(m.staffId, parseInt(e.target.value))}
@@ -228,17 +230,41 @@ export default function BreakManagementTab({
                                 <option key={s.slot_number} value={s.slot_number}>{s.label}</option>
                               ))}
                             </select>
+                            {/* 小休憩トグル */}
+                            <button
+                              onClick={() => handleShortMinutesToggle(m.staffId, shortMin)}
+                              disabled={isPending}
+                              className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
+                                shortMin === 30
+                                  ? "bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-600"
+                                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+                              }`}
+                              title="小休憩時間をタップで切り替え（15分 / 30分）"
+                            >
+                              小{shortMin}
+                            </button>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      )}
+
+                          {/* 実績 */}
+                          {records.length > 0 && (
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-12">
+                              {records.map((r, i) => (
+                                <span key={i} className="text-[10px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                                  {r.break_type ? `[${r.break_type}] ` : ""}{fmtTime(r.started_at)}〜{r.ended_at ? fmtTime(r.ended_at) : "…"}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
 
       {/* トースト */}
       {toast && (

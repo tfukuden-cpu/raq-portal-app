@@ -8,7 +8,7 @@ import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/a
 import HMotaPanel, { type MotaRow } from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
 import BreakManagementTab from "./BreakManagementTab";
-import type { BreakSlotSetting, BreakSlotAssignment } from "@/app/(portal)/seating/break-actions";
+import type { BreakSlotSetting, BreakSlotAssignment, BreakShortSetting, BreakRecord } from "@/app/(portal)/seating/break-actions";
 
 // ── 型定義 ────────────────────────────────────────────────
 export type StatusKey = "working" | "clocked_out" | "departed" | "absent" | "late" | "not_departed";
@@ -174,6 +174,8 @@ interface Props {
   initialMotaAssignments: MotaAssignment[];
   breakSlots?: BreakSlotSetting[];
   breakAssignments?: BreakSlotAssignment[];
+  breakShortSettings?: BreakShortSetting[];
+  breakRecords?: BreakRecord[];
 }
 
 type SelectionMode = "reminder" | "request" | "followup";
@@ -189,6 +191,7 @@ export default function AttendanceClient({
   seatData, wallData, seatStaffList,
   hMotaRows, initialMotaAssignments,
   breakSlots = [], breakAssignments = [],
+  breakShortSettings = [], breakRecords = [],
 }: Props) {
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating" | "break">("today");
 
@@ -548,6 +551,8 @@ export default function AttendanceClient({
               today={today}
               breakSlots={breakSlots}
               breakAssignments={breakAssignments}
+              breakShortSettings={breakShortSettings}
+              breakRecords={breakRecords}
               grouped={grouped}
             />
           </div>
