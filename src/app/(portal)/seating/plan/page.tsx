@@ -7,15 +7,12 @@ import SeatingPlanClient, { type PlanSeat, type PlanStaff, type WallData } from 
 function tokyoToday() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
-function addDays(dateStr: string, n: number) {
-  const d = new Date(dateStr + "T00:00:00+09:00");
-  d.setDate(d.getDate() + n);
-  return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
-}
 
 const OFF_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
 
-export default async function SeatingPlanPage() {
+export default async function SeatingPlanPage(props: {
+  searchParams: Promise<{ date?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -34,9 +31,10 @@ export default async function SeatingPlanPage() {
     myStaff?.global_role === "executive";
   if (!isAdmin) redirect("/seating");
 
-  const admin    = createAdminClient();
-  const today    = tokyoToday();
-  const tomorrow = addDays(today, 1);
+  const { date: dateParam } = await props.searchParams;
+  const admin  = createAdminClient();
+  const today  = tokyoToday();
+  const target = dateParam ?? today;
 
   const [
     { data: seats },
@@ -50,13 +48,13 @@ export default async function SeatingPlanPage() {
       .eq("project_id", projectId).eq("is_active", true),
     admin.from("seat_assignments")
       .select("seat_id, staff_id")
-      .eq("project_id", projectId).eq("assignment_date", tomorrow),
+      .eq("project_id", projectId).eq("assignment_date", target),
     admin.from("project_members")
       .select("staff_id, section, staffs(name, display_name, account_number)")
       .eq("project_id", projectId),
     admin.from("shifts")
       .select("staff_id, shift_name")
-      .eq("project_id", projectId).eq("shift_date", tomorrow),
+      .eq("project_id", projectId).eq("shift_date", target),
     admin.from("seat_walls")
       .select("x1_pct, y1_pct, x2_pct, y2_pct")
       .eq("project_id", projectId),
@@ -75,9 +73,7 @@ export default async function SeatingPlanPage() {
     });
   }
 
-  // 翌日出勤予定スタッフ
   const assignMap    = new Map((assignments ?? []).map(a => [a.seat_id, a.staff_id]));
-  // staffId → shiftName（早番/遅番判定用）
   const shiftNameMap = new Map(
     (shifts ?? []).map(s => [s.staff_id as string, s.shift_name as string | null])
   );
@@ -125,7 +121,8 @@ export default async function SeatingPlanPage() {
   return (
     <SeatingPlanClient
       projectId={projectId}
-      date={tomorrow}
+      date={target}
+      today={today}
       seats={planSeats}
       staff={planStaff}
       walls={wallData}

@@ -266,7 +266,7 @@ export default function SeatingClient({
                   href="/seating/plan"
                   className="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors"
                 >
-                  翌日配置
+                  配置編集
                 </a>
               </>
             )}

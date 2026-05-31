@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { saveSeatAssignmentsAction, autoAssignSeatsAction } from "../actions";
 import { getSeatBgClass, getSeatBorderClass, getSeatTextClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 
@@ -32,10 +32,11 @@ export type PlanStaff = {
 };
 
 export default function SeatingPlanClient({
-  projectId, date, seats: initialSeats, staff, walls = [], embedded = false,
+  projectId, date, today, seats: initialSeats, staff, walls = [], embedded = false,
 }: {
   projectId: string;
   date: string;
+  today?: string;
   seats: PlanSeat[];
   staff: PlanStaff[];
   walls?: WallData[];
@@ -47,7 +48,8 @@ export default function SeatingPlanClient({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
-  const router = useRouter();
+  const router   = useRouter();
+  const pathname = usePathname();
 
   const staffMap = new Map(staff.map(s => [s.id, s]));
   const assignedIds = new Set(seats.map(s => s.staffId).filter(Boolean) as string[]);
@@ -158,8 +160,9 @@ export default function SeatingPlanClient({
     });
   }
 
-  const [, m, d] = date.split("-");
-  const dateLabel = `${parseInt(m)}/${parseInt(d)}`;
+  const handleDateChange = (newDate: string) => {
+    router.push(`${pathname}?date=${newDate}`);
+  };
 
   const unassignedStaff = staff.filter(s => !assignedIds.has(s.id));
   const assignedStaff   = staff.filter(s => assignedIds.has(s.id));
@@ -195,9 +198,14 @@ export default function SeatingPlanClient({
       {/* ヘッダー（スタンドアロン時のみ） */}
       {!embedded && (
         <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">
-          <div>
-            <h1 className="text-base font-bold text-zinc-800 dark:text-zinc-100">翌日座席配置</h1>
-            <p className="text-xs text-zinc-400 tabular-nums">{dateLabel}（翌日）</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-base font-bold text-zinc-800 dark:text-zinc-100">座席配置編集</h1>
+            <input
+              type="date"
+              value={date}
+              onChange={e => handleDateChange(e.target.value)}
+              className="text-xs tabular-nums px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
+            />
           </div>
           {actionButtons}
         </div>
@@ -206,7 +214,12 @@ export default function SeatingPlanClient({
       {/* 埋め込み時のコンパクトツールバー */}
       {embedded && (
         <div className="flex items-center justify-between gap-2 pt-1 pb-2">
-          <p className="text-[11px] text-zinc-400 tabular-nums">{dateLabel}（翌日）</p>
+          <input
+            type="date"
+            value={date}
+            onChange={e => handleDateChange(e.target.value)}
+            className="text-xs tabular-nums px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
+          />
           {actionButtons}
         </div>
       )}
