@@ -427,6 +427,45 @@ export default async function AttendancePage({
 
   const grouped = buildGrouped(allInternal, sectionOrderFull);
 
+  // ── H MOTA スロット配置 ────────────────────────────────────
+  const FIXED_MOTA_NUMBERS = [
+    "ASS 130", "ASS 131", "ASS 132", "ASS 133", "ASS 134",
+    "ASS 196", "ASS 197", "ASS 198", "ASS 199", "ASS 200",
+  ];
+
+  const todayShiftIds = new Set(
+    (todayShifts ?? [])
+      .filter(s => !OFF_SHIFT_NAMES.includes((s.shift_name ?? "") as string))
+      .map(s => s.staff_id),
+  );
+
+  const hMotaRows: MotaRow[] = [
+    ...(memberRows ?? [])
+      .filter(m => (m.section as string | null) === "H MOTA" && !todayShiftIds.has(m.staff_id))
+      .map(m => {
+        const info = memberMap.get(m.staff_id);
+        return info?.accountNumber
+          ? { accountNumber: info.accountNumber, name: info.name, isFixed: false }
+          : null;
+      })
+      .filter((r): r is MotaRow => r !== null),
+    ...FIXED_MOTA_NUMBERS.map(n => ({ accountNumber: n, name: n, isFixed: true })),
+  ];
+
+  const initialMotaAssignments: MotaAssignment[] = (motaAssignmentRows ?? []).map(r => ({
+    id: r.id as string,
+    accountNumber: r.account_number as string,
+    slot: r.slot as string,
+    isFixed: (r.is_fixed as boolean) ?? false,
+  }));
+
+  // アカウント番号 → スロット（座席表用）
+  const motaAccountSlotMap = new Map<string, string[]>();
+  for (const a of initialMotaAssignments) {
+    if (!motaAccountSlotMap.has(a.accountNumber)) motaAccountSlotMap.set(a.accountNumber, []);
+    motaAccountSlotMap.get(a.accountNumber)!.push(a.slot);
+  }
+
   // ── 座席データ ─────────────────────────────────────────
   const seatAssignMap = new Map((assignmentRows ?? []).map(a => [a.seat_id, a.staff_id]));
   const seatShiftMap  = new Map((todayShifts ?? []).map(s => [s.staff_id, s.shift_name as string | null]));
@@ -493,45 +532,6 @@ export default async function AttendancePage({
         shiftName:     seatShiftMap.get(m.staff_id) ?? null,
       };
     });
-
-  // ── H MOTA スロット配置 ────────────────────────────────────
-  const FIXED_MOTA_NUMBERS = [
-    "ASS 130", "ASS 131", "ASS 132", "ASS 133", "ASS 134",
-    "ASS 196", "ASS 197", "ASS 198", "ASS 199", "ASS 200",
-  ];
-
-  const todayShiftIds = new Set(
-    (todayShifts ?? [])
-      .filter(s => !OFF_SHIFT_NAMES.includes((s.shift_name ?? "") as string))
-      .map(s => s.staff_id),
-  );
-
-  const hMotaRows: MotaRow[] = [
-    ...(memberRows ?? [])
-      .filter(m => (m.section as string | null) === "H MOTA" && !todayShiftIds.has(m.staff_id))
-      .map(m => {
-        const info = memberMap.get(m.staff_id);
-        return info?.accountNumber
-          ? { accountNumber: info.accountNumber, name: info.name, isFixed: false }
-          : null;
-      })
-      .filter((r): r is MotaRow => r !== null),
-    ...FIXED_MOTA_NUMBERS.map(n => ({ accountNumber: n, name: n, isFixed: true })),
-  ];
-
-  const initialMotaAssignments: MotaAssignment[] = (motaAssignmentRows ?? []).map(r => ({
-    id: r.id as string,
-    accountNumber: r.account_number as string,
-    slot: r.slot as string,
-    isFixed: (r.is_fixed as boolean) ?? false,
-  }));
-
-  // アカウント番号 → スロット（座席表用）
-  const motaAccountSlotMap = new Map<string, string[]>();
-  for (const a of initialMotaAssignments) {
-    if (!motaAccountSlotMap.has(a.accountNumber)) motaAccountSlotMap.set(a.accountNumber, []);
-    motaAccountSlotMap.get(a.accountNumber)!.push(a.slot);
-  }
 
   // ── 翌日配置データ ─────────────────────────────────────────
   const OFF_NAMES_PLAN = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];

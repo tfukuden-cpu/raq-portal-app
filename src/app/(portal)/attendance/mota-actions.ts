@@ -54,15 +54,6 @@ export async function addMotaAssignmentAction(
     await assertAdmin(projectId);
     const admin = createAdminClient();
 
-    if (isFixed) {
-      await admin
-        .from("mota_slot_assignments")
-        .delete()
-        .eq("project_id", projectId)
-        .eq("assignment_date", date)
-        .eq("account_number", accountNumber);
-    }
-
     const { data, error } = await admin
       .from("mota_slot_assignments")
       .insert({ project_id: projectId, assignment_date: date, account_number: accountNumber, slot, is_fixed: isFixed })
