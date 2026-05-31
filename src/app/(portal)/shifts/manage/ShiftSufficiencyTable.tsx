@@ -40,6 +40,9 @@ type Props = {
   onDateSelect?: (date: string) => void;
 };
 
+// 合計から除外するセクション
+const EXCLUDE_FROM_TOTAL = ["ローン", "リメイク"];
+
 function isWeekend(dateStr: string, holidays: string[]): boolean {
   const d = new Date(dateStr);
   const dow = d.getUTCDay(); // 0=日, 6=土
@@ -70,7 +73,12 @@ export default function ShiftSufficiencyTable({
   const targetPatterns = patterns.filter(p => p.section);
 
   // セクション一覧（重複排除・順序維持）
-  const sections = Array.from(new Set(targetPatterns.map(p => p.section!)));
+  const allSections = Array.from(new Set(targetPatterns.map(p => p.section!)));
+
+  // メインセクション（合計対象）とボトムセクション（ローン・リメイク）に分離
+  const mainSections   = allSections.filter(s => !EXCLUDE_FROM_TOTAL.includes(s));
+  const bottomSections = allSections.filter(s =>  EXCLUDE_FROM_TOTAL.includes(s));
+  const orderedSections = [...mainSections, ...bottomSections];
 
   // 折りたたみ state（デフォルト折りたたみ）
   const [collapsed, setCollapsed] = useState(true);
@@ -114,6 +122,20 @@ export default function ShiftSufficiencyTable({
     return 0;
   }
 
+  // 合計行の計算（mainSections のみ）
+  function getTotalForDate(date: string): { actual: number; required: number } {
+    let actual = 0;
+    let required = 0;
+    for (const section of mainSections) {
+      const sectionPatterns = targetPatterns.filter(p => p.section === section);
+      for (const pattern of sectionPatterns) {
+        actual   += getActual(section, pattern.name, date);
+        required += getRequired(pattern, date);
+      }
+    }
+    return { actual, required };
+  }
+
   function openEdit(section: string, pattern: string, date: string, current: number) {
     setEditing({ section, pattern, date, current });
     setEditValue(String(current));
@@ -142,7 +164,7 @@ export default function ShiftSufficiencyTable({
       <button
         type="button"
         onClick={() => setCollapsed(c => !c)}
-        className="w-full px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-left"
+        className="w-full px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-left"
       >
         <div>
           <h2 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">充足表</h2>
@@ -163,10 +185,10 @@ export default function ShiftSufficiencyTable({
           <thead>
             <tr>
               {/* 固定列ヘッダー */}
-              <th className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-3 py-1.5 text-left font-semibold text-zinc-500 dark:text-zinc-400 border-b border-r border-zinc-200 dark:border-zinc-700 min-w-[100px]">
+              <th className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-3 py-1 text-left font-semibold text-zinc-500 dark:text-zinc-400 border-b border-r border-zinc-200 dark:border-zinc-700 min-w-[100px]">
                 セクション
               </th>
-              <th className="sticky left-[100px] z-10 bg-zinc-50 dark:bg-zinc-800 px-3 py-1.5 text-left font-semibold text-zinc-500 dark:text-zinc-400 border-b border-r border-zinc-200 dark:border-zinc-700 min-w-[72px]">
+              <th className="sticky left-[100px] z-10 bg-zinc-50 dark:bg-zinc-800 px-3 py-1 text-left font-semibold text-zinc-500 dark:text-zinc-400 border-b border-r border-zinc-200 dark:border-zinc-700 min-w-[72px]">
                 パターン
               </th>
               {allDates.map(d => {
@@ -192,21 +214,34 @@ export default function ShiftSufficiencyTable({
             </tr>
           </thead>
           <tbody>
-            {sections.map(section => {
+            {/* ── メイン + ボトムセクション行 ── */}
+            {orderedSections.map((section, si) => {
               const sectionPatterns = targetPatterns.filter(p => p.section === section);
+              // ボトムセクション最初の行の前に区切り線を入れる
+              const isFirstBottom = EXCLUDE_FROM_TOTAL.includes(section) &&
+                (si === 0 || !EXCLUDE_FROM_TOTAL.includes(orderedSections[si - 1]));
+
               return sectionPatterns.map((pattern, pi) => (
                 <tr key={`${section}-${pattern.name}`}
-                  className="border-b border-zinc-100 dark:border-zinc-800 last:border-0">
+                  className={[
+                    "border-b border-zinc-100 dark:border-zinc-800 last:border-0",
+                    isFirstBottom && pi === 0 ? "border-t-2 border-t-zinc-300 dark:border-t-zinc-600" : "",
+                  ].join(" ")}>
                   {/* セクション列（rowSpan） */}
                   {pi === 0 && (
                     <td
                       rowSpan={sectionPatterns.length}
-                      className="sticky left-0 z-10 bg-white dark:bg-zinc-900 px-3 py-1.5 font-semibold text-zinc-700 dark:text-zinc-300 border-r border-zinc-200 dark:border-zinc-700 align-middle">
+                      className={[
+                        "sticky left-0 z-10 bg-white dark:bg-zinc-900 px-3 py-1 font-semibold border-r border-zinc-200 dark:border-zinc-700 align-middle",
+                        EXCLUDE_FROM_TOTAL.includes(section)
+                          ? "text-zinc-400 dark:text-zinc-500"
+                          : "text-zinc-700 dark:text-zinc-300",
+                      ].join(" ")}>
                       {section}
                     </td>
                   )}
                   {/* パターン列 */}
-                  <td className="sticky left-[100px] z-10 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-zinc-600 dark:text-zinc-400 border-r border-zinc-200 dark:border-zinc-700 whitespace-nowrap">
+                  <td className="sticky left-[100px] z-10 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1 text-zinc-600 dark:text-zinc-400 border-r border-zinc-200 dark:border-zinc-700 whitespace-nowrap">
                     {pattern.name}
                   </td>
                   {/* 日別セル */}
@@ -222,7 +257,7 @@ export default function ShiftSufficiencyTable({
                       <td key={date}
                         onClick={() => openEdit(section, pattern.name, date, required)}
                         className={[
-                          "text-center tabular-nums py-1 px-0.5 cursor-pointer transition-colors select-none",
+                          "text-center tabular-nums py-0.5 px-0.5 cursor-pointer transition-colors select-none",
                           isSel ? "bg-blue-50/60 dark:bg-blue-950/20" : weekend ? "bg-red-50/30 dark:bg-red-950/10" : "",
                           "hover:bg-zinc-100 dark:hover:bg-zinc-800",
                         ].join(" ")}>
@@ -252,6 +287,50 @@ export default function ShiftSufficiencyTable({
                 </tr>
               ));
             })}
+
+            {/* ── 合計行（ローン・リメイク除く） ── */}
+            {mainSections.length > 0 && (
+              <tr className="border-t-2 border-t-zinc-400 dark:border-t-zinc-500 bg-zinc-50 dark:bg-zinc-800/40">
+                <td className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1 font-bold text-zinc-700 dark:text-zinc-200 border-r border-zinc-200 dark:border-zinc-700 align-middle whitespace-nowrap">
+                  合計
+                </td>
+                <td className="sticky left-[100px] z-10 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1 text-[10px] text-zinc-400 dark:text-zinc-500 border-r border-zinc-200 dark:border-zinc-700 whitespace-nowrap">
+                  {mainSections.join("・")}
+                </td>
+                {allDates.map(date => {
+                  const { actual, required } = getTotalForDate(date);
+                  const diff = required === 0 ? 0 : actual - required;
+                  const weekend = isWeekend(date, holidays);
+                  const isSel = date === selectedDate;
+
+                  return (
+                    <td key={date}
+                      className={[
+                        "text-center tabular-nums py-0.5 px-0.5 select-none",
+                        isSel ? "bg-blue-50/60 dark:bg-blue-950/20" : weekend ? "bg-red-50/30 dark:bg-red-950/10" : "",
+                      ].join(" ")}>
+                      {required === 0 ? (
+                        <span className="text-zinc-300 dark:text-zinc-700">—</span>
+                      ) : (
+                        <div className="flex flex-col items-center leading-tight">
+                          <span className={[
+                            "font-bold text-[11px]",
+                            diff > 0 ? "text-emerald-600 dark:text-emerald-400"
+                             : diff < 0 ? "text-red-500 dark:text-red-400"
+                             : "text-zinc-400 dark:text-zinc-500",
+                          ].join(" ")}>
+                            {diff > 0 ? `+${diff}` : diff}
+                          </span>
+                          <span className="text-[9px] text-zinc-400 dark:text-zinc-500">
+                            {actual}/{required}
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>}
