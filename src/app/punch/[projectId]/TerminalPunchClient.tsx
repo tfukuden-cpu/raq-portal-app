@@ -65,6 +65,7 @@ interface Props {
   walls: TerminalWall[];
   breakAssignmentMap?: Record<string, number>;
   breakSlots?: BreakSlotInfo[];
+  motaAccountNumbers?: string[];
 }
 
 // ── ステータス表示定義 ──────────────────────────────────────────
@@ -281,7 +282,7 @@ function LiveClock() {
 }
 
 // ── メインコンポーネント ──────────────────────────────────────
-export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [] }: Props) {
+export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [] }: Props) {
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [localMembers, setLocalMembers] = useState(members);
   const [isPending, startTransition] = useTransition();
@@ -303,6 +304,10 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   // 座席表の「名前で探す」タブ
   const hasSeatData = seats.length > 0;
   const [activeTab, setActiveTab] = useState<"seat" | "name">(hasSeatData ? "seat" : "name");
+
+  // ホバーツールチップ
+  const [hoveredSeatId, setHoveredSeatId] = useState<string | null>(null);
+  const motaAccountSet = useMemo(() => new Set(motaAccountNumbers), [motaAccountNumbers]);
 
   // ── 30秒ポーリング ───────────────────────────────────────────
   useEffect(() => {
@@ -582,6 +587,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                 <div
                   className="relative bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden"
                   style={{ width: "max(100%, 1800px)", aspectRatio: "3/2" }}
+                  onMouseLeave={() => setHoveredSeatId(null)}
                 >
                   {seats.every(s => s.seatType === "disabled") && (
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -599,12 +605,79 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       ))}
                     </svg>
                   )}
+                  {/* ── ホバーツールチップ ── */}
+                  {(() => {
+                    const hSeat = hoveredSeatId ? seats.find(s => s.id === hoveredSeatId) : null;
+                    const hMember = hSeat?.staffId ? memberMap.get(hSeat.staffId) : null;
+                    if (!hSeat || !hMember) return null;
+                    const hStatus = memberStatus(hMember);
+                    const hSlotNum = hSeat.staffId ? breakAssignmentMap[hSeat.staffId] : undefined;
+                    const hSlot = hSlotNum ? breakSlots.find(s => s.slotNumber === hSlotNum) : null;
+                    const hasMota = hMember.accountNumber ? motaAccountSet.has(hMember.accountNumber) : false;
+                    const showAbove = hSeat.yPct > 15;
+                    return (
+                      <div
+                        className="absolute z-[200] pointer-events-none"
+                        style={{
+                          left: `${hSeat.xPct}%`,
+                          top: `${hSeat.yPct}%`,
+                          transform: showAbove
+                            ? "translate(-50%, calc(-100% - 38px))"
+                            : "translate(-50%, 36px)",
+                        }}
+                      >
+                        <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-600 rounded-2xl p-3 shadow-2xl shadow-black/70 min-w-[170px] max-w-[230px]">
+                          <div className="flex items-baseline gap-1.5 mb-1.5">
+                            {hMember.accountNumber && (
+                              <span className="text-[10px] font-mono text-zinc-500 tabular-nums shrink-0">{hMember.accountNumber}</span>
+                            )}
+                            <span className="text-xs font-bold text-white truncate">{hMember.name}</span>
+                          </div>
+                          {hMember.shiftName && (
+                            <p className="text-[10px] text-zinc-400 mb-1">
+                              {hMember.shiftName}
+                              {hMember.shiftStart && hMember.shiftEnd && ` ${hMember.shiftStart}〜${hMember.shiftEnd}`}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className={`w-1.5 h-1.5 rounded-full ${STATUS_BG[hStatus].split(" ")[0]}`} />
+                            <span className={`text-[10px] font-semibold ${STATUS_COLOR[hStatus]}`}>{STATUS_LABEL[hStatus]}</span>
+                          </div>
+                          {hSlot && (
+                            <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-zinc-700">
+                              <span className={`w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold shrink-0 ${BREAK_BADGE_CLASS[hSlotNum!] ?? ""}`}>
+                                {hSlot.label}
+                              </span>
+                              <span className="text-[10px] text-zinc-300 tabular-nums">
+                                休憩 {hSlot.startTime.slice(0, 5)}〜{hSlot.endTime.slice(0, 5)}
+                              </span>
+                            </div>
+                          )}
+                          {hStatus === "on_break" && hMember.breakNote && (
+                            <p className="text-[10px] text-amber-400 mt-1">
+                              {hMember.breakNote}
+                            </p>
+                          )}
+                          {hasMota && (
+                            <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-zinc-700">
+                              <span className="text-[9px] font-bold bg-purple-600 text-white px-1.5 py-0.5 rounded-full">H MOTA</span>
+                              <span className="text-[10px] text-zinc-400">割り当て済み</span>
+                            </div>
+                          )}
+                        </div>
+                        {/* 吹き出し矢印 */}
+                        <div className={`absolute left-1/2 -translate-x-1/2 w-0 h-0 ${showAbove ? "bottom-[-6px] border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-zinc-600" : "top-[-6px] border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-zinc-600"}`} />
+                      </div>
+                    );
+                  })()}
+
                   {seats.map(seat => {
                     const isDisabled = seat.seatType === "disabled";
                     const isFree     = seat.seatType === "free";
                     const member     = seat.staffId ? memberMap.get(seat.staffId) : undefined;
                     const status     = member ? memberStatus(member) : null;
                     const tappable   = !isDisabled && !!seat.staffId && !!member;
+                    const hasMota    = member?.accountNumber ? motaAccountSet.has(member.accountNumber) : false;
 
                     if (isDisabled) {
                       return (
@@ -629,6 +702,8 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                     return (
                       <button key={seat.id}
                         onClick={() => tappable && handleSeatTap(seat)}
+                        onMouseEnter={() => member && setHoveredSeatId(seat.id)}
+                        onMouseLeave={() => setHoveredSeatId(null)}
                         disabled={isPending || !tappable}
                         style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
                         className={[
@@ -661,9 +736,16 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                                 {STATUS_LABEL[status]}
                               </span>
                             ) : null}
+                            {/* 休憩スロットバッジ */}
                             {seat.staffId && breakAssignmentMap[seat.staffId] && (
                               <span className={`absolute bottom-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold ${BREAK_BADGE_CLASS[breakAssignmentMap[seat.staffId]] ?? ""}`}>
                                 {BREAK_SLOT_LABEL[breakAssignmentMap[seat.staffId]] ?? ""}
+                              </span>
+                            )}
+                            {/* H MOTAバッジ */}
+                            {hasMota && (
+                              <span className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-bold bg-purple-600 text-white">
+                                M
                               </span>
                             )}
                           </>

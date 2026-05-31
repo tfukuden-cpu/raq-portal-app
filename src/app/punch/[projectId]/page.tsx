@@ -47,6 +47,7 @@ export default async function PunchPage({
     { data: wallRows },
     { data: absenceRows },
     { data: breakAssignmentRows },
+    { data: motaAssignmentRows },
   ] = await Promise.all([
     admin
       .from("project_members")
@@ -91,6 +92,11 @@ export default async function PunchPage({
     admin
       .from("break_slot_assignments")
       .select("staff_id, slot_number")
+      .eq("project_id", projectId)
+      .eq("assignment_date", today),
+    admin
+      .from("mota_slot_assignments")
+      .select("account_number")
       .eq("project_id", projectId)
       .eq("assignment_date", today),
   ]);
@@ -230,6 +236,10 @@ export default async function PunchPage({
     endTime:    s.end_time,
   }));
 
+  const motaAccountNumbers: string[] = (motaAssignmentRows ?? [])
+    .map(r => r.account_number as string)
+    .filter(Boolean);
+
   return (
     <TerminalPunchClient
       projectId={projectId}
@@ -239,6 +249,7 @@ export default async function PunchPage({
       walls={walls}
       breakAssignmentMap={breakAssignmentMap}
       breakSlots={breakSlots}
+      motaAccountNumbers={motaAccountNumbers}
     />
   );
 }
