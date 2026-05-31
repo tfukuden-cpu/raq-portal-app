@@ -673,7 +673,10 @@ export default function ShiftDayList({
                   {(() => {
                     const SUM_H = 22; // px（編集モードと同じ高さ）
                     const GRAY_SECTIONS = ["ローン", "リメイク"]; // グレーアウトセクション
-                    const EXCLUDE_TOTAL = ["ローン", "リメイク"]; // 全体合計から除外
+                    const EXCLUDE_TOTAL = ["ローン", "リメイク"]; // 全体合計から除外（セクション）
+                    const isGrandExcluded = (p: typeof visibleShiftPatterns[0]) =>
+                      EXCLUDE_TOTAL.includes(p.section ?? "") ||
+                      (p.section === "SV" && p.name.includes("中"));
                     const isGrayed = (p: typeof visibleShiftPatterns[0]) =>
                       (p.section === "SV" && p.name.includes("中")) ||
                       GRAY_SECTIONS.includes(p.section ?? "");
@@ -703,7 +706,7 @@ export default function ShiftDayList({
                     }
 
                     const todayJST = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
-                    const mainPats = visibleShiftPatterns.filter(p => !EXCLUDE_TOTAL.includes(p.section ?? ""));
+                    const mainPats = visibleShiftPatterns.filter(p => !isGrandExcluded(p));
 
                     return (
                   <div className="flex min-w-max bg-white dark:bg-zinc-900">

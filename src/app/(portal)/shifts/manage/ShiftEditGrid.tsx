@@ -2279,9 +2279,12 @@ export default function ShiftEditGrid({
                     })()}
                     {/* ── 全体合計行（ローン・リメイク除く）：最後のメインパターンの直後に挿入 ── */}
                     {(() => {
-                      const mainPats = arr.filter(p => !GRAND_TOTAL_EXCLUDE.includes(p.section ?? ""));
+                      const isGrandExcluded = (p: Pattern) =>
+                        GRAND_TOTAL_EXCLUDE.includes(p.section ?? "") ||
+                        (p.section === "SV" && p.name.includes("中"));
+                      const mainPats = arr.filter(p => !isGrandExcluded(p));
                       if (mainPats.length === 0) return null;
-                      const lastMainIdx = arr.reduce((acc, p, i) => !GRAND_TOTAL_EXCLUDE.includes(p.section ?? "") ? i : acc, -1);
+                      const lastMainIdx = arr.reduce((acc, p, i) => !isGrandExcluded(p) ? i : acc, -1);
                       // isEarlyLateTotal がある場合は合計行の後に出力するためそちらに任せる
                       const insertHere = patIdx === lastMainIdx && !isEarlyLateTotal;
                       const insertAfterEarlyLate = patIdx === lastMainIdx && isEarlyLateTotal;
