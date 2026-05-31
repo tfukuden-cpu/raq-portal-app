@@ -24,12 +24,11 @@ import {
 
 // ── 時刻ユーティリティ ───────────────────────────────────────────────────────
 
-/** JST現在時刻の「0時からの経過分」 */
+/** JST現在時刻の「0時からの経過分」（UTC+9 で計算） */
 function nowMinuteJST(): number {
-  const jst = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" })
-  );
-  return jst.getHours() * 60 + jst.getMinutes();
+  const jstMs = Date.now() + 9 * 60 * 60 * 1000;
+  const jst   = new Date(jstMs);
+  return jst.getUTCHours() * 60 + jst.getUTCMinutes();
 }
 
 /** JST今日の日付 YYYY-MM-DD */
@@ -37,11 +36,13 @@ function todayJST(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
 
-/** JST翌日の日付 YYYY-MM-DD */
+/** JST翌日の日付 YYYY-MM-DD（UTC環境でも正しく計算） */
 function tomorrowJST(): string {
-  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
-  d.setDate(d.getDate() + 1);
-  return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  const today = todayJST(); // "YYYY-MM-DD" in JST
+  const [y, m, d] = today.split("-").map(Number);
+  // UTC midnight の翌日 → JST では同日09:00 なので正しい日付になる
+  return new Date(Date.UTC(y, m - 1, d + 1))
+    .toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
 
 /** "HH:MM" または "HH:MM:SS" → 分 */
