@@ -434,7 +434,7 @@ export function MemberList({
   shiftPatternNames = [],
   initialEditStaffId,
   projectName,
-  initialRankingPeriods = [],
+  rankingHasData = false,
 }: {
   projectId: string;
   members: Member[];
@@ -442,7 +442,7 @@ export function MemberList({
   shiftPatternNames?: string[];
   initialEditStaffId?: string;
   projectName?: string;
-  initialRankingPeriods?: string[];
+  rankingHasData?: boolean;
 }) {
   const [memberTab, setMemberTab] = useState<"list" | "ranking">("list");
   const [addMode, setAddMode]       = useState<AddMode>("none");
@@ -906,7 +906,7 @@ export function MemberList({
 
       {/* ── 番付タブ ── */}
       {memberTab === "ranking" && projectName !== undefined && (
-        <RankingTab projectId={projectId} initialPeriods={initialRankingPeriods} />
+        <RankingTab projectId={projectId} hasData={rankingHasData} />
       )}
 
       {/* ── Scrollable content (form, list, modal) ── */}

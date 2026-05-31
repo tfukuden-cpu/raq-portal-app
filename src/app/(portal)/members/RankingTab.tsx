@@ -4,54 +4,36 @@ import { useState, useTransition, useEffect, useRef } from "react";
 import {
   fetchRankingAction,
   importRankingAction,
-  deleteRankingPeriodAction,
   type RankingRow,
 } from "./ranking-actions";
 
 type ImportRow = { rank: number; section: string | null; staffName: string };
 
-export default function RankingTab({
-  projectId,
-  initialPeriods,
-}: {
-  projectId: string;
-  initialPeriods: string[];
-}) {
-  const [periods, setPeriods]         = useState<string[]>(initialPeriods);
-  const [selectedPeriod, setSelected] = useState<string>(initialPeriods[0] ?? "");
-  const [rows, setRows]               = useState<RankingRow[]>([]);
-  const [loadedPeriod, setLoaded]     = useState<string>("");
-  const [isPending, start]            = useTransition();
-
-  const [showImport, setShowImport]   = useState(false);
-  const [importPeriod, setImportPeriod] = useState("");
-  const [preview, setPreview]         = useState<ImportRow[]>([]);
-  const [importMsg, setImportMsg]     = useState<{ ok: boolean; text: string } | null>(null);
-  const fileRef                       = useRef<HTMLInputElement>(null);
-
-  const loadRanking = (period: string) => {
-    if (!period) return;
-    start(async () => {
-      const data = await fetchRankingAction(projectId, period);
-      setRows(data);
-      setLoaded(period);
-    });
-  };
+export default function RankingTab({ projectId, hasData }: { projectId: string; hasData: boolean }) {
+  const [rows, setRows]             = useState<RankingRow[]>([]);
+  const [loaded, setLoaded]         = useState(false);
+  const [isPending, start]          = useTransition();
+  const [showImport, setShowImport] = useState(false);
+  const [preview, setPreview]       = useState<ImportRow[]>([]);
+  const [importMsg, setImportMsg]   = useState<{ ok: boolean; text: string } | null>(null);
+  const fileRef                     = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (initialPeriods[0]) loadRanking(initialPeriods[0]);
+    if (hasData) {
+      start(async () => {
+        const data = await fetchRankingAction(projectId);
+        setRows(data);
+        setLoaded(true);
+      });
+    } else {
+      setLoaded(true);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handlePeriodChange = (p: string) => {
-    setSelected(p);
-    loadRanking(p);
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     import("xlsx").then(XLSX => {
       const reader = new FileReader();
       reader.onload = (ev) => {
@@ -77,35 +59,20 @@ export default function RankingTab({
   };
 
   const handleImport = () => {
-    const period = importPeriod.trim();
-    if (!period || preview.length === 0) return;
+    if (preview.length === 0) return;
     start(async () => {
-      const res = await importRankingAction(projectId, period, preview.map(r => ({ rank: r.rank, accountNumber: r.section, staffName: r.staffName })));
+      const res = await importRankingAction(
+        projectId,
+        preview.map(r => ({ rank: r.rank, accountNumber: r.section, staffName: r.staffName }))
+      );
       setImportMsg({ ok: res.success, text: res.message });
       if (res.success) {
-        setPeriods(prev => prev.includes(period) ? prev : [period, ...prev]);
-        setSelected(period);
-        loadRanking(period);
+        const data = await fetchRankingAction(projectId);
+        setRows(data);
+        setLoaded(true);
         setShowImport(false);
         setPreview([]);
-        setImportPeriod("");
         if (fileRef.current) fileRef.current.value = "";
-      }
-    });
-  };
-
-  const handleDelete = () => {
-    if (!selectedPeriod) return;
-    if (!confirm(`「${selectedPeriod}」の番付データを削除しますか？`)) return;
-    start(async () => {
-      const res = await deleteRankingPeriodAction(projectId, selectedPeriod);
-      if (res.success) {
-        const next = periods.filter(p => p !== selectedPeriod);
-        setPeriods(next);
-        setSelected(next[0] ?? "");
-        setRows([]);
-        setLoaded("");
-        if (next[0]) loadRanking(next[0]);
       }
     });
   };
@@ -113,17 +80,10 @@ export default function RankingTab({
   return (
     <div className="space-y-4 pt-4">
 
-      {/* 期間セレクタ + ボタン群 */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {periods.length > 0 ? (
-          <select
-            value={selectedPeriod}
-            onChange={e => handlePeriodChange(e.target.value)}
-            className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-800 dark:text-zinc-200 font-medium"
-          >
-            {periods.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        ) : (
+      {/* ヘッダー行 */}
+      <div className="flex items-center gap-2">
+        {!loaded && <p className="text-sm text-zinc-400">読み込み中…</p>}
+        {loaded && rows.length === 0 && !showImport && (
           <p className="text-sm text-zinc-400">まだデータがありません</p>
         )}
         <button
@@ -133,16 +93,6 @@ export default function RankingTab({
         >
           Excelインポート
         </button>
-        {selectedPeriod && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={isPending}
-            className="px-3 py-1.5 rounded-xl border border-red-200 dark:border-red-900/50 text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-40 transition-colors"
-          >
-            削除
-          </button>
-        )}
       </div>
 
       {/* インポートパネル */}
@@ -159,9 +109,7 @@ export default function RankingTab({
                     ["順位", "セクション", "社員名"],
                     [1, "ASS査定", "ASS 42"],
                     [2, "ASS査定", "ASS 34"],
-                    [3, "査定販売", "市川 千英"],
-                    [4, "査定販売", "大澤 愛里"],
-                    [5, "ASS査定", "ASS 33"],
+                    [3, "ASS販売", "ASS 11"],
                   ]);
                   ws["!cols"] = [{ wch: 8 }, { wch: 14 }, { wch: 20 }];
                   XLSX.utils.book_append_sheet(wb, ws, "番付");
@@ -180,17 +128,6 @@ export default function RankingTab({
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-zinc-500 w-14 flex-shrink-0">期間</span>
-            <input
-              type="text"
-              value={importPeriod}
-              onChange={e => setImportPeriod(e.target.value)}
-              placeholder="例: 2026年5月"
-              className="flex-1 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
             <span className="text-xs font-semibold text-zinc-500 w-14 flex-shrink-0">ファイル</span>
             <input
               ref={fileRef}
@@ -202,7 +139,7 @@ export default function RankingTab({
           </div>
 
           <p className="text-[10px] text-zinc-400">
-            1行目: ヘッダー（順位 / セクション / 名前）　2行目以降: データ
+            1行目: ヘッダー（順位 / セクション / 社員名）　ASS査定・ASS販売のみ抽出されます
           </p>
 
           {preview.length > 0 && (
@@ -213,7 +150,7 @@ export default function RankingTab({
                   <tr className="text-left text-zinc-400 border-b border-zinc-100 dark:border-zinc-800">
                     <th className="pb-1.5 w-12">順位</th>
                     <th className="pb-1.5 w-32">セクション</th>
-                    <th className="pb-1.5">名前</th>
+                    <th className="pb-1.5">社員名</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -231,7 +168,7 @@ export default function RankingTab({
                 <button
                   type="button"
                   onClick={handleImport}
-                  disabled={!importPeriod.trim() || isPending}
+                  disabled={isPending}
                   className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors"
                 >
                   {isPending ? "保存中…" : "保存する"}
@@ -248,21 +185,13 @@ export default function RankingTab({
       )}
 
       {/* 番付テーブル */}
-      {isPending && rows.length === 0 ? (
-        <p className="text-sm text-zinc-400 py-10 text-center">読み込み中…</p>
-      ) : rows.length === 0 && (loadedPeriod || periods.length === 0) ? (
-        <p className="text-sm text-zinc-400 py-10 text-center">
-          {periods.length === 0 ? "Excelインポートからデータを追加してください" : "データがありません"}
-        </p>
-      ) : rows.length > 0 ? (
+      {loaded && rows.length > 0 && (
         <div className="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
-          {/* テーブルヘッダー */}
           <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-800 flex gap-4 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
             <span className="w-10">順位</span>
             <span className="w-32">セクション</span>
-            <span>名前</span>
+            <span>社員名</span>
           </div>
-          {/* 行 */}
           <div className="divide-y divide-zinc-50 dark:divide-zinc-800">
             {rows.map(r => (
               <div key={r.id} className="px-4 py-2.5 flex items-center gap-4">
@@ -279,7 +208,7 @@ export default function RankingTab({
             ))}
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

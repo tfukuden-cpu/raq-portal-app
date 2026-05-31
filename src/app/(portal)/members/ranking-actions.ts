@@ -45,13 +45,12 @@ export async function fetchPeriodsAction(projectId: string): Promise<string[]> {
   return periods;
 }
 
-export async function fetchRankingAction(projectId: string, period: string): Promise<RankingRow[]> {
+export async function fetchRankingAction(projectId: string): Promise<RankingRow[]> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("rankings")
     .select("id, rank, account_number, staff_name")
     .eq("project_id", projectId)
-    .eq("period", period)
     .order("rank", { ascending: true });
 
   return (data ?? []).map(r => ({
@@ -64,22 +63,19 @@ export async function fetchRankingAction(projectId: string, period: string): Pro
 
 export async function importRankingAction(
   projectId: string,
-  period: string,
   rows: { rank: number; accountNumber: string | null; staffName: string }[],
 ): Promise<{ success: boolean; message: string }> {
   await assertAdmin(projectId);
   const admin = createAdminClient();
 
-  await admin.from("rankings").delete()
-    .eq("project_id", projectId)
-    .eq("period", period);
+  await admin.from("rankings").delete().eq("project_id", projectId);
 
   if (rows.length === 0) return { success: true, message: "データがありません" };
 
   const { error } = await admin.from("rankings").insert(
     rows.map(r => ({
       project_id:     projectId,
-      period,
+      period:         "",
       rank:           r.rank,
       account_number: r.accountNumber || null,
       staff_name:     r.staffName,

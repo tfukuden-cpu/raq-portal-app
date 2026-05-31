@@ -4,7 +4,7 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { MemberList } from "../admin/[projectId]/settings/SettingsClient";
-import { fetchPeriodsAction } from "./ranking-actions";
+import { fetchRankingAction } from "./ranking-actions";
 
 export default async function MembersPage(props: {
   searchParams: Promise<{ edit?: string }>;
@@ -35,7 +35,7 @@ export default async function MembersPage(props: {
 
   const admin = createAdminClient();
 
-  const [{ data: project }, { data: members }, { data: shiftPatterns }, initialRankingPeriods] = await Promise.all([
+  const [{ data: project }, { data: members }, { data: shiftPatterns }, rankingRows] = await Promise.all([
     supabase.from("projects").select("name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
       .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, end_date, churn_risk, churn_risk_since, staffs(name, display_name, company_name, line_user_id, line_friend, account_number)")
@@ -44,7 +44,7 @@ export default async function MembersPage(props: {
       .select("name, section")
       .eq("project_id", projectId)
       .order("sort_order"),
-    fetchPeriodsAction(projectId),
+    fetchRankingAction(projectId),
   ]);
 
   if (!project) redirect("/dashboard");
@@ -96,7 +96,7 @@ export default async function MembersPage(props: {
             shiftPatternNames={shiftPatternNames}
             initialEditStaffId={initialEditStaffId}
             projectName={project.name}
-            initialRankingPeriods={initialRankingPeriods}
+            rankingHasData={rankingRows.length > 0}
           />
         </Suspense>
       </div>
