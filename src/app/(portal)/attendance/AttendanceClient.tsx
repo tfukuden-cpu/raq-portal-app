@@ -6,7 +6,7 @@ import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, sendBulkFol
 import type { SendResult } from "./actions";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/app/(portal)/seating/SeatingClient";
 import SeatingPlanClient, { type PlanSeat, type PlanStaff } from "@/app/(portal)/seating/plan/SeatingPlanClient";
-import HMotaPanel from "./HMotaPanel";
+import HMotaPanel, { type MotaRow } from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
 
 // ── 型定義 ────────────────────────────────────────────────
@@ -164,6 +164,7 @@ interface Props {
   tomorrow: string;
   planSeatData: PlanSeat[];
   planStaffData: PlanStaff[];
+  hMotaRows: MotaRow[];
   motaNameLookup: Record<string, string>;
   initialMotaAssignments: MotaAssignment[];
 }
@@ -180,7 +181,7 @@ export default function AttendanceClient({
   myStaffId, churnRiskAlerts,
   seatData, wallData, seatStaffList,
   tomorrow, planSeatData, planStaffData,
-  motaNameLookup, initialMotaAssignments,
+  hMotaRows, motaNameLookup, initialMotaAssignments,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
   const [seatSubTab, setSeatSubTab] = useState<"today" | "tomorrow">("today");
@@ -612,6 +613,7 @@ export default function AttendanceClient({
                       <HMotaPanel
                         projectId={projectId}
                         date={today}
+                        rows={hMotaRows}
                         nameLookup={motaNameLookup}
                         initialAssignments={initialMotaAssignments}
                       />
