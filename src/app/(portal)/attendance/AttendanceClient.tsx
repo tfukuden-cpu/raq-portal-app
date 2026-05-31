@@ -6,7 +6,7 @@ import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, sendBulkFol
 import type { SendResult } from "./actions";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/app/(portal)/seating/SeatingClient";
 import SeatingPlanClient, { type PlanSeat, type PlanStaff } from "@/app/(portal)/seating/plan/SeatingPlanClient";
-import HMotaPanel, { type MotaRow } from "./HMotaPanel";
+import HMotaPanel from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
 
 // ── 型定義 ────────────────────────────────────────────────
@@ -164,7 +164,7 @@ interface Props {
   tomorrow: string;
   planSeatData: PlanSeat[];
   planStaffData: PlanStaff[];
-  hMotaRows: MotaRow[];
+  motaNameLookup: Record<string, string>;
   initialMotaAssignments: MotaAssignment[];
 }
 
@@ -180,7 +180,7 @@ export default function AttendanceClient({
   myStaffId, churnRiskAlerts,
   seatData, wallData, seatStaffList,
   tomorrow, planSeatData, planStaffData,
-  hMotaRows, initialMotaAssignments,
+  motaNameLookup, initialMotaAssignments,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
   const [seatSubTab, setSeatSubTab] = useState<"today" | "tomorrow">("today");
@@ -592,8 +592,8 @@ export default function AttendanceClient({
                 const isDragTarget = dragOverSection === section;
                 const secCol = SECTION_COL[section] ?? SECTION_COL_FALLBACK;
 
-                // H MOTA セクション：スロット配置テーブルをカラム内に表示
-                if ((section === "H MOTA" || section === "H　MOTA") && hMotaRows.length > 0) {
+                // H MOTA セクション：スロット配置パネルをカラム内に表示
+                if (section === "H MOTA" || section === "H　MOTA") {
                   return (
                     <div
                       key={section}
@@ -612,9 +612,8 @@ export default function AttendanceClient({
                       <HMotaPanel
                         projectId={projectId}
                         date={today}
-                        rows={hMotaRows}
+                        nameLookup={motaNameLookup}
                         initialAssignments={initialMotaAssignments}
-                        inline
                       />
                     </div>
                   );
@@ -682,7 +681,16 @@ export default function AttendanceClient({
                           <div
                             key={m.staffId}
                             draggable
-                            onDragStart={() => setDragStaffId(m.staffId)}
+                            onDragStart={e => {
+                              setDragStaffId(m.staffId);
+                              if (m.accountNumber) {
+                                e.dataTransfer.setData("mota-card", JSON.stringify({
+                                  accountNumber: m.accountNumber,
+                                  name: m.name,
+                                  isFixed: false,
+                                }));
+                              }
+                            }}
                             onDragEnd={() => { setDragStaffId(null); setDragOverSection(null); }}
                             className={[
                               "rounded-lg border px-2 py-1.5 cursor-grab active:cursor-grabbing select-none transition-all",

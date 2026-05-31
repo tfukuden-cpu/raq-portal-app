@@ -6,57 +6,59 @@ import type { MotaAssignment } from "./mota-actions";
 const SLOTS = ["12:00-13:00", "18:00-19:00"] as const;
 type Slot = typeof SLOTS[number];
 
-export type MotaRow = {
-  accountNumber: string;
-  name: string;
-  isFixed: boolean;
-};
+const FIXED_MOTA_NUMBERS = [
+  "ASS 130", "ASS 131", "ASS 132", "ASS 133", "ASS 134",
+  "ASS 196", "ASS 197", "ASS 198", "ASS 199", "ASS 200",
+];
 
 interface Props {
   projectId: string;
   date: string;
-  rows: MotaRow[];
+  nameLookup: Record<string, string>; // accountNumber → name
   initialAssignments: MotaAssignment[];
-  inline?: boolean;
 }
 
-export default function HMotaPanel({ projectId, date, rows, initialAssignments, inline = false }: Props) {
-  const [assignments, setAssignments] = useState<MotaAssignment[]>(initialAssignments);
-  const [dragging, setDragging] = useState<{ accountNumber: string; isFixed: boolean } | null>(null);
-  const [dragOver, setDragOver] = useState<{ accountNumber: string; slot: Slot } | null>(null);
+type DragCard = { accountNumber: string; name: string; isFixed: boolean };
 
-  function getAssignment(accountNumber: string, slot: string): MotaAssignment | undefined {
-    return assignments.find(a => a.accountNumber === accountNumber && a.slot === slot);
+export default function HMotaPanel({ projectId, date, nameLookup, initialAssignments }: Props) {
+  const [assignments, setAssignments] = useState<MotaAssignment[]>(initialAssignments);
+  const [dragOver, setDragOver] = useState<Slot | null>(null);
+
+  function getSlotAssignments(slot: string): MotaAssignment[] {
+    return assignments.filter(a => a.slot === slot);
   }
 
-  async function handleDrop(targetAccountNumber: string, slot: Slot) {
-    setDragOver(null);
-    if (!dragging || dragging.accountNumber !== targetAccountNumber) return;
+  function getName(accountNumber: string): string {
+    return nameLookup[accountNumber] ?? accountNumber;
+  }
 
-    const existing = getAssignment(dragging.accountNumber, slot);
+  async function handleDrop(slot: Slot, e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(null);
+    const raw = e.dataTransfer.getData("mota-card");
+    if (!raw) return;
+
+    let card: DragCard;
+    try { card = JSON.parse(raw); } catch { return; }
+    if (!card.accountNumber) return;
+
+    const existing = assignments.find(a => a.accountNumber === card.accountNumber && a.slot === slot);
     if (existing) return;
 
     const tempId = `temp-${Date.now()}`;
-    const newAssignment: MotaAssignment = {
+    setAssignments(prev => [...prev, {
       id: tempId,
-      accountNumber: dragging.accountNumber,
+      accountNumber: card.accountNumber,
       slot,
-      isFixed: dragging.isFixed,
-    };
+      isFixed: card.isFixed,
+    }]);
 
-    setAssignments(prev => [...prev, newAssignment]);
-
-    const res = await addMotaAssignmentAction(
-      projectId, date, dragging.accountNumber, slot, dragging.isFixed,
-    );
+    const res = await addMotaAssignmentAction(projectId, date, card.accountNumber, slot, card.isFixed);
     if (res.ok && res.id) {
-      setAssignments(prev =>
-        prev.map(a => a.id === tempId ? { ...a, id: res.id! } : a),
-      );
+      setAssignments(prev => prev.map(a => a.id === tempId ? { ...a, id: res.id! } : a));
     } else {
       setAssignments(prev => prev.filter(a => a.id !== tempId));
     }
-    setDragging(null);
   }
 
   async function handleRemove(id: string) {
@@ -64,188 +66,88 @@ export default function HMotaPanel({ projectId, date, rows, initialAssignments, 
     await removeMotaAssignmentAction(projectId, id);
   }
 
-  if (rows.length === 0) return null;
-
-  const hMotaRows = rows.filter(r => !r.isFixed);
-  const fixedRows = rows.filter(r => r.isFixed);
-
-  const table = (
-    <table className="w-full text-xs border-collapse">
-      <thead>
-        <tr className="border-b border-zinc-100 dark:border-zinc-800">
-          <th className="text-left px-2 py-1.5 font-semibold text-zinc-400 w-24 text-[10px]">番号</th>
-          {SLOTS.map(slot => (
-            <th key={slot} className="text-center px-1 py-1.5 font-semibold text-purple-500 tabular-nums text-[10px]">
-              {slot}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {hMotaRows.length > 0 && (
-          <tr>
-            <td colSpan={3} className="px-2 pt-2 pb-0.5">
-              <span className="text-[9px] font-bold text-purple-400 uppercase tracking-wide">空き</span>
-            </td>
-          </tr>
-        )}
-        {hMotaRows.map(row => (
-          <MotaTableRow
-            key={row.accountNumber}
-            row={row}
-            dragging={dragging}
-            dragOver={dragOver}
-            getAssignment={getAssignment}
-            onDragStart={() => setDragging({ accountNumber: row.accountNumber, isFixed: row.isFixed })}
-            onDragEnd={() => { setDragging(null); setDragOver(null); }}
-            onDragOver={(slot) => setDragOver({ accountNumber: row.accountNumber, slot })}
-            onDragLeave={() => setDragOver(null)}
-            onDrop={handleDrop}
-            onRemove={handleRemove}
-            compact={inline}
-          />
-        ))}
-        {fixedRows.length > 0 && (
-          <tr>
-            <td colSpan={3} className="px-2 pt-2 pb-0.5">
-              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">固定</span>
-            </td>
-          </tr>
-        )}
-        {fixedRows.map(row => (
-          <MotaTableRow
-            key={row.accountNumber}
-            row={row}
-            dragging={dragging}
-            dragOver={dragOver}
-            getAssignment={getAssignment}
-            onDragStart={() => setDragging({ accountNumber: row.accountNumber, isFixed: row.isFixed })}
-            onDragEnd={() => { setDragging(null); setDragOver(null); }}
-            onDragOver={(slot) => setDragOver({ accountNumber: row.accountNumber, slot })}
-            onDragLeave={() => setDragOver(null)}
-            onDrop={handleDrop}
-            onRemove={handleRemove}
-            compact={inline}
-          />
-        ))}
-      </tbody>
-    </table>
-  );
-
-  if (inline) {
-    return <div className="overflow-y-auto flex-1 min-h-0">{table}</div>;
-  }
-
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-800 rounded-2xl overflow-hidden">
-      <div className="px-4 py-3 bg-purple-50 dark:bg-purple-950/30 border-b border-purple-100 dark:border-purple-900">
-        <h3 className="text-sm font-bold text-purple-900 dark:text-purple-100">H MOTA スロット配置</h3>
-        <p className="text-[11px] text-purple-500 dark:text-purple-400 mt-0.5">
-          番号チップをドラッグしてスロットに配置
-        </p>
-      </div>
-      <div className="overflow-x-auto">{table}</div>
-    </div>
-  );
-}
+    <div className="flex flex-col flex-1 min-h-0">
+      {/* スロット列 */}
+      <div className="flex flex-1 min-h-0 divide-x divide-zinc-100 dark:divide-zinc-800">
+        {SLOTS.map(slot => {
+          const slotItems = getSlotAssignments(slot);
+          const isTarget = dragOver === slot;
+          return (
+            <div
+              key={slot}
+              className={[
+                "flex-1 flex flex-col min-h-0 transition-colors",
+                isTarget ? "bg-purple-50 dark:bg-purple-950/20" : "",
+              ].join(" ")}
+              onDragOver={e => { e.preventDefault(); setDragOver(slot); }}
+              onDragLeave={e => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null);
+              }}
+              onDrop={e => handleDrop(slot, e)}
+            >
+              {/* スロットヘッダー */}
+              <div className="px-2 py-1.5 border-b border-zinc-100 dark:border-zinc-800 text-center text-[10px] font-bold tabular-nums text-purple-500 dark:text-purple-400 shrink-0">
+                {slot}
+              </div>
 
-function MotaTableRow({
-  row,
-  dragging,
-  dragOver,
-  getAssignment,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onRemove,
-  compact = false,
-}: {
-  row: MotaRow;
-  dragging: { accountNumber: string; isFixed: boolean } | null;
-  dragOver: { accountNumber: string; slot: string } | null;
-  getAssignment: (accountNumber: string, slot: string) => MotaAssignment | undefined;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDragOver: (slot: typeof SLOTS[number]) => void;
-  onDragLeave: () => void;
-  onDrop: (accountNumber: string, slot: typeof SLOTS[number]) => void;
-  onRemove: (id: string) => void;
-  compact?: boolean;
-}) {
-  const isDraggingThis = dragging?.accountNumber === row.accountNumber;
-
-  return (
-    <tr className="border-b last:border-b-0 border-zinc-50 dark:border-zinc-800/50">
-      {/* アカウント番号（ドラッグソース） */}
-      <td className={compact ? "px-1.5 py-1" : "px-4 py-1.5"}>
-        <div
-          draggable
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          className={[
-            "inline-flex items-center px-1.5 py-0.5 rounded border cursor-grab active:cursor-grabbing select-none font-mono font-semibold transition-opacity",
-            compact ? "text-[9px]" : "text-[11px]",
-            row.isFixed
-              ? "bg-zinc-50 border-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-300"
-              : "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-900/30 dark:border-purple-800 dark:text-purple-300",
-            isDraggingThis ? "opacity-40" : "",
-          ].join(" ")}
-        >
-          {row.accountNumber}
-        </div>
-      </td>
-
-      {/* スロットセル */}
-      {SLOTS.map(slot => {
-        const assignment = getAssignment(row.accountNumber, slot);
-        const isTarget = dragOver?.accountNumber === row.accountNumber && dragOver?.slot === slot;
-        const canDrop = dragging?.accountNumber === row.accountNumber;
-
-        return (
-          <td
-            key={slot}
-            className={compact ? "px-1 py-1" : "px-4 py-1.5"}
-            onDragOver={e => { if (canDrop) { e.preventDefault(); onDragOver(slot); } }}
-            onDragLeave={onDragLeave}
-            onDrop={() => onDrop(row.accountNumber, slot)}
-          >
-            <div className={[
-              "rounded border-2 border-dashed flex items-center justify-center transition-colors",
-              compact ? "min-h-[22px] px-0.5" : "min-h-[30px] px-2",
-              isTarget && canDrop
-                ? "border-purple-400 bg-purple-50 dark:bg-purple-900/20"
-                : "border-zinc-200 dark:border-zinc-700",
-            ].join(" ")}>
-              {assignment ? (
-                <div className="flex items-center gap-0.5 px-1 py-px bg-purple-100 dark:bg-purple-900/50 rounded border border-purple-200 dark:border-purple-700">
-                  <span className={[
-                    "font-semibold font-mono text-purple-700 dark:text-purple-300 tabular-nums",
-                    compact ? "text-[8px]" : "text-[10px]",
-                  ].join(" ")}>
-                    ✓
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(assignment.id)}
-                    className="text-purple-300 hover:text-purple-600 dark:hover:text-purple-200 leading-none text-xs font-bold"
+              {/* 配置済みリスト */}
+              <div
+                className="flex-1 overflow-y-auto p-1.5 space-y-1 [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {slotItems.map(a => (
+                  <div
+                    key={a.id}
+                    className="flex items-center gap-1 px-1.5 py-1 rounded bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-700"
                   >
-                    ×
-                  </button>
-                </div>
-              ) : (
-                <span className={[
-                  compact ? "text-[8px]" : "text-[10px]",
-                  isTarget && canDrop ? "text-purple-400" : "text-zinc-300 dark:text-zinc-600",
+                    <span className="flex-1 text-[10px] font-semibold text-purple-800 dark:text-purple-200 truncate">
+                      {getName(a.accountNumber)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(a.id)}
+                      className="text-purple-300 hover:text-purple-600 dark:hover:text-purple-200 font-bold text-xs leading-none shrink-0"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+
+                {/* ドロップ枠 */}
+                <div className={[
+                  "rounded border-2 border-dashed flex items-center justify-center text-[10px] transition-colors",
+                  slotItems.length === 0 ? "h-12" : "h-8",
+                  isTarget
+                    ? "border-purple-400 text-purple-400 bg-purple-50/50 dark:bg-purple-900/10"
+                    : "border-zinc-200 dark:border-zinc-700 text-zinc-300 dark:text-zinc-600",
                 ].join(" ")}>
-                  {isTarget && canDrop ? "→" : "—"}
-                </span>
-              )}
+                  {isTarget ? "→ ここにドロップ" : slotItems.length === 0 ? "—" : ""}
+                </div>
+              </div>
             </div>
-          </td>
-        );
-      })}
-    </tr>
+          );
+        })}
+      </div>
+
+      {/* 固定番号チップ */}
+      <div className="border-t border-zinc-100 dark:border-zinc-800 p-2 shrink-0">
+        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">固定番号</div>
+        <div className="flex flex-wrap gap-1">
+          {FIXED_MOTA_NUMBERS.map(n => (
+            <div
+              key={n}
+              draggable
+              onDragStart={e => {
+                e.dataTransfer.setData("mota-card", JSON.stringify({ accountNumber: n, name: n, isFixed: true }));
+              }}
+              className="inline-flex items-center px-1.5 py-0.5 rounded border cursor-grab active:cursor-grabbing select-none font-mono font-semibold text-[9px] bg-zinc-50 border-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-300 hover:border-purple-300 transition-colors"
+            >
+              {n}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

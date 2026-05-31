@@ -9,7 +9,6 @@ import AttendanceClient from "./AttendanceClient";
 import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry, ChurnRiskAlert } from "./AttendanceClient";
 import type { SeatData, WallData, StaffInfo } from "../seating/SeatingClient";
 import type { PlanSeat, PlanStaff } from "../seating/plan/SeatingPlanClient";
-import type { MotaRow } from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
 
 function tokyoToday(): string {
@@ -428,32 +427,10 @@ export default async function AttendancePage({
   const grouped = buildGrouped(allInternal, sectionOrderFull);
 
   // ── H MOTA スロット配置 ────────────────────────────────────
-  const FIXED_MOTA_NUMBERS = [
-    "ASS 130", "ASS 131", "ASS 132", "ASS 133", "ASS 134",
-    "ASS 196", "ASS 197", "ASS 198", "ASS 199", "ASS 200",
-  ];
-
-  const todayShiftIds = new Set(
-    (todayShifts ?? [])
-      .filter(s => !OFF_SHIFT_NAMES.includes((s.shift_name ?? "") as string))
-      .map(s => s.staff_id),
-  );
-
-  const hMotaRows: MotaRow[] = [
-    ...(memberRows ?? [])
-      .filter(m => {
-        const sec = (m.section as string | null) ?? "";
-        return (sec === "MOTA" || sec === "H MOTA") && !todayShiftIds.has(m.staff_id);
-      })
-      .map(m => {
-        const info = memberMap.get(m.staff_id);
-        return info?.accountNumber
-          ? { accountNumber: info.accountNumber, name: info.name, isFixed: false }
-          : null;
-      })
-      .filter((r): r is MotaRow => r !== null),
-    ...FIXED_MOTA_NUMBERS.map(n => ({ accountNumber: n, name: n, isFixed: true })),
-  ];
+  const motaNameLookup: Record<string, string> = {};
+  for (const [, info] of memberMap) {
+    if (info.accountNumber) motaNameLookup[info.accountNumber] = info.name;
+  }
 
   const initialMotaAssignments: MotaAssignment[] = (motaAssignmentRows ?? []).map(r => ({
     id: r.id as string,
@@ -617,7 +594,7 @@ export default async function AttendancePage({
       tomorrow={tomorrow}
       planSeatData={planSeatData}
       planStaffData={planStaffData}
-      hMotaRows={hMotaRows}
+      motaNameLookup={motaNameLookup}
       initialMotaAssignments={initialMotaAssignments}
     />
   );
