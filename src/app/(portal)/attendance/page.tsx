@@ -18,11 +18,13 @@ function tokyoToday(): string {
 
 // 優先順位付きの固定セクション順（これ以外のセクションはこの後ろに追加される）
 const BASE_SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "H MOTA", "未アポ", "インフォ", "ローン"];
+const HIDDEN_SECTIONS = ["リメイク"]; // カラムとして表示しないセクション（その他に合流）
 const OFF_SHIFT_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
 const STATUS_SORT: StatusKey[] = ["absent", "late", "working", "departed", "clocked_out", "not_departed"];
 
 function resolveSection(shiftName: string, memberSection: string | null, sectionOrder: string[]): string {
   if (shiftName.includes("研修")) return "その他";
+  if (HIDDEN_SECTIONS.includes(memberSection ?? "")) return "その他";
   for (const sec of sectionOrder) {
     if (sec === "その他") continue;
     if (shiftName.startsWith(sec)) return sec;
@@ -269,7 +271,7 @@ export default async function AttendancePage({
   const allSections = [...new Set([...allMemberSections, ...patternSections])];
   const sectionOrderFull: string[] = [
     ...BASE_SECTION_ORDER.filter(s => allSections.includes(s)),
-    ...allSections.filter(s => !BASE_SECTION_ORDER.includes(s) && s !== "その他"),
+    ...allSections.filter(s => !BASE_SECTION_ORDER.includes(s) && s !== "その他" && !HIDDEN_SECTIONS.includes(s)),
     "その他",
   ];
 

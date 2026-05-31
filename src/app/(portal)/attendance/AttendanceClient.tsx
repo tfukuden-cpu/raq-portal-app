@@ -623,7 +623,7 @@ export default function AttendanceClient({
                   <div
                     key={section}
                     className={[
-                      "flex flex-col rounded-2xl border-2 transition-all w-52 shrink-0",
+                      "flex flex-col rounded-2xl border-2 transition-all w-64 shrink-0",
                       "h-[calc(100dvh-280px)]",
                       isDragTarget
                         ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20 shadow-lg"
