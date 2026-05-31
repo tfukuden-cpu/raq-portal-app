@@ -44,8 +44,8 @@ export default function ShiftChangeLogTab({ logs, year, month, prevMonth, nextMo
       )
     : logs;
 
-  const prevUrl = `${monthNavBase}${prevMonth.year}&month=${prevMonth.month}&tab=logs`;
-  const nextUrl = `${monthNavBase}${nextMonth.year}&month=${nextMonth.month}&tab=logs`;
+  const prevUrl = `${monthNavBase}${prevMonth.year}&month=${prevMonth.month}`;
+  const nextUrl = `${monthNavBase}${nextMonth.year}&month=${nextMonth.month}`;
 
   return (
     <div className="space-y-4">
