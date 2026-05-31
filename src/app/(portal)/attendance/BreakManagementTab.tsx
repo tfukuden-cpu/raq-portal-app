@@ -19,7 +19,6 @@ const SLOT_HEADER_BG: Record<number, string> = {
   2: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800",
   3: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800",
 };
-const SLOT_LABEL: Record<number, string> = { 1: "①", 2: "②", 3: "③" };
 const TARGET_SHIFT_LABEL: Record<string, string> = {
   early: "早番のみ",
   late:  "遅番のみ",
@@ -51,8 +50,8 @@ export default function BreakManagementTab({
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<string | null>(null);
 
-  // Build member info map from grouped data
-  const memberInfoMap = new Map<string, BreakMemberInfo>();
+  // メンバー情報マップ（staffId → info + section）
+  const memberInfoMap = new Map<string, BreakMemberInfo & { section: string }>();
   for (const sec of grouped) {
     for (const sg of sec.shiftGroups) {
       for (const m of sg.members) {
@@ -61,6 +60,7 @@ export default function BreakManagementTab({
           name:          m.name,
           accountNumber: m.accountNumber,
           shiftName:     sg.shiftName,
+          section:       sec.section,
         });
       }
     }
@@ -104,23 +104,36 @@ export default function BreakManagementTab({
     return <p className="text-sm text-zinc-400 py-6 text-center">休憩スロットが設定されていません</p>;
   }
 
-  // Collect members with assignments, organized by section
-  const sectionMembersMap = new Map<string, BreakMemberInfo[]>();
+  // スロット × セクション → メンバーリスト
+  const slotSectionMap = new Map<number, Map<string, BreakMemberInfo[]>>();
+  for (const slot of breakSlots) {
+    const secMap = new Map<string, BreakMemberInfo[]>();
+    for (const sec of BREAK_SECTIONS) secMap.set(sec, []);
+    slotSectionMap.set(slot.slot_number, secMap);
+  }
   for (const a of assignments) {
     const info = memberInfoMap.get(a.staff_id);
     if (!info) continue;
-    const sec = grouped.find(g =>
-      g.shiftGroups.some(sg => sg.members.some(m => m.staffId === a.staff_id))
-    )?.section ?? "";
-    if (!BREAK_SECTIONS.includes(sec as (typeof BREAK_SECTIONS)[number])) continue;
-    if (!sectionMembersMap.has(sec)) sectionMembersMap.set(sec, []);
-    // Avoid duplicates
-    if (!sectionMembersMap.get(sec)!.some(m => m.staffId === a.staff_id)) {
-      sectionMembersMap.get(sec)!.push(info);
+    if (!BREAK_SECTIONS.includes(info.section as (typeof BREAK_SECTIONS)[number])) continue;
+    const secMap = slotSectionMap.get(a.slot_number);
+    if (!secMap) continue;
+    const list = secMap.get(info.section);
+    if (list && !list.some(m => m.staffId === info.staffId)) list.push(info);
+  }
+
+  // セクション別合計人数
+  const sectionTotals: Record<string, number> = {};
+  for (const sec of BREAK_SECTIONS) {
+    sectionTotals[sec] = 0;
+    for (const [, secMap] of slotSectionMap) {
+      sectionTotals[sec] += secMap.get(sec)?.length ?? 0;
     }
   }
 
-  const totalAssigned = assignments.length;
+  const totalAssigned = assignments.filter(a => {
+    const info = memberInfoMap.get(a.staff_id);
+    return info && BREAK_SECTIONS.includes(info.section as (typeof BREAK_SECTIONS)[number]);
+  }).length;
 
   return (
     <div className="space-y-4">
@@ -146,78 +159,86 @@ export default function BreakManagementTab({
         </div>
       )}
 
-      {/* セクション別表示 */}
-      {BREAK_SECTIONS.map(section => {
-        const secMembers = sectionMembersMap.get(section) ?? [];
-        if (secMembers.length === 0) return null;
+      {totalAssigned > 0 && (
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+          {/* テーブルヘッダー */}
+          <div className="grid border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60"
+               style={{ gridTemplateColumns: "minmax(100px,auto) 1fr 1fr" }}>
+            <div className="px-3 py-2.5 text-xs font-bold text-zinc-500 dark:text-zinc-400">スロット</div>
+            {BREAK_SECTIONS.map(sec => (
+              <div key={sec} className="px-3 py-2.5 border-l border-zinc-200 dark:border-zinc-700">
+                <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200">{sec}</span>
+                <span className="ml-1.5 text-[11px] text-zinc-400 tabular-nums">{sectionTotals[sec]}名</span>
+              </div>
+            ))}
+          </div>
 
-        return (
-          <div key={section} className="rounded-2xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-            {/* セクションヘッダー */}
-            <div className="px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between">
-              <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{section}セクション</span>
-              <span className="text-[11px] tabular-nums text-zinc-400">{secMembers.length}名</span>
-            </div>
+          {/* スロット行 */}
+          {breakSlots.map((slot, idx) => {
+            const secMap = slotSectionMap.get(slot.slot_number);
+            const isLast = idx === breakSlots.length - 1;
 
-            {/* スロット別グループ */}
-            {breakSlots.map(slot => {
-              const slotMembers = secMembers.filter(m => getSlotNumber(m.staffId) === slot.slot_number);
-              if (slotMembers.length === 0) return null;
-
-              return (
-                <div key={slot.slot_number} className={`border-b border-zinc-100 dark:border-zinc-800 last:border-b-0`}>
-                  {/* スロットヘッダー */}
-                  <div className={`flex items-center gap-2 px-4 py-1.5 border-b border-zinc-100 dark:border-zinc-800 ${SLOT_HEADER_BG[slot.slot_number] ?? ""}`}>
+            return (
+              <div
+                key={slot.slot_number}
+                className={`grid ${!isLast ? "border-b border-zinc-200 dark:border-zinc-700" : ""}`}
+                style={{ gridTemplateColumns: "minmax(100px,auto) 1fr 1fr" }}
+              >
+                {/* スロット情報セル */}
+                <div className={`px-3 py-3 flex flex-col gap-0.5 ${SLOT_HEADER_BG[slot.slot_number] ?? ""}`}>
+                  <div className="flex items-center gap-1.5">
                     <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[11px] font-bold ${SLOT_BG[slot.slot_number] ?? ""}`}>
-                      {SLOT_LABEL[slot.slot_number] ?? slot.slot_number}
+                      {slot.label}
                     </span>
-                    <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200 tabular-nums">
-                      {slot.start_time}–{slot.end_time}
+                    <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200 tabular-nums">
+                      {slot.start_time.slice(0, 5)}
                     </span>
-                    <span className="text-[10px] text-zinc-400">
-                      {TARGET_SHIFT_LABEL[slot.target_shift] ?? slot.target_shift}
-                    </span>
-                    <span className="ml-auto text-[10px] tabular-nums text-zinc-400">{slotMembers.length}名</span>
                   </div>
-
-                  {/* スタッフ一覧 */}
-                  <div className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
-                    {slotMembers.map(m => {
-                      const currentSlot = getSlotNumber(m.staffId) ?? 1;
-                      return (
-                        <div key={m.staffId} className="flex items-center gap-2 px-4 py-2">
-                          <span className="text-[11px] font-mono text-zinc-400 tabular-nums w-12 shrink-0">
-                            {m.accountNumber ?? "—"}
-                          </span>
-                          <span className="text-sm text-zinc-700 dark:text-zinc-200 flex-1 min-w-0 truncate">
-                            {m.name}
-                          </span>
-                          <span className="text-[10px] text-zinc-400 shrink-0">
-                            {m.shiftName}
-                          </span>
-                          {/* スロット変更セレクト */}
-                          <select
-                            value={currentSlot}
-                            onChange={e => handleSlotChange(m.staffId, parseInt(e.target.value))}
-                            disabled={isPending}
-                            className="text-xs px-1.5 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 disabled:opacity-50"
-                          >
-                            {breakSlots.map(s => (
-                              <option key={s.slot_number} value={s.slot_number}>
-                                {SLOT_LABEL[s.slot_number] ?? s.slot_number}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    })}
+                  <div className="pl-0.5 text-[10px] text-zinc-400 tabular-nums">
+                    〜{slot.end_time.slice(0, 5)}
+                  </div>
+                  <div className="text-[9px] text-zinc-400 leading-tight">
+                    {TARGET_SHIFT_LABEL[slot.target_shift] ?? slot.target_shift}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        );
-      })}
+
+                {/* セクション別メンバーセル */}
+                {BREAK_SECTIONS.map(sec => {
+                  const members = secMap?.get(sec) ?? [];
+                  return (
+                    <div key={sec} className="px-2 py-2 border-l border-zinc-200 dark:border-zinc-700 divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                      {members.length === 0 ? (
+                        <p className="text-[11px] text-zinc-300 dark:text-zinc-600 py-1 text-center">—</p>
+                      ) : (
+                        members.map(m => (
+                          <div key={m.staffId} className="flex items-center gap-1.5 py-1.5 min-w-0">
+                            <span className="text-[10px] font-mono text-zinc-400 tabular-nums shrink-0 w-10 truncate">
+                              {m.accountNumber ?? "—"}
+                            </span>
+                            <span className="text-xs text-zinc-700 dark:text-zinc-200 flex-1 min-w-0 truncate">
+                              {m.name}
+                            </span>
+                            <select
+                              value={getSlotNumber(m.staffId) ?? slot.slot_number}
+                              onChange={e => handleSlotChange(m.staffId, parseInt(e.target.value))}
+                              disabled={isPending}
+                              className="text-[10px] px-1 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 disabled:opacity-50 shrink-0"
+                            >
+                              {breakSlots.map(s => (
+                                <option key={s.slot_number} value={s.slot_number}>{s.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* トースト */}
       {toast && (

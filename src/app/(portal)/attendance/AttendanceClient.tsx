@@ -570,6 +570,22 @@ export default function AttendanceClient({
           </div>
         )}
 
+        {/* ── 休憩スロット凡例 ── */}
+        {activeTab === "today" && breakSlots.length > 0 && Object.keys(breakAssignmentMap).length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-1">
+            {breakSlots.map(slot => (
+              <div key={slot.slot_number} className="flex items-center gap-1.5">
+                <span className={`w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold ${BREAK_BADGE_CLASS[slot.slot_number] ?? ""}`}>
+                  {BREAK_SLOT_LABEL[slot.slot_number]}
+                </span>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">
+                  {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ── 離脱リスク候補アラート ── */}
         {activeTab === "today" && (churnRiskAlerts?.length ?? 0) > 0 && (
           <div className="mb-3 px-4 py-3 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
