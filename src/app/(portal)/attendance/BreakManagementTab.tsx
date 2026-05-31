@@ -223,26 +223,21 @@ export default function BreakManagementTab({
                         return (
                           <div
                             key={m.staffId}
-                            className={`rounded-xl border p-3 space-y-2 ${theme.cardBorder} ${theme.cardBg}`}
+                            className={`rounded-lg border px-2.5 py-2 space-y-1 ${theme.cardBorder} ${theme.cardBg}`}
                           >
-                            {/* 名前行 */}
+                            {/* 1行：番号 | 名前 | スロット▼ | 小休憩▼ */}
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`} />
-                              <span className="text-[10px] font-mono text-zinc-400 tabular-nums shrink-0">
+                              <span className="text-[10px] font-mono text-zinc-400 tabular-nums shrink-0 w-9 truncate">
                                 {m.accountNumber ?? "—"}
                               </span>
-                              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200 truncate">
+                              <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 flex-1 min-w-0 truncate">
                                 {m.name}
                               </span>
-                            </div>
-
-                            {/* プルダウン2つ */}
-                            <div className="flex gap-1.5">
                               <select
                                 value={getSlotNumber(m.staffId) ?? slot.slot_number}
                                 onChange={e => handleSlotChange(m.staffId, parseInt(e.target.value))}
                                 disabled={isPending}
-                                className="flex-[3] text-[11px] px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:focus:ring-blue-600"
+                                className="text-[10px] px-1 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 disabled:opacity-40 focus:outline-none shrink-0"
                               >
                                 {breakSlots.map(s => (
                                   <option key={s.slot_number} value={s.slot_number}>
@@ -254,26 +249,23 @@ export default function BreakManagementTab({
                                 value={shortMin}
                                 onChange={e => handleShortMinutesChange(m.staffId, parseInt(e.target.value))}
                                 disabled={isPending}
-                                className="flex-[2] text-[11px] px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:focus:ring-blue-600"
+                                className="text-[10px] px-1 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 disabled:opacity-40 focus:outline-none shrink-0"
                               >
                                 <option value={15}>小休憩15分</option>
                                 <option value={30}>小休憩30分</option>
                               </select>
                             </div>
-
                             {/* 実績 */}
-                            {records.length === 0 ? (
-                              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">実績なし</p>
-                            ) : (
-                              <div className="space-y-0.5">
-                                {records.map((r, i) => (
-                                  <p key={i} className="text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums">
-                                    {r.break_type && <span className="font-medium">[{r.break_type}]</span>}
-                                    {r.break_type ? " " : ""}{fmtTime(r.started_at)}〜{r.ended_at ? fmtTime(r.ended_at) : "…"}
-                                  </p>
-                                ))}
-                              </div>
-                            )}
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 pl-10">
+                              {records.length === 0 ? (
+                                <span className="text-[10px] text-zinc-300 dark:text-zinc-600">—</span>
+                              ) : records.map((r, i) => (
+                                <span key={i} className="text-[10px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                                  {r.break_type && <span className="font-medium text-zinc-500">[{r.break_type}]</span>}
+                                  {r.break_type ? " " : ""}{fmtTime(r.started_at)}〜{r.ended_at ? fmtTime(r.ended_at) : "…"}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         );
                       })}
