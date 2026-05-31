@@ -56,23 +56,32 @@ interface Props {
   members: TerminalMember[];
   seats: TerminalSeat[];
   walls: TerminalWall[];
+  breakAssignmentMap?: Record<string, number>;
 }
 
 // ── ステータス表示定義 ──────────────────────────────────────────
 const STATUS_BG: Record<StaffStatus, string> = {
   not_arrived: "bg-zinc-700/80 border-zinc-500",
   working:     "bg-green-900/80 border-green-600",
-  on_break:    "bg-amber-900/80 border-amber-600",
+  on_break:    "bg-amber-500 border-amber-300",
   clocked_out: "bg-zinc-800/50 border-zinc-700",
   absent:      "bg-red-900/80 border-red-700",
 };
 const STATUS_TEXT: Record<StaffStatus, string> = {
   not_arrived: "text-zinc-200",
   working:     "text-green-100",
-  on_break:    "text-amber-100",
+  on_break:    "text-zinc-900",
   clocked_out: "text-zinc-500",
   absent:      "text-red-300",
 };
+
+// ── 休憩スロットバッジ ──────────────────────────────────────────
+const BREAK_BADGE_CLASS: Record<number, string> = {
+  1: "bg-blue-500 text-white",
+  2: "bg-amber-600 text-white",
+  3: "bg-emerald-500 text-white",
+};
+const BREAK_SLOT_LABEL: Record<number, string> = { 1: "①", 2: "②", 3: "③" };
 const STATUS_LABEL: Record<StaffStatus, string> = {
   not_arrived: "未出勤",
   working:     "勤務中",
@@ -264,7 +273,7 @@ function LiveClock() {
 }
 
 // ── メインコンポーネント ──────────────────────────────────────
-export default function TerminalPunchClient({ projectId, projectName, members, seats, walls }: Props) {
+export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {} }: Props) {
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [localMembers, setLocalMembers] = useState(members);
   const [isPending, startTransition] = useTransition();
@@ -577,10 +586,8 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       return (
                         <div key={seat.id}
                           style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
-                          className="absolute w-[70px] h-[58px] rounded-xl border-2 border-zinc-800 bg-zinc-900 opacity-30 flex items-center justify-center"
-                        >
-                          <span className="text-[9px] text-zinc-600">{seat.label}</span>
-                        </div>
+                          className="absolute w-[70px] h-[58px] rounded-xl border-2 border-zinc-800 bg-zinc-900 opacity-30"
+                        />
                       );
                     }
 
@@ -611,10 +618,9 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                         {!isFree && effectiveSection && (
                           <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(effectiveSection, member?.shiftName ?? seat.shiftSlot)}`} />
                         )}
-                        <span className="text-[9px] text-zinc-500 leading-none">{seat.label}</span>
                         {member ? (
                           <>
-                            <span className="text-[10px] font-mono text-zinc-500 tabular-nums leading-none">
+                            <span className={`text-[10px] font-mono tabular-nums leading-none ${status === "on_break" ? "text-zinc-800" : "text-zinc-500"}`}>
                               {member.accountNumber ?? ""}
                             </span>
                             <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${textCls}`}>
@@ -623,7 +629,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                             {status === "on_break" && member.breakStartedAt ? (
                               <BreakTimer startedAt={member.breakStartedAt} breakNote={member.breakNote} size="compact" />
                             ) : sectionLabel ? (
-                              <span className="text-[9px] leading-none text-zinc-500 truncate px-0.5 w-full text-center">
+                              <span className={`text-[9px] leading-none truncate px-0.5 w-full text-center ${status === "on_break" ? "text-zinc-800" : "text-zinc-500"}`}>
                                 {sectionLabel}
                               </span>
                             ) : status ? (
@@ -631,6 +637,11 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                                 {STATUS_LABEL[status]}
                               </span>
                             ) : null}
+                            {seat.staffId && breakAssignmentMap[seat.staffId] && (
+                              <span className={`absolute bottom-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold ${BREAK_BADGE_CLASS[breakAssignmentMap[seat.staffId]] ?? ""}`}>
+                                {BREAK_SLOT_LABEL[breakAssignmentMap[seat.staffId]] ?? ""}
+                              </span>
+                            )}
                           </>
                         ) : (
                           <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-600" : "text-zinc-600"}`}>
