@@ -8,7 +8,7 @@ import {
   type RankingRow,
 } from "./ranking-actions";
 
-type ImportRow = { rank: number; accountNumber: string | null; staffName: string };
+type ImportRow = { rank: number; section: string | null; staffName: string };
 
 export default function RankingTab({
   projectId,
@@ -64,9 +64,9 @@ export default function RankingTab({
           .map(row => {
             const r = row as unknown[];
             return {
-              rank:          Number(r[0]) || 0,
-              accountNumber: String(r[1] ?? "").trim() || null,
-              staffName:     String(r[2] ?? "").trim(),
+              rank:      Number(r[0]) || 0,
+              section:   String(r[1] ?? "").trim() || null,
+              staffName: String(r[2] ?? "").trim(),
             };
           })
           .filter(r => r.rank > 0 && r.staffName);
@@ -80,7 +80,7 @@ export default function RankingTab({
     const period = importPeriod.trim();
     if (!period || preview.length === 0) return;
     start(async () => {
-      const res = await importRankingAction(projectId, period, preview);
+      const res = await importRankingAction(projectId, period, preview.map(r => ({ rank: r.rank, accountNumber: r.section, staffName: r.staffName })));
       setImportMsg({ ok: res.success, text: res.message });
       if (res.success) {
         setPeriods(prev => prev.includes(period) ? prev : [period, ...prev]);
@@ -156,12 +156,14 @@ export default function RankingTab({
                 import("xlsx").then(XLSX => {
                   const wb = XLSX.utils.book_new();
                   const ws = XLSX.utils.aoa_to_sheet([
-                    ["順位", "アカウント番号", "名前"],
-                    [1, "ASS42", "田中 花子"],
-                    [2, "ASS34", "山田 太郎"],
-                    [3, "", "佐藤 次郎"],
+                    ["順位", "セクション", "社員名"],
+                    [1, "ASS査定", "ASS 42"],
+                    [2, "ASS査定", "ASS 34"],
+                    [3, "査定販売", "市川 千英"],
+                    [4, "査定販売", "大澤 愛里"],
+                    [5, "ASS査定", "ASS 33"],
                   ]);
-                  ws["!cols"] = [{ wch: 8 }, { wch: 16 }, { wch: 20 }];
+                  ws["!cols"] = [{ wch: 8 }, { wch: 14 }, { wch: 20 }];
                   XLSX.utils.book_append_sheet(wb, ws, "番付");
                   XLSX.writeFile(wb, "番付テンプレート.xlsx");
                 });
@@ -200,7 +202,7 @@ export default function RankingTab({
           </div>
 
           <p className="text-[10px] text-zinc-400">
-            1行目: ヘッダー（順位 / アカウント番号 / 名前）　2行目以降: データ
+            1行目: ヘッダー（順位 / セクション / 名前）　2行目以降: データ
           </p>
 
           {preview.length > 0 && (
@@ -210,7 +212,7 @@ export default function RankingTab({
                 <thead>
                   <tr className="text-left text-zinc-400 border-b border-zinc-100 dark:border-zinc-800">
                     <th className="pb-1.5 w-12">順位</th>
-                    <th className="pb-1.5 w-32">アカウント番号</th>
+                    <th className="pb-1.5 w-32">セクション</th>
                     <th className="pb-1.5">名前</th>
                   </tr>
                 </thead>
@@ -218,7 +220,7 @@ export default function RankingTab({
                   {preview.slice(0, 5).map((r, i) => (
                     <tr key={i} className="border-b border-zinc-50 dark:border-zinc-800/60">
                       <td className="py-1 tabular-nums font-semibold text-zinc-700 dark:text-zinc-300">{r.rank}</td>
-                      <td className="py-1 tabular-nums text-zinc-500">{r.accountNumber ?? "−"}</td>
+                      <td className="py-1 text-zinc-500">{r.section ?? "−"}</td>
                       <td className="py-1 text-zinc-700 dark:text-zinc-300">{r.staffName}</td>
                     </tr>
                   ))}
@@ -257,7 +259,7 @@ export default function RankingTab({
           {/* テーブルヘッダー */}
           <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-800 flex gap-4 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
             <span className="w-10">順位</span>
-            <span className="w-32">アカウント番号</span>
+            <span className="w-32">セクション</span>
             <span>名前</span>
           </div>
           {/* 行 */}
@@ -267,7 +269,7 @@ export default function RankingTab({
                 <span className="w-10 tabular-nums text-sm font-bold text-zinc-800 dark:text-zinc-100">
                   {r.rank}
                 </span>
-                <span className="w-32 tabular-nums text-xs text-zinc-400 dark:text-zinc-500">
+                <span className="w-32 text-xs text-zinc-400 dark:text-zinc-500">
                   {r.accountNumber ?? "−"}
                 </span>
                 <span className="text-sm text-zinc-800 dark:text-zinc-100">
