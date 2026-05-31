@@ -90,7 +90,11 @@ function buildGrouped(members: InternalMember[]): SectionGroup[] {
     .filter((g): g is SectionGroup => g !== null);
 }
 
-export default async function AttendancePage() {
+export default async function AttendancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -112,7 +116,19 @@ export default async function AttendancePage() {
   if (!isAuthorized) redirect("/dashboard");
 
   const admin = createAdminClient();
-  const today = tokyoToday();
+  const realToday = tokyoToday();
+
+  // 日付パラメータ（未指定なら当日）
+  const params = await searchParams;
+  const today = (params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date))
+    ? params.date
+    : realToday;
+
+  const prevDate = (() => {
+    const d = new Date(today + "T00:00:00+09:00");
+    d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  })();
   const tomorrow = (() => {
     const d = new Date(today + "T00:00:00+09:00");
     d.setDate(d.getDate() + 1);
@@ -124,7 +140,7 @@ export default async function AttendancePage() {
   const currentMonth = today.slice(0, 7); // YYYY-MM
 
   const last14Start = (() => {
-    const d = new Date();
+    const d = new Date(realToday + "T00:00:00+09:00");
     d.setDate(d.getDate() - 13);
     return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
   })();
@@ -198,7 +214,7 @@ export default async function AttendancePage() {
       .select("staff_id, absence_date")
       .eq("project_id", projectId)
       .gte("absence_date", last14Start)
-      .lte("absence_date", today),
+      .lte("absence_date", realToday),
   ]);
 
   // 今日・明日でデータを分割
@@ -506,6 +522,8 @@ export default async function AttendancePage() {
     <AttendanceClient
       projectId={projectId}
       today={today}
+      prevDate={prevDate}
+      nextDate={tomorrow}
       dateLabel={dateLabel}
       projectName={project?.name ?? ""}
       total={total}

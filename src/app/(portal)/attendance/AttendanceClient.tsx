@@ -1,5 +1,6 @@
 ﻿"use client";
 import React, { useState, useMemo, useTransition, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
 import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction, toggleChurnRiskAction, moveSectionAction } from "./actions";
 import type { SendResult } from "./actions";
@@ -137,6 +138,8 @@ const REQUEST_MSG  = "本日はお休みのところ恐れ入ります。急な�
 interface Props {
   projectId: string;
   today: string;
+  prevDate: string;
+  nextDate: string;
   dateLabel: string;
   projectName: string;
   total: number;
@@ -165,7 +168,7 @@ type ModalState = null | "confirm" | "sending" | "results";
 
 // ── メインコンポーネント ──────────────────────────────────
 export default function AttendanceClient({
-  projectId, today, dateLabel, projectName,
+  projectId, today, prevDate, nextDate, dateLabel, projectName,
   total, departed, clockedIn, late, absent, notClocked,
   grouped, offMembers, enableDeparture,
   publishedAt, shiftChanges,
@@ -173,6 +176,7 @@ export default function AttendanceClient({
   seatData, wallData, seatStaffList,
   tomorrow, planSeatData, planStaffData,
 }: Props) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
   const [seatSubTab, setSeatSubTab] = useState<"today" | "tomorrow">("today");
   // 催促・依頼の選択（トグル式）
@@ -402,7 +406,26 @@ export default function AttendanceClient({
               </div>
               <p className="text-sm font-semibold text-zinc-400 mt-0.5">{projectName}</p>
             </div>
-            <span className="text-sm font-semibold text-zinc-500 tabular-nums">{dateLabel}</span>
+            {/* 日付ナビゲーション */}
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => router.push(`/attendance?date=${prevDate}`)}
+                className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                aria-label="前日"
+              >
+                <ChevronLeft className="w-4 h-4 text-zinc-400" />
+              </button>
+              <span className="text-sm font-semibold text-zinc-500 tabular-nums px-1">{dateLabel}</span>
+              <button
+                type="button"
+                onClick={() => router.push(`/attendance?date=${nextDate}`)}
+                className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                aria-label="翌日"
+              >
+                <ChevronRight className="w-4 h-4 text-zinc-400" />
+              </button>
+            </div>
           </div>
         </div>
         {/* サマリー（固定） */}
@@ -1058,6 +1081,14 @@ function ChevronRight({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function ChevronLeft({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
     </svg>
   );
 }
