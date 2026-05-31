@@ -182,7 +182,7 @@ export default function AttendanceClient({
   tomorrow, planSeatData, planStaffData,
   hMotaRows, initialMotaAssignments,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
+  const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating" | "hmota">("today");
   const [seatSubTab, setSeatSubTab] = useState<"today" | "tomorrow">("today");
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
@@ -473,9 +473,34 @@ export default function AttendanceClient({
           >
             座席表
           </button>
+          {hMotaRows.length > 0 && (
+            <button
+              onClick={() => setActiveTab("hmota")}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                activeTab === "hmota"
+                  ? "bg-purple-700 text-white"
+                  : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+            >
+              H MOTA
+            </button>
+          )}
         </div>
       </div>
       <div className="max-w-5xl mx-auto px-4 pt-4 pb-32">
+
+        {/* ── H MOTA タブ ── */}
+        {activeTab === "hmota" && (
+          <div>
+            <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} />
+            <HMotaPanel
+              projectId={projectId}
+              date={today}
+              rows={hMotaRows}
+              initialAssignments={initialMotaAssignments}
+            />
+          </div>
+        )}
 
         {/* ── 確定後変更タブ ── */}
         {activeTab === "changes" && (
@@ -766,18 +791,6 @@ export default function AttendanceClient({
                 );
               })}
             </div>
-          </div>
-        )}
-
-        {/* H MOTA スロット配置パネル */}
-        {activeTab === "today" && hMotaRows.length > 0 && (
-          <div className="mt-4">
-            <HMotaPanel
-              projectId={projectId}
-              date={today}
-              rows={hMotaRows}
-              initialAssignments={initialMotaAssignments}
-            />
           </div>
         )}
 
