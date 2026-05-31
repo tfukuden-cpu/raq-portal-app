@@ -1654,7 +1654,8 @@ export default function ShiftEditGrid({
   const NAME_W = 100;
   const TOT_W = 52;     // 合計列幅
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
-  const SUM_ROW_H = 34; // 34px (充足サマリー行の高さ)
+  const SUM_ROW_H = 22; // 22px (充足サマリー行の高さ)
+  const GRAND_TOTAL_EXCLUDE = ["ローン", "リメイク"]; // 全体合計から除外するセクション
 
   // 前月末5日間の日付リスト
   const prevDates = useMemo(() => {
@@ -2268,6 +2269,66 @@ export default function ShiftEditGrid({
                         </tr>
                       );
                     })()}
+                    {/* ── 全体合計行（ローン・リメイク除く）：最後のメインパターンの直後に挿入 ── */}
+                    {(() => {
+                      const mainPats = arr.filter(p => !GRAND_TOTAL_EXCLUDE.includes(p.section ?? ""));
+                      if (mainPats.length === 0) return null;
+                      const lastMainIdx = arr.reduce((acc, p, i) => !GRAND_TOTAL_EXCLUDE.includes(p.section ?? "") ? i : acc, -1);
+                      // isEarlyLateTotal がある場合は合計行の後に出力するためそちらに任せる
+                      const insertHere = patIdx === lastMainIdx && !isEarlyLateTotal;
+                      const insertAfterEarlyLate = patIdx === lastMainIdx && isEarlyLateTotal;
+                      if (!insertHere && !insertAfterEarlyLate) return null;
+                  const gtByDate = allDates.map(d => ({
+                    asgn: mainPats.reduce((s, p) => s + getEffectiveCount(p.name, d), 0),
+                    req:  mainPats.reduce((s, p) => s + getRequired(p.name, d), 0),
+                  }));
+                  const gtGrandAsgn = gtByDate.reduce((s, v) => s + v.asgn, 0);
+                  const gtGrandReq  = gtByDate.reduce((s, v) => s + v.req,  0);
+                  const gtGrandNet  = gtGrandReq - gtGrandAsgn;
+                  let gtTotDisp: string, gtTotText: string, gtTotBg: string;
+                  if (gtGrandReq === 0) { gtTotDisp = gtGrandAsgn > 0 ? String(gtGrandAsgn) : "—"; gtTotText = "text-zinc-400 dark:text-zinc-500"; gtTotBg = "bg-zinc-200 dark:bg-zinc-700"; }
+                  else if (gtGrandNet > 0) { gtTotDisp = `-${gtGrandNet}`; gtTotText = "text-red-600 dark:text-red-400 font-bold"; gtTotBg = "bg-red-200 dark:bg-red-900/60"; }
+                  else if (gtGrandNet < 0) { gtTotDisp = `+${-gtGrandNet}`; gtTotText = "text-emerald-700 dark:text-emerald-400 font-bold"; gtTotBg = "bg-emerald-200 dark:bg-emerald-900/60"; }
+                  else { gtTotDisp = "✓"; gtTotText = "text-emerald-400 dark:text-emerald-500 font-bold"; gtTotBg = "bg-zinc-200 dark:bg-zinc-700"; }
+                  return (
+                    <tr key="grand-total-row" style={{ height: `${SUM_ROW_H}px` }} className="bg-zinc-200 dark:bg-zinc-700">
+                      <td className="p-0 overflow-hidden bg-zinc-500 dark:bg-zinc-400 border-r-2 border-zinc-600 dark:border-zinc-300 border-t-2 border-t-zinc-500 dark:border-t-zinc-400 border-b-2 border-b-zinc-600 dark:border-b-zinc-300"
+                        style={{ position: "sticky", left: 0, zIndex: 10 }}>
+                        <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-2">
+                          <span className="text-[10px] font-bold text-white dark:text-zinc-900 leading-none truncate block">全体合計</span>
+                        </div>
+                      </td>
+                      {prevDates.map((d) => (
+                        <td key={`prev-gt-${d}`} className="p-0 bg-zinc-400 dark:bg-zinc-500 border-t-2 border-t-zinc-500 dark:border-t-zinc-400 border-b-2 border-b-zinc-600 dark:border-b-zinc-300 border-r border-r-zinc-300 dark:border-r-zinc-600" />
+                      ))}
+                      {allDates.map((date, di) => {
+                        const { asgn, req } = gtByDate[di];
+                        const net = req - asgn;
+                        const isToday = date === todayJST;
+                        let nd: string, tc: string, bc: string;
+                        if (req === 0) { nd = asgn > 0 ? String(asgn) : ""; tc = "text-zinc-500 dark:text-zinc-400"; bc = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-200 dark:bg-zinc-700"; }
+                        else if (net > 0) { nd = `-${net}`; tc = "text-red-600 dark:text-red-400 font-bold"; bc = isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950"; }
+                        else if (net < 0) { nd = `+${-net}`; tc = "text-emerald-700 dark:text-emerald-400 font-bold"; bc = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950"; }
+                        else { nd = "✓"; tc = "text-emerald-400 dark:text-emerald-500 font-bold"; bc = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-200 dark:bg-zinc-700"; }
+                        return (
+                          <td key={date} className={["tabular-nums p-0 overflow-hidden border-t-2 border-t-zinc-500 dark:border-t-zinc-400 border-b-2 border-b-zinc-600 dark:border-b-zinc-300 border-r border-r-zinc-200 dark:border-r-zinc-700", bc].join(" ")}>
+                            <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center gap-0">
+                              <span className={`text-[12px] font-bold leading-none ${tc}`}>{nd}</span>
+                              {req > 0 && <span className="text-[9px] leading-none opacity-70 text-zinc-600 dark:text-zinc-300">{asgn}/{req}</span>}
+                            </div>
+                          </td>
+                        );
+                      })}
+                      <td className={["tabular-nums p-0 overflow-hidden border-l-2 border-zinc-500 dark:border-zinc-400 border-t-2 border-t-zinc-500 dark:border-t-zinc-400 border-b-2 border-b-zinc-600 dark:border-b-zinc-300", gtTotBg].join(" ")}
+                        style={{ position: "sticky", right: 0, zIndex: 12 }}>
+                        <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex flex-col items-center justify-center gap-0">
+                          <span className={`text-[12px] font-bold leading-none ${gtTotText}`}>{gtTotDisp}</span>
+                          {gtGrandReq > 0 && <span className="text-[9px] leading-none opacity-70 text-zinc-600 dark:text-zinc-300">{gtGrandAsgn}/{gtGrandReq}</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })()}
                     </React.Fragment>
                   );
                 })}
