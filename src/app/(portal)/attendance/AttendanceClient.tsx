@@ -220,6 +220,16 @@ export default function AttendanceClient({
   const [staffMenu, setStaffMenu] = useState<{ staffId: string; staffName: string; churnRisk: boolean } | null>(null);
   const [detailMember, setDetailMember] = useState<MemberRow | null>(null);
 
+  // 日付変更時にローカルオーバーライドをリセット（key={today} による remount の補完）
+  useEffect(() => {
+    const map = new Map<string, StatusKey>();
+    grouped.flatMap(g => g.shiftGroups.flatMap(sg => sg.members))
+      .forEach(m => map.set(m.staffId, m.status));
+    setLocalStatuses(map);
+    setSectionOverrides(new Map());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today]);
+
   // ── セクション間ドラッグ ──────────────────────────────────
   const [dragStaffId, setDragStaffId] = useState<string | null>(null);
   const [dragOverSection, setDragOverSection] = useState<string | null>(null);

@@ -190,7 +190,7 @@ export default async function AttendancePage({
       .eq("project_id", projectId)
       .eq("late_date", today),
     admin.from("shift_patterns")
-      .select("name, start_time, end_time")
+      .select("name, start_time, end_time, section")
       .eq("project_id", projectId),
     admin.from("project_settings")
       .select("enable_departure_report")
@@ -247,16 +247,21 @@ export default async function AttendancePage({
     });
   }
 
-  // project_members.section の全ユニーク値から動的にセクション順を構築
-  // BASE_SECTION_ORDER を優先し、それ以外のセクションを後ろに追加
+  // project_members.section と shift_patterns.section を合わせてセクション順を構築
   const allMemberSections = [...new Set(
     (memberRows ?? [])
       .map(m => (m.section as string | null) ?? null)
       .filter((s): s is string => !!s)
   )];
+  const patternSections = [...new Set(
+    (shiftPatterns ?? [])
+      .map(p => (p as { section?: string | null }).section as string | null)
+      .filter((s): s is string => !!s)
+  )];
+  const allSections = [...new Set([...allMemberSections, ...patternSections])];
   const sectionOrderFull: string[] = [
-    ...BASE_SECTION_ORDER.filter(s => allMemberSections.includes(s)),
-    ...allMemberSections.filter(s => !BASE_SECTION_ORDER.includes(s) && s !== "その他"),
+    ...BASE_SECTION_ORDER.filter(s => allSections.includes(s)),
+    ...allSections.filter(s => !BASE_SECTION_ORDER.includes(s) && s !== "その他"),
     "その他",
   ];
 
