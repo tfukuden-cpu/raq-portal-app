@@ -1837,15 +1837,11 @@ type NotifyKey = keyof NotificationSettings;
 
 // イベント通知カード定義（順序・ラベル・説明のみ。変数は NOTIFY_VARS から参照）
 const EVENT_NOTIFY_ITEMS: { key: NotifyKey; label: string; desc: string }[] = [
-  { key: "absence",         label: "欠勤申請通知",       desc: "スタッフが欠勤申請を行ったとき（管理者グループへ）" },
-  { key: "absence_confirm", label: "欠勤連絡完了通知",   desc: "欠勤申請受付をスタッフ本人に通知" },
-  { key: "tardiness",       label: "遅刻申請通知",       desc: "スタッフが遅刻申請を行ったとき（管理者グループへ）" },
-  { key: "clock",           label: "打刻通知",           desc: "出勤・退勤の打刻が行われたとき" },
-  { key: "announcement",   label: "お知らせ通知",       desc: "管理者がお知らせを投稿したとき（スタッフへ）" },
-  { key: "inquiry",              label: "問い合わせ通知",         desc: "スタッフから問い合わせが届いたとき（管理者グループへ）" },
-  { key: "inquiry_reply",        label: "問い合わせ返信通知",     desc: "管理者が問い合わせに返信したとき（スタッフ本人へ）" },
-  { key: "shift_request",        label: "追加申請通知",           desc: "スタッフがシフト追加申請をしたとき（管理者グループへ）" },
-  { key: "shift_request_result", label: "追加申請審査結果通知",   desc: "管理者が追加申請を承認・却下したとき（スタッフ本人へ）" },
+  { key: "absence",      label: "欠勤申請通知",   desc: "スタッフが欠勤申請を行ったとき（管理者グループへ）" },
+  { key: "tardiness",    label: "遅刻申請通知",   desc: "スタッフが遅刻申請を行ったとき（管理者グループへ）" },
+  { key: "announcement", label: "お知らせ通知",   desc: "管理者がお知らせを投稿したとき（スタッフへ）" },
+  { key: "inquiry",      label: "問い合わせ通知", desc: "スタッフから問い合わせが届いたとき（管理者グループへ）" },
+  { key: "inquiry_reply", label: "問い合わせ返信通知", desc: "管理者が問い合わせに返信したとき（スタッフ本人へ）" },
 ];
 
 const RECIPIENT_LABELS: Record<string, string> = {
@@ -2136,52 +2132,6 @@ export function LineNotifySettings({
           定時通知（スケジュール）
         </p>
 
-        {/* 出勤前リマインド */}
-        <NotifyCard
-          notifyKey="shift_start_remind"
-          label="出勤前リマインド"
-          desc="各スタッフの出勤時間の直前に通知"
-          config={settings.shift_start_remind}
-          vars={NOTIFY_VARS.shift_start_remind}
-          onToggle={() => updateItem("shift_start_remind", { enabled: !settings.shift_start_remind.enabled })}
-          onRecipient={v => updateItem("shift_start_remind", { recipient: v })}
-          projectId={projectId}
-          extra={
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">タイミング</span>
-              <span className="text-[11px] text-zinc-500">出勤時間の</span>
-              <MinutesInput
-                value={settings.shift_start_remind.minutes_before ?? 60}
-                onChange={v => updateItem("shift_start_remind", { minutes_before: v })}
-              />
-              <span className="text-[11px] text-zinc-400">分前に送信</span>
-            </div>
-          }
-        />
-
-        {/* 退勤打刻リマインド */}
-        <NotifyCard
-          notifyKey="shift_end_remind"
-          label="退勤打刻リマインド＋次回出勤アナウンス"
-          desc="退勤時間を過ぎても打刻がない場合に通知"
-          config={settings.shift_end_remind}
-          vars={NOTIFY_VARS.shift_end_remind}
-          onToggle={() => updateItem("shift_end_remind", { enabled: !settings.shift_end_remind.enabled })}
-          onRecipient={v => updateItem("shift_end_remind", { recipient: v })}
-          projectId={projectId}
-          extra={
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">タイミング</span>
-              <span className="text-[11px] text-zinc-500">退勤時間の</span>
-              <MinutesInput
-                value={settings.shift_end_remind.minutes_after ?? 15}
-                onChange={v => updateItem("shift_end_remind", { minutes_after: v })}
-              />
-              <span className="text-[11px] text-zinc-400">分後に送信</span>
-            </div>
-          }
-        />
-
         {/* 当日休み→翌日出勤アナウンス */}
         <NotifyCard
           notifyKey="rest_day_remind"
@@ -2200,60 +2150,6 @@ export function LineNotifySettings({
                 onChange={v => updateItem("rest_day_remind", { time: v })}
               />
               <span className="text-[11px] text-zinc-400">に送信（前日）</span>
-            </div>
-          }
-        />
-
-        {/* 日次サマリー */}
-        <NotifyCard
-          notifyKey="daily_summary"
-          label="日次出勤サマリー"
-          desc="毎日指定時刻に当日の出勤状況をまとめて通知"
-          config={settings.daily_summary}
-          vars={NOTIFY_VARS.daily_summary}
-          onToggle={() => updateItem("daily_summary", { enabled: !settings.daily_summary.enabled })}
-          onRecipient={v => updateItem("daily_summary", { recipient: v })}
-          projectId={projectId}
-          extra={
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">送信時刻</span>
-              <TimeInput
-                value={settings.daily_summary.time ?? "08:00"}
-                onChange={v => updateItem("daily_summary", { time: v })}
-              />
-              <span className="text-[11px] text-zinc-400">に送信</span>
-            </div>
-          }
-        />
-
-        {/* 希望休リマインド */}
-        <NotifyCard
-          notifyKey="holiday_reminder"
-          label="希望休締切リマインド"
-          desc="希望休の提出締切が近づいたらスタッフに通知"
-          config={settings.holiday_reminder}
-          vars={NOTIFY_VARS.holiday_reminder}
-          onToggle={() => updateItem("holiday_reminder", { enabled: !settings.holiday_reminder.enabled })}
-          onRecipient={v => updateItem("holiday_reminder", { recipient: v })}
-          projectId={projectId}
-          extra={
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-semibold text-zinc-500 w-14 flex-shrink-0">タイミング</span>
-              <span className="text-[11px] text-zinc-500">締切の</span>
-              <input
-                type="number"
-                min={1}
-                max={30}
-                value={settings.holiday_reminder.days_before ?? 3}
-                onChange={e => updateItem("holiday_reminder", { days_before: Number(e.target.value) })}
-                className="w-12 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-700 dark:text-zinc-300 text-center"
-              />
-              <span className="text-[11px] text-zinc-500">日前の</span>
-              <TimeInput
-                value={settings.holiday_reminder.time ?? "09:00"}
-                onChange={v => updateItem("holiday_reminder", { time: v })}
-              />
-              <span className="text-[11px] text-zinc-400">に送信</span>
             </div>
           }
         />
@@ -2302,17 +2198,6 @@ export function LineNotifySettings({
           }
         />
 
-        {/* 経過報告提出通知 */}
-        <NotifyCard
-          notifyKey="absence_followup_notify"
-          label="欠勤者経過報告受信通知"
-          desc="欠勤スタッフが経過報告を提出したとき管理者グループへ通知"
-          config={settings.absence_followup_notify}
-          vars={NOTIFY_VARS.absence_followup_notify}
-          onToggle={() => updateItem("absence_followup_notify", { enabled: !settings.absence_followup_notify.enabled })}
-          onRecipient={v => updateItem("absence_followup_notify", { recipient: v })}
-          projectId={projectId}
-        />
 
       </div>
 
