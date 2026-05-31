@@ -52,7 +52,15 @@ export default function RankingTab({ projectId, hasData }: { projectId: string; 
             };
           })
           .filter(r => r.rank > 0 && r.staffName && (r.section === "ASS査定" || r.section === "ASS販売"));
-        setPreview(parsed);
+
+        // セクション別に順位を1から振り直す
+        const counters: Record<string, number> = {};
+        const renumbered = parsed.map(r => {
+          const sec = r.section ?? "";
+          counters[sec] = (counters[sec] ?? 0) + 1;
+          return { ...r, rank: counters[sec] };
+        });
+        setPreview(renumbered);
       };
       reader.readAsArrayBuffer(file);
     });
