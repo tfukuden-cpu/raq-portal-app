@@ -17,9 +17,10 @@ interface Props {
   date: string;
   rows: MotaRow[];
   initialAssignments: MotaAssignment[];
+  inline?: boolean;
 }
 
-export default function HMotaPanel({ projectId, date, rows, initialAssignments }: Props) {
+export default function HMotaPanel({ projectId, date, rows, initialAssignments, inline = false }: Props) {
   const [assignments, setAssignments] = useState<MotaAssignment[]>(initialAssignments);
   const [dragging, setDragging] = useState<{ accountNumber: string; isFixed: boolean } | null>(null);
   const [dragOver, setDragOver] = useState<{ accountNumber: string; slot: Slot } | null>(null);
@@ -43,14 +44,7 @@ export default function HMotaPanel({ projectId, date, rows, initialAssignments }
       isFixed: dragging.isFixed,
     };
 
-    if (dragging.isFixed) {
-      setAssignments(prev => [
-        ...prev.filter(a => a.accountNumber !== dragging.accountNumber),
-        newAssignment,
-      ]);
-    } else {
-      setAssignments(prev => [...prev, newAssignment]);
-    }
+    setAssignments(prev => [...prev, newAssignment]);
 
     const res = await addMotaAssignmentAction(
       projectId, date, dragging.accountNumber, slot, dragging.isFixed,
@@ -75,83 +69,82 @@ export default function HMotaPanel({ projectId, date, rows, initialAssignments }
   const hMotaRows = rows.filter(r => !r.isFixed);
   const fixedRows = rows.filter(r => r.isFixed);
 
+  const table = (
+    <table className="w-full text-xs border-collapse">
+      <thead>
+        <tr className="border-b border-zinc-100 dark:border-zinc-800">
+          <th className="text-left px-2 py-1.5 font-semibold text-zinc-400 w-24 text-[10px]">番号</th>
+          {SLOTS.map(slot => (
+            <th key={slot} className="text-center px-1 py-1.5 font-semibold text-purple-500 tabular-nums text-[10px]">
+              {slot}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {hMotaRows.length > 0 && (
+          <tr>
+            <td colSpan={3} className="px-2 pt-2 pb-0.5">
+              <span className="text-[9px] font-bold text-purple-400 uppercase tracking-wide">空き</span>
+            </td>
+          </tr>
+        )}
+        {hMotaRows.map(row => (
+          <MotaTableRow
+            key={row.accountNumber}
+            row={row}
+            dragging={dragging}
+            dragOver={dragOver}
+            getAssignment={getAssignment}
+            onDragStart={() => setDragging({ accountNumber: row.accountNumber, isFixed: row.isFixed })}
+            onDragEnd={() => { setDragging(null); setDragOver(null); }}
+            onDragOver={(slot) => setDragOver({ accountNumber: row.accountNumber, slot })}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={handleDrop}
+            onRemove={handleRemove}
+            compact={inline}
+          />
+        ))}
+        {fixedRows.length > 0 && (
+          <tr>
+            <td colSpan={3} className="px-2 pt-2 pb-0.5">
+              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">固定</span>
+            </td>
+          </tr>
+        )}
+        {fixedRows.map(row => (
+          <MotaTableRow
+            key={row.accountNumber}
+            row={row}
+            dragging={dragging}
+            dragOver={dragOver}
+            getAssignment={getAssignment}
+            onDragStart={() => setDragging({ accountNumber: row.accountNumber, isFixed: row.isFixed })}
+            onDragEnd={() => { setDragging(null); setDragOver(null); }}
+            onDragOver={(slot) => setDragOver({ accountNumber: row.accountNumber, slot })}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={handleDrop}
+            onRemove={handleRemove}
+            compact={inline}
+          />
+        ))}
+      </tbody>
+    </table>
+  );
+
+  if (inline) {
+    return <div className="overflow-y-auto flex-1 min-h-0">{table}</div>;
+  }
+
   return (
     <div className="bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-800 rounded-2xl overflow-hidden">
-      {/* ヘッダー */}
       <div className="px-4 py-3 bg-purple-50 dark:bg-purple-950/30 border-b border-purple-100 dark:border-purple-900">
         <h3 className="text-sm font-bold text-purple-900 dark:text-purple-100">H MOTA スロット配置</h3>
         <p className="text-[11px] text-purple-500 dark:text-purple-400 mt-0.5">
-          アカウント番号をドラッグしてスロットに配置
+          番号チップをドラッグしてスロットに配置
         </p>
       </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse">
-          <thead>
-            <tr className="border-b border-zinc-100 dark:border-zinc-800">
-              <th className="text-left px-4 py-2 font-semibold text-zinc-400 w-36">アカウント番号</th>
-              {SLOTS.map(slot => (
-                <th key={slot} className="text-center px-4 py-2 font-semibold text-zinc-500 tabular-nums w-40">
-                  {slot}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {/* H MOTA 空き番号 */}
-            {hMotaRows.length > 0 && (
-              <tr>
-                <td colSpan={3} className="px-4 pt-2 pb-0.5">
-                  <span className="text-[10px] font-bold text-purple-500 dark:text-purple-400 uppercase tracking-wide">
-                    H MOTA 空き
-                  </span>
-                </td>
-              </tr>
-            )}
-            {hMotaRows.map(row => (
-              <MotaTableRow
-                key={row.accountNumber}
-                row={row}
-                dragging={dragging}
-                dragOver={dragOver}
-                getAssignment={getAssignment}
-                onDragStart={() => setDragging({ accountNumber: row.accountNumber, isFixed: row.isFixed })}
-                onDragEnd={() => { setDragging(null); setDragOver(null); }}
-                onDragOver={(slot) => setDragOver({ accountNumber: row.accountNumber, slot })}
-                onDragLeave={() => setDragOver(null)}
-                onDrop={handleDrop}
-                onRemove={handleRemove}
-              />
-            ))}
-
-            {/* 固定番号 */}
-            {fixedRows.length > 0 && (
-              <tr>
-                <td colSpan={3} className="px-4 pt-3 pb-0.5">
-                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
-                    固定番号
-                  </span>
-                </td>
-              </tr>
-            )}
-            {fixedRows.map(row => (
-              <MotaTableRow
-                key={row.accountNumber}
-                row={row}
-                dragging={dragging}
-                dragOver={dragOver}
-                getAssignment={getAssignment}
-                onDragStart={() => setDragging({ accountNumber: row.accountNumber, isFixed: row.isFixed })}
-                onDragEnd={() => { setDragging(null); setDragOver(null); }}
-                onDragOver={(slot) => setDragOver({ accountNumber: row.accountNumber, slot })}
-                onDragLeave={() => setDragOver(null)}
-                onDrop={handleDrop}
-                onRemove={handleRemove}
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <div className="overflow-x-auto">{table}</div>
     </div>
   );
 }
@@ -167,6 +160,7 @@ function MotaTableRow({
   onDragLeave,
   onDrop,
   onRemove,
+  compact = false,
 }: {
   row: MotaRow;
   dragging: { accountNumber: string; isFixed: boolean } | null;
@@ -178,19 +172,21 @@ function MotaTableRow({
   onDragLeave: () => void;
   onDrop: (accountNumber: string, slot: typeof SLOTS[number]) => void;
   onRemove: (id: string) => void;
+  compact?: boolean;
 }) {
   const isDraggingThis = dragging?.accountNumber === row.accountNumber;
 
   return (
     <tr className="border-b last:border-b-0 border-zinc-50 dark:border-zinc-800/50">
       {/* アカウント番号（ドラッグソース） */}
-      <td className="px-4 py-1.5">
+      <td className={compact ? "px-1.5 py-1" : "px-4 py-1.5"}>
         <div
           draggable
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           className={[
-            "inline-flex items-center px-2 py-1 rounded-lg border cursor-grab active:cursor-grabbing select-none font-mono text-[11px] font-semibold transition-opacity",
+            "inline-flex items-center px-1.5 py-0.5 rounded border cursor-grab active:cursor-grabbing select-none font-mono font-semibold transition-opacity",
+            compact ? "text-[9px]" : "text-[11px]",
             row.isFixed
               ? "bg-zinc-50 border-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-300"
               : "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-900/30 dark:border-purple-800 dark:text-purple-300",
@@ -210,23 +206,25 @@ function MotaTableRow({
         return (
           <td
             key={slot}
-            className="px-4 py-1.5"
-            onDragOver={e => {
-              if (canDrop) { e.preventDefault(); onDragOver(slot); }
-            }}
+            className={compact ? "px-1 py-1" : "px-4 py-1.5"}
+            onDragOver={e => { if (canDrop) { e.preventDefault(); onDragOver(slot); } }}
             onDragLeave={onDragLeave}
             onDrop={() => onDrop(row.accountNumber, slot)}
           >
             <div className={[
-              "min-h-[30px] rounded-lg border-2 border-dashed flex items-center justify-center px-2 transition-colors",
+              "rounded border-2 border-dashed flex items-center justify-center transition-colors",
+              compact ? "min-h-[22px] px-0.5" : "min-h-[30px] px-2",
               isTarget && canDrop
                 ? "border-purple-400 bg-purple-50 dark:bg-purple-900/20"
                 : "border-zinc-200 dark:border-zinc-700",
             ].join(" ")}>
               {assignment ? (
-                <div className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 rounded border border-purple-200 dark:border-purple-700">
-                  <span className="text-[10px] font-semibold font-mono text-purple-700 dark:text-purple-300 tabular-nums">
-                    {row.accountNumber}
+                <div className="flex items-center gap-0.5 px-1 py-px bg-purple-100 dark:bg-purple-900/50 rounded border border-purple-200 dark:border-purple-700">
+                  <span className={[
+                    "font-semibold font-mono text-purple-700 dark:text-purple-300 tabular-nums",
+                    compact ? "text-[8px]" : "text-[10px]",
+                  ].join(" ")}>
+                    ✓
                   </span>
                   <button
                     type="button"
@@ -238,12 +236,10 @@ function MotaTableRow({
                 </div>
               ) : (
                 <span className={[
-                  "text-[10px]",
-                  isTarget && canDrop
-                    ? "text-purple-400"
-                    : "text-zinc-300 dark:text-zinc-600",
+                  compact ? "text-[8px]" : "text-[10px]",
+                  isTarget && canDrop ? "text-purple-400" : "text-zinc-300 dark:text-zinc-600",
                 ].join(" ")}>
-                  {isTarget && canDrop ? "ここにドロップ" : "—"}
+                  {isTarget && canDrop ? "→" : "—"}
                 </span>
               )}
             </div>

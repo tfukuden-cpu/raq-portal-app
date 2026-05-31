@@ -182,7 +182,7 @@ export default function AttendanceClient({
   tomorrow, planSeatData, planStaffData,
   hMotaRows, initialMotaAssignments,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating" | "hmota">("today");
+  const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
   const [seatSubTab, setSeatSubTab] = useState<"today" | "tomorrow">("today");
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
@@ -473,34 +473,9 @@ export default function AttendanceClient({
           >
             座席表
           </button>
-          {hMotaRows.length > 0 && (
-            <button
-              onClick={() => setActiveTab("hmota")}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                activeTab === "hmota"
-                  ? "bg-purple-700 text-white"
-                  : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-              }`}
-            >
-              H MOTA
-            </button>
-          )}
         </div>
       </div>
       <div className="max-w-5xl mx-auto px-4 pt-4 pb-32">
-
-        {/* ── H MOTA タブ ── */}
-        {activeTab === "hmota" && (
-          <div>
-            <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} />
-            <HMotaPanel
-              projectId={projectId}
-              date={today}
-              rows={hMotaRows}
-              initialAssignments={initialMotaAssignments}
-            />
-          </div>
-        )}
 
         {/* ── 確定後変更タブ ── */}
         {activeTab === "changes" && (
@@ -616,6 +591,34 @@ export default function AttendanceClient({
                 ).length;
                 const isDragTarget = dragOverSection === section;
                 const secCol = SECTION_COL[section] ?? SECTION_COL_FALLBACK;
+
+                // H MOTA セクション：スロット配置テーブルをカラム内に表示
+                if (section === "H MOTA" && hMotaRows.length > 0) {
+                  return (
+                    <div
+                      key={section}
+                      className={[
+                        "flex flex-col rounded-2xl border-2 shrink-0 transition-all",
+                        "h-[calc(100dvh-280px)] w-72",
+                        "border-purple-200 dark:border-purple-800 bg-white dark:bg-zinc-900",
+                      ].join(" ")}
+                    >
+                      <div className="px-3 pt-2.5 pb-2 border-b shrink-0 rounded-t-2xl bg-purple-50 dark:bg-purple-950/30 border-b-purple-200 dark:border-b-purple-800">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-purple-800 dark:text-purple-100">H MOTA</span>
+                          <span className="text-[10px] font-semibold text-purple-400">スロット配置</span>
+                        </div>
+                      </div>
+                      <HMotaPanel
+                        projectId={projectId}
+                        date={today}
+                        rows={hMotaRows}
+                        initialAssignments={initialMotaAssignments}
+                        inline
+                      />
+                    </div>
+                  );
+                }
 
                 return (
                   <div
