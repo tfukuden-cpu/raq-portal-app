@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 import { sendEventNotify } from "@/lib/notify";
 import { multicastLine, pushLine, pushLineWithButton } from "@/lib/line";
 import {
-  buildDefaultNotificationSettings,
   DEFAULT_NOTIFY_MESSAGES,
 } from "@/app/(portal)/admin/[projectId]/settings/notify-config";
 import { resolveMessage } from "@/lib/notify";
@@ -259,19 +258,6 @@ export async function notifyShiftChangesAction(
 
   const admin = createAdminClient();
 
-  // ── 変更通知が無効なら即終了 ──────────────────────────────────
-  const { data: ps } = await admin
-    .from("project_settings")
-    .select("notification_settings")
-    .eq("project_id", projectId)
-    .maybeSingle();
-  const settings = buildDefaultNotificationSettings(
-    (ps?.notification_settings as Record<string, unknown>) ?? {}
-  );
-  if (!settings.shift_changed.enabled) {
-    return { success: true, sent: 0, noLine: [] };
-  }
-
   const { data: staffRows } = await admin
     .from("staffs")
     .select("id, line_user_id, display_name, name")
@@ -302,7 +288,7 @@ export async function notifyShiftChangesAction(
       return `${fmtDateLine(c.date)} ${c.from} → ${c.to}`;
     });
 
-    const baseMsg = settings.shift_changed.message ?? DEFAULT_NOTIFY_MESSAGES.shift_changed;
+    const baseMsg = DEFAULT_NOTIFY_MESSAGES.shift_changed;
     const header  = resolveMessage(baseMsg, { "名前": staffName });
     const text    = `${header}\n\n${lines.join("\n")}`;
     await pushLine(lineId, text);
@@ -370,31 +356,6 @@ export async function publishShiftsAction(
     shiftsByStaff.get(id)!.push(s);
   }
 
-  // 通知設定を取得
-  const { data: ps } = await admin
-    .from("project_settings")
-    .select("notification_settings")
-    .eq("project_id", projectId)
-    .maybeSingle();
-  const settings = buildDefaultNotificationSettings(
-    (ps?.notification_settings as Record<string, unknown>) ?? {}
-  );
-
-  // ── 展開通知が無効なら送信しない ──────────────────────────────
-  if (!settings.shift_published.enabled) {
-    // 展開済みとして記録だけして終了
-    const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
-    await admin.from("shift_month_status").upsert(
-      {
-        project_id:   projectId,
-        year_month:   yearMonth,
-        published_by: user.email?.split("@")[0]?.toUpperCase() ?? "",
-      },
-      { onConflict: "project_id,year_month" }
-    );
-    return { success: true, sent: 0, noLine: [] };
-  }
-
   // LINE IDを含むスタッフ情報を取得
   const staffIds = [...shiftsByStaff.keys()];
   const { data: staffRows } = await admin
@@ -430,7 +391,7 @@ export async function publishShiftsAction(
       })
       .join("\n");
 
-    const baseMsg = customMessage?.trim() || settings.shift_published.message || DEFAULT_NOTIFY_MESSAGES.shift_published;
+    const baseMsg = customMessage?.trim() || DEFAULT_NOTIFY_MESSAGES.shift_published;
     const message = resolveMessage(baseMsg, {
       "名前": name,
       "対象月": targetMonth,
@@ -541,16 +502,6 @@ export async function sendShiftNotifyAction(
     shiftsByStaff.get(id)!.push(s);
   }
 
-  // 通知設定を取得
-  const { data: ps } = await admin
-    .from("project_settings")
-    .select("notification_settings")
-    .eq("project_id", projectId)
-    .maybeSingle();
-  const settings = buildDefaultNotificationSettings(
-    (ps?.notification_settings as Record<string, unknown>) ?? {}
-  );
-
   const staffIds = [...shiftsByStaff.keys()];
   const { data: staffRows } = await admin
     .from("staffs")
@@ -584,7 +535,7 @@ export async function sendShiftNotifyAction(
       })
       .join("\n");
 
-    const baseMsg = customMessage?.trim() || settings.shift_published.message || DEFAULT_NOTIFY_MESSAGES.shift_published;
+    const baseMsg = customMessage?.trim() || DEFAULT_NOTIFY_MESSAGES.shift_published;
     const message = resolveMessage(baseMsg, {
       "名前": name,
       "対象月": targetMonth,

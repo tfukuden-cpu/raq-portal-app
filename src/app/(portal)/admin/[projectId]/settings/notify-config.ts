@@ -39,9 +39,9 @@ export type NotificationSettings = {
   shift_request:        NotifyItemConfig;
   /** 管理者がシフト追加申請を承認・却下したとき → スタッフへ */
   shift_request_result: NotifyItemConfig;
-  /** 管理者がシフトを変更・削除したとき → 対象スタッフへ */
-  shift_changed:        NotifyItemConfig;
   /** 管理者が勤怠補正申請を承認・却下したとき → スタッフへ */
+  /** 管理者がシフトを変更・削除したとき → 対象スタッフへ（UI非表示・常時有効） */
+  shift_changed:        NotifyItemConfig;
   correction_result:    NotifyItemConfig;
 
   // ── 定時通知（スケジュール）────────────────────────────
@@ -61,7 +61,7 @@ export type NotificationSettings = {
   absence_followup_remind: NotifyItemConfig;
   /** 経過報告が提出されたとき → 管理者グループへ */
   absence_followup_notify: NotifyItemConfig;
-  /** シフト展開通知（管理者が展開ボタンを押したとき） → 全スタッフへ */
+  /** シフト展開通知（管理者が展開ボタンを押したとき） → 全スタッフへ（UI非表示・展開ボタンで制御） */
   shift_published:     NotifyItemConfig;
   /** タスクが割り当てられたとき → 担当スタッフへ */
   task_assigned:       NotifyItemConfig;
@@ -362,7 +362,7 @@ export function buildDefaultNotificationSettings(
     inquiry_reply:        get("inquiry_reply",        { enabled: true,  recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.inquiry_reply }),
     shift_request:        get("shift_request",        { enabled: false, recipient: "admin", message: DEFAULT_NOTIFY_MESSAGES.shift_request }),
     shift_request_result: get("shift_request_result", { enabled: false, recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.shift_request_result }),
-    shift_changed:        get("shift_changed",        { enabled: false, recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.shift_changed }),
+    shift_changed:        get("shift_changed",        { enabled: true,  recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.shift_changed }),
     correction_result:    get("correction_result",    { enabled: false, recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.correction_result }),
     shift_start_remind:  get("shift_start_remind",  { enabled: false, recipient: "staff", minutes_before: 60, message: DEFAULT_NOTIFY_MESSAGES.shift_start_remind }),
     shift_end_remind:    get("shift_end_remind",    { enabled: false, recipient: "staff", minutes_after: 15,  message: DEFAULT_NOTIFY_MESSAGES.shift_end_remind }),
@@ -372,7 +372,7 @@ export function buildDefaultNotificationSettings(
     holiday_open_notify:     get("holiday_open_notify",     { enabled: true,  recipient: "staff", time: "09:00", message: DEFAULT_NOTIFY_MESSAGES.holiday_open_notify }),
     absence_followup_remind: get("absence_followup_remind", { enabled: true,  recipient: "staff", time: "17:00", message: DEFAULT_NOTIFY_MESSAGES.absence_followup_remind }),
     absence_followup_notify: get("absence_followup_notify", { enabled: false, recipient: "admin", message: DEFAULT_NOTIFY_MESSAGES.absence_followup_notify }),
-    shift_published:         get("shift_published",         { enabled: false, recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.shift_published }),
+    shift_published:         get("shift_published",         { enabled: true,  recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.shift_published }),
     task_assigned:           get("task_assigned",           { enabled: false, recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.task_assigned }),
     daily_task_remind:       get("daily_task_remind",       { enabled: false, recipient: "staff", time: "08:00", message: DEFAULT_NOTIFY_MESSAGES.daily_task_remind }),
   };

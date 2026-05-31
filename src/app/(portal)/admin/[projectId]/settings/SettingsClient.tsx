@@ -2314,17 +2314,6 @@ export function LineNotifySettings({
           projectId={projectId}
         />
 
-        {/* シフト展開通知 */}
-        <NotifyCard
-          notifyKey="shift_published"
-          label="シフト展開通知"
-          desc="管理者がシフト展開ボタンを押したとき、各スタッフへ個別シフトをLINE送信"
-          config={settings.shift_published}
-          vars={NOTIFY_VARS.shift_published}
-          onToggle={() => updateItem("shift_published", { enabled: !settings.shift_published.enabled })}
-          onRecipient={v => updateItem("shift_published", { recipient: v })}
-          projectId={projectId}
-        />
       </div>
 
       <div className="flex justify-end pt-2">
