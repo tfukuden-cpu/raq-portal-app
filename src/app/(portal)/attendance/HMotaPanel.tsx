@@ -153,7 +153,7 @@ function MotaTableRow({
       {/* 番号ラベル（ドラッグ不要） */}
       <td className="px-1.5 py-1">
         <span className={[
-          "inline-flex items-center px-1.5 py-0.5 rounded border font-mono font-semibold text-[9px] select-none",
+          "inline-flex items-center px-1.5 py-0.5 rounded border font-mono font-semibold text-[11px] select-none",
           row.isFixed
             ? "bg-zinc-50 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400"
             : "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-900/30 dark:border-purple-800 dark:text-purple-300",
@@ -183,7 +183,7 @@ function MotaTableRow({
             ].join(" ")}>
               {assignment ? (
                 <div className="flex items-center gap-0.5 px-1 py-px bg-purple-100 dark:bg-purple-900/50 rounded border border-purple-200 dark:border-purple-700 w-full mx-0.5">
-                  <span className="flex-1 text-[8px] font-semibold text-purple-700 dark:text-purple-300 truncate">
+                  <span className="flex-1 text-[10px] font-semibold text-purple-700 dark:text-purple-300 truncate">
                     {assignment.staffName || assignment.accountNumber}
                   </span>
                   <button
