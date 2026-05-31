@@ -169,29 +169,17 @@ export default function ShiftManageClient({
   const [regenError, setRegenError] = useState<string | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportSectionsSel, setExportSectionsSel] = useState<string[]>([]);
-  const [sortByAccount, setSortByAccount] = useState(false);
-
-  // ソート（デフォルト: セクション順、トグル時: SV固定上部＋SV以外番号順）
-  const activeMembers = sortByAccount
-    ? [...activeMembersRaw].sort((a, b) => {
-        const aIsSV = a.section === "SV";
-        const bIsSV = b.section === "SV";
-        if (aIsSV !== bIsSV) return aIsSV ? -1 : 1;
-        if (aIsSV) return a.name.localeCompare(b.name, "ja"); // SV は名前順
-        const na = getAccNum(a.accountNumber);
-        const nb = getAccNum(b.accountNumber);
-        return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
-      })
-    : [...activeMembersRaw].sort((a, b) => {
-        const ra = SECTION_ORDER_LIST.indexOf(a.section ?? "");
-        const rb = SECTION_ORDER_LIST.indexOf(b.section ?? "");
-        const ria = ra === -1 ? SECTION_ORDER_LIST.length : ra;
-        const rib = rb === -1 ? SECTION_ORDER_LIST.length : rb;
-        if (ria !== rib) return ria - rib;
-        const na = getAccNum(a.accountNumber);
-        const nb = getAccNum(b.accountNumber);
-        return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
-      });
+  // 番号順固定（SV先頭、SV以外はアカウント番号順）
+  const sortByAccount = true;
+  const activeMembers = [...activeMembersRaw].sort((a, b) => {
+    const aIsSV = a.section === "SV";
+    const bIsSV = b.section === "SV";
+    if (aIsSV !== bIsSV) return aIsSV ? -1 : 1;
+    if (aIsSV) return a.name.localeCompare(b.name, "ja");
+    const na = getAccNum(a.accountNumber);
+    const nb = getAccNum(b.accountNumber);
+    return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
+  });
 
   // シフトパターンから使用中セクション一覧
   const exportSections = [...new Set(shiftPatterns.map(p => p.section).filter((s): s is string => !!s))];
@@ -565,24 +553,6 @@ export default function ShiftManageClient({
             下書きあり
           </span>
         )}
-
-        {/* 並び順トグル */}
-        <button
-          type="button"
-          onClick={() => setSortByAccount(v => !v)}
-          className={[
-            "flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-colors",
-            sortByAccount
-              ? "border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300"
-              : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800",
-          ].join(" ")}
-          title={sortByAccount ? "番号順（クリックでセクション順に戻す）" : "セクション順（クリックで番号順に切替）"}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h12M3 17h6" />
-          </svg>
-          {sortByAccount ? "番号順" : "セクション順"}
-        </button>
 
         {/* LINE通知ボタン（シフト展開とは独立） */}
         <ShiftLineNotifyButton

@@ -669,20 +669,72 @@ export default function ShiftDayList({
                   style={{ scrollbarWidth: "none" }}
                   onScroll={(e) => handleSufficiencyScroll(e.currentTarget.scrollLeft)}
                 >
+                  {/* 編集モードと同デザインの充足サマリーテーブル */}
+                  {(() => {
+                    const SUM_H = 22; // px（編集モードと同じ高さ）
+                    const GRAY_SECTIONS = ["ローン", "リメイク"]; // グレーアウトセクション
+                    const EXCLUDE_TOTAL = ["ローン", "リメイク"]; // 全体合計から除外
+                    const isGrayed = (p: typeof visibleShiftPatterns[0]) =>
+                      (p.section === "SV" && p.name.includes("中")) ||
+                      GRAY_SECTIONS.includes(p.section ?? "");
+
+                    function getCellStyle(p: typeof visibleShiftPatterns[0], actual: number, req: number, isToday: boolean) {
+                      const net = req - actual;
+                      const grayed = isGrayed(p);
+                      let nd: string, tc: string, bc: string;
+                      if (req === 0) {
+                        nd = actual > 0 ? String(actual) : "";
+                        tc = grayed ? "text-zinc-300 dark:text-zinc-600" : "text-zinc-400 dark:text-zinc-500";
+                        bc = isToday ? "bg-blue-100 dark:bg-blue-950" : grayed ? "bg-zinc-200 dark:bg-zinc-800" : "bg-zinc-100 dark:bg-zinc-800";
+                      } else if (net > 0) {
+                        nd = `-${net}`;
+                        tc = grayed ? "text-red-400 dark:text-red-500 opacity-70 font-bold" : "text-red-600 dark:text-red-400 font-bold";
+                        bc = isToday ? "bg-red-200 dark:bg-red-950" : grayed ? "bg-red-50 dark:bg-red-950/40" : "bg-red-100 dark:bg-red-950";
+                      } else if (net < 0) {
+                        nd = `+${-net}`;
+                        tc = grayed ? "text-emerald-500 dark:text-emerald-600 opacity-70 font-bold" : "text-emerald-700 dark:text-emerald-400 font-bold";
+                        bc = isToday ? "bg-emerald-200 dark:bg-emerald-950" : grayed ? "bg-emerald-50 dark:bg-emerald-950/40" : "bg-emerald-100 dark:bg-emerald-950";
+                      } else {
+                        nd = "✓";
+                        tc = grayed ? "text-zinc-300 dark:text-zinc-600 font-bold" : "text-emerald-400 dark:text-emerald-500 font-bold";
+                        bc = isToday ? "bg-blue-100 dark:bg-blue-950" : grayed ? "bg-zinc-200 dark:bg-zinc-800" : "bg-zinc-100 dark:bg-zinc-800";
+                      }
+                      return { nd, tc, bc, showSub: req > 0 };
+                    }
+
+                    const todayJST = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+                    const mainPats = visibleShiftPatterns.filter(p => !EXCLUDE_TOTAL.includes(p.section ?? ""));
+
+                    return (
                   <div className="flex min-w-max bg-white dark:bg-zinc-900">
 
                     {/* 左固定列（シフトパターン名） */}
-                    <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-                      {visibleShiftPatterns.map((pattern, i, arr) => (
-                        <div key={pattern.name} className={cx(
-                          "h-9 flex items-center px-2 bg-zinc-50 dark:bg-zinc-800/60",
-                          i < arr.length - 1 ? "border-b border-zinc-100 dark:border-zinc-700/60" : "",
-                        )}>
-                          <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate leading-tight" title={pattern.name}>
-                            {pattern.name}
-                          </span>
-                        </div>
-                      ))}
+                    <div className="sticky left-0 z-20 w-[90px] flex-shrink-0 bg-white dark:bg-zinc-900 border-r-2 border-zinc-400 dark:border-zinc-500">
+                      {visibleShiftPatterns.map((pattern, i, arr) => {
+                        const grayed = isGrayed(pattern);
+                        const isFirst = i === 0;
+                        const isLast  = i === arr.length - 1;
+                        return (
+                          <div key={pattern.name}
+                            style={{ height: `${SUM_H}px` }}
+                            className={cx(
+                              "flex items-center px-2 overflow-hidden",
+                              grayed ? "bg-zinc-300 dark:bg-zinc-600" : "bg-zinc-200 dark:bg-zinc-700",
+                              isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                              isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
+                            )}>
+                            <span className={cx(
+                              "text-[10px] font-bold truncate leading-none",
+                              grayed ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-700 dark:text-zinc-200",
+                            )} title={pattern.name}>{pattern.name}</span>
+                          </div>
+                        );
+                      })}
+                      {/* 全体合計ラベル */}
+                      <div style={{ height: `${SUM_H}px` }}
+                        className="flex items-center px-2 overflow-hidden bg-zinc-500 dark:bg-zinc-400 border-t-2 border-t-zinc-500 dark:border-t-zinc-400 border-b-2 border-b-zinc-600 dark:border-b-zinc-300">
+                        <span className="text-[10px] font-bold text-white dark:text-zinc-900 leading-none truncate">全体合計</span>
+                      </div>
                     </div>
 
                     {/* 日付列 */}
@@ -692,87 +744,81 @@ export default function ShiftDayList({
                         const dayOfWeek = new Date(d).getUTCDay();
                         const isSun     = dayOfWeek === 0;
                         const isSat     = dayOfWeek === 6;
+                        const isToday   = d === todayJST;
                         return (
-                          <div
-                            key={d}
-                            className={cx(
-                              "w-11 flex-shrink-0 flex flex-col",
-                              isSel ? "bg-blue-50/80 dark:bg-blue-950/20"
-                              : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
-                            )}
-                          >
+                          <div key={d} className={cx("w-[50px] flex-shrink-0 flex flex-col",
+                            isSel ? "bg-blue-50/80 dark:bg-blue-950/20"
+                            : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
+                          )}>
                             {visibleShiftPatterns.map((pattern, i, arr) => {
-                              const isSV   = pattern.section === "SV";
                               const req    = getReqForDate(pattern, d);
                               const actual = visibleMembers.filter(m =>
                                 getShift(m.id, d)?.shift_name === pattern.name && !isChurnExcluded(m.id, d)
                               ).length;
+                              const { nd, tc, bc, showSub } = getCellStyle(pattern, actual, req, isToday);
+                              const isFirst = i === 0;
+                              const isLast  = i === arr.length - 1;
                               return (
-                                <div
-                                  key={pattern.name}
+                                <div key={pattern.name}
+                                  style={{ height: `${SUM_H}px` }}
                                   className={cx(
-                                    "h-9 flex items-center justify-center bg-zinc-50/50 dark:bg-zinc-800/30",
-                                    i < arr.length - 1 ? "border-b border-zinc-100 dark:border-zinc-700/60" : "",
-                                  )}
-                                >
-                                  {isSV ? (
-                                    <span className="tabular-nums text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
-                                      {actual > 0 ? actual : "—"}
-                                    </span>
-                                  ) : req > 0 ? (
-                                    <div className="flex flex-col items-center gap-px">
-                                      <span className={cx(
-                                        "tabular-nums text-[11px] font-bold leading-none",
-                                        actual < req ? "text-red-500 dark:text-red-400"
-                                        : "text-emerald-600 dark:text-emerald-400",
-                                      )}>{actual}/{req}</span>
-                                      <span className={cx(
-                                        "tabular-nums text-[8px] font-bold leading-none",
-                                        actual > req ? "text-emerald-500 dark:text-emerald-400"
-                                        : actual < req ? "text-red-400 dark:text-red-500"
-                                        : "text-zinc-300 dark:text-zinc-600",
-                                      )}>
-                                        {actual > req ? `+${actual - req}人`
-                                        : actual < req ? `-${req - actual}人`
-                                        : "✓"}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
-                                  )}
+                                    "tabular-nums flex flex-col items-center justify-center overflow-hidden", bc,
+                                    isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                                    isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500 border-r border-r-zinc-200 dark:border-r-zinc-700"
+                                            : "border-b border-b-zinc-300 dark:border-b-zinc-600 border-r border-r-zinc-200 dark:border-r-zinc-700",
+                                  )}>
+                                  <span className={cx("text-[12px] font-bold leading-none", tc)}>{nd || "—"}</span>
+                                  {showSub && <span className="text-[9px] leading-none opacity-80 text-zinc-500 dark:text-zinc-400">{actual}/{req}</span>}
                                 </div>
                               );
                             })}
+                            {/* 全体合計セル */}
+                            {(() => {
+                              const gtActual = mainPats.reduce((s, p) =>
+                                s + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === p.name && !isChurnExcluded(m.id, d)).length, 0);
+                              const gtReq = mainPats.reduce((s, p) => s + getReqForDate(p, d), 0);
+                              const gtNet = gtReq - gtActual;
+                              let nd: string, tc: string, bc: string;
+                              if (gtReq === 0) { nd = gtActual > 0 ? String(gtActual) : "—"; tc = "text-zinc-500 dark:text-zinc-400"; bc = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-200 dark:bg-zinc-700"; }
+                              else if (gtNet > 0) { nd = `-${gtNet}`; tc = "text-red-600 dark:text-red-400 font-bold"; bc = isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950"; }
+                              else if (gtNet < 0) { nd = `+${-gtNet}`; tc = "text-emerald-700 dark:text-emerald-400 font-bold"; bc = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950"; }
+                              else { nd = "✓"; tc = "text-emerald-400 dark:text-emerald-500 font-bold"; bc = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-200 dark:bg-zinc-700"; }
+                              return (
+                                <div style={{ height: `${SUM_H}px` }}
+                                  className={cx("tabular-nums flex flex-col items-center justify-center overflow-hidden border-t-2 border-t-zinc-500 dark:border-t-zinc-400 border-b-2 border-b-zinc-600 dark:border-b-zinc-300 border-r border-r-zinc-200 dark:border-r-zinc-700", bc)}>
+                                  <span className={cx("text-[12px] font-bold leading-none", tc)}>{nd}</span>
+                                  {gtReq > 0 && <span className="text-[9px] leading-none opacity-70 text-zinc-600 dark:text-zinc-300">{gtActual}/{gtReq}</span>}
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })}
                     </div>
 
                     {/* 合計列（右固定） */}
-                    <div className="sticky right-0 z-20 w-16 flex-shrink-0 bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
+                    <div className="sticky right-0 z-20 w-[52px] flex-shrink-0 bg-white dark:bg-zinc-900 border-l-2 border-zinc-300 dark:border-zinc-600">
                       {visibleShiftPatterns.map((pattern, i, arr) => {
-                        const isSV          = pattern.section === "SV";
+                        const grayed        = isGrayed(pattern);
                         const totalActual   = allDates.reduce((s, d) =>
                           s + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === pattern.name && !isChurnExcluded(m.id, d)).length, 0);
-                        const totalRequired = isSV ? 0 : allDates.reduce((s, d) => s + getReqForDate(pattern, d), 0);
-                        const net           = totalRequired - totalActual;
+                        const totalReq      = allDates.reduce((s, d) => s + getReqForDate(pattern, d), 0);
+                        const net           = totalReq - totalActual;
+                        const { nd, tc, bc } = getCellStyle(pattern, totalActual, totalReq, false);
+                        const isFirst = i === 0;
+                        const isLast  = i === arr.length - 1;
                         return (
-                          <div key={pattern.name} className={cx(
-                            "h-9 flex flex-col items-center justify-center bg-zinc-100/60 dark:bg-zinc-800/50",
-                            i < arr.length - 1 ? "border-b border-zinc-200 dark:border-zinc-700" : "",
-                          )}>
-                            {isSV ? (
-                              <span className="tabular-nums text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
-                                {totalActual > 0 ? totalActual : "—"}
-                              </span>
-                            ) : totalRequired > 0 ? (
+                          <div key={pattern.name}
+                            style={{ height: `${SUM_H}px` }}
+                            className={cx(
+                              "tabular-nums flex flex-col items-center justify-center overflow-hidden", bc,
+                              grayed ? "opacity-70" : "",
+                              isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                              isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
+                            )}>
+                            {totalReq > 0 ? (
                               <>
-                                <span className={cx(
-                                  "tabular-nums text-[11px] font-bold leading-none",
-                                  net > 0 ? "text-red-500 dark:text-red-400"
-                                  : net < 0 ? "text-emerald-600 dark:text-emerald-400"
-                                  : "text-emerald-600 dark:text-emerald-400",
-                                )}>{totalActual}/{totalRequired}</span>
+                                <span className={cx("tabular-nums text-[12px] font-bold leading-none", tc)}>{nd}</span>
                                 <span className={cx(
                                   "tabular-nums text-[9px] font-bold leading-none mt-0.5",
                                   net > 0 ? "text-red-400 dark:text-red-500"
@@ -788,9 +834,30 @@ export default function ShiftDayList({
                           </div>
                         );
                       })}
+                      {/* 全体合計（右固定列） */}
+                      {(() => {
+                        const gtTotal = allDates.reduce((s, d) =>
+                          mainPats.reduce((ss, p) => ss + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === p.name && !isChurnExcluded(m.id, d)).length, s), 0);
+                        const gtReqTotal = allDates.reduce((s, d) => mainPats.reduce((ss, p) => ss + getReqForDate(p, d), s), 0);
+                        const gtNet = gtReqTotal - gtTotal;
+                        let nd: string, tc: string, bc: string;
+                        if (gtReqTotal === 0) { nd = gtTotal > 0 ? String(gtTotal) : "—"; tc = "text-zinc-400 dark:text-zinc-500"; bc = "bg-zinc-200 dark:bg-zinc-700"; }
+                        else if (gtNet > 0) { nd = `-${gtNet}`; tc = "text-red-600 dark:text-red-400 font-bold"; bc = "bg-red-200 dark:bg-red-900/60"; }
+                        else if (gtNet < 0) { nd = `+${-gtNet}`; tc = "text-emerald-700 dark:text-emerald-400 font-bold"; bc = "bg-emerald-200 dark:bg-emerald-900/60"; }
+                        else { nd = "✓"; tc = "text-emerald-400 dark:text-emerald-500 font-bold"; bc = "bg-zinc-200 dark:bg-zinc-700"; }
+                        return (
+                          <div style={{ height: `${SUM_H}px` }}
+                            className={cx("tabular-nums flex flex-col items-center justify-center overflow-hidden border-t-2 border-t-zinc-500 dark:border-t-zinc-400 border-b-2 border-b-zinc-600 dark:border-b-zinc-300", bc)}>
+                            <span className={cx("text-[12px] font-bold leading-none", tc)}>{nd}</span>
+                            {gtReqTotal > 0 && <span className="text-[9px] leading-none opacity-70 text-zinc-600 dark:text-zinc-300">{gtTotal}/{gtReqTotal}</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                   </div>
+                    );
+                  })()}
                 </div>
                 )}
               </div>
