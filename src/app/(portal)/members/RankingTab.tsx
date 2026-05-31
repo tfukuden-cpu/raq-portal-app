@@ -204,10 +204,10 @@ export default function RankingTab({ projectId, hasData }: { projectId: string; 
               <span className="text-[10px] tabular-nums text-zinc-400">{list.length} 名</span>
             </div>
             <div className="divide-y divide-zinc-50 dark:divide-zinc-800">
-              {list.map(r => (
+              {list.map((r, idx) => (
                 <div key={r.id} className="px-4 py-2 flex items-center gap-4">
                   <span className="w-10 tabular-nums text-sm font-bold text-zinc-800 dark:text-zinc-100">
-                    {r.rank}
+                    {idx + 1}
                   </span>
                   <span className="text-sm text-zinc-800 dark:text-zinc-100">
                     {r.staffName}
