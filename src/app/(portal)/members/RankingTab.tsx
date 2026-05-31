@@ -185,30 +185,38 @@ export default function RankingTab({ projectId, hasData }: { projectId: string; 
       )}
 
       {/* 番付テーブル */}
-      {loaded && rows.length > 0 && (
-        <div className="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
-          <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-800 flex gap-4 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-            <span className="w-10">順位</span>
-            <span className="w-32">セクション</span>
-            <span>社員名</span>
+      {loaded && rows.length > 0 && (() => {
+        const satei  = [...rows].filter(r => r.accountNumber === "ASS査定").sort((a, b) => a.rank - b.rank);
+        const hanbai = [...rows].filter(r => r.accountNumber === "ASS販売").sort((a, b) => a.rank - b.rank);
+
+        const Section = ({ title, list }: { title: string; list: typeof rows }) => (
+          <div className="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
+            <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+              <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{title}</span>
+              <span className="text-[10px] tabular-nums text-zinc-400">{list.length} 名</span>
+            </div>
+            <div className="divide-y divide-zinc-50 dark:divide-zinc-800">
+              {list.map(r => (
+                <div key={r.id} className="px-4 py-2 flex items-center gap-4">
+                  <span className="w-10 tabular-nums text-sm font-bold text-zinc-800 dark:text-zinc-100">
+                    {r.rank}
+                  </span>
+                  <span className="text-sm text-zinc-800 dark:text-zinc-100">
+                    {r.staffName}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="divide-y divide-zinc-50 dark:divide-zinc-800">
-            {rows.map(r => (
-              <div key={r.id} className="px-4 py-2.5 flex items-center gap-4">
-                <span className="w-10 tabular-nums text-sm font-bold text-zinc-800 dark:text-zinc-100">
-                  {r.rank}
-                </span>
-                <span className="w-32 text-xs text-zinc-400 dark:text-zinc-500">
-                  {r.accountNumber ?? "−"}
-                </span>
-                <span className="text-sm text-zinc-800 dark:text-zinc-100">
-                  {r.staffName}
-                </span>
-              </div>
-            ))}
+        );
+
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Section title="査定セクション" list={satei} />
+            <Section title="販売セクション" list={hanbai} />
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
