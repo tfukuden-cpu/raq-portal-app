@@ -467,6 +467,7 @@ export default function AttendanceClient({
             <ShiftChangesTab
               publishedAt={publishedAt}
               shiftChanges={shiftChanges}
+              grouped={grouped}
             />
           </div>
         )}
@@ -1109,25 +1110,15 @@ function DateNav({ prevDate, nextDate, dateLabel }: { prevDate: string; nextDate
   );
 }
 
-// ── アカウント番号＋名前チップ ──────────────────────────────
-function StaffRefChip({ staff, muted }: { staff: { name: string; accountNumber: string | null }; muted?: boolean }) {
-  return (
-    <span className={`flex items-baseline gap-1 ${muted ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-800 dark:text-zinc-100"}`}>
-      {staff.accountNumber && (
-        <span className="text-[10px] font-mono text-zinc-400 tabular-nums">{staff.accountNumber}</span>
-      )}
-      <span className={`text-sm font-semibold ${muted ? "" : ""}`}>{staff.name}</span>
-    </span>
-  );
-}
-
-// ── 確定後変更タブ ────────────────────────────────────────
+// ── 確定後変更タブ（セクション別・アカウント番号順・確定版vs当日版） ──
 function ShiftChangesTab({
   publishedAt,
   shiftChanges,
+  grouped,
 }: {
   publishedAt: string | null;
   shiftChanges: ShiftChangeEntry[];
+  grouped: SectionGroup[];
 }) {
   if (!publishedAt) {
     return (
@@ -1143,97 +1134,169 @@ function ShiftChangesTab({
     hour: "2-digit", minute: "2-digit",
   });
 
-  // シフトパターン軸に変換
-  // パターンごとに「外れた人」「入った人」を収集し、ペアは「変更 A⇒B」で表示
-  type StaffRef = { name: string; accountNumber: string | null };
-  const patternAdded   = new Map<string, StaffRef[]>(); // パターン → 入った人リスト
-  const patternRemoved = new Map<string, StaffRef[]>(); // パターン → 外れた人リスト
+  // 現在のシフト状態マップ（grouped から展開）
+  type CurrentInfo = { shiftName: string; section: string; accountNumber: string | null; staffName: string };
+  const currentMap = new Map<string, CurrentInfo>();
+  // grouped のセクション順を保持
+  const sectionOrder: string[] = [];
+  for (const { section, shiftGroups } of grouped) {
+    if (!sectionOrder.includes(section)) sectionOrder.push(section);
+    for (const { shiftName, members } of shiftGroups) {
+      for (const m of members) {
+        currentMap.set(m.staffId, { shiftName, section, accountNumber: m.accountNumber, staffName: m.name });
+      }
+    }
+  }
 
+  // 変更ログマップ：最初のエントリの beforeShift = 確定版
+  const changeMap = new Map<string, { beforeShift: string | null }>();
   for (const c of shiftChanges) {
-    const before = c.beforeShift;
-    const after  = c.afterShift;
-    if (!before && !after) continue;
-    if (before === after) continue;
-
-    const ref: StaffRef = { name: c.staffName, accountNumber: c.accountNumber };
-    if (before) {
-      if (!patternRemoved.has(before)) patternRemoved.set(before, []);
-      patternRemoved.get(before)!.push(ref);
-    }
-    if (after) {
-      if (!patternAdded.has(after)) patternAdded.set(after, []);
-      patternAdded.get(after)!.push(ref);
+    if (!changeMap.has(c.staffId)) {
+      changeMap.set(c.staffId, { beforeShift: c.beforeShift });
     }
   }
 
-  // 全パターン名を収集（追加・削除両方）
-  const allPatterns = [...new Set([...patternAdded.keys(), ...patternRemoved.keys()])];
+  // 比較行の型
+  type CompareRow = {
+    staffId: string;
+    staffName: string;
+    accountNumber: string | null;
+    confirmedShift: string | null;
+    currentShift: string | null;
+    isChanged: boolean;
+  };
 
-  // パターンごとに表示行を生成
-  type DisplayRow =
-    | { kind: "swap";   patternName: string; from: StaffRef; to: StaffRef }
-    | { kind: "add";    patternName: string; staff: StaffRef }
-    | { kind: "remove"; patternName: string; staff: StaffRef };
-
-  const displayRows: DisplayRow[] = [];
-  for (const pat of allPatterns) {
-    const added   = [...(patternAdded.get(pat)   ?? [])];
-    const removed = [...(patternRemoved.get(pat) ?? [])];
-    // ペアを「変更」として消化
-    while (added.length > 0 && removed.length > 0) {
-      displayRows.push({ kind: "swap", patternName: pat, from: removed.shift()!, to: added.shift()! });
-    }
-    // 余った追加
-    for (const staff of added)   displayRows.push({ kind: "add",    patternName: pat, staff });
-    // 余った削除
-    for (const staff of removed) displayRows.push({ kind: "remove", patternName: pat, staff });
+  // セクション別に行を構築
+  const sectionRowMap = new Map<string, CompareRow[]>();
+  for (const [staffId, info] of currentMap) {
+    if (!sectionRowMap.has(info.section)) sectionRowMap.set(info.section, []);
+    const change = changeMap.get(staffId);
+    const confirmedShift = change ? change.beforeShift : info.shiftName;
+    sectionRowMap.get(info.section)!.push({
+      staffId,
+      staffName: info.staffName,
+      accountNumber: info.accountNumber,
+      confirmedShift,
+      currentShift: info.shiftName,
+      isChanged: change !== undefined && change.beforeShift !== info.shiftName,
+    });
   }
+
+  // 当日シフトなし（削除・休日変更など）
+  const removedRows: CompareRow[] = [];
+  const seen = new Set<string>();
+  for (const c of shiftChanges) {
+    if (!currentMap.has(c.staffId) && c.beforeShift && !seen.has(c.staffId)) {
+      seen.add(c.staffId);
+      removedRows.push({
+        staffId: c.staffId,
+        staffName: c.staffName,
+        accountNumber: c.accountNumber,
+        confirmedShift: c.beforeShift,
+        currentShift: null,
+        isChanged: true,
+      });
+    }
+  }
+
+  // セクション順・アカウント番号昇順にソート
+  const sections = sectionOrder
+    .map(sec => {
+      const rows = sectionRowMap.get(sec) ?? [];
+      rows.sort((a, b) => (a.accountNumber ?? "").localeCompare(b.accountNumber ?? "", "ja"));
+      return { section: sec, rows, changedCount: rows.filter(r => r.isChanged).length };
+    })
+    .filter(s => s.rows.length > 0);
+
+  removedRows.sort((a, b) => (a.accountNumber ?? "").localeCompare(b.accountNumber ?? "", "ja"));
+
+  const totalChanged = sections.reduce((s, sec) => s + sec.changedCount, 0) + removedRows.length;
+
+  // グリッド列定義
+  const GRID = "48px 1fr 96px 14px 96px";
 
   return (
-    <div>
-      <p className="text-xs text-zinc-400 mb-3 tabular-nums">
-        確定シフト展開：{fmtPublished}
+    <div className="space-y-4">
+      <p className="text-xs text-zinc-400 tabular-nums">
+        確定シフト展開：{fmtPublished}　／　変更：{totalChanged}件
       </p>
 
-      {displayRows.length === 0 ? (
-        <div className="py-10 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
-          <p className="text-sm font-semibold text-zinc-500">変更なし</p>
-        </div>
-      ) : (
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {displayRows.map((row, i) => (
-              <div key={i} className="px-4 py-2.5 flex items-center gap-3">
-                {/* パターン名 */}
-                <span className="w-24 shrink-0 text-sm font-semibold text-zinc-700 dark:text-zinc-200 truncate">
-                  {row.patternName}
+      {sections.map(({ section, rows, changedCount }) => (
+        <div key={section}>
+          <div className="flex items-center gap-2 mb-1.5 px-0.5">
+            <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400">{section}</span>
+            {changedCount > 0 && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500 text-white tabular-nums">
+                {changedCount}件変更
+              </span>
+            )}
+          </div>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+            {/* 列ヘッダー */}
+            <div className="grid px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800 text-[10px] font-semibold text-zinc-400 uppercase tracking-wide"
+                 style={{ gridTemplateColumns: GRID }}>
+              <span>番号</span><span>名前</span><span>確定版</span><span /><span>当日版</span>
+            </div>
+            {/* データ行 */}
+            {rows.map(row => (
+              <div
+                key={row.staffId}
+                className={`grid px-3 py-2 border-b last:border-b-0 border-zinc-100 dark:border-zinc-800 items-center ${row.isChanged ? "bg-amber-50 dark:bg-amber-950/20" : ""}`}
+                style={{ gridTemplateColumns: GRID }}
+              >
+                <span className="text-[10px] font-mono text-zinc-400 tabular-nums truncate">
+                  {row.accountNumber ?? "—"}
                 </span>
-                {/* 種別ラベル */}
-                {row.kind === "swap" && (
-                  <>
-                    <span className="shrink-0 text-xs font-semibold text-amber-600 dark:text-amber-400 w-8">変更</span>
-                    <span className="text-sm text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5 flex-wrap">
-                      <StaffRefChip staff={row.from} muted />
-                      <span className="text-zinc-400">⇒</span>
-                      <StaffRefChip staff={row.to} />
-                    </span>
-                  </>
-                )}
-                {row.kind === "add" && (
-                  <>
-                    <span className="shrink-0 text-xs font-semibold text-emerald-600 dark:text-emerald-400 w-8">追加</span>
-                    <StaffRefChip staff={row.staff} />
-                  </>
-                )}
-                {row.kind === "remove" && (
-                  <>
-                    <span className="shrink-0 text-xs font-semibold text-red-500 dark:text-red-400 w-8">削除</span>
-                    <StaffRefChip staff={row.staff} muted />
-                  </>
-                )}
+                <span className={`text-xs font-semibold truncate ${row.isChanged ? "text-zinc-800 dark:text-zinc-100" : "text-zinc-500 dark:text-zinc-400"}`}>
+                  {row.staffName}
+                </span>
+                <span className={`text-xs truncate ${row.isChanged ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-600 dark:text-zinc-300 font-medium"}`}>
+                  {row.confirmedShift ?? "—"}
+                </span>
+                <span className="text-[10px] text-zinc-400 text-center">{row.isChanged ? "→" : ""}</span>
+                <span className={`text-xs truncate ${row.isChanged ? "text-amber-700 dark:text-amber-300 font-bold" : "text-zinc-400 dark:text-zinc-500"}`}>
+                  {row.currentShift ?? "—"}
+                </span>
               </div>
             ))}
           </div>
+        </div>
+      ))}
+
+      {/* 削除・休日変更 */}
+      {removedRows.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-1.5 px-0.5">
+            <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400">削除・休日変更</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white tabular-nums">
+              {removedRows.length}件
+            </span>
+          </div>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+            <div className="grid px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800 text-[10px] font-semibold text-zinc-400 uppercase tracking-wide"
+                 style={{ gridTemplateColumns: GRID }}>
+              <span>番号</span><span>名前</span><span>確定版</span><span /><span>当日版</span>
+            </div>
+            {removedRows.map(row => (
+              <div
+                key={row.staffId}
+                className="grid px-3 py-2 border-b last:border-b-0 border-zinc-100 dark:border-zinc-800 items-center bg-red-50 dark:bg-red-950/20"
+                style={{ gridTemplateColumns: GRID }}
+              >
+                <span className="text-[10px] font-mono text-zinc-400 tabular-nums truncate">{row.accountNumber ?? "—"}</span>
+                <span className="text-xs font-semibold truncate text-zinc-800 dark:text-zinc-100">{row.staffName}</span>
+                <span className="text-xs text-zinc-400 dark:text-zinc-500 line-through truncate">{row.confirmedShift ?? "—"}</span>
+                <span className="text-[10px] text-zinc-400 text-center">→</span>
+                <span className="text-xs font-bold text-red-600 dark:text-red-400">なし</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {totalChanged === 0 && sections.every(s => s.changedCount === 0) && removedRows.length === 0 && (
+        <div className="py-10 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
+          <p className="text-sm font-semibold text-zinc-500">変更なし</p>
         </div>
       )}
     </div>
