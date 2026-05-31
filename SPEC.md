@@ -1,6 +1,6 @@
 # Raq Works 全機能仕様書
 
-> 最終更新: 2026-05-31（v59）  
+> 最終更新: 2026-05-31（v60）  
 > 対象: 全メニュー（スタッフ / 管理 / 運営）
 
 ---
@@ -269,7 +269,8 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 **機能:**
 - 案件内全スタッフの当日出勤状況をリアルタイム表示
-- セクション別グループ表示（SV / 査定 / 販売 / MOTA / ローン / リメイク / その他）
+- **日付ナビゲーション**（`?date=YYYY-MM-DD`）: 前日・翌日ボタンで任意の日付の状況を閲覧可能。各タブ内にナビバーを配置。
+- セクション別グループ表示: `shift_patterns.section` + `project_members.section` の全セクションを表示（スタッフが配置されていない空セクションも表示）
 - ステータス別表示:
 
 | ステータス | 説明 |
@@ -284,11 +285,15 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 離席タイマー表示（名前リスト・座席カード）
 - 欠勤スタッフの翌日・翌々日出勤予定チェック
 - 離職リスクアラート（`churn_risk = true` スタッフ）
-- シフト変更ログ表示
+- **CSV出力ボタン**（出勤簿タブ）: セクション順×アカウント番号順で「セクション・アカウント番号・名前・シフト」をダウンロード（UTF-8 BOM付きでExcel対応）
+- **確定後変更タブ（比較ビュー）**: セクション別×アカウント番号順で全スタッフを一覧表示し、確定版と当日版を並列表示。差分行はアンバー強調。
 - 座席表インライン表示（`/seating` 統合）
 
+**セクション順（固定優先 + 動的追加）:**
+`["SV", "査定", "販売", "MOTA", "ローン", "リメイク"]` → `shift_patterns.section` から取得した追加セクション → "その他"
+
 **関連テーブル:**
-`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `project_members`, `staffs`, `seat_layouts`（推定）
+`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `project_members`, `staffs`, `shift_patterns`, `shift_change_logs`, `shift_month_status`, `seats`, `seat_assignments`, `seat_walls`
 
 ---
 
