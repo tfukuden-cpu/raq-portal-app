@@ -40,8 +40,12 @@ export default function FollowupClient({
   const dateLabel = `${parseInt(mm)}/${parseInt(dd)}`;
 
   const handleSubmit = () => {
-    if (!recoveryStatus || !consultStatus || !nextDayAvail) {
+    if (!recoveryStatus || !consultStatus) {
       setError("必須項目を入力してください");
+      return;
+    }
+    if (tomorrowHasShift && !nextDayAvail) {
+      setError("翌日出勤可否を選択してください");
       return;
     }
     if (nextDayAvail === "出勤困難" && (!nextReportDate || !nextReportTime)) {
@@ -55,8 +59,9 @@ export default function FollowupClient({
       fd.set("symptomsJson", JSON.stringify(symptoms));
       fd.set("recoveryStatus", recoveryStatus);
       fd.set("consultationStatus", consultStatus);
-      fd.set("nextDayAvailable", String(nextDayAvail === "出勤可能"));
-      fd.set("nextDayAvailLabel", nextDayAvail);
+      // 翌日シフトなしの場合は出勤可否不問（サーバー側でも tomorrowHasShift=false で判断）
+      fd.set("nextDayAvailable", tomorrowHasShift ? String(nextDayAvail === "出勤可能") : "false");
+      fd.set("nextDayAvailLabel", tomorrowHasShift ? nextDayAvail : "");
       fd.set("nextReportDate", nextReportDate);
       fd.set("nextReportTime", nextReportTime);
       fd.set("tomorrowHasShift", String(tomorrowHasShift));
@@ -201,56 +206,53 @@ export default function FollowupClient({
           </div>
         </div>
 
-        {/* 翌日出勤可否 */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-3">
-          <div>
+        {/* 翌日出勤可否（翌日シフトがある場合のみ表示） */}
+        {tomorrowHasShift && (
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-3">
             <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
               翌日出勤可否 <span className="text-red-500">*</span>
             </h2>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              {tomorrowHasShift ? "翌日シフトがあります" : "翌日のシフトはありません"}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {(["出勤可能", "出勤困難"] as const).map(v => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setNextDayAvail(v)}
-                className={[
-                  "py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors",
-                  nextDayAvail === v
-                    ? v === "出勤可能"
-                      ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-300"
-                      : "bg-red-50 dark:bg-red-900/30 border-red-500 text-red-700 dark:text-red-300"
-                    : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300",
-                ].join(" ")}
-              >{v}</button>
-            ))}
-          </div>
-
-          {nextDayAvail === "出勤困難" && (
-            <div className="pt-2 space-y-3 border-t border-zinc-100 dark:border-zinc-800">
-              <p className="text-xs font-semibold text-zinc-500">
-                次回出勤可否報告予定（出勤前日）<span className="text-red-500"> *</span>
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={nextReportDate}
-                  onChange={e => setNextReportDate(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-sm text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  type="time"
-                  value={nextReportTime}
-                  onChange={e => setNextReportTime(e.target.value)}
-                  className="w-28 px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-sm text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-2">
+              {(["出勤可能", "出勤困難"] as const).map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setNextDayAvail(v)}
+                  className={[
+                    "py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors",
+                    nextDayAvail === v
+                      ? v === "出勤可能"
+                        ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-500 text-emerald-700 dark:text-emerald-300"
+                        : "bg-red-50 dark:bg-red-900/30 border-red-500 text-red-700 dark:text-red-300"
+                      : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300",
+                  ].join(" ")}
+                >{v}</button>
+              ))}
             </div>
-          )}
-        </div>
+
+            {nextDayAvail === "出勤困難" && (
+              <div className="pt-2 space-y-3 border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-xs font-semibold text-zinc-500">
+                  次回出勤可否報告予定（出勤前日）<span className="text-red-500"> *</span>
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={nextReportDate}
+                    onChange={e => setNextReportDate(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-sm text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <input
+                    type="time"
+                    value={nextReportTime}
+                    onChange={e => setNextReportTime(e.target.value)}
+                    className="w-28 px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-sm text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <p className="text-sm text-red-600 dark:text-red-400 px-1">{error}</p>
