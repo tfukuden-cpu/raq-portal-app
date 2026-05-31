@@ -12,49 +12,55 @@ export type MotaRow = {
   isFixed: boolean;
 };
 
+type DragCard = { accountNumber: string; name: string; isFixed: boolean };
+
 interface Props {
   projectId: string;
   date: string;
   rows: MotaRow[];
-  nameLookup: Record<string, string>; // accountNumber → 表示名
   initialAssignments: MotaAssignment[];
 }
 
-export default function HMotaPanel({ projectId, date, rows, nameLookup, initialAssignments }: Props) {
+export default function HMotaPanel({ projectId, date, rows, initialAssignments }: Props) {
   const [assignments, setAssignments] = useState<MotaAssignment[]>(initialAssignments);
-  const [dragging, setDragging] = useState<{ accountNumber: string; isFixed: boolean } | null>(null);
   const [dragOver, setDragOver] = useState<{ accountNumber: string; slot: Slot } | null>(null);
 
-  function getAssignment(accountNumber: string, slot: string): MotaAssignment | undefined {
-    return assignments.find(a => a.accountNumber === accountNumber && a.slot === slot);
+  function getAssignment(positionAccount: string, slot: string): MotaAssignment | undefined {
+    return assignments.find(a => a.accountNumber === positionAccount && a.slot === slot);
   }
 
-  function getName(accountNumber: string): string {
-    return nameLookup[accountNumber] ?? accountNumber;
-  }
-
-  async function handleDrop(targetAccountNumber: string, slot: Slot) {
+  async function handleDrop(positionAccount: string, slot: Slot, isFixed: boolean, e: React.DragEvent) {
+    e.preventDefault();
     setDragOver(null);
-    if (!dragging || dragging.accountNumber !== targetAccountNumber) return;
+    const raw = e.dataTransfer.getData("mota-card");
+    if (!raw) return;
 
-    const existing = getAssignment(dragging.accountNumber, slot);
+    let card: DragCard;
+    try { card = JSON.parse(raw); } catch { return; }
+    if (!card.name) return;
+
+    const existing = getAssignment(positionAccount, slot);
     if (existing) return;
 
     const tempId = `temp-${Date.now()}`;
     setAssignments(prev => [...prev, {
       id: tempId,
-      accountNumber: dragging.accountNumber,
+      accountNumber: positionAccount,
+      staffName: card.name,
+      assignedAccount: card.accountNumber || null,
       slot,
-      isFixed: dragging.isFixed,
+      isFixed,
     }]);
 
-    const res = await addMotaAssignmentAction(projectId, date, dragging.accountNumber, slot, dragging.isFixed);
+    const res = await addMotaAssignmentAction(
+      projectId, date, positionAccount, slot, isFixed,
+      card.name, card.accountNumber || null,
+    );
     if (res.ok && res.id) {
       setAssignments(prev => prev.map(a => a.id === tempId ? { ...a, id: res.id! } : a));
     } else {
       setAssignments(prev => prev.filter(a => a.id !== tempId));
     }
-    setDragging(null);
   }
 
   async function handleRemove(id: string) {
@@ -71,7 +77,7 @@ export default function HMotaPanel({ projectId, date, rows, nameLookup, initialA
     <div className="overflow-y-auto flex-1 min-h-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
       <table className="w-full text-xs border-collapse">
         <thead>
-          <tr className="border-b border-zinc-100 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900">
+          <tr className="border-b border-zinc-100 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 z-10">
             <th className="text-left px-2 py-1.5 font-semibold text-zinc-400 text-[10px]">番号</th>
             {SLOTS.map(slot => (
               <th key={slot} className="text-center px-1 py-1.5 font-semibold text-purple-500 tabular-nums text-[10px]">
@@ -92,15 +98,11 @@ export default function HMotaPanel({ projectId, date, rows, nameLookup, initialA
             <MotaTableRow
               key={row.accountNumber}
               row={row}
-              dragging={dragging}
               dragOver={dragOver}
               getAssignment={getAssignment}
-              getName={getName}
-              onDragStart={() => setDragging({ accountNumber: row.accountNumber, isFixed: row.isFixed })}
-              onDragEnd={() => { setDragging(null); setDragOver(null); }}
-              onDragOver={slot => setDragOver({ accountNumber: row.accountNumber, slot })}
+              onDragOver={(slot) => setDragOver({ accountNumber: row.accountNumber, slot })}
               onDragLeave={() => setDragOver(null)}
-              onDrop={handleDrop}
+              onDrop={(slot, e) => handleDrop(row.accountNumber, slot, row.isFixed, e)}
               onRemove={handleRemove}
             />
           ))}
@@ -115,15 +117,11 @@ export default function HMotaPanel({ projectId, date, rows, nameLookup, initialA
             <MotaTableRow
               key={row.accountNumber}
               row={row}
-              dragging={dragging}
               dragOver={dragOver}
               getAssignment={getAssignment}
-              getName={getName}
-              onDragStart={() => setDragging({ accountNumber: row.accountNumber, isFixed: row.isFixed })}
-              onDragEnd={() => { setDragging(null); setDragOver(null); }}
-              onDragOver={slot => setDragOver({ accountNumber: row.accountNumber, slot })}
+              onDragOver={(slot) => setDragOver({ accountNumber: row.accountNumber, slot })}
               onDragLeave={() => setDragOver(null)}
-              onDrop={handleDrop}
+              onDrop={(slot, e) => handleDrop(row.accountNumber, slot, row.isFixed, e)}
               onRemove={handleRemove}
             />
           ))}
@@ -135,53 +133,36 @@ export default function HMotaPanel({ projectId, date, rows, nameLookup, initialA
 
 function MotaTableRow({
   row,
-  dragging,
   dragOver,
   getAssignment,
-  getName,
-  onDragStart,
-  onDragEnd,
   onDragOver,
   onDragLeave,
   onDrop,
   onRemove,
 }: {
   row: MotaRow;
-  dragging: { accountNumber: string; isFixed: boolean } | null;
   dragOver: { accountNumber: string; slot: string } | null;
   getAssignment: (accountNumber: string, slot: string) => MotaAssignment | undefined;
-  getName: (accountNumber: string) => string;
-  onDragStart: () => void;
-  onDragEnd: () => void;
   onDragOver: (slot: Slot) => void;
   onDragLeave: () => void;
-  onDrop: (accountNumber: string, slot: Slot) => void;
+  onDrop: (slot: Slot, e: React.DragEvent) => void;
   onRemove: (id: string) => void;
 }) {
-  const isDraggingThis = dragging?.accountNumber === row.accountNumber;
-  const canDrop = dragging?.accountNumber === row.accountNumber;
-
   return (
     <tr className="border-b last:border-b-0 border-zinc-50 dark:border-zinc-800/50">
-      {/* 番号チップ（ドラッグソース） */}
+      {/* 番号ラベル（ドラッグ不要） */}
       <td className="px-1.5 py-1">
-        <div
-          draggable
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          className={[
-            "inline-flex items-center px-1.5 py-0.5 rounded border cursor-grab active:cursor-grabbing select-none font-mono font-semibold transition-opacity text-[9px]",
-            row.isFixed
-              ? "bg-zinc-50 border-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-300"
-              : "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-900/30 dark:border-purple-800 dark:text-purple-300",
-            isDraggingThis ? "opacity-40" : "",
-          ].join(" ")}
-        >
+        <span className={[
+          "inline-flex items-center px-1.5 py-0.5 rounded border font-mono font-semibold text-[9px] select-none",
+          row.isFixed
+            ? "bg-zinc-50 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400"
+            : "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-900/30 dark:border-purple-800 dark:text-purple-300",
+        ].join(" ")}>
           {row.accountNumber}
-        </div>
+        </span>
       </td>
 
-      {/* スロットセル */}
+      {/* スロットセル（ドロップターゲット） */}
       {SLOTS.map(slot => {
         const assignment = getAssignment(row.accountNumber, slot);
         const isTarget = dragOver?.accountNumber === row.accountNumber && dragOver?.slot === slot;
@@ -190,20 +171,20 @@ function MotaTableRow({
           <td
             key={slot}
             className="px-1 py-1"
-            onDragOver={e => { if (canDrop) { e.preventDefault(); onDragOver(slot); } }}
+            onDragOver={e => { e.preventDefault(); onDragOver(slot); }}
             onDragLeave={onDragLeave}
-            onDrop={() => onDrop(row.accountNumber, slot)}
+            onDrop={e => onDrop(slot, e)}
           >
             <div className={[
               "rounded border-2 border-dashed flex items-center justify-center transition-colors min-h-[22px]",
-              isTarget && canDrop
+              isTarget
                 ? "border-purple-400 bg-purple-50 dark:bg-purple-900/20"
                 : "border-zinc-200 dark:border-zinc-700",
             ].join(" ")}>
               {assignment ? (
                 <div className="flex items-center gap-0.5 px-1 py-px bg-purple-100 dark:bg-purple-900/50 rounded border border-purple-200 dark:border-purple-700 w-full mx-0.5">
                   <span className="flex-1 text-[8px] font-semibold text-purple-700 dark:text-purple-300 truncate">
-                    {getName(assignment.accountNumber)}
+                    {assignment.staffName || assignment.accountNumber}
                   </span>
                   <button
                     type="button"
@@ -216,9 +197,9 @@ function MotaTableRow({
               ) : (
                 <span className={[
                   "text-[8px]",
-                  isTarget && canDrop ? "text-purple-400" : "text-zinc-300 dark:text-zinc-600",
+                  isTarget ? "text-purple-400" : "text-zinc-300 dark:text-zinc-600",
                 ].join(" ")}>
-                  {isTarget && canDrop ? "→" : "—"}
+                  {isTarget ? "→" : "—"}
                 </span>
               )}
             </div>

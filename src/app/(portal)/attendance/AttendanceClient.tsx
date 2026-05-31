@@ -165,7 +165,6 @@ interface Props {
   planSeatData: PlanSeat[];
   planStaffData: PlanStaff[];
   hMotaRows: MotaRow[];
-  motaNameLookup: Record<string, string>;
   initialMotaAssignments: MotaAssignment[];
 }
 
@@ -181,7 +180,7 @@ export default function AttendanceClient({
   myStaffId, churnRiskAlerts,
   seatData, wallData, seatStaffList,
   tomorrow, planSeatData, planStaffData,
-  hMotaRows, motaNameLookup, initialMotaAssignments,
+  hMotaRows, initialMotaAssignments,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating">("today");
   const [seatSubTab, setSeatSubTab] = useState<"today" | "tomorrow">("today");
@@ -614,7 +613,6 @@ export default function AttendanceClient({
                         projectId={projectId}
                         date={today}
                         rows={hMotaRows}
-                        nameLookup={motaNameLookup}
                         initialAssignments={initialMotaAssignments}
                       />
                     </div>

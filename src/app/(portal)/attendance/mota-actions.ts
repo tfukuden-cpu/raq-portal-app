@@ -20,7 +20,9 @@ async function assertAdmin(projectId: string): Promise<void> {
 
 export type MotaAssignment = {
   id: string;
-  accountNumber: string;
+  accountNumber: string;   // ポジションキー（行の番号）
+  staffName: string;       // 配置されたスタッフの表示名
+  assignedAccount: string | null; // 配置スタッフのアカウント番号（座席表連携用）
   slot: string;
   isFixed: boolean;
 };
@@ -32,12 +34,14 @@ export async function fetchMotaAssignmentsAction(
   const admin = createAdminClient();
   const { data } = await admin
     .from("mota_slot_assignments")
-    .select("id, account_number, slot, is_fixed")
+    .select("id, account_number, slot, is_fixed, staff_name, assigned_account")
     .eq("project_id", projectId)
     .eq("assignment_date", date);
   return (data ?? []).map(r => ({
     id: r.id as string,
     accountNumber: r.account_number as string,
+    staffName: (r.staff_name as string) ?? "",
+    assignedAccount: (r.assigned_account as string | null) ?? null,
     slot: r.slot as string,
     isFixed: (r.is_fixed as boolean) ?? false,
   }));
@@ -49,6 +53,8 @@ export async function addMotaAssignmentAction(
   accountNumber: string,
   slot: string,
   isFixed: boolean,
+  staffName: string,
+  assignedAccount: string | null,
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
   try {
     await assertAdmin(projectId);
@@ -56,7 +62,15 @@ export async function addMotaAssignmentAction(
 
     const { data, error } = await admin
       .from("mota_slot_assignments")
-      .insert({ project_id: projectId, assignment_date: date, account_number: accountNumber, slot, is_fixed: isFixed })
+      .insert({
+        project_id: projectId,
+        assignment_date: date,
+        account_number: accountNumber,
+        slot,
+        is_fixed: isFixed,
+        staff_name: staffName,
+        assigned_account: assignedAccount,
+      })
       .select("id")
       .single();
 

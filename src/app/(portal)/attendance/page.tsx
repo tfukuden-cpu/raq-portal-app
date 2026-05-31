@@ -455,23 +455,22 @@ export default async function AttendancePage({
     ...FIXED_MOTA_NUMBERS.map(n => ({ accountNumber: n, name: n, isFixed: true })),
   ];
 
-  const motaNameLookup: Record<string, string> = {};
-  for (const [, info] of memberMap) {
-    if (info.accountNumber) motaNameLookup[info.accountNumber] = info.name;
-  }
-
   const initialMotaAssignments: MotaAssignment[] = (motaAssignmentRows ?? []).map(r => ({
     id: r.id as string,
     accountNumber: r.account_number as string,
+    staffName: (r as { staff_name?: string }).staff_name ?? "",
+    assignedAccount: (r as { assigned_account?: string | null }).assigned_account ?? null,
     slot: r.slot as string,
     isFixed: (r.is_fixed as boolean) ?? false,
   }));
 
-  // アカウント番号 → スロット（座席表用）
+  // 配置スタッフのアカウント番号 → スロット（座席表用）
   const motaAccountSlotMap = new Map<string, string[]>();
   for (const a of initialMotaAssignments) {
-    if (!motaAccountSlotMap.has(a.accountNumber)) motaAccountSlotMap.set(a.accountNumber, []);
-    motaAccountSlotMap.get(a.accountNumber)!.push(a.slot);
+    const key = a.assignedAccount;
+    if (!key) continue;
+    if (!motaAccountSlotMap.has(key)) motaAccountSlotMap.set(key, []);
+    motaAccountSlotMap.get(key)!.push(a.slot);
   }
 
   // ── 座席データ ─────────────────────────────────────────
@@ -623,7 +622,6 @@ export default async function AttendancePage({
       planSeatData={planSeatData}
       planStaffData={planStaffData}
       hMotaRows={hMotaRows}
-      motaNameLookup={motaNameLookup}
       initialMotaAssignments={initialMotaAssignments}
     />
   );
