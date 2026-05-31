@@ -1157,6 +1157,8 @@ export async function testNotifyAction(
 
   const prefix = "【テスト通知】\n";
 
+  if (!groupId) return { success: false, message: "グループLINEが未設定です" };
+
   // 経過報告リマインドはボタン付き送信＋変数解決
   if (notifyKey === "absence_followup_remind") {
     const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
@@ -1167,19 +1169,11 @@ export async function testNotifyAction(
       return `${parseInt(m)}月${parseInt(day)}日`;
     })();
     const resolved = prefix + resolveMessage(message, { "名前": "テストさん", "翌日": tomorrow });
-    const sends: Promise<void>[] = [];
-    if (groupId)         sends.push(pushLineWithButton(groupId, resolved, "経過報告を入力する", `${appUrl}/absence-followup`));
-    if (adminIds.length) sends.push(...adminIds.map(id => pushLineWithButton(id, resolved, "経過報告を入力する", `${appUrl}/absence-followup`)));
-    await Promise.allSettled(sends);
+    await pushLineWithButton(groupId, resolved, "経過報告を入力する", `${appUrl}/absence-followup`);
     return { success: true, message: "テスト送信しました" };
   }
 
-  const fullText = prefix + message;
-  const sends: Promise<void>[] = [];
-  if (groupId)          sends.push(pushLine(groupId, fullText));
-  if (adminIds.length)  sends.push(multicastLine(adminIds, fullText));
-
-  await Promise.allSettled(sends);
+  await pushLine(groupId, prefix + message);
   return { success: true, message: "テスト送信しました" };
 }
 
