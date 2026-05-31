@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
-import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, changeAttendanceStatusAction, toggleChurnRiskAction, moveSectionAction } from "./actions";
+import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, sendBulkFollowupReminderAction, changeAttendanceStatusAction, toggleChurnRiskAction, moveSectionAction } from "./actions";
 import type { SendResult } from "./actions";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/app/(portal)/seating/SeatingClient";
 import SeatingPlanClient, { type PlanSeat, type PlanStaff } from "@/app/(portal)/seating/plan/SeatingPlanClient";
@@ -164,7 +164,7 @@ interface Props {
   planStaffData: PlanStaff[];
 }
 
-type SelectionMode = "reminder" | "request";
+type SelectionMode = "reminder" | "request" | "followup";
 type ModalState = null | "confirm" | "sending" | "results";
 
 // ── メインコンポーネント ──────────────────────────────────
@@ -387,6 +387,8 @@ export default function AttendanceClient({
     const { staffIds, mode } = pendingSend;
     const { results } = mode === "reminder"
       ? await sendBulkDepartureReminderAction(projectId, staffIds)
+      : mode === "followup"
+      ? await sendBulkFollowupReminderAction(projectId, staffIds)
       : await sendBulkWorkRequestAction(projectId, staffIds);
     setSendResults(results);
     setModalState("results");
@@ -697,6 +699,16 @@ export default function AttendanceClient({
 
                             {/* サブ情報（欠勤・遅刻・催促・移動）*/}
                             {currentStatus === "absent" && (
+                              <button type="button" onClick={() => toggleSelect(m.staffId, "followup")}
+                                className={["mt-1 w-full text-[10px] font-bold py-0.5 rounded border transition-colors",
+                                  selectedIds.has(m.staffId) && selectedMode === "followup"
+                                    ? "bg-red-600 text-white border-red-600"
+                                    : "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800",
+                                ].join(" ")}>
+                                {selectedIds.has(m.staffId) && selectedMode === "followup" ? "✓ 選択中" : "経過報告催促"}
+                              </button>
+                            )}
+                            {currentStatus === "absent" && (
                               <button type="button" onClick={() => setDetailMember(m)}
                                 className="mt-0.5 text-[10px] text-red-400 w-full text-left truncate block underline leading-none">
                                 {m.absenceReason || "欠勤"}　詳細→
@@ -815,7 +827,7 @@ export default function AttendanceClient({
               onClick={() => openConfirm(Array.from(selectedIds), selectedMode!)}
               className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-sm font-bold px-4 py-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              {selectedMode === "reminder" ? `${selectedIds.size}名にまとめて催促する` : `${selectedIds.size}名にまとめて依頼する`} →
+              {selectedMode === "reminder" ? `${selectedIds.size}名にまとめて催促する` : selectedMode === "followup" ? `${selectedIds.size}名に経過報告催促する` : `${selectedIds.size}名にまとめて依頼する`} →
             </button>
           </div>
         </div>
@@ -862,7 +874,7 @@ export default function AttendanceClient({
               <>
                 <div className="px-5 pt-5 pb-3 border-b border-zinc-100 dark:border-zinc-800">
                   <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                    {pendingSend?.mode === "reminder" ? "出発催促を送信" : "出勤依頼を送信"}
+                    {pendingSend?.mode === "reminder" ? "出発催促を送信" : pendingSend?.mode === "followup" ? "経過報告催促を送信" : "出勤依頼を送信"}
                   </h2>
                   <p className="text-xs text-zinc-400 mt-0.5">{confirmMembers.length}名に送信します</p>
                 </div>

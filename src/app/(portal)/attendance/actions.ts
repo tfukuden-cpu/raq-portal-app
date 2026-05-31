@@ -1,7 +1,7 @@
 "use server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { pushLine } from "@/lib/line";
+import { pushLine, pushLineWithButton } from "@/lib/line";
 import { redirect } from "next/navigation";
 
 async function requireAdmin(projectId: string) {
@@ -295,6 +295,44 @@ export async function moveSectionAction(
 function _timeToMinutes(time: string): number {
   const parts = time.split(":").map(Number);
   return (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+}
+
+/** 欠勤スタッフへ経過報告リマインドLINE一括送信（ボタン付き） */
+export async function sendBulkFollowupReminderAction(
+  projectId: string,
+  staffIds: string[],
+): Promise<{ results: SendResult[] }> {
+  await requireAdmin(projectId);
+  const admin = createAdminClient();
+  const { data: staffList } = await admin
+    .from("staffs").select("id, display_name, name, line_user_id")
+    .in("id", staffIds);
+  const staffMap = new Map((staffList ?? []).map(s => [s.id, s]));
+  const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+  const tomorrow = (() => {
+    const d = new Date(new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }) + "T00:00:00+09:00");
+    d.setDate(d.getDate() + 1);
+    const [, m, day] = d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }).split("-");
+    return `${parseInt(m)}月${parseInt(day)}日`;
+  })();
+  const results: SendResult[] = [];
+  for (const staffId of staffIds) {
+    const staff = staffMap.get(staffId);
+    const name = staff?.display_name ?? staff?.name ?? staffId;
+    if (!staff?.line_user_id) {
+      results.push({ staffId, name, ok: false, error: "LINE未連携" });
+      continue;
+    }
+    const message = `${name}さん、お疲れ様です。\n本日はご欠勤されておりますが、明日（${tomorrow}）の出勤について経過報告をお願いします。`;
+    await pushLineWithButton(
+      staff.line_user_id,
+      message,
+      "経過報告を入力する",
+      `${appUrl}/absence-followup`,
+    );
+    results.push({ staffId, name, ok: true });
+  }
+  return { results };
 }
 
 /** 公休スタッフへ出勤依頼LINE一括送信 */
