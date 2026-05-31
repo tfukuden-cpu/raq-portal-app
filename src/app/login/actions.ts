@@ -19,6 +19,7 @@ export type LoginResult = {
 export async function loginAction(formData: FormData): Promise<LoginResult> {
   const nameInput = String(formData.get("name") ?? "").trim();
   const password  = String(formData.get("password") ?? "");
+  const nextParam = String(formData.get("next") ?? "").trim();
 
   if (!nameInput || !password) {
     return { success: false, message: "氏名とパスワードを入力してください" };
@@ -66,7 +67,9 @@ export async function loginAction(formData: FormData): Promise<LoginResult> {
     redirect("/link-line");
   }
 
-  redirect("/dashboard");
+  // next が内部パスであればそこへ、なければダッシュボードへ
+  const dest = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/dashboard";
+  redirect(dest);
 }
 
 export async function logoutAction() {

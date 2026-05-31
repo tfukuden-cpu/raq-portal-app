@@ -10,7 +10,7 @@ import FollowupClient from "./FollowupClient";
 export default async function AbsenceFollowupPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?next=/absence-followup");
 
   const staffId   = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();

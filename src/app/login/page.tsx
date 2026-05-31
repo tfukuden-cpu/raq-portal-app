@@ -32,6 +32,8 @@ function LoginForm() {
     if (code && URL_ERROR_MESSAGES[code]) setError(URL_ERROR_MESSAGES[code]);
   }, [searchParams]);
 
+  const next = searchParams.get("next") ?? "";
+
   const handleSubmit = (formData: FormData) => {
     setError(null);
     startTransition(async () => {
@@ -56,6 +58,7 @@ function LoginForm() {
           action={handleSubmit}
           className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 space-y-4 shadow-sm"
         >
+          <input type="hidden" name="next" value={next} />
           <div>
             <label
               htmlFor="name"

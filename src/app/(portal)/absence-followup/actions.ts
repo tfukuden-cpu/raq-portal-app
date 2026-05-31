@@ -4,8 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getAdminLineIds } from "@/lib/notify";
-import { multicastLine, pushLine } from "@/lib/line";
+import { pushLine } from "@/lib/line";
 import { getCurrentProjectId } from "@/lib/project-context";
 
 export async function submitFollowupAction(
@@ -117,9 +116,7 @@ export async function submitFollowupAction(
       const { data: ps } = await admin
         .from("project_settings").select("line_group_id")
         .eq("project_id", projectId).maybeSingle();
-      const groupId  = ps?.line_group_id as string | null;
-      const adminIds = await getAdminLineIds(projectId);
-      if (adminIds.length > 0) await multicastLine(adminIds, message);
+      const groupId = ps?.line_group_id as string | null;
       if (groupId) await pushLine(groupId, message);
     } catch (e) {
       console.error("[followup] LINE送信エラー:", e);
