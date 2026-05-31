@@ -1655,7 +1655,8 @@ export default function ShiftEditGrid({
   const TOT_W = 52;     // 合計列幅
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
   const SUM_ROW_H = 22; // 22px (充足サマリー行の高さ)
-  const GRAND_TOTAL_EXCLUDE = ["ローン", "リメイク", "H MOTA"]; // 全体合計から除外するセクション
+  const GRAND_TOTAL_EXCLUDE = ["SV", "ローン", "リメイク", "H MOTA"]; // 全体合計から除外（SVは早+遅合計行で別表示）
+  const GRAY_ROW_SECTIONS  = ["ローン", "リメイク", "H MOTA"];       // グレーアウト対象セクション
 
   // 前月末5日間の日付リスト
   const prevDates = useMemo(() => {
@@ -2116,10 +2117,10 @@ export default function ShiftEditGrid({
                   const isLateTotal  = false;
                   const isFirst = patIdx === 0;
                   const isLast  = patIdx === arr.length - 1;
-                  // SV中番 または ローン/リメイク はグレーアウト表示
+                  // SV中番 または ローン/リメイク/H MOTA はグレーアウト表示（SV早/遅は通常表示）
                   const isGrayedRow =
                     (pattern.section === "SV" && pattern.name.includes("中")) ||
-                    GRAND_TOTAL_EXCLUDE.includes(pattern.section ?? "");
+                    GRAY_ROW_SECTIONS.includes(pattern.section ?? "");
                   return (
                     <React.Fragment key={`sum-frag-${pattern.name}`}>
                     <tr style={{ height: `${SUM_ROW_H}px` }} className={isGrayedRow ? "bg-zinc-100 dark:bg-zinc-800/70" : "bg-zinc-50 dark:bg-zinc-900"}>
@@ -2280,8 +2281,7 @@ export default function ShiftEditGrid({
                     {/* ── 全体合計行（ローン・リメイク除く）：最後のメインパターンの直後に挿入 ── */}
                     {(() => {
                       const isGrandExcluded = (p: Pattern) =>
-                        GRAND_TOTAL_EXCLUDE.includes(p.section ?? "") ||
-                        (p.section === "SV" && p.name.includes("中"));
+                        GRAND_TOTAL_EXCLUDE.includes(p.section ?? "");
                       const mainPats = arr.filter(p => !isGrandExcluded(p));
                       if (mainPats.length === 0) return null;
                       const lastMainIdx = arr.reduce((acc, p, i) => !isGrandExcluded(p) ? i : acc, -1);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
 import StaffInfoPanel, { type StaffInfoMember } from "./StaffInfoPanel";
 
@@ -672,11 +672,10 @@ export default function ShiftDayList({
                   {/* 編集モードと同デザインの充足サマリーテーブル */}
                   {(() => {
                     const SUM_H = 22; // px（編集モードと同じ高さ）
-                    const GRAY_SECTIONS = ["ローン", "リメイク", "H MOTA"]; // グレーアウトセクション
-                    const EXCLUDE_TOTAL = ["ローン", "リメイク", "H MOTA"]; // 全体合計から除外（セクション）
+                    const GRAY_SECTIONS = ["ローン", "リメイク", "H MOTA"]; // グレーアウトセクション（SV早/遅は通常表示）
+                    const EXCLUDE_TOTAL = ["SV", "ローン", "リメイク", "H MOTA"]; // 全体合計から除外（SVは早+遅合計行で別表示）
                     const isGrandExcluded = (p: typeof visibleShiftPatterns[0]) =>
-                      EXCLUDE_TOTAL.includes(p.section ?? "") ||
-                      (p.section === "SV" && p.name.includes("中"));
+                      EXCLUDE_TOTAL.includes(p.section ?? "");
                     const isGrayed = (p: typeof visibleShiftPatterns[0]) =>
                       (p.section === "SV" && p.name.includes("中")) ||
                       GRAY_SECTIONS.includes(p.section ?? "");
@@ -707,6 +706,8 @@ export default function ShiftDayList({
 
                     const todayJST = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
                     const mainPats = visibleShiftPatterns.filter(p => !isGrandExcluded(p));
+                    const svEarlyLatePats = visibleShiftPatterns.filter(p => p.section === "SV" && !p.name.includes("中"));
+                    const lastSvPat = [...visibleShiftPatterns].filter(p => p.section === "SV").at(-1);
 
                     return (
                   <div className="flex min-w-max bg-white dark:bg-zinc-900">
@@ -717,20 +718,29 @@ export default function ShiftDayList({
                         const grayed = isGrayed(pattern);
                         const isFirst = i === 0;
                         const isLast  = i === arr.length - 1;
+                        const isLastSV = pattern.name === lastSvPat?.name;
                         return (
-                          <div key={pattern.name}
-                            style={{ height: `${SUM_H}px` }}
-                            className={cx(
-                              "flex items-center px-2 overflow-hidden",
-                              grayed ? "bg-zinc-300 dark:bg-zinc-600" : "bg-zinc-200 dark:bg-zinc-700",
-                              isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
-                              isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
-                            )}>
-                            <span className={cx(
-                              "text-[10px] font-bold truncate leading-none",
-                              grayed ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-700 dark:text-zinc-200",
-                            )} title={pattern.name}>{pattern.name}</span>
-                          </div>
+                          <Fragment key={pattern.name}>
+                            <div
+                              style={{ height: `${SUM_H}px` }}
+                              className={cx(
+                                "flex items-center px-2 overflow-hidden",
+                                grayed ? "bg-zinc-300 dark:bg-zinc-600" : "bg-zinc-200 dark:bg-zinc-700",
+                                isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                                isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
+                              )}>
+                              <span className={cx(
+                                "text-[10px] font-bold truncate leading-none",
+                                grayed ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-700 dark:text-zinc-200",
+                              )} title={pattern.name}>{pattern.name}</span>
+                            </div>
+                            {isLastSV && (
+                              <div style={{ height: `${SUM_H}px` }}
+                                className="flex items-center px-2 overflow-hidden bg-zinc-400 dark:bg-zinc-500 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400">
+                                <span className="text-[10px] font-bold text-white dark:text-zinc-900 leading-none truncate">SV合計</span>
+                              </div>
+                            )}
+                          </Fragment>
                         );
                       })}
                       {/* 全体合計ラベル */}
@@ -761,18 +771,38 @@ export default function ShiftDayList({
                               const { nd, tc, bc, showSub } = getCellStyle(pattern, actual, req, isToday);
                               const isFirst = i === 0;
                               const isLast  = i === arr.length - 1;
+                              const isLastSV = pattern.name === lastSvPat?.name;
                               return (
-                                <div key={pattern.name}
-                                  style={{ height: `${SUM_H}px` }}
-                                  className={cx(
-                                    "tabular-nums flex flex-col items-center justify-center overflow-hidden", bc,
-                                    isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
-                                    isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500 border-r border-r-zinc-200 dark:border-r-zinc-700"
-                                            : "border-b border-b-zinc-300 dark:border-b-zinc-600 border-r border-r-zinc-200 dark:border-r-zinc-700",
-                                  )}>
-                                  <span className={cx("text-[12px] font-bold leading-none", tc)}>{nd || "—"}</span>
-                                  {showSub && <span className="text-[9px] leading-none opacity-80 text-zinc-500 dark:text-zinc-400">{actual}/{req}</span>}
-                                </div>
+                                <Fragment key={pattern.name}>
+                                  <div
+                                    style={{ height: `${SUM_H}px` }}
+                                    className={cx(
+                                      "tabular-nums flex flex-col items-center justify-center overflow-hidden", bc,
+                                      isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                                      isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500 border-r border-r-zinc-200 dark:border-r-zinc-700"
+                                              : "border-b border-b-zinc-300 dark:border-b-zinc-600 border-r border-r-zinc-200 dark:border-r-zinc-700",
+                                    )}>
+                                    <span className={cx("text-[12px] font-bold leading-none", tc)}>{nd || "—"}</span>
+                                    {showSub && <span className="text-[9px] leading-none opacity-80 text-zinc-500 dark:text-zinc-400">{actual}/{req}</span>}
+                                  </div>
+                                  {isLastSV && (() => {
+                                    const svA = svEarlyLatePats.reduce((s, p) => s + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === p.name && !isChurnExcluded(m.id, d)).length, 0);
+                                    const svR = svEarlyLatePats.reduce((s, p) => s + getReqForDate(p, d), 0);
+                                    const svN = svR - svA;
+                                    let svNd: string, svTc: string, svBc: string;
+                                    if (svR === 0) { svNd = svA > 0 ? String(svA) : "—"; svTc = "text-zinc-500 dark:text-zinc-400"; svBc = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800"; }
+                                    else if (svN > 0) { svNd = `-${svN}`; svTc = "text-red-600 dark:text-red-400 font-bold"; svBc = isToday ? "bg-red-200 dark:bg-red-950" : "bg-red-100 dark:bg-red-950"; }
+                                    else if (svN < 0) { svNd = `+${-svN}`; svTc = "text-emerald-700 dark:text-emerald-400 font-bold"; svBc = isToday ? "bg-emerald-200 dark:bg-emerald-950" : "bg-emerald-100 dark:bg-emerald-950"; }
+                                    else { svNd = "✓"; svTc = "text-emerald-400 dark:text-emerald-500 font-bold"; svBc = isToday ? "bg-blue-100 dark:bg-blue-950" : "bg-zinc-100 dark:bg-zinc-800"; }
+                                    return (
+                                      <div style={{ height: `${SUM_H}px` }}
+                                        className={cx("tabular-nums flex flex-col items-center justify-center overflow-hidden border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400 border-r border-r-zinc-200 dark:border-r-zinc-700", svBc)}>
+                                        <span className={cx("text-[12px] font-bold leading-none", svTc)}>{svNd}</span>
+                                        {svR > 0 && <span className="text-[9px] leading-none opacity-80 text-zinc-500 dark:text-zinc-400">{svA}/{svR}</span>}
+                                      </div>
+                                    );
+                                  })()}
+                                </Fragment>
                               );
                             })}
                             {/* 全体合計セル */}
@@ -810,31 +840,52 @@ export default function ShiftDayList({
                         const { nd, tc, bc } = getCellStyle(pattern, totalActual, totalReq, false);
                         const isFirst = i === 0;
                         const isLast  = i === arr.length - 1;
+                        const isLastSV = pattern.name === lastSvPat?.name;
                         return (
-                          <div key={pattern.name}
-                            style={{ height: `${SUM_H}px` }}
-                            className={cx(
-                              "tabular-nums flex flex-col items-center justify-center overflow-hidden", bc,
-                              grayed ? "opacity-70" : "",
-                              isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
-                              isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
-                            )}>
-                            {totalReq > 0 ? (
-                              <>
-                                <span className={cx("tabular-nums text-[12px] font-bold leading-none", tc)}>{nd}</span>
-                                <span className={cx(
-                                  "tabular-nums text-[9px] font-bold leading-none mt-0.5",
-                                  net > 0 ? "text-red-400 dark:text-red-500"
-                                  : net < 0 ? "text-emerald-500 dark:text-emerald-400"
-                                  : "text-zinc-300 dark:text-zinc-600",
-                                )}>
-                                  {net > 0 ? `-${net}人` : net < 0 ? `+${-net}人` : "✓"}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
-                            )}
-                          </div>
+                          <Fragment key={pattern.name}>
+                            <div
+                              style={{ height: `${SUM_H}px` }}
+                              className={cx(
+                                "tabular-nums flex flex-col items-center justify-center overflow-hidden", bc,
+                                grayed ? "opacity-70" : "",
+                                isFirst ? "border-t-2 border-t-zinc-400 dark:border-t-zinc-500" : "border-t border-t-zinc-300 dark:border-t-zinc-600",
+                                isLast  ? "border-b-2 border-b-zinc-400 dark:border-b-zinc-500" : "border-b border-b-zinc-300 dark:border-b-zinc-600",
+                              )}>
+                              {totalReq > 0 ? (
+                                <>
+                                  <span className={cx("tabular-nums text-[12px] font-bold leading-none", tc)}>{nd}</span>
+                                  <span className={cx(
+                                    "tabular-nums text-[9px] font-bold leading-none mt-0.5",
+                                    net > 0 ? "text-red-400 dark:text-red-500"
+                                    : net < 0 ? "text-emerald-500 dark:text-emerald-400"
+                                    : "text-zinc-300 dark:text-zinc-600",
+                                  )}>
+                                    {net > 0 ? `-${net}人` : net < 0 ? `+${-net}人` : "✓"}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-[9px] text-zinc-200 dark:text-zinc-700">—</span>
+                              )}
+                            </div>
+                            {isLastSV && (() => {
+                              const svTotal = allDates.reduce((s, d) =>
+                                svEarlyLatePats.reduce((ss, p) => ss + visibleMembers.filter(m => getShift(m.id, d)?.shift_name === p.name && !isChurnExcluded(m.id, d)).length, s), 0);
+                              const svReqTotal = allDates.reduce((s, d) => svEarlyLatePats.reduce((ss, p) => ss + getReqForDate(p, d), s), 0);
+                              const svNet = svReqTotal - svTotal;
+                              let svNd: string, svTc: string, svBc: string;
+                              if (svReqTotal === 0) { svNd = svTotal > 0 ? String(svTotal) : "—"; svTc = "text-zinc-400 dark:text-zinc-500"; svBc = "bg-zinc-200 dark:bg-zinc-700"; }
+                              else if (svNet > 0) { svNd = `-${svNet}`; svTc = "text-red-600 dark:text-red-400 font-bold"; svBc = "bg-red-200 dark:bg-red-900/60"; }
+                              else if (svNet < 0) { svNd = `+${-svNet}`; svTc = "text-emerald-700 dark:text-emerald-400 font-bold"; svBc = "bg-emerald-200 dark:bg-emerald-900/60"; }
+                              else { svNd = "✓"; svTc = "text-emerald-400 dark:text-emerald-500 font-bold"; svBc = "bg-zinc-200 dark:bg-zinc-700"; }
+                              return (
+                                <div style={{ height: `${SUM_H}px` }}
+                                  className={cx("tabular-nums flex flex-col items-center justify-center overflow-hidden border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400", svBc)}>
+                                  <span className={cx("text-[12px] font-bold leading-none", svTc)}>{svNd}</span>
+                                  {svReqTotal > 0 && <span className="text-[9px] leading-none opacity-70 text-zinc-600 dark:text-zinc-300">{svTotal}/{svReqTotal}</span>}
+                                </div>
+                              );
+                            })()}
+                          </Fragment>
                         );
                       })}
                       {/* 全体合計（右固定列） */}
