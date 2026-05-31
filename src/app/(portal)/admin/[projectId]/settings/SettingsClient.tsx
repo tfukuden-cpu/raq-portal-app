@@ -2132,11 +2132,11 @@ export function LineNotifySettings({
           定時通知（スケジュール）
         </p>
 
-        {/* 当日休み→翌日出勤アナウンス */}
+        {/* 翌日出勤アナウンス */}
         <NotifyCard
           notifyKey="rest_day_remind"
-          label="当日休み＋翌日出勤アナウンス"
-          desc="当日が休みで翌日に出勤があるスタッフへ前日夜に通知"
+          label="翌日出勤リマインド"
+          desc="翌日に出勤予定のスタッフへ前日夜に通知"
           config={settings.rest_day_remind}
           vars={NOTIFY_VARS.rest_day_remind}
           onToggle={() => updateItem("rest_day_remind", { enabled: !settings.rest_day_remind.enabled })}

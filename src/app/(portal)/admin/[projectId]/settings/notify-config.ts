@@ -151,10 +151,10 @@ export const DEFAULT_NOTIFY_MESSAGES: Record<keyof NotificationSettings, string>
 次回もよろしくお願いいたします！`,
 
   rest_day_remind:
-`{名前}さん、お疲れ様です。
+`{名前}さん、お疲れ様です
 明日出勤予定となっております。
 {翌日}{シフト}
-明日もよろしくお願いいたします！`,
+明日もよろしくお願いいたします！！`,
 
   daily_summary:
 `📋 {日付}の出勤状況
