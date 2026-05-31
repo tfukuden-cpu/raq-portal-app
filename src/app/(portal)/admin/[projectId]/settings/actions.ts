@@ -3,8 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
-import { pushLine, pushLineTestButton, multicastLine } from "@/lib/line";
-import { getAdminLineIds } from "@/lib/notify";
+import { pushLine, pushLineTestButton, pushLineWithButton, multicastLine } from "@/lib/line";
+import { getAdminLineIds, resolveMessage } from "@/lib/notify";
 import { redirect } from "next/navigation";
 import {
   createSpreadsheet,
@@ -1136,6 +1136,7 @@ export async function clearLineTestConfirmationsAction(projectId: string): Promi
 export async function testNotifyAction(
   projectId: string,
   message: string,
+  notifyKey?: string,
 ): Promise<SettingsResult> {
   await assertAdmin(projectId);
 
@@ -1154,9 +1155,26 @@ export async function testNotifyAction(
     return { success: false, message: "管理者グループ・管理者のLINEがどちらも未設定です" };
   }
 
-  const prefix   = "【テスト通知】\n";
-  const fullText = prefix + message;
+  const prefix = "【テスト通知】\n";
 
+  // 経過報告リマインドはボタン付き送信＋変数解決
+  if (notifyKey === "absence_followup_remind") {
+    const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+    const tomorrow = (() => {
+      const d = new Date(new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }) + "T00:00:00+09:00");
+      d.setDate(d.getDate() + 1);
+      const [, m, day] = d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }).split("-");
+      return `${parseInt(m)}月${parseInt(day)}日`;
+    })();
+    const resolved = prefix + resolveMessage(message, { "名前": "テストさん", "翌日": tomorrow });
+    const sends: Promise<void>[] = [];
+    if (groupId)         sends.push(pushLineWithButton(groupId, resolved, "経過報告を入力する", `${appUrl}/absence-followup`));
+    if (adminIds.length) sends.push(...adminIds.map(id => pushLineWithButton(id, resolved, "経過報告を入力する", `${appUrl}/absence-followup`)));
+    await Promise.allSettled(sends);
+    return { success: true, message: "テスト送信しました" };
+  }
+
+  const fullText = prefix + message;
   const sends: Promise<void>[] = [];
   if (groupId)          sends.push(pushLine(groupId, fullText));
   if (adminIds.length)  sends.push(multicastLine(adminIds, fullText));

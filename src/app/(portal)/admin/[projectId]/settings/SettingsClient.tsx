@@ -1978,7 +1978,7 @@ function NotifyCard({
     const message = config.message ?? DEFAULT_NOTIFY_MESSAGES[notifyKey] ?? label;
     startTest(async () => {
       setTestStatus("sending");
-      const res = await testNotifyAction(projectId, message);
+      const res = await testNotifyAction(projectId, message, notifyKey);
       setTestStatus(res.success ? "ok" : "err");
       setTestMsg(res.message ?? "");
       setTimeout(() => setTestStatus("idle"), 3000);
