@@ -524,9 +524,21 @@ export default function AttendanceClient({
           </div>
         )}
 
-        {/* ── 出勤簿タブ：日付ナビ ── */}
+        {/* ── 出勤簿タブ：日付ナビ + 出力ボタン ── */}
         {activeTab === "today" && (
-          <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} />
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex-1">
+              <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} noMargin />
+            </div>
+            <button
+              type="button"
+              onClick={() => exportAttendanceCSV(today, dateLabel, grouped)}
+              className="flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
+            >
+              <DownloadIcon className="w-3.5 h-3.5" />
+              出力
+            </button>
+          </div>
         )}
 
         {/* ── 離脱リスク候補アラート ── */}
@@ -1085,10 +1097,10 @@ function ChevronLeft({ className }: { className?: string }) {
 }
 
 // ── 日付ナビゲーション（各タブ内に配置） ──────────────────────
-function DateNav({ prevDate, nextDate, dateLabel }: { prevDate: string; nextDate: string; dateLabel: string }) {
+function DateNav({ prevDate, nextDate, dateLabel, noMargin }: { prevDate: string; nextDate: string; dateLabel: string; noMargin?: boolean }) {
   const router = useRouter();
   return (
-    <div className="flex items-center justify-between mb-4 bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-xl px-3 py-2 shadow-sm">
+    <div className={`flex items-center justify-between ${noMargin ? "" : "mb-4"} bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-xl px-3 py-2 shadow-sm`}>
       <button
         type="button"
         onClick={() => router.push(`/attendance?date=${prevDate}`)}
@@ -1300,6 +1312,56 @@ function ShiftChangesTab({
         </div>
       )}
     </div>
+  );
+}
+
+// ── 出勤簿CSV出力 ────────────────────────────────────────
+function exportAttendanceCSV(today: string, dateLabel: string, grouped: SectionGroup[]) {
+  const BOM = "﻿";
+  const lines: string[] = [];
+
+  // 日付ヘッダー
+  lines.push(`日付,${dateLabel}`);
+  lines.push("");
+
+  // 列ヘッダー
+  lines.push("セクション,アカウント番号,名前,シフト");
+
+  // セクション順・アカウント番号順でデータ行
+  for (const { section, shiftGroups } of grouped) {
+    type Row = { accountNumber: string | null; staffName: string; shiftName: string };
+    const rows: Row[] = [];
+    for (const { shiftName, members } of shiftGroups) {
+      for (const m of members) {
+        rows.push({ accountNumber: m.accountNumber, staffName: m.name, shiftName });
+      }
+    }
+    rows.sort((a, b) => (a.accountNumber ?? "").localeCompare(b.accountNumber ?? "", "ja"));
+
+    for (const r of rows) {
+      const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      lines.push([esc(section), esc(r.accountNumber ?? ""), esc(r.staffName), esc(r.shiftName)].join(","));
+    }
+  }
+
+  const csv = BOM + lines.join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `出勤簿_${today}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── ダウンロードアイコン ──────────────────────────────────
+function DownloadIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+    </svg>
   );
 }
 
