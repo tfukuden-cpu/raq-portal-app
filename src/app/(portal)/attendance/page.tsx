@@ -17,7 +17,7 @@ function tokyoToday(): string {
 }
 
 // 優先順位付きの固定セクション順（これ以外のセクションはこの後ろに追加される）
-const BASE_SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク"];
+const BASE_SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "H MOTA", "未アポ", "インフォ", "ローン"];
 const OFF_SHIFT_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
 const STATUS_SORT: StatusKey[] = ["absent", "late", "working", "departed", "clocked_out", "not_departed"];
 

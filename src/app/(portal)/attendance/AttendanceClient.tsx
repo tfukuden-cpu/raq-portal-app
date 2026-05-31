@@ -599,7 +599,7 @@ export default function AttendanceClient({
                       key={section}
                       className={[
                         "flex flex-col rounded-2xl border-2 shrink-0 transition-all",
-                        "h-[calc(100dvh-280px)] w-72",
+                        "h-[calc(100dvh-280px)] w-80",
                         "border-purple-200 dark:border-purple-800 bg-white dark:bg-zinc-900",
                       ].join(" ")}
                     >
