@@ -269,8 +269,10 @@ export async function notifyShiftChangesAction(
 
   const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
   function fmtDateLine(d: string) {
-    const dt = new Date(d + "T00:00:00+09:00");
-    return `${dt.getMonth() + 1}/${dt.getDate()}（${WEEKDAY_JP[dt.getDay()]}）`;
+    // d = "YYYY-MM-DD"。UTC midnight として解析し UTC メソッドで取得することで
+    // サーバーのローカルタイムゾーン（UTC）に依存しない。
+    const dt = new Date(d);
+    return `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}（${WEEKDAY_JP[dt.getUTCDay()]}）`;
   }
 
   let sent = 0;
