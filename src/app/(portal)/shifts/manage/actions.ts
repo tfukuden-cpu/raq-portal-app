@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
-import { sendEventNotify } from "@/lib/notify";
+import { sendEventNotify, logNotify } from "@/lib/notify";
 import { multicastLine, pushLine, pushLineWithButton } from "@/lib/line";
 import {
   DEFAULT_NOTIFY_MESSAGES,
@@ -294,6 +294,14 @@ export async function notifyShiftChangesAction(
     const header  = resolveMessage(baseMsg, { "名前": staffName });
     const text    = `${header}\n\n${lines.join("\n")}`;
     await pushLine(lineId, text);
+    void logNotify({
+      projectId,
+      notifyType:    "shift_changed",
+      recipientType: "staff",
+      recipientId:   n.staffId,
+      recipientName: staffName,
+      message:       text,
+    });
     sent++;
   }
 
