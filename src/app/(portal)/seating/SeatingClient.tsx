@@ -45,10 +45,10 @@ export type StaffInfo = {
 
 const STATUS_BG: Record<NonNullable<SeatData["status"]>, string> = {
   not_arrived: "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-600",
-  working:     "bg-green-100 dark:bg-green-900/60 border-green-400 dark:border-green-600",
-  on_break:    "bg-amber-100 dark:bg-amber-900/60 border-amber-400 dark:border-amber-600",
-  clocked_out: "bg-zinc-100 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-500",
-  absent:      "bg-red-100 dark:bg-red-900/60 border-red-400 dark:border-red-600",
+  working:     "bg-green-200 dark:bg-green-800/80 border-green-500 dark:border-green-500",
+  on_break:    "bg-amber-200 dark:bg-amber-800/80 border-amber-500 dark:border-amber-500",
+  clocked_out: "bg-zinc-200 dark:bg-zinc-600 border-zinc-400 dark:border-zinc-400",
+  absent:      "bg-red-200 dark:bg-red-800/80 border-red-500 dark:border-red-500",
 };
 
 const STATUS_TEXT: Record<NonNullable<SeatData["status"]>, string> = {
@@ -611,8 +611,6 @@ export default function SeatingClient({
                 {!isFree && !seat.motaSlot && effectiveSection && (
                   <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(effectiveSection, sfShift ?? seat.shiftSlot)}`} />
                 )}
-
-                <span className="text-[9px] text-zinc-400 leading-none">{seat.label}</span>
 
                 {sfName ? (
                   <>
