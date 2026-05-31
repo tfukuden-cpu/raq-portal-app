@@ -39,6 +39,7 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
   { href: "/notices/manage",    icon: "Megaphone",       label: "周知管理" },
   { href: "/inquiries/manage",  icon: "MessageSquare",   label: "問合せ管理" },
   { href: "/attendance/edit", icon: "ClipboardCheck",  label: "勤怠管理" },
+  { href: "/rankings",         icon: "Trophy",          label: "番付管理" },
   { href: "/line-settings",   icon: "Smartphone",      label: "LINE連携" },
   { href: "/admin",           icon: "Settings",        label: "案件設定" },
 ];
