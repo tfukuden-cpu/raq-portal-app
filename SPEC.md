@@ -1,6 +1,6 @@
 # Raq Works 全機能仕様書
 
-> 最終更新: 2026-05-31（v60）  
+> 最終更新: 2026-05-31（v61）  
 > 対象: 全メニュー（スタッフ / 管理 / 運営）
 
 ---
@@ -292,8 +292,31 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 **セクション順（固定優先 + 動的追加）:**
 `["SV", "査定", "販売", "MOTA", "ローン", "リメイク"]` → `shift_patterns.section` から取得した追加セクション → "その他"
 
+**シフト名によるセクション振り分けルール:**
+- シフト名に「研修」を含む → セクションに関係なく「その他」へ
+- 休み扱いシフト（ボード非表示・休暇者リストに表示）: `公休 / 有休 / 休暇 / 振替休日 / 特別休暇 / 代休 / 欠勤 / 希望休`
+
+**H MOTA スロット配置パネル（出勤ボード内）:**
+
+`H MOTA` セクション（シフト名が "H MOTA" で始まる）のカラム内に専用パネルを表示。
+
+| 列 | 内容 |
+|---|---|
+| 番号 | アカウント番号（ポジションキー） |
+| 12:00-13:00 | ドロップゾーン |
+| 18:00-19:00 | ドロップゾーン |
+
+**行の種類:**
+- **MOTA非出勤**：`project_members.section = "MOTA"` または `"H MOTA"` で当日シフトなしのメンバー
+- **空き**：固定ポジション番号（ASS 130〜134, ASS 196〜200）
+
+**操作:**
+- メインボードの任意のセクションのスタッフカードをドラッグ → スロット枠にドロップ → 名前が複製される
+- × ボタンで削除
+- 座席表でも配置済みスタッフのカードに紫バーと時間帯が表示される（`assigned_account` で連携）
+
 **関連テーブル:**
-`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `project_members`, `staffs`, `shift_patterns`, `shift_change_logs`, `shift_month_status`, `seats`, `seat_assignments`, `seat_walls`
+`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `project_members`, `staffs`, `shift_patterns`, `shift_change_logs`, `shift_month_status`, `seats`, `seat_assignments`, `seat_walls`, `mota_slot_assignments`
 
 ---
 
@@ -545,6 +568,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 | `task_extraction_groups` | タスク抽出グループ設定（group_id, group_label, enabled） |
 | `line_groups` | LINEグループ情報（group_id, joined_at） |
 | `line_name_mappings` | LINEユーザー名 → 社員ID マッピング |
+| `mota_slot_assignments` | H MOTAスロット配置（account_number=ポジションキー, slot, staff_name, assigned_account, is_fixed） |
 
 ---
 
