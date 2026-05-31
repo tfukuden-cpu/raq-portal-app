@@ -30,33 +30,36 @@ type Member = {
 
 type Props = {
   projectId: string;
-  allDates: string[];   // ["2026-05-01", ...]
+  allDates: string[];
   patterns: Pattern[];
   shifts: Shift[];
   members: Member[];
   slotRequirements: SlotReq[];
-  holidays: string[];   // 祝日の date 文字列一覧
+  holidays: string[];
   selectedDate?: string;
   onDateSelect?: (date: string) => void;
 };
 
-// 合計から除外するセクション
+// 合計から除外・最下部に表示するセクション
 const EXCLUDE_FROM_TOTAL = ["ローン", "リメイク"];
 
 function isWeekend(dateStr: string, holidays: string[]): boolean {
   const d = new Date(dateStr);
-  const dow = d.getUTCDay(); // 0=日, 6=土
+  const dow = d.getUTCDay();
   return dow === 0 || dow === 6 || holidays.includes(dateStr);
 }
-
 function dayLabel(dateStr: string): string {
-  const d = new Date(dateStr);
-  return String(d.getUTCDate());
+  return String(new Date(dateStr).getUTCDate());
+}
+function dayOfWeekLabel(dateStr: string): string {
+  return ["日","月","火","水","木","金","土"][new Date(dateStr).getUTCDay()];
 }
 
-function dayOfWeekLabel(dateStr: string): string {
-  return ["日", "月", "火", "水", "木", "金", "土"][new Date(dateStr).getUTCDay()];
-}
+// ── セル共通スタイル ──
+// 高さを小さくするため py-0 + leading-none で固定
+const CELL_DATA = "text-center tabular-nums py-0 px-0.5 h-[22px] leading-none";
+const CELL_LABEL = "sticky left-0 z-10 bg-white dark:bg-zinc-900 px-2 py-0 h-[22px] leading-none font-semibold border-r border-zinc-200 dark:border-zinc-700 align-middle";
+const CELL_PATTERN = "sticky left-[90px] z-10 bg-zinc-50 dark:bg-zinc-800/60 px-2 py-0 h-[22px] leading-none text-zinc-600 dark:text-zinc-400 border-r border-zinc-200 dark:border-zinc-700 whitespace-nowrap";
 
 export default function ShiftSufficiencyTable({
   projectId,
@@ -69,21 +72,12 @@ export default function ShiftSufficiencyTable({
   selectedDate,
   onDateSelect,
 }: Props) {
-  // セクションがあるパターンのみ対象
   const targetPatterns = patterns.filter(p => p.section);
-
-  // セクション一覧（重複排除・順序維持）
   const allSections = Array.from(new Set(targetPatterns.map(p => p.section!)));
-
-  // メインセクション（合計対象）とボトムセクション（ローン・リメイク）に分離
   const mainSections   = allSections.filter(s => !EXCLUDE_FROM_TOTAL.includes(s));
   const bottomSections = allSections.filter(s =>  EXCLUDE_FROM_TOTAL.includes(s));
-  const orderedSections = [...mainSections, ...bottomSections];
 
-  // 折りたたみ state（デフォルト折りたたみ）
   const [collapsed, setCollapsed] = useState(true);
-
-  // 編集ポップオーバー state
   const [editing, setEditing] = useState<{
     section: string; pattern: string; date: string; current: number;
   } | null>(null);
@@ -92,27 +86,19 @@ export default function ShiftSufficiencyTable({
 
   if (targetPatterns.length === 0) return null;
 
-  // slot requirements を Map に変換 key: "section::pattern::date"
   const reqMap = new Map<string, number>();
   for (const r of slotRequirements) {
     reqMap.set(`${r.section}::${r.pattern_name}::${r.shift_date}`, r.required_count);
   }
-
-  // メンバーのセクションMap
   const memberSectionMap = new Map<string, string | null>();
-  for (const m of members) {
-    memberSectionMap.set(m.id, m.section);
-  }
+  for (const m of members) memberSectionMap.set(m.id, m.section);
 
-  // 実際の充足数を計算
   function getActual(section: string, patternName: string, date: string): number {
     return shifts.filter(s =>
-      s.shift_date === date &&
-      s.shift_name === patternName &&
+      s.shift_date === date && s.shift_name === patternName &&
       memberSectionMap.get(s.staff_id) === section
     ).length;
   }
-
   function getRequired(pattern: Pattern, date: string): number {
     const key = `${pattern.section}::${pattern.name}::${date}`;
     if (reqMap.has(key)) return reqMap.get(key)!;
@@ -121,14 +107,10 @@ export default function ShiftSufficiencyTable({
     if (!weekend && pattern.required_weekday != null) return pattern.required_weekday;
     return 0;
   }
-
-  // 合計行の計算（mainSections のみ）
   function getTotalForDate(date: string): { actual: number; required: number } {
-    let actual = 0;
-    let required = 0;
+    let actual = 0; let required = 0;
     for (const section of mainSections) {
-      const sectionPatterns = targetPatterns.filter(p => p.section === section);
-      for (const pattern of sectionPatterns) {
+      for (const pattern of targetPatterns.filter(p => p.section === section)) {
         actual   += getActual(section, pattern.name, date);
         required += getRequired(pattern, date);
       }
@@ -140,7 +122,6 @@ export default function ShiftSufficiencyTable({
     setEditing({ section, pattern, date, current });
     setEditValue(String(current));
   }
-
   function saveEdit() {
     if (!editing) return;
     const val = Number(editValue);
@@ -153,10 +134,71 @@ export default function ShiftSufficiencyTable({
     fd.set("requiredCount", String(val));
     startTransition(async () => {
       await upsertSlotRequirementAction(fd);
-      // 楽観的更新
       reqMap.set(`${editing.section}::${editing.pattern}::${editing.date}`, val);
       setEditing(null);
     });
+  }
+
+  // セクション行を描画するヘルパー
+  function renderSectionRows(section: string, topBorder = false) {
+    const sectionPatterns = targetPatterns.filter(p => p.section === section);
+    return sectionPatterns.map((pattern, pi) => (
+      <tr key={`${section}-${pattern.name}`}
+        className={[
+          "border-b border-zinc-100 dark:border-zinc-800",
+          topBorder && pi === 0 ? "border-t-2 border-t-zinc-300 dark:border-t-zinc-600" : "",
+        ].join(" ")}>
+        {pi === 0 && (
+          <td rowSpan={sectionPatterns.length}
+            className={[
+              CELL_LABEL,
+              EXCLUDE_FROM_TOTAL.includes(section)
+                ? "text-zinc-400 dark:text-zinc-500 min-w-[90px]"
+                : "text-zinc-700 dark:text-zinc-300 min-w-[90px]",
+            ].join(" ")}>
+            {section}
+          </td>
+        )}
+        <td className={`${CELL_PATTERN} min-w-[68px]`}>{pattern.name}</td>
+        {allDates.map(date => {
+          const required = getRequired(pattern, date);
+          const actual   = getActual(section, pattern.name, date);
+          const diff     = required === 0 ? 0 : actual - required;
+          const hasOverride = reqMap.has(`${section}::${pattern.name}::${date}`);
+          const weekend = isWeekend(date, holidays);
+          const isSel   = date === selectedDate;
+          return (
+            <td key={date}
+              onClick={() => openEdit(section, pattern.name, date, required)}
+              className={[
+                CELL_DATA, "cursor-pointer transition-colors select-none hover:bg-zinc-100 dark:hover:bg-zinc-800 min-w-[36px]",
+                isSel ? "bg-blue-50/60 dark:bg-blue-950/20" : weekend ? "bg-red-50/30 dark:bg-red-950/10" : "",
+              ].join(" ")}>
+              {required === 0 ? (
+                <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">—</span>
+              ) : (
+                <span className="inline-flex items-baseline gap-0.5">
+                  <span className={[
+                    "font-bold text-[11px]",
+                    diff > 0 ? "text-emerald-600 dark:text-emerald-400"
+                     : diff < 0 ? "text-red-500 dark:text-red-400"
+                     : "text-zinc-400 dark:text-zinc-500",
+                  ].join(" ")}>
+                    {diff > 0 ? `+${diff}` : diff}
+                  </span>
+                  <span className={[
+                    "text-[9px]",
+                    hasOverride ? "text-blue-500 dark:text-blue-400" : "text-zinc-300 dark:text-zinc-600",
+                  ].join(" ")}>
+                    {actual}/{required}
+                  </span>
+                </span>
+              )}
+            </td>
+          );
+        })}
+      </tr>
+    ));
   }
 
   return (
@@ -172,168 +214,98 @@ export default function ShiftSufficiencyTable({
             <p className="text-[10px] text-zinc-400 mt-0.5">必要数セルをタップして日別上書き可</p>
           )}
         </div>
-        <svg
-          className={`w-4 h-4 text-zinc-400 transition-transform ${collapsed ? "" : "rotate-180"}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-        >
+        <svg className={`w-4 h-4 text-zinc-400 transition-transform ${collapsed ? "" : "rotate-180"}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
-      {!collapsed && <div className="overflow-x-auto">
-        <table className="text-xs border-collapse min-w-max">
-          <thead>
-            <tr>
-              {/* 固定列ヘッダー */}
-              <th className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-3 py-1 text-left font-semibold text-zinc-500 dark:text-zinc-400 border-b border-r border-zinc-200 dark:border-zinc-700 min-w-[100px]">
-                セクション
-              </th>
-              <th className="sticky left-[100px] z-10 bg-zinc-50 dark:bg-zinc-800 px-3 py-1 text-left font-semibold text-zinc-500 dark:text-zinc-400 border-b border-r border-zinc-200 dark:border-zinc-700 min-w-[72px]">
-                パターン
-              </th>
-              {allDates.map(d => {
-                const weekend = isWeekend(d, holidays);
-                const isSel = d === selectedDate;
-                return (
-                  <th key={d}
-                    onClick={() => onDateSelect?.(d)}
-                    className={[
-                      "px-1.5 py-1 text-center font-semibold border-b border-zinc-200 dark:border-zinc-700 min-w-[36px]",
-                      onDateSelect ? "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700/60" : "",
-                      isSel
-                        ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                        : weekend
-                          ? "text-red-500 dark:text-red-400 bg-red-50/50 dark:bg-red-950/20"
-                          : "text-zinc-500 dark:text-zinc-400",
-                    ].join(" ")}>
-                    <div className="tabular-nums">{dayLabel(d)}</div>
-                    <div className="text-[9px] font-normal">{dayOfWeekLabel(d)}</div>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {/* ── メイン + ボトムセクション行 ── */}
-            {orderedSections.map((section, si) => {
-              const sectionPatterns = targetPatterns.filter(p => p.section === section);
-              // ボトムセクション最初の行の前に区切り線を入れる
-              const isFirstBottom = EXCLUDE_FROM_TOTAL.includes(section) &&
-                (si === 0 || !EXCLUDE_FROM_TOTAL.includes(orderedSections[si - 1]));
-
-              return sectionPatterns.map((pattern, pi) => (
-                <tr key={`${section}-${pattern.name}`}
-                  className={[
-                    "border-b border-zinc-100 dark:border-zinc-800 last:border-0",
-                    isFirstBottom && pi === 0 ? "border-t-2 border-t-zinc-300 dark:border-t-zinc-600" : "",
-                  ].join(" ")}>
-                  {/* セクション列（rowSpan） */}
-                  {pi === 0 && (
-                    <td
-                      rowSpan={sectionPatterns.length}
+      {!collapsed && (
+        <div className="overflow-x-auto">
+          <table className="text-xs border-collapse min-w-max">
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 text-left font-semibold text-zinc-500 dark:text-zinc-400 border-b border-r border-zinc-200 dark:border-zinc-700 min-w-[90px]">
+                  セクション
+                </th>
+                <th className="sticky left-[90px] z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 text-left font-semibold text-zinc-500 dark:text-zinc-400 border-b border-r border-zinc-200 dark:border-zinc-700 min-w-[68px]">
+                  パターン
+                </th>
+                {allDates.map(d => {
+                  const weekend = isWeekend(d, holidays);
+                  const isSel = d === selectedDate;
+                  return (
+                    <th key={d}
+                      onClick={() => onDateSelect?.(d)}
                       className={[
-                        "sticky left-0 z-10 bg-white dark:bg-zinc-900 px-3 py-1 font-semibold border-r border-zinc-200 dark:border-zinc-700 align-middle",
-                        EXCLUDE_FROM_TOTAL.includes(section)
-                          ? "text-zinc-400 dark:text-zinc-500"
-                          : "text-zinc-700 dark:text-zinc-300",
+                        "px-1 py-1 text-center font-semibold border-b border-zinc-200 dark:border-zinc-700 min-w-[34px]",
+                        onDateSelect ? "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700/60" : "",
+                        isSel
+                          ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                          : weekend
+                            ? "text-red-500 dark:text-red-400 bg-red-50/50 dark:bg-red-950/20"
+                            : "text-zinc-500 dark:text-zinc-400",
                       ].join(" ")}>
-                      {section}
-                    </td>
-                  )}
-                  {/* パターン列 */}
-                  <td className="sticky left-[100px] z-10 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1 text-zinc-600 dark:text-zinc-400 border-r border-zinc-200 dark:border-zinc-700 whitespace-nowrap">
-                    {pattern.name}
-                  </td>
-                  {/* 日別セル */}
-                  {allDates.map(date => {
-                    const required = getRequired(pattern, date);
-                    const actual   = getActual(section, pattern.name, date);
-                    const diff     = required === 0 ? 0 : actual - required;
-                    const hasOverride = reqMap.has(`${section}::${pattern.name}::${date}`);
-                    const weekend = isWeekend(date, holidays);
-                    const isSel = date === selectedDate;
+                      <div className="tabular-nums text-[11px]">{dayLabel(d)}</div>
+                      <div className="text-[9px] font-normal">{dayOfWeekLabel(d)}</div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {/* ── メインセクション（ローン・リメイク除く） ── */}
+              {mainSections.map(section => renderSectionRows(section))}
 
+              {/* ── 合計行 ── */}
+              {mainSections.length > 0 && (
+                <tr className="border-t-2 border-t-zinc-400 dark:border-t-zinc-500 border-b border-b-zinc-200 dark:border-b-zinc-600 bg-zinc-100 dark:bg-zinc-800">
+                  <td className="sticky left-0 z-10 bg-zinc-100 dark:bg-zinc-800 px-2 py-0 h-[22px] font-bold text-zinc-800 dark:text-zinc-100 border-r border-zinc-200 dark:border-zinc-700 align-middle whitespace-nowrap min-w-[90px]">
+                    合計
+                  </td>
+                  <td className="sticky left-[90px] z-10 bg-zinc-100 dark:bg-zinc-800 px-2 py-0 h-[22px] text-[9px] text-zinc-500 dark:text-zinc-400 border-r border-zinc-200 dark:border-zinc-700 align-middle whitespace-nowrap min-w-[68px]">
+                    ローン/リメイク除く
+                  </td>
+                  {allDates.map(date => {
+                    const { actual, required } = getTotalForDate(date);
+                    const diff = required === 0 ? 0 : actual - required;
+                    const weekend = isWeekend(date, holidays);
+                    const isSel  = date === selectedDate;
                     return (
                       <td key={date}
-                        onClick={() => openEdit(section, pattern.name, date, required)}
                         className={[
-                          "text-center tabular-nums py-0.5 px-0.5 cursor-pointer transition-colors select-none",
+                          CELL_DATA, "min-w-[34px]",
                           isSel ? "bg-blue-50/60 dark:bg-blue-950/20" : weekend ? "bg-red-50/30 dark:bg-red-950/10" : "",
-                          "hover:bg-zinc-100 dark:hover:bg-zinc-800",
                         ].join(" ")}>
                         {required === 0 ? (
-                          <span className="text-zinc-300 dark:text-zinc-700">—</span>
+                          <span className="text-zinc-300 dark:text-zinc-700 text-[10px]">—</span>
                         ) : (
-                          <div className="flex flex-col items-center leading-tight">
+                          <span className="inline-flex items-baseline gap-0.5">
                             <span className={[
                               "font-bold text-[11px]",
                               diff > 0 ? "text-emerald-600 dark:text-emerald-400"
                                : diff < 0 ? "text-red-500 dark:text-red-400"
-                               : "text-zinc-400 dark:text-zinc-500",
+                               : "text-zinc-500 dark:text-zinc-400",
                             ].join(" ")}>
                               {diff > 0 ? `+${diff}` : diff}
                             </span>
-                            <span className={[
-                              "text-[9px]",
-                              hasOverride ? "text-blue-500 dark:text-blue-400" : "text-zinc-300 dark:text-zinc-600",
-                            ].join(" ")}>
+                            <span className="text-[9px] text-zinc-400 dark:text-zinc-500">
                               {actual}/{required}
                             </span>
-                          </div>
+                          </span>
                         )}
                       </td>
                     );
                   })}
                 </tr>
-              ));
-            })}
+              )}
 
-            {/* ── 合計行（ローン・リメイク除く） ── */}
-            {mainSections.length > 0 && (
-              <tr className="border-t-2 border-t-zinc-400 dark:border-t-zinc-500 bg-zinc-50 dark:bg-zinc-800/40">
-                <td className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1 font-bold text-zinc-700 dark:text-zinc-200 border-r border-zinc-200 dark:border-zinc-700 align-middle whitespace-nowrap">
-                  合計
-                </td>
-                <td className="sticky left-[100px] z-10 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1 text-[10px] text-zinc-400 dark:text-zinc-500 border-r border-zinc-200 dark:border-zinc-700 whitespace-nowrap">
-                  {mainSections.join("・")}
-                </td>
-                {allDates.map(date => {
-                  const { actual, required } = getTotalForDate(date);
-                  const diff = required === 0 ? 0 : actual - required;
-                  const weekend = isWeekend(date, holidays);
-                  const isSel = date === selectedDate;
-
-                  return (
-                    <td key={date}
-                      className={[
-                        "text-center tabular-nums py-0.5 px-0.5 select-none",
-                        isSel ? "bg-blue-50/60 dark:bg-blue-950/20" : weekend ? "bg-red-50/30 dark:bg-red-950/10" : "",
-                      ].join(" ")}>
-                      {required === 0 ? (
-                        <span className="text-zinc-300 dark:text-zinc-700">—</span>
-                      ) : (
-                        <div className="flex flex-col items-center leading-tight">
-                          <span className={[
-                            "font-bold text-[11px]",
-                            diff > 0 ? "text-emerald-600 dark:text-emerald-400"
-                             : diff < 0 ? "text-red-500 dark:text-red-400"
-                             : "text-zinc-400 dark:text-zinc-500",
-                          ].join(" ")}>
-                            {diff > 0 ? `+${diff}` : diff}
-                          </span>
-                          <span className="text-[9px] text-zinc-400 dark:text-zinc-500">
-                            {actual}/{required}
-                          </span>
-                        </div>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>}
+              {/* ── ローン・リメイク（最下部、区切り線付き） ── */}
+              {bottomSections.map((section, si) => renderSectionRows(section, si === 0))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* 編集ポップオーバー */}
       {editing && (
@@ -348,10 +320,7 @@ export default function ShiftSufficiencyTable({
               <p className="text-xs text-zinc-400 mt-0.5">{editing.date} の必要人数を上書き</p>
             </div>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0}
-                value={editValue}
+              <input type="number" min={0} value={editValue}
                 onChange={e => setEditValue(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && saveEdit()}
                 autoFocus
