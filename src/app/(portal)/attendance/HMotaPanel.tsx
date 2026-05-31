@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, forwardRef, useImperativeHandle } from "react";
 import { addMotaAssignmentAction, removeMotaAssignmentAction } from "./mota-actions";
 import type { MotaAssignment } from "./mota-actions";
 
@@ -12,6 +12,10 @@ export type MotaRow = {
   isFixed: boolean;
 };
 
+export type HMotaPanelRef = {
+  dropStaffCard: (staffName: string, accountNumber: string | null) => Promise<"ok" | "full" | "error">;
+};
+
 type DragCard = { accountNumber: string; name: string; isFixed: boolean };
 
 interface Props {
@@ -21,12 +25,52 @@ interface Props {
   initialAssignments: MotaAssignment[];
 }
 
-export default function HMotaPanel({ projectId, date, rows, initialAssignments }: Props) {
+const HMotaPanel = forwardRef<HMotaPanelRef, Props>(function HMotaPanel(
+  { projectId, date, rows, initialAssignments },
+  ref,
+) {
   const [assignments, setAssignments] = useState<MotaAssignment[]>(initialAssignments);
   const [dragOver, setDragOver] = useState<{ accountNumber: string; slot: Slot } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
 
   function getAssignment(positionAccount: string, slot: string): MotaAssignment | undefined {
     return assignments.find(a => a.accountNumber === positionAccount && a.slot === slot);
+  }
+
+  async function assignToSlot(
+    positionAccount: string,
+    slot: Slot,
+    isFixed: boolean,
+    staffName: string,
+    assignedAccount: string | null,
+  ): Promise<boolean> {
+    const tempId = `temp-${Date.now()}`;
+    setAssignments(prev => [...prev, {
+      id: tempId,
+      accountNumber: positionAccount,
+      staffName,
+      assignedAccount,
+      slot,
+      isFixed,
+    }]);
+
+    const res = await addMotaAssignmentAction(
+      projectId, date, positionAccount, slot, isFixed,
+      staffName, assignedAccount,
+    );
+    if (res.ok && res.id) {
+      setAssignments(prev => prev.map(a => a.id === tempId ? { ...a, id: res.id! } : a));
+      return true;
+    } else {
+      setAssignments(prev => prev.filter(a => a.id !== tempId));
+      showToast(`⚠️ 配置に失敗しました: ${res.error ?? "不明なエラー"}`);
+      return false;
+    }
   }
 
   async function handleDrop(positionAccount: string, slot: Slot, isFixed: boolean, e: React.DragEvent) {
@@ -42,26 +86,24 @@ export default function HMotaPanel({ projectId, date, rows, initialAssignments }
     const existing = getAssignment(positionAccount, slot);
     if (existing) return;
 
-    const tempId = `temp-${Date.now()}`;
-    setAssignments(prev => [...prev, {
-      id: tempId,
-      accountNumber: positionAccount,
-      staffName: card.name,
-      assignedAccount: card.accountNumber || null,
-      slot,
-      isFixed,
-    }]);
-
-    const res = await addMotaAssignmentAction(
-      projectId, date, positionAccount, slot, isFixed,
-      card.name, card.accountNumber || null,
-    );
-    if (res.ok && res.id) {
-      setAssignments(prev => prev.map(a => a.id === tempId ? { ...a, id: res.id! } : a));
-    } else {
-      setAssignments(prev => prev.filter(a => a.id !== tempId));
-    }
+    await assignToSlot(positionAccount, slot, isFixed, card.name, card.accountNumber || null);
   }
+
+  // Used by parent to drop a staff card anywhere on the H MOTA column
+  useImperativeHandle(ref, () => ({
+    async dropStaffCard(staffName, accountNumber) {
+      for (const row of rows) {
+        for (const slot of SLOTS) {
+          if (!getAssignment(row.accountNumber, slot)) {
+            const ok = await assignToSlot(row.accountNumber, slot, row.isFixed, staffName, accountNumber);
+            return ok ? "ok" : "error";
+          }
+        }
+      }
+      showToast("⚠️ H MOTAのスロットが全て埋まっています");
+      return "full";
+    },
+  }));
 
   async function handleRemove(id: string) {
     setAssignments(prev => prev.filter(a => a.id !== id));
@@ -74,7 +116,7 @@ export default function HMotaPanel({ projectId, date, rows, initialAssignments }
   const fixedRows = rows.filter(r => r.isFixed);
 
   return (
-    <div className="overflow-y-auto flex-1 min-h-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+    <div className="relative overflow-y-auto flex-1 min-h-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
       <table className="w-full text-xs border-collapse">
         <thead>
           <tr className="border-b border-zinc-100 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 z-10">
@@ -127,9 +169,17 @@ export default function HMotaPanel({ projectId, date, rows, initialAssignments }
           ))}
         </tbody>
       </table>
+
+      {toast && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-50 px-3 py-1.5 rounded-lg bg-zinc-800 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[11px] font-medium shadow-lg whitespace-nowrap">
+          {toast}
+        </div>
+      )}
     </div>
   );
-}
+});
+
+export default HMotaPanel;
 
 function MotaTableRow({
   row,
@@ -171,9 +221,9 @@ function MotaTableRow({
           <td
             key={slot}
             className="px-1 py-1"
-            onDragOver={e => { e.preventDefault(); onDragOver(slot); }}
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); onDragOver(slot); }}
             onDragLeave={onDragLeave}
-            onDrop={e => onDrop(slot, e)}
+            onDrop={e => { e.stopPropagation(); onDrop(slot, e); }}
           >
             <div className={[
               "rounded border-2 border-dashed flex items-center justify-center transition-colors min-h-[22px]",

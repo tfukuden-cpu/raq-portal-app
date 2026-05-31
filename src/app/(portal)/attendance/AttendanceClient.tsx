@@ -5,7 +5,7 @@ import StaffPopupMenu from "@/components/StaffPopupMenu";
 import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, sendBulkFollowupReminderAction, changeAttendanceStatusAction, toggleChurnRiskAction, moveSectionAction } from "./actions";
 import type { SendResult } from "./actions";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/app/(portal)/seating/SeatingClient";
-import HMotaPanel, { type MotaRow } from "./HMotaPanel";
+import HMotaPanel, { type MotaRow, type HMotaPanelRef } from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
 import BreakManagementTab from "./BreakManagementTab";
 import type { BreakSlotSetting, BreakSlotAssignment, BreakShortSetting, BreakRecord } from "@/app/(portal)/seating/break-actions";
@@ -255,6 +255,7 @@ export default function AttendanceClient({
   const [dragStaffId, setDragStaffId] = useState<string | null>(null);
   const [dragOverSection, setDragOverSection] = useState<string | null>(null);
   const [sectionOverrides, setSectionOverrides] = useState<Map<string, string>>(new Map());
+  const hMotaPanelRef = useRef<HMotaPanelRef>(null);
 
   // ボード用：セクション×シフトグループ×メンバー（ドラッグオーバーライド反映）
   type BoardMember = MemberRow & { shiftName: string; shiftStart: string | null };
@@ -298,8 +299,47 @@ export default function AttendanceClient({
     });
   }, [grouped, sectionOverrides]);
 
+  async function handleHMotaColumnDrop(e: React.DragEvent) {
+    const raw = e.dataTransfer.getData("mota-card");
+    setDragStaffId(null);
+    setDragOverSection(null);
+    if (!raw) return;
+    let card: { name: string; accountNumber?: string };
+    try { card = JSON.parse(raw); } catch { return; }
+    if (!card.name) return;
+    const result = await hMotaPanelRef.current?.dropStaffCard(card.name, card.accountNumber || null);
+    if (result === "ok") {
+      setStatusToast("H MOTAに複製配置しました");
+      setTimeout(() => setStatusToast(null), 2500);
+    } else if (result === "full") {
+      setStatusToast("⚠️ H MOTAのスロットが全て埋まっています");
+      setTimeout(() => setStatusToast(null), 3000);
+    }
+  }
+
   function handleSectionDrop(targetSection: string) {
     if (!dragStaffId) return;
+    // H MOTAへのセクション移動は複製配置に変換（シフト変更なし）
+    if (targetSection === "H MOTA" || targetSection === "H　MOTA") {
+      const member = grouped
+        .flatMap(g => g.shiftGroups.flatMap(sg => sg.members))
+        .find(m => m.staffId === dragStaffId);
+      setDragStaffId(null);
+      setDragOverSection(null);
+      if (member) {
+        hMotaPanelRef.current?.dropStaffCard(member.name, member.accountNumber ?? null).then(result => {
+          if (result === "ok") {
+            setStatusToast("H MOTAに複製配置しました");
+            setTimeout(() => setStatusToast(null), 2500);
+          } else if (result === "full") {
+            setStatusToast("⚠️ H MOTAのスロットが全て埋まっています");
+            setTimeout(() => setStatusToast(null), 3000);
+          }
+        });
+      }
+      return;
+    }
+
     const staffId = dragStaffId;
     const origSec = grouped
       .flatMap(g => g.shiftGroups.flatMap(sg => sg.members))
@@ -627,22 +667,30 @@ export default function AttendanceClient({
 
                 // H MOTA セクション：スロット配置パネルをカラム内に表示
                 if (section === "H MOTA" || section === "H　MOTA") {
+                  const isHMotaDragTarget = dragStaffId !== null;
                   return (
                     <div
                       key={section}
                       className={[
                         "flex flex-col rounded-2xl border-2 shrink-0 transition-all",
                         "h-[calc(100dvh-280px)] w-80",
-                        "border-purple-200 dark:border-purple-800 bg-white dark:bg-zinc-900",
+                        isHMotaDragTarget
+                          ? "border-purple-400 bg-purple-50/50 dark:bg-purple-950/30 shadow-lg"
+                          : "border-purple-200 dark:border-purple-800 bg-white dark:bg-zinc-900",
                       ].join(" ")}
+                      onDragOver={e => { e.preventDefault(); }}
+                      onDrop={handleHMotaColumnDrop}
                     >
                       <div className="px-3 pt-2.5 pb-2 border-b shrink-0 rounded-t-2xl bg-purple-50 dark:bg-purple-950/30 border-b-purple-200 dark:border-b-purple-800">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-bold text-purple-800 dark:text-purple-100">H MOTA</span>
-                          <span className="text-[10px] font-semibold text-purple-400">スロット配置</span>
+                          <span className="text-[10px] font-semibold text-purple-400">
+                            {isHMotaDragTarget ? "ドロップで複製配置" : "スロット配置"}
+                          </span>
                         </div>
                       </div>
                       <HMotaPanel
+                        ref={hMotaPanelRef}
                         projectId={projectId}
                         date={today}
                         rows={hMotaRows}
