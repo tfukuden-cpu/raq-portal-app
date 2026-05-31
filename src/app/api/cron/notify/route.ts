@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { multicastLine, pushLine, pushLineWithButton } from "@/lib/line";
-import { getAdminLineIds, resolveMessage } from "@/lib/notify";
+import { getAdminLineIds, logNotify, resolveMessage } from "@/lib/notify";
 import {
   buildDefaultNotificationSettings,
   DEFAULT_NOTIFY_MESSAGES,
@@ -158,6 +158,7 @@ export async function GET(req: NextRequest) {
           );
           await pushLine(staff.line_user_id, message);
           if (groupId) await pushLine(groupId, message);
+          void logNotify({ projectId, notifyType: "shift_start_remind", recipientType: "staff", recipientId: shift.staff_id, recipientName: name, message });
           sent++;
         }
       }
@@ -234,6 +235,7 @@ export async function GET(req: NextRequest) {
           );
           await pushLine(staff.line_user_id, message);
           if (groupId) await pushLine(groupId, message);
+          void logNotify({ projectId, notifyType: "shift_end_remind", recipientType: "staff", recipientId: shift.staff_id, recipientName: name, message });
           sent++;
         }
       }
@@ -274,6 +276,7 @@ export async function GET(req: NextRequest) {
             );
             await pushLine(staff.line_user_id, message);
             if (groupId) await pushLine(groupId, message);
+            void logNotify({ projectId, notifyType: "rest_day_remind", recipientType: "staff", recipientId: shift.staff_id, recipientName: name, message });
             sent++;
           }
         }
@@ -386,6 +389,7 @@ export async function GET(req: NextRequest) {
                 `${appUrl}/absence-followup`,
               );
               if (groupId) await pushLineWithButton(groupId, message, "経過報告を入力する", `${appUrl}/absence-followup`);
+              void logNotify({ projectId, notifyType: "absence_followup_remind", recipientType: "staff", recipientId: staff.id, recipientName: name, message });
               sent++;
             }
           }
@@ -440,6 +444,7 @@ export async function GET(req: NextRequest) {
             );
             await pushLine(staff.line_user_id, message);
             if (groupId) await pushLine(groupId, message);
+            void logNotify({ projectId, notifyType: "holiday_open_notify", recipientType: "staff", recipientId: staff.id, recipientName: name, message });
             sent++;
           }
         }
@@ -498,6 +503,7 @@ export async function GET(req: NextRequest) {
               `${appUrl}/tasks`,
             );
             if (groupId) await pushLineWithButton(groupId, message, "タスクを確認する", `${appUrl}/tasks`);
+            void logNotify({ projectId, notifyType: "daily_task_remind", recipientType: "staff", recipientId: staffId, recipientName: name, message });
             sent++;
           }
         }

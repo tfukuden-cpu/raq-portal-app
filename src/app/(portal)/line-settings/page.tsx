@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import LineSettingsClient from "./LineSettingsClient";
+import { fetchNotifyLogsAction } from "./notify-history-actions";
 
 export default async function LineSettingsPage() {
   const supabase = await createClient();
@@ -22,7 +23,7 @@ export default async function LineSettingsPage() {
 
   const admin = createAdminClient();
 
-  const [{ data: project }, { data: members }, { data: settings }] = await Promise.all([
+  const [{ data: project }, { data: members }, { data: settings }, { logs: initialLogs, nextCursor: initialCursor }] = await Promise.all([
     supabase.from("projects").select("name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
       .select("staff_id, role, staffs(name, display_name, line_user_id)")
@@ -30,6 +31,7 @@ export default async function LineSettingsPage() {
     admin.from("project_settings")
       .select("line_group_id, notification_settings")
       .eq("project_id", projectId).maybeSingle(),
+    fetchNotifyLogsAction(),
   ]);
 
   if (!project) redirect("/dashboard");
@@ -62,6 +64,8 @@ export default async function LineSettingsPage() {
             (settings?.notification_settings as Record<string, boolean> | null) ?? {}
           }
           projectName={project.name}
+          initialLogs={initialLogs}
+          initialCursor={initialCursor}
         />
       </div>
     </main>

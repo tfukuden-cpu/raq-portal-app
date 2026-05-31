@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import LineConnectionSection from "@/app/(portal)/admin/[projectId]/settings/LineConnectionSection";
 import { LineGroupSection, LineNotifySettings } from "@/app/(portal)/admin/[projectId]/settings/SettingsClient";
 import type { NotificationSettings } from "@/app/(portal)/admin/[projectId]/settings/notify-config";
+import NotifyHistory from "./NotifyHistory";
+import type { NotifyLog } from "./notify-history-actions";
 
 type Member = {
   staffId: string;
@@ -12,11 +14,12 @@ type Member = {
   lineLinked: boolean;
 };
 
-type Tab = "connection" | "notify";
+type Tab = "connection" | "notify" | "history";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "connection", label: "連携管理" },
   { id: "notify",     label: "通知設定" },
+  { id: "history",    label: "通知履歴" },
 ];
 
 export default function LineSettingsClient({
@@ -25,12 +28,16 @@ export default function LineSettingsClient({
   lineGroupId,
   notificationSettings,
   projectName,
+  initialLogs,
+  initialCursor,
 }: {
   projectId: string;
   members: Member[];
   lineGroupId: string | null;
   notificationSettings: Partial<NotificationSettings>;
   projectName: string;
+  initialLogs: NotifyLog[];
+  initialCursor: string | null;
 }) {
   const [tab, setTab] = useState<Tab>("connection");
   const headerRef = useRef<HTMLDivElement>(null);
@@ -112,6 +119,17 @@ export default function LineSettingsClient({
               initialSettings={notificationSettings}
             />
           </section>
+        </div>
+      )}
+
+      {/* 通知履歴タブ */}
+      {tab === "history" && (
+        <div className="pt-4 space-y-3">
+          <div>
+            <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">通知履歴</h2>
+            <p className="text-[10px] text-zinc-400 mt-0.5">LINEで送信された通知の履歴（直近30件〜）</p>
+          </div>
+          <NotifyHistory initialLogs={initialLogs} initialCursor={initialCursor} />
         </div>
       )}
     </div>

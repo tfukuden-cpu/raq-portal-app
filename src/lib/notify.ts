@@ -19,6 +19,32 @@ import {
   type NotifyItemConfig,
 } from "@/app/(portal)/admin/[projectId]/settings/notify-config";
 
+// ── 通知ログ ─────────────────────────────────────────────────────────────────
+
+/** 通知ログをDBに記録（失敗しても無視） */
+export async function logNotify(entry: {
+  projectId:     string;
+  notifyType:    string;
+  recipientType: "staff" | "group" | "broadcast";
+  recipientId?:  string;
+  recipientName?: string;
+  message:       string;
+}): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    await admin.from("notification_logs").insert({
+      project_id:     entry.projectId,
+      notify_type:    entry.notifyType,
+      recipient_type: entry.recipientType,
+      recipient_id:   entry.recipientId ?? null,
+      recipient_name: entry.recipientName ?? null,
+      message:        entry.message,
+    });
+  } catch (e) {
+    console.error("[notify] logNotify failed:", e);
+  }
+}
+
 // ── テンプレート処理 ─────────────────────────────────────────────────────────
 
 /** {変数名} プレースホルダーを実際の値に置換する */
@@ -151,6 +177,16 @@ export async function sendEventNotify(
 
     // グループにも送信（個別送信の失敗に関わらず必ず試みる）
     if (groupId) await send(() => pushLine(groupId, message));
+
+    // ログ記録
+    const recipientName = vars["名前"] ?? undefined;
+    if (item.recipient === "admin") {
+      void logNotify({ projectId, notifyType: type, recipientType: "group", message });
+    } else if (targetStaffId) {
+      void logNotify({ projectId, notifyType: type, recipientType: "staff", recipientId: targetStaffId, recipientName, message });
+    } else {
+      void logNotify({ projectId, notifyType: type, recipientType: "broadcast", message });
+    }
   } catch (e) {
     console.error(`[notify] sendEventNotify(${type}) failed:`, e);
   }
