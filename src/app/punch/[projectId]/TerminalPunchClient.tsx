@@ -50,6 +50,13 @@ function memberStatus(m: TerminalMember): StaffStatus {
   return "not_arrived";
 }
 
+export type BreakSlotInfo = {
+  slotNumber: number;
+  label: string;
+  startTime: string;
+  endTime: string;
+};
+
 interface Props {
   projectId: string;
   projectName: string;
@@ -57,6 +64,7 @@ interface Props {
   seats: TerminalSeat[];
   walls: TerminalWall[];
   breakAssignmentMap?: Record<string, number>;
+  breakSlots?: BreakSlotInfo[];
 }
 
 // ── ステータス表示定義 ──────────────────────────────────────────
@@ -273,7 +281,7 @@ function LiveClock() {
 }
 
 // ── メインコンポーネント ──────────────────────────────────────
-export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {} }: Props) {
+export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [] }: Props) {
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [localMembers, setLocalMembers] = useState(members);
   const [isPending, startTransition] = useTransition();
@@ -546,7 +554,8 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
           {activeTab === "seat" && hasSeatData && (
             <div>
               <p className="text-zinc-600 text-xs mb-3 text-center">自分の席をタップして打刻してください</p>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-1">
+              {/* ステータス凡例 */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2 px-1">
                 {(["not_arrived", "working", "on_break", "clocked_out", "absent"] as StaffStatus[]).map(s => (
                   <div key={s} className="flex items-center gap-1">
                     <span className={`w-2.5 h-2.5 rounded-sm border-2 ${STATUS_BG[s]}`} />
@@ -554,6 +563,21 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                   </div>
                 ))}
               </div>
+              {/* 休憩スロット凡例 */}
+              {breakSlots.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3 px-1">
+                  {breakSlots.map(slot => (
+                    <div key={slot.slotNumber} className="flex items-center gap-1.5">
+                      <span className={`w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold ${BREAK_BADGE_CLASS[slot.slotNumber] ?? "bg-zinc-600 text-white"}`}>
+                        {slot.label}
+                      </span>
+                      <span className="text-[11px] text-zinc-500 tabular-nums">
+                        {slot.startTime.slice(0, 5)}–{slot.endTime.slice(0, 5)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="overflow-x-auto rounded-2xl">
                 <div
                   className="relative bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden"

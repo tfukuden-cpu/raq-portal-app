@@ -46,6 +46,7 @@ export default async function PunchPage({
     { data: wallRows },
     { data: absenceRows },
     { data: breakAssignmentRows },
+    { data: breakSlotRows },
   ] = await Promise.all([
     admin
       .from("project_members")
@@ -92,6 +93,11 @@ export default async function PunchPage({
       .select("staff_id, slot_number")
       .eq("project_id", projectId)
       .eq("assignment_date", today),
+    admin
+      .from("break_slot_settings")
+      .select("slot_number, label, start_time, end_time")
+      .eq("project_id", projectId)
+      .order("sort_order"),
   ]);
 
   // 当月同意済みスタッフセット
@@ -219,6 +225,14 @@ export default async function PunchPage({
     breakAssignmentMap[a.staff_id as string] = a.slot_number as number;
   }
 
+  type BreakSlotInfo = { slotNumber: number; label: string; startTime: string; endTime: string };
+  const breakSlots: BreakSlotInfo[] = (breakSlotRows ?? []).map(r => ({
+    slotNumber: r.slot_number as number,
+    label:      r.label as string,
+    startTime:  r.start_time as string,
+    endTime:    r.end_time as string,
+  }));
+
   return (
     <TerminalPunchClient
       projectId={projectId}
@@ -227,6 +241,7 @@ export default async function PunchPage({
       seats={seats}
       walls={walls}
       breakAssignmentMap={breakAssignmentMap}
+      breakSlots={breakSlots}
     />
   );
 }
