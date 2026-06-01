@@ -67,9 +67,14 @@ export default function AppNav({
   const isNoScrollPage = pathname.startsWith("/shifts") || pathname.startsWith("/record") || pathname.startsWith("/post") || pathname.startsWith("/notices") || pathname === "/inquiries";
 
   useEffect(() => {
-    const el = document.documentElement;
-    el.style.overflow = isNoScrollPage ? "hidden" : "";
-    return () => { el.style.overflow = ""; };
+    const id = "rqp-no-scroll";
+    document.getElementById(id)?.remove();
+    if (!isNoScrollPage) return;
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = "html, body { overflow: hidden !important; height: 100% !important; }";
+    document.head.appendChild(style);
+    return () => { document.getElementById(id)?.remove(); };
   }, [isNoScrollPage]);
 
   const toggle = () => {
