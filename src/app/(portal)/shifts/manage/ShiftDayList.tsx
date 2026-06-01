@@ -122,6 +122,7 @@ export default function ShiftDayList({
   allDates, shifts, activeMembers, shiftPatterns, slotRequirements,
   changeLogs, absenceSet, selectedDate, onDateChange, projectId, offRequests,
   availableSections, shiftPatternNames, sortByAccount, onSetKyukyu,
+  targetYear, targetMonth,
 }: {
   allDates: string[];
   shifts: Shift[];
@@ -237,7 +238,25 @@ export default function ShiftDayList({
     return next;
   });
 
-  const visibleMembers = activeMembers;
+  // シフト編集モードで保存した並び替え順をlocalStorageから読み込み適用
+  const targetMonthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
+  const rowOrderKey = `shift-row-order-${projectId}-${targetMonthStr}`;
+  const visibleMembers = (() => {
+    try {
+      const saved = typeof window !== "undefined" ? localStorage.getItem(rowOrderKey) : null;
+      if (!saved) return activeMembers;
+      const order: string[] = JSON.parse(saved);
+      if (!order.length) return activeMembers;
+      const orderMap = new Map(order.map((id, i) => [id, i]));
+      return [...activeMembers].sort((a, b) => {
+        const ia = orderMap.has(a.id) ? orderMap.get(a.id)! : 9999;
+        const ib = orderMap.has(b.id) ? orderMap.get(b.id)! : 9999;
+        return ia !== ib ? ia - ib : a.name.localeCompare(b.name, "ja");
+      });
+    } catch {
+      return activeMembers;
+    }
+  })();
 
   // 離脱リスクマップ（staff_id → churn_risk_since | null）
   const churnRiskSinceMap = new Map<string, string | null>();
