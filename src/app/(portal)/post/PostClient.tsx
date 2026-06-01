@@ -148,11 +148,13 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
   const popularPosts = [...posts].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 3);
 
   return (
-    <main className="min-h-screen bg-[#f4f6fa] dark:bg-zinc-950">
-      <div className="w-full px-4 md:px-8 pt-5 pb-10">
+    <main className="flex flex-col bg-[#f4f6fa] dark:bg-zinc-950" style={{ height: "calc(100svh - 3.5rem)" }}>
+
+      {/* ── 固定ヘッダー ── */}
+      <div className="flex-shrink-0 w-full px-4 md:px-8 pt-5 pb-3">
 
         {/* ── タイトル + タブ + 検索 ── */}
-        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <h1 className="text-[22px] font-bold text-[#0d1b35] dark:text-white">掲示板</h1>
           <div className="flex items-center gap-3">
             {/* フィルタータブ */}
@@ -185,6 +187,10 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
           </div>
         </div>
 
+      </div>{/* /固定ヘッダー */}
+
+      {/* ── スクロールエリア ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 pb-6">
         {/* ── 2カラムレイアウト ── */}
         <div className="flex gap-5 items-start">
 
@@ -364,7 +370,7 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
             )}
           </div>
         </div>
-      </div>
+      </div>{/* /スクロールエリア */}
     </main>
   );
 }
