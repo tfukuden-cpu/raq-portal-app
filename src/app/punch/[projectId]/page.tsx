@@ -96,7 +96,7 @@ export default async function PunchPage({
       .eq("assignment_date", today),
     admin
       .from("mota_slot_assignments")
-      .select("account_number")
+      .select("assigned_account")
       .eq("project_id", projectId)
       .eq("assignment_date", today),
   ]);
@@ -237,8 +237,8 @@ export default async function PunchPage({
   }));
 
   const motaAccountNumbers: string[] = (motaAssignmentRows ?? [])
-    .map(r => r.account_number as string)
-    .filter(Boolean);
+    .map(r => r.assigned_account as string | null)
+    .filter((v): v is string => Boolean(v));
 
   return (
     <TerminalPunchClient

@@ -231,7 +231,7 @@ export default async function AttendancePage({
       .gte("absence_date", last14Start)
       .lte("absence_date", realToday),
     admin.from("mota_slot_assignments")
-      .select("id, account_number, slot, is_fixed")
+      .select("id, account_number, slot, is_fixed, staff_name, assigned_account")
       .eq("project_id", projectId)
       .eq("assignment_date", today),
     getBreakSlotSettingsAction(projectId),
