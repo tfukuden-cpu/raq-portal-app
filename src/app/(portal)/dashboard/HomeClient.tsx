@@ -36,6 +36,7 @@ export interface HomeClientProps {
   enableDeparture?: boolean;
   hasPrevAbsence?: boolean;
   nextDayHasShift?: boolean;
+  tasksWidget?: React.ReactNode;
 }
 
 const NAVY    = "#0d1b35";
@@ -145,6 +146,7 @@ export default function HomeClient({
   enableDeparture  = true,
   hasPrevAbsence   = false,
   nextDayHasShift  = false,
+  tasksWidget,
 }: HomeClientProps) {
 
   const [modal,        setModal]        = useState<ModalType>("none");
@@ -436,6 +438,9 @@ export default function HomeClient({
               </div>
             </div>
           )}
+
+          {/* ── 今日のタスク（管理者のみ） ── */}
+          {tasksWidget}
 
         </div>
       </main>
