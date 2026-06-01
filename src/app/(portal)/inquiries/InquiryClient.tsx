@@ -15,7 +15,7 @@ type Inquiry = {
 };
 
 const CATEGORIES = [
-  "シフト・勤務", "休暇・申請", "勤怠・打刻", "給与・手当", "アカウント・ログイン", "その他",
+  "シフト・勤務", "休暇・申請", "勤怠・打刻", "アカウント・ログイン", "その他",
 ];
 
 type Priority = "高" | "中" | "低";
@@ -84,7 +84,7 @@ export function InquiryClient({ inquiries }: { inquiries: Inquiry[] }) {
   const latestReply = inquiries.find(i => i.reply);
 
   return (
-    <main className="flex flex-col bg-[#f4f6fa] dark:bg-zinc-950" style={{ height: "calc(100svh - 3.5rem)" }}>
+    <main className="flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 overflow-hidden" style={{ height: "calc(100svh - 3.5rem)" }}>
 
       {/* ── 固定タイトルバー ── */}
       <div className="flex-shrink-0 px-4 md:px-8 pt-5 pb-3">

@@ -65,7 +65,7 @@ export default function AppNav({
   }, []);
 
   // シフト・勤怠実績ページではページスクロールを封じる
-  const isNoScrollPage = pathname.startsWith("/shifts") || pathname.startsWith("/record") || pathname.startsWith("/post") || pathname.startsWith("/notices") || pathname === "/inquiries";
+  const isNoScrollPage = pathname.startsWith("/shifts") || pathname.startsWith("/record") || pathname.startsWith("/post") || pathname.startsWith("/notices") || pathname === "/inquiries" || pathname.startsWith("/inquiries/") && !pathname.startsWith("/inquiries/manage");
   useEffect(() => {
     if (!isNoScrollPage) return;
     const prev = document.body.style.overflow;
