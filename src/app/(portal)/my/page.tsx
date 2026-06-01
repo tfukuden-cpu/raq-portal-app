@@ -174,7 +174,7 @@ export default async function MyPage({
           </div>
 
           {/* 右：ステータスカード（横並び） */}
-          <div className="flex flex-row gap-3 lg:flex-shrink-0">
+          <div className="flex flex-row gap-3 lg:flex-shrink-0 items-center justify-center lg:justify-end self-center">
             {/* 所属案件 */}
             <div className="flex-1 lg:w-36 bg-zinc-50 dark:bg-zinc-800 rounded-2xl border border-zinc-100 dark:border-zinc-700 p-4 flex flex-col items-center gap-2 text-center">
               <BriefcaseIcon />
