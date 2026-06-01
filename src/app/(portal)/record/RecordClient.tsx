@@ -177,7 +177,7 @@ export default function RecordClient({
       <style>{`@media print{aside,nav.fixed,.no-print{display:none!important}[class*="md:pl-"]{padding-left:0!important}.pb-safe{padding-bottom:0!important}body{background:white!important;color:black!important}.record-table{border-radius:0!important;border:none!important}.record-table table{border-collapse:collapse!important;width:100%!important;font-size:10px!important}.record-table th,.record-table td{border:1px solid #d4d4d8!important;padding:5px 7px!important;background:white!important;color:black!important}.record-table thead tr{background:#f4f4f5!important}.record-table thead th{font-weight:600!important;color:#52525b!important;background:#f4f4f5!important}.print-show{display:block!important}.print-hide{display:none!important}}.print-show{display:none;}`}</style>
 
       <main className="min-h-screen bg-[#f4f6fa] dark:bg-zinc-950">
-        <div className="max-w-6xl mx-auto px-4 md:px-8 pt-5 pb-12">
+        <div className="w-full px-4 md:px-8 pt-5 pb-12">
 
           {/* ── タイトル + タブ + 月ナビ ── */}
           <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
