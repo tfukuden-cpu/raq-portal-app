@@ -15,13 +15,16 @@ function ChevronRightIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-zinc-300 flex-shrink-0"><polyline points="9 18 15 12 9 6"/></svg>;
 }
 function PersonIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-zinc-500"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
 }
 function LockIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-zinc-500"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
 }
 function LogoutIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-zinc-500"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+}
+function CameraIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-white"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
 }
 function LineIcon({ size = 32 }: { size?: number }) {
   return <svg viewBox="0 0 24 24" width={size} height={size} style={{ fill: "#06C755" }}><path d="M12 2C6.477 2 2 6.036 2 11c0 2.67 1.28 5.063 3.306 6.73.145.122.203.316.151.496l-.47 1.717c-.073.266.107.538.378.538.07 0 .14-.018.202-.054L8.05 19.05c.131-.076.284-.09.427-.039C9.357 19.332 10.666 19.5 12 19.5c5.523 0 10-4.036 10-9s-4.477-9-10-9z"/></svg>;
@@ -131,13 +134,18 @@ export default async function MyPage({
 
           {/* 左：アバター */}
           <div className="flex-shrink-0 flex justify-center lg:justify-start">
-            {isExecutiveOrAdmin ? (
-              <AvatarEditor initialConfig={avatarConfig} />
-            ) : (
-              <div className="w-36 h-36 rounded-full bg-[#0d1b35] flex items-center justify-center text-white text-[52px] font-bold select-none">
-                {displayName.charAt(0)}
+            <div className="relative">
+              {isExecutiveOrAdmin ? (
+                <AvatarEditor initialConfig={avatarConfig} />
+              ) : (
+                <div className="w-36 h-36 rounded-full bg-[#0d1b35] flex items-center justify-center text-white text-[52px] font-bold select-none">
+                  {displayName.charAt(0)}
+                </div>
+              )}
+              <div className="absolute bottom-1 right-1 w-8 h-8 rounded-full bg-zinc-600 border-2 border-white flex items-center justify-center cursor-pointer hover:bg-zinc-700 transition-colors">
+                <CameraIcon />
               </div>
-            )}
+            </div>
           </div>
 
           {/* 中：名前 + 情報 */}
@@ -204,7 +212,7 @@ export default async function MyPage({
           {/* プロフィール画像 */}
           {isExecutiveOrAdmin && (
             <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
-              <div className="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500"><PersonIcon /></div>
+              <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center"><PersonIcon /></div>
               <div className="flex-1">
                 <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">プロフィール画像（アバター）変更</p>
                 <p className="text-[12px] text-zinc-400 mt-0.5">プロフィール画像を変更できます</p>
@@ -216,7 +224,7 @@ export default async function MyPage({
           {/* スタッフのみ */}
           {isStaffOnly && (
             <a href="/corrections" className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-              <div className="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500"><LockIcon /></div>
+              <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center"><LockIcon /></div>
               <div className="flex-1">
                 <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">打刻補正申請</p>
                 <p className="text-[12px] text-zinc-400 mt-0.5">打刻時刻の修正を申請できます</p>
@@ -227,7 +235,7 @@ export default async function MyPage({
 
           {isAbsentToday && (
             <a href="/absence-followup" className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 bg-red-50 dark:bg-red-950/10 hover:bg-red-100/50 transition-colors">
-              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500"><PersonIcon /></div>
+              <div className="w-10 h-10 rounded-2xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><PersonIcon /></div>
               <div className="flex-1">
                 <p className="text-[14px] font-semibold text-red-600 dark:text-red-400">経過報告</p>
                 <p className="text-[12px] text-zinc-400 mt-0.5">翌日の出勤可否を報告してください</p>
@@ -238,7 +246,7 @@ export default async function MyPage({
 
           {/* パスワード変更 */}
           <a href="/change-password" className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-            <div className="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500"><LockIcon /></div>
+            <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center"><LockIcon /></div>
             <div className="flex-1">
               <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">パスワード変更</p>
               <p className="text-[12px] text-zinc-400 mt-0.5">現在のパスワードの変更ができます</p>
@@ -249,7 +257,7 @@ export default async function MyPage({
           {/* LINE連携 */}
           {lineLinked ? (
             <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
-              <div className="w-14 h-14 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center"><LineIcon /></div>
+              <div className="w-10 h-10 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center"><LineIcon /></div>
               <div className="flex-1">
                 <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE連携</p>
                 <p className="text-[12px] text-[#06C755] font-medium mt-0.5">● 連携済み</p>
@@ -260,7 +268,7 @@ export default async function MyPage({
             </div>
           ) : (
             <a href="/api/auth/line?mode=link" className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-              <div className="w-14 h-14 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center"><LineIcon /></div>
+              <div className="w-10 h-10 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center"><LineIcon /></div>
               <div className="flex-1">
                 <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE連携</p>
                 <p className="text-[12px] text-zinc-400 mt-0.5">LINEとの連携・解除ができます</p>
@@ -272,7 +280,7 @@ export default async function MyPage({
           {/* ログアウト */}
           <form action={logoutAction}>
             <button type="submit" className="w-full flex items-center gap-4 px-5 py-4 hover:bg-red-50 dark:hover:bg-red-950/10 transition-colors text-left">
-              <div className="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500"><LogoutIcon /></div>
+              <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center"><LogoutIcon /></div>
               <div className="flex-1">
                 <p className="text-[14px] font-semibold text-red-500">ログアウト</p>
                 <p className="text-[12px] text-zinc-400 mt-0.5">現在のアカウントからログアウトします</p>
