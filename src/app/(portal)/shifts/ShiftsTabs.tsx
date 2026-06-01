@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import ShiftCalendar, { type ShiftChangeLog } from "./ShiftCalendar";
 import HolidayTab from "./HolidayTab";
-import RequestClient from "./request/RequestClient";
 import { ChevronRightIcon } from "@/components/icons";
 
 type ShiftData = {
@@ -35,13 +34,6 @@ type Props = {
   holidayWeekendLimit?: number | null;
 };
 
-type TabKey = "shift" | "holiday" | "request";
-
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "shift",   label: "月間カレンダー" },
-  { key: "holiday", label: "希望休申請" },
-  { key: "request", label: "追加申請" },
-];
 
 const WD_FULL = ["日曜日","月曜日","火曜日","水曜日","木曜日","金曜日","土曜日"];
 const JP_HOLIDAYS: Record<string, string> = {
@@ -93,7 +85,7 @@ export default function ShiftsTabs({
   holidayRequests, shiftRequests, shiftOpenings,
   holidayOpenDay = null, holidayDeadlineDay = null, holidayMaxDaysPerMonth = null, holidayWeekendLimit = null,
 }: Props) {
-  const [tab, setTab]               = useState<TabKey>("shift");
+  const [showHoliday, setShowHoliday] = useState(false);
   const [year, setYear]             = useState(initialYear);
   const [month, setMonth]           = useState(initialMonth);
   const [selectedDate, setSelected] = useState<string | null>(todayStr);
@@ -142,28 +134,23 @@ export default function ShiftsTabs({
         <h1 className="text-[20px] md:text-[22px] font-bold text-[#0d1b35] dark:text-white">
           勤務スケジュール
         </h1>
-        <div className="flex items-center gap-2">
-          {TABS.map(({ key, label }) => (
-            <button key={key} type="button" onClick={() => setTab(key)}
-              className={[
-                "px-3.5 py-1.5 rounded-xl text-[13px] font-semibold transition-colors whitespace-nowrap",
-                tab === key
-                  ? "bg-[#0d1b35] text-white shadow-sm"
-                  : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50",
-              ].join(" ")}
-            >{label}</button>
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowHoliday(true)}
+          className="px-3.5 py-1.5 rounded-xl text-[13px] font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-colors shadow-sm"
+        >
+          希望休申請
+        </button>
       </div>
 
-      {/* ── コンテンツ ── */}
+      {/* ── コンテンツ：カレンダー常時表示 ── */}
       <div className="flex-1 min-h-0 px-4 md:px-8 pb-4 flex gap-4">
 
-        {tab === "shift" && (
-          <>
-            {/* カレンダー */}
+        <>
+            {/* カレンダー（常時表示） */}
             <ShiftCalendar
               shifts={shifts} changeLogs={changeLogs}
+              holidayRequests={holidayRequests}
               todayStr={todayStr} initialYear={initialYear} initialMonth={initialMonth}
               minMonth={minMonth} maxMonth={maxMonth}
               controlledYear={year} controlledMonth={month} onGoMonth={goMonth}
@@ -250,32 +237,37 @@ export default function ShiftsTabs({
               </div>
             )}
           </>
-        )}
-
-        {tab === "holiday" && (
-          <div className="flex-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-y-auto">
-            <HolidayTab
-              projectId={projectId} holidayRequests={holidayRequests}
-              initialYear={year} initialMonth={month}
-              openDay={holidayOpenDay} deadlineDay={holidayDeadlineDay}
-              maxDaysPerMonth={holidayMaxDaysPerMonth} weekendLimit={holidayWeekendLimit}
-            />
-          </div>
-        )}
-
-        {tab === "request" && (
-          <div className="flex-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-y-auto">
-            <RequestClient
-              openings={shiftOpenings} existingRequests={shiftRequests}
-              todayStr={todayStr} initialYear={initialYear} initialMonth={initialMonth}
-            />
-          </div>
-        )}
 
       </div>
 
+      {/* ── 希望休申請オーバーレイ ── */}
+      {showHoliday && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50"
+          onClick={() => setShowHoliday(false)}>
+          <div
+            className="w-full md:max-w-2xl md:mx-4 md:rounded-2xl rounded-t-2xl bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden max-h-[90dvh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
+              <h2 className="text-[15px] font-bold text-[#0d1b35] dark:text-white">希望休申請</h2>
+              <button onClick={() => setShowHoliday(false)} className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400">
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              <HolidayTab
+                projectId={projectId} holidayRequests={holidayRequests}
+                initialYear={year} initialMonth={month}
+                openDay={holidayOpenDay} deadlineDay={holidayDeadlineDay}
+                maxDaysPerMonth={holidayMaxDaysPerMonth} weekendLimit={holidayWeekendLimit}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* モバイル用ボトムシート */}
-      {selectedDate && tab === "shift" && (
+      {selectedDate && (
         <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center bg-black/40"
           onClick={() => setSelected(null)}>
           <div className="w-full max-w-lg rounded-t-2xl bg-white dark:bg-zinc-900 shadow-xl overflow-hidden"
@@ -319,3 +311,4 @@ export default function ShiftsTabs({
     </div>
   );
 }
+

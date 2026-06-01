@@ -23,6 +23,7 @@ export type ShiftChangeLog = {
 type Props = {
   shifts: ShiftData[];
   changeLogs?: ShiftChangeLog[];
+  holidayRequests?: { request_date: string; status: string }[];
   todayStr: string;
   initialYear: number;
   initialMonth: number;
@@ -104,9 +105,13 @@ export default function ShiftCalendar({
   shifts, changeLogs = [], todayStr, initialYear, initialMonth, minMonth, maxMonth,
   controlledYear, controlledMonth, onGoMonth,
   selectedDate, onSelectDate, className = "",
+  holidayRequests = [],
 }: Props) {
   const [internalYear,  setInternalYear]  = useState(initialYear);
   const [internalMonth, setInternalMonth] = useState(initialMonth);
+
+  // 希望休申請マップ（日付→ステータス）
+  const holidayReqMap = new Map(holidayRequests.map(r => [r.request_date, r.status]));
 
   const isControlled = controlledYear !== undefined;
   const year  = isControlled ? controlledYear!  : internalYear;
@@ -215,6 +220,7 @@ export default function ShiftCalendar({
           const isRed       = dow === 0 || isHoliday;
           const isBlue      = dow === 6;
           const holidayName = JP_HOLIDAYS[ds];
+          const holidayReqStatus = holidayReqMap.get(ds) ?? null;
 
           return (
             <button
@@ -247,9 +253,21 @@ export default function ShiftCalendar({
                       {d}
                     </span>
                   )}
-                  {hasLog && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-                  )}
+                  <div className="flex items-center gap-0.5">
+                    {hasLog && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                    )}
+                    {holidayReqStatus && (
+                      <span className={cx(
+                        "text-[8px] font-bold px-1 py-0.5 rounded leading-none",
+                        holidayReqStatus === "approved" ? "bg-purple-200 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300"
+                        : holidayReqStatus === "rejected" ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400"
+                        : "bg-purple-100 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400",
+                      )}>
+                        {holidayReqStatus === "approved" ? "承認" : holidayReqStatus === "rejected" ? "却下" : "申請"}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {holidayName && (
                   <p className="text-[9px] text-red-400 leading-tight mt-0.5 truncate font-medium">{holidayName}</p>
