@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
           .select("staff_id, shift_start, shift_end, shift_name")
           .eq("project_id", projectId)
           .eq("shift_date", tmrw)
-          .not("shift_start", "is", null) as { data: ShiftRow[] | null };
+          .or("shift_start.not.is.null,shift_name.ilike.%研修%") as { data: ShiftRow[] | null };
 
         if ((tShifts ?? []).length > 0) {
           const staffIds = [...new Set(tShifts!.map(s => s.staff_id))];
@@ -200,7 +200,8 @@ export async function GET(req: NextRequest) {
             const staff   = staffMap[shift.staff_id] as StaffRow | undefined;
             const name    = staff?.display_name ?? staff?.name ?? shift.staff_id;
             const acct    = staff?.account_number ?? shift.staff_id;
-            const section = sectionMap[shift.staff_id] ?? "セクション設定なし";
+            const baseSection = sectionMap[shift.staff_id] ?? "セクション設定なし";
+            const section = (shift.shift_name ?? "").includes("研修") ? "研修関連" : baseSection;
             const star    = absentYday.has(shift.staff_id);
 
             if (!staff?.line_user_id) {

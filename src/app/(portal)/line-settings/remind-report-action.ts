@@ -53,7 +53,7 @@ export async function previewRemindReportAction(): Promise<{ ok: boolean; text?:
     .select("staff_id, shift_start, shift_end, shift_name")
     .eq("project_id", projectId)
     .eq("shift_date", tmrw)
-    .not("shift_start", "is", null);
+    .or("shift_start.not.is.null,shift_name.ilike.%研修%");
 
   if (!tShifts?.length) return { ok: false, message: `翌日（${fmtMD(tmrw)}）の出勤予定者がいません` };
 
@@ -75,7 +75,7 @@ export async function previewRemindReportAction(): Promise<{ ok: boolean; text?:
     return {
       name:           staff?.display_name ?? staff?.name ?? shift.staff_id,
       accountNumber:  (staff?.account_number as string | null) ?? shift.staff_id,
-      section:        sectionMap[shift.staff_id] ?? "セクション設定なし",
+      section:        (shift.shift_name as string ?? "").includes("研修") ? "研修関連" : (sectionMap[shift.staff_id] ?? "セクション設定なし"),
       star:           absentYday.has(shift.staff_id),
       lineRegistered: !!staff?.line_user_id,
     };
@@ -149,7 +149,7 @@ export async function sendRemindReportNowAction(): Promise<{ ok: boolean; messag
     .select("staff_id, shift_start, shift_end, shift_name")
     .eq("project_id", projectId)
     .eq("shift_date", tmrw)
-    .not("shift_start", "is", null);
+    .or("shift_start.not.is.null,shift_name.ilike.%研修%");
 
   if (!tShifts?.length) return { ok: false, message: `翌日（${fmtMD(tmrw)}）の出勤予定者がいません` };
 
@@ -199,7 +199,7 @@ export async function sendRemindReportNowAction(): Promise<{ ok: boolean; messag
     const staff  = staffMap[shift.staff_id] as { id: string; display_name: string | null; name: string | null; line_user_id: string | null; account_number: string | null } | undefined;
     const name   = staff?.display_name ?? staff?.name ?? shift.staff_id;
     const acct   = (staff?.account_number as string | null) ?? shift.staff_id;
-    const section = sectionMap[shift.staff_id] ?? "セクション設定なし";
+    const section = (shift.shift_name as string ?? "").includes("研修") ? "研修関連" : (sectionMap[shift.staff_id] ?? "セクション設定なし");
     const star   = absentYday.has(shift.staff_id);
 
     if (!staff?.line_user_id) {
