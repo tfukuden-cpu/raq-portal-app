@@ -99,8 +99,8 @@ export default async function DashboardPage() {
   const today = tokyoToday();
   const todayStart = `${today}T00:00:00+09:00`;
   const todayEnd = `${today}T23:59:59+09:00`;
-  const weekLater = new Date(); weekLater.setDate(weekLater.getDate() + 7);
-  const weekLaterStr = weekLater.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  const sixDaysLaterDate = new Date(); sixDaysLaterDate.setDate(sixDaysLaterDate.getDate() + 6);
+  const sixDaysLater = sixDaysLaterDate.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = yesterday.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
@@ -118,6 +118,7 @@ export default async function DashboardPage() {
     { data: allNotices },
     { data: readNotices },
     { data: upcomingShiftRows },
+    { data: weekShiftRows },
     { data: projectSettings },
     { data: yesterdayAbsence },
     { data: tomorrowShift },
@@ -168,8 +169,9 @@ export default async function DashboardPage() {
       .maybeSingle(),
     supabase
       .from("notices")
-      .select("id")
-      .eq("project_id", currentProjectId!),
+      .select("id, title, created_at")
+      .eq("project_id", currentProjectId!)
+      .order("created_at", { ascending: false }),
     supabase
       .from("notice_reads")
       .select("notice_id")
@@ -180,10 +182,19 @@ export default async function DashboardPage() {
       .eq("staff_id", staffId)
       .eq("project_id", currentProjectId!)
       .gt("shift_date", today)
-      .lte("shift_date", weekLaterStr)
+      .lte("shift_date", sixDaysLater)
       .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休")')
       .order("shift_date")
-      .limit(5),
+      .limit(6),
+    // 7日分（今日含む・全種別）
+    supabase
+      .from("shifts")
+      .select("shift_date, shift_name, shift_start, shift_end")
+      .eq("staff_id", staffId)
+      .eq("project_id", currentProjectId!)
+      .gte("shift_date", today)
+      .lte("shift_date", sixDaysLater)
+      .order("shift_date"),
     adminClient
       .from("project_settings")
       .select("enable_departure_report")
@@ -237,6 +248,33 @@ export default async function DashboardPage() {
   const readIds = new Set((readNotices ?? []).map(r => r.notice_id as string));
   const unreadCount = (allNotices ?? []).filter(n => !readIds.has(n.id as string)).length;
 
+  // お知らせタイムライン（最新3件）
+  const recentNotices = (allNotices ?? []).slice(0, 3).map(n => ({
+    id:        n.id as string,
+    title:     (n.title as string) ?? "",
+    createdAt: new Date(n.created_at as string).toLocaleString("ja-JP", {
+      timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }),
+  }));
+
+  // 7日分スケジュール
+  function addDays(base: string, days: number): string {
+    const [y, m, d] = base.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+  }
+  const weekShiftMap = new Map((weekShiftRows ?? []).map(s => [s.shift_date as string, s]));
+  const weekSchedule = Array.from({ length: 7 }, (_, i) => {
+    const dateStr = addDays(today, i);
+    const s = weekShiftMap.get(dateStr);
+    return {
+      date:  dateStr,
+      name:  (s?.shift_name  as string | null) ?? null,
+      start: (s?.shift_start as string | null) ?? null,
+      end:   (s?.shift_end   as string | null) ?? null,
+    };
+  });
+
   const clockInEntry = todayPunches?.find((p) => p.punch_type === "clock_in");
   const clockOutEntry = [...(todayPunches ?? [])]
     .reverse()
@@ -262,6 +300,8 @@ export default async function DashboardPage() {
     hasPrevAbsence: !!yesterdayAbsence,
     nextDayHasShift: !!tomorrowShift,
     noticeCount: unreadCount,
+    recentNotices,
+    weekSchedule,
     upcomingShifts: (upcomingShiftRows ?? []).map(s => ({
       date:  s.shift_date  as string,
       name:  s.shift_name  as string | null,
