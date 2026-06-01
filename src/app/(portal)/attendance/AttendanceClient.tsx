@@ -729,30 +729,32 @@ export default function AttendanceClient({
                           {present}<span className="text-zinc-400 font-normal">/{allMembers.length}</span>
                         </span>
                       </div>
-                      {/* 充足数：シフトグループ別 */}
-                      <div className="mt-1 space-y-0.5">
-                        {groups.map(({ shiftName, members: grpMembers }) => {
-                          const required = shiftRequired[shiftName] ?? 0;
-                          const assigned = grpMembers.length;
-                          const diff = assigned - required;
-                          if (required === 0) return null;
-                          return (
-                            <div key={shiftName} className="flex items-center gap-1">
-                              {groups.length > 1 && (
-                                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 shrink-0">
-                                  {shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName}
+                      {/* 充足数：シフトグループ別（出勤済み/配置数） */}
+                      {groups.length > 1 && (
+                        <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                          {groups.map(({ shiftName, members: grpMembers }) => {
+                            const grpPresent = grpMembers.filter(m => {
+                              const s = localStatuses.get(m.staffId) ?? m.status;
+                              return s === "working" || s === "clocked_out" || s === "departed";
+                            }).length;
+                            const grpTotal = grpMembers.length;
+                            const diff = grpPresent - grpTotal;
+                            const label = shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName;
+                            return (
+                              <div key={shiftName} className="flex items-center gap-1">
+                                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 shrink-0">{label}</span>
+                                <span className={`text-[10px] font-bold tabular-nums ${grpPresent >= grpTotal ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+                                  {grpPresent}
                                 </span>
-                              )}
-                              <span className="text-[10px] tabular-nums font-semibold text-zinc-600 dark:text-zinc-300">
-                                {assigned}/{required}
-                              </span>
-                              <span className={`text-[10px] font-bold tabular-nums ${diff < 0 ? "text-red-500 dark:text-red-400" : diff > 0 ? "text-blue-500 dark:text-blue-400" : "text-zinc-400"}`}>
-                                {diff > 0 ? `+${diff}` : diff < 0 ? diff : "✓"}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                                <span className="text-[10px] text-zinc-400 font-normal">/{grpTotal}</span>
+                                {diff < 0 && (
+                                  <span className="text-[10px] font-bold tabular-nums text-red-500 dark:text-red-400">{diff}</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       {absCnt > 0 && (
                         <span className="text-[11px] font-bold text-red-500 dark:text-red-400 block mt-0.5">
                           欠員 {absCnt}名
