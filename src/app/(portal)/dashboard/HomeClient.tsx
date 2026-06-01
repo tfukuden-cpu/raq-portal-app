@@ -283,18 +283,20 @@ export default function HomeClient({
         <div className="max-w-6xl mx-auto px-4 md:px-8 pt-5 md:pt-6 pb-32 md:pb-12 space-y-4">
 
           {/* ── 挨拶カード ── */}
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-6 py-5 flex items-center gap-5">
-            {/* アバター */}
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[22px] font-bold flex-shrink-0 shadow-sm">
-              {displayName.charAt(0)}
-            </div>
-            {/* メッセージ */}
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium text-zinc-400 mb-1">{displayName}さん</p>
-              <p className="text-[18px] md:text-[20px] font-bold text-[#0d1b35] dark:text-white leading-snug whitespace-pre-line">
-                {greetMsg.message}
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-6 py-5">
+            {/* アイコン + 名前 */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[20px] font-bold flex-shrink-0 shadow-sm">
+                {displayName.charAt(0)}
+              </div>
+              <p className="text-[24px] md:text-[28px] font-bold text-[#0d1b35] dark:text-white leading-none">
+                {displayName}<span className="text-[16px] font-medium text-zinc-400 ml-1.5">さん</span>
               </p>
             </div>
+            {/* メッセージ */}
+            <p className="text-[15px] md:text-[16px] text-zinc-500 dark:text-zinc-400 leading-relaxed whitespace-pre-line pl-1">
+              {greetMsg.message}
+            </p>
           </div>
 
           {/* ── 上段 3カラム ── */}
