@@ -72,7 +72,7 @@ export default function AppNav({
     if (!isNoScrollPage) return;
     const style = document.createElement("style");
     style.id = id;
-    style.textContent = "html, body { overflow: hidden !important; height: 100% !important; }";
+    style.textContent = "html { height: 100%; overflow: hidden !important; } body { position: fixed !important; width: 100% !important; height: 100% !important; overflow: hidden !important; }";
     document.head.appendChild(style);
     return () => { document.getElementById(id)?.remove(); };
   }, [isNoScrollPage]);
