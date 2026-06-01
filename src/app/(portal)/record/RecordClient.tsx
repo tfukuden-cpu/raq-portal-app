@@ -274,7 +274,7 @@ export default function RecordClient({
           {isFuture ? (
             <p className="text-[13px] text-zinc-500 text-center py-10">未来の月は表示できません</p>
           ) : (
-            <div className="record-table bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden shadow-sm">
+            <div className="record-table bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm" style={{ overflow: "clip" }}>
               <table className="w-full min-w-[700px] border-separate border-spacing-0">
                 <thead>
                   <tr className="border-b border-zinc-100 dark:border-zinc-800">
