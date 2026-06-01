@@ -40,7 +40,7 @@ export default async function PostPage() {
   // 投稿一覧（新しい順・最新100件）
   const { data: rawPosts } = await supabase
     .from("posts")
-    .select("id, body, created_at, staff_id, staffs(display_name, name)")
+    .select("id, body, image_url, created_at, staff_id, staffs(display_name, name)")
     .eq("project_id", projectId)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -50,7 +50,8 @@ export default async function PostPage() {
     const staff = Array.isArray(p.staffs) ? p.staffs[0] : p.staffs;
     return {
       id:         p.id as string,
-      body:       p.body as string,
+      body:       (p.body ?? "") as string,
+      image_url:  (p.image_url ?? null) as string | null,
       created_at: p.created_at as string,
       staffId:    p.staff_id as string,
       posterName: (staff?.display_name ?? staff?.name ?? p.staff_id ?? "") as string,

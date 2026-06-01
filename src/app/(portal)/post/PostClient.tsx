@@ -7,6 +7,7 @@ import { createPostAction, deletePostAction } from "./actions";
 type Post = {
   id: string;
   body: string;
+  image_url: string | null;
   created_at: string;
   staffId: string;
   posterName: string;
@@ -19,6 +20,22 @@ type Props = {
   isAdmin: boolean;
   todayCount: number;
 };
+
+function PaperclipIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  );
+}
 
 
 function fmtDateTime(iso: string): string {
@@ -96,6 +113,8 @@ function ChevronRightIcon() {
 export default function PostClient({ posts, currentStaffId, currentStaffName, isAdmin, todayCount }: Props) {
   const router = useRouter();
   const [body, setBody]             = useState("");
+  const [imageFile, setImageFile]   = useState<File | null>(null);
+  const [imagePreview, setPreview]  = useState<string | null>(null);
   const [searchQuery, setSearch]    = useState("");
   const [formError, setFormError]   = useState<string | null>(null);
   const [isPosting, startPostTrans] = useTransition();
@@ -104,15 +123,31 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
   const [likes, setLikes]           = useState<Record<string, boolean>>({});
   const [openMenu, setOpenMenu]     = useState<string | null>(null);
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) return;
+    setImageFile(file);
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    e.target.value = "";
+  };
+
+  const clearImage = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImageFile(null);
+    setPreview(null);
+  };
+
   const handlePost = () => {
-    if (!body.trim()) { setFormError("本文を入力してください"); return; }
+    if (!body.trim() && !imageFile) { setFormError("本文か画像を入力してください"); return; }
     setFormError(null);
     const fd = new FormData();
     fd.set("body", body.trim());
+    if (imageFile) fd.set("image", imageFile);
     startPostTrans(async () => {
       const result = await createPostAction(fd);
       if (!result.success) { setFormError(result.message ?? "投稿失敗"); }
-      else { setBody(""); router.refresh(); }
+      else { setBody(""); clearImage(); router.refresh(); }
     });
   };
 
@@ -192,8 +227,26 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
                     maxLength={2000}
                     className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[13px] text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 resize-none focus:outline-none focus:ring-2 focus:ring-[#0d1b35]/20 transition"
                   />
+                  {/* 画像プレビュー */}
+                  {imagePreview && (
+                    <div className="relative mt-2 inline-block">
+                      <img src={imagePreview} alt="添付画像" className="max-h-40 rounded-xl border border-zinc-200 dark:border-zinc-700 object-cover" />
+                      <button type="button" onClick={clearImage}
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-zinc-700 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors">
+                        <XIcon />
+                      </button>
+                    </div>
+                  )}
+
                   {formError && <p className="text-[11px] text-red-500 mt-1">{formError}</p>}
-                  <div className="flex items-center justify-end mt-2.5">
+
+                  <div className="flex items-center justify-between mt-2.5">
+                    {/* 画像添付ボタン */}
+                    <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer transition-colors text-[12px] font-medium">
+                      <PaperclipIcon />
+                      写真を添付
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                    </label>
                     <button
                       type="button"
                       onClick={handlePost}
@@ -267,8 +320,17 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
                     {rest && (
                       <p className="text-[13px] text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">{rest}</p>
                     )}
-                    {!title && !rest && (
+                    {!title && !rest && p.body && (
                       <p className="text-[13px] text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">{p.body}</p>
+                    )}
+
+                    {/* 添付画像 */}
+                    {p.image_url && (
+                      <div className="mt-3">
+                        <a href={p.image_url} target="_blank" rel="noopener noreferrer">
+                          <img src={p.image_url} alt="添付画像" className="max-h-72 rounded-xl border border-zinc-100 dark:border-zinc-800 object-cover cursor-pointer hover:opacity-95 transition-opacity" />
+                        </a>
+                      </div>
                     )}
 
                     {/* フッター */}
