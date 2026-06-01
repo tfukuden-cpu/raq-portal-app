@@ -172,7 +172,6 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
             </div>
             {/* 検索 */}
             <div className="relative">
-              <SearchIcon />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none">
                 <SearchIcon />
               </span>
