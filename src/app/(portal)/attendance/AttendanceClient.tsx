@@ -737,16 +737,34 @@ export default function AttendanceClient({
                       className="flex flex-col gap-1.5 p-2 overflow-y-auto flex-1 min-h-0 [&::-webkit-scrollbar]:hidden"
                       style={{ scrollbarWidth: "none" }}
                     >
-                      {groups.map(({ shiftName, members }, gi) => (
+                      {groups.map(({ shiftName, members }, gi) => {
+                        // シフトグループ内の出勤中人数
+                        const groupPresent = members.filter(m => {
+                          const s = localStatuses.get(m.staffId) ?? m.status;
+                          return s === "working" || s === "clocked_out" || s === "departed";
+                        }).length;
+                        const groupTotal = members.length;
+                        const groupDiff  = groupPresent - groupTotal;
+                        return (
                         <React.Fragment key={shiftName}>
                           {/* 複数シフトグループがある場合のみサブヘッダー */}
                           {groups.length > 1 && (
-                            <div className={`flex items-center gap-1.5 ${gi > 0 ? "mt-0.5" : ""}`}>
-                              <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
-                              <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 shrink-0 tabular-nums">
+                            <div className={`flex items-center gap-1.5 ${gi > 0 ? "mt-1" : ""}`}>
+                              <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 shrink-0 tabular-nums">
                                 {shiftName}
                               </span>
                               <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
+                              <span className="text-[10px] font-bold tabular-nums shrink-0">
+                                <span className={groupPresent >= groupTotal ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}>
+                                  {groupPresent}
+                                </span>
+                                <span className="text-zinc-400 font-normal">/{groupTotal}</span>
+                              </span>
+                              {groupDiff !== 0 && (
+                                <span className={`text-[10px] font-bold tabular-nums shrink-0 ${groupDiff < 0 ? "text-red-500 dark:text-red-400" : "text-blue-500 dark:text-blue-400"}`}>
+                                  {groupDiff > 0 ? `+${groupDiff}` : groupDiff}
+                                </span>
+                              )}
                             </div>
                           )}
                       {members.map(m => {
@@ -870,7 +888,8 @@ export default function AttendanceClient({
                         );
                       })}
                         </React.Fragment>
-                      ))}
+                        );
+                      })}
 
                       {/* 空のドロップゾーン */}
                       {allMembers.length === 0 && (
@@ -1467,29 +1486,41 @@ function ShiftChangesTab({
 // ── 出勤簿CSV出力 ────────────────────────────────────────
 function exportAttendanceCSV(today: string, dateLabel: string, grouped: SectionGroup[]) {
   const BOM = "﻿";
+  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const lines: string[] = [];
 
-  // 日付ヘッダー
   lines.push(`日付,${dateLabel}`);
   lines.push("");
 
-  // 列ヘッダー
-  lines.push("セクション,アカウント番号,名前,シフト");
-
-  // セクション順・アカウント番号順でデータ行
   for (const { section, shiftGroups } of grouped) {
-    type Row = { accountNumber: string | null; staffName: string; shiftName: string };
-    const rows: Row[] = [];
-    for (const { shiftName, members } of shiftGroups) {
-      for (const m of members) {
-        rows.push({ accountNumber: m.accountNumber, staffName: m.name, shiftName });
-      }
-    }
-    rows.sort((a, b) => (a.accountNumber ?? "").localeCompare(b.accountNumber ?? "", "ja"));
+    let sectionTotal = 0;
 
-    for (const r of rows) {
-      const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-      lines.push([esc(section), esc(r.accountNumber ?? ""), esc(r.staffName), esc(r.shiftName)].join(","));
+    for (const { shiftName, members } of shiftGroups) {
+      // シフト区分ヘッダー
+      const label = shiftGroups.length > 1
+        ? `${section}（${shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName}）`
+        : section;
+      lines.push(esc(label));
+      lines.push("アカウント番号,名前,シフト");
+
+      // アカウント番号順にソート
+      const sorted = [...members].sort((a, b) =>
+        (a.accountNumber ?? "").localeCompare(b.accountNumber ?? "", "ja")
+      );
+      for (const m of sorted) {
+        lines.push([esc(m.accountNumber ?? "—"), esc(m.name), esc(shiftName)].join(","));
+      }
+
+      // 小計
+      lines.push(`小計,${members.length}名`);
+      sectionTotal += members.length;
+      lines.push("");
+    }
+
+    // セクション合計（複数シフトグループがある場合のみ）
+    if (shiftGroups.length > 1) {
+      lines.push(`${esc(section)} 合計,${sectionTotal}名`);
+      lines.push("");
     }
   }
 
