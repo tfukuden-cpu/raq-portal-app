@@ -294,9 +294,13 @@ export default function HomeClient({
               </p>
             </div>
             {/* メッセージ */}
-            <p className="text-[15px] md:text-[16px] text-zinc-500 dark:text-zinc-400 leading-relaxed whitespace-pre-line pl-1">
-              {greetMsg.message}
-            </p>
+            <div className="pl-1 flex flex-col gap-0.5">
+              {greetMsg.message.split("\n").map((line, i) => (
+                <p key={i} className="text-[15px] md:text-[16px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                  {line}
+                </p>
+              ))}
+            </div>
           </div>
 
           {/* ── 上段 3カラム ── */}
