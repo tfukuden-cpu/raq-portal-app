@@ -66,6 +66,12 @@ export default function AppNav({
 
   const isNoScrollPage = pathname.startsWith("/shifts") || pathname.startsWith("/record") || pathname.startsWith("/post") || pathname.startsWith("/notices") || pathname === "/inquiries";
 
+  useEffect(() => {
+    const el = document.documentElement;
+    el.style.overflow = isNoScrollPage ? "hidden" : "";
+    return () => { el.style.overflow = ""; };
+  }, [isNoScrollPage]);
+
   const toggle = () => {
     const next = !collapsed;
     setCollapsed(next);
