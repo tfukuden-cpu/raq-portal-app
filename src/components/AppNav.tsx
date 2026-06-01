@@ -64,14 +64,14 @@ export default function AppNav({
     return () => clearInterval(id);
   }, []);
 
-  // シフトページではページスクロールを封じる（ヘッダーはDOMの外なので影響なし）
-  const isShiftPage = pathname.startsWith("/shifts");
+  // シフト・勤怠実績ページではページスクロールを封じる
+  const isNoScrollPage = pathname.startsWith("/shifts") || pathname.startsWith("/record");
   useEffect(() => {
-    if (!isShiftPage) return;
+    if (!isNoScrollPage) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
-  }, [isShiftPage]);
+  }, [isNoScrollPage]);
 
   const toggle = () => {
     const next = !collapsed;

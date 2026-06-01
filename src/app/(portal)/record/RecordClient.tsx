@@ -176,8 +176,10 @@ export default function RecordClient({
     <>
       <style>{`@media print{aside,nav.fixed,.no-print{display:none!important}[class*="md:pl-"]{padding-left:0!important}.pb-safe{padding-bottom:0!important}body{background:white!important;color:black!important}.record-table{border-radius:0!important;border:none!important}.record-table table{border-collapse:collapse!important;width:100%!important;font-size:10px!important}.record-table th,.record-table td{border:1px solid #d4d4d8!important;padding:5px 7px!important;background:white!important;color:black!important}.record-table thead tr{background:#f4f4f5!important}.record-table thead th{font-weight:600!important;color:#52525b!important;background:#f4f4f5!important}.print-show{display:block!important}.print-hide{display:none!important}}.print-show{display:none;}`}</style>
 
-      <main className="min-h-screen bg-[#f4f6fa] dark:bg-zinc-950">
-        <div className="w-full px-4 md:px-8 pt-5 pb-12">
+      <main className="flex flex-col bg-[#f4f6fa] dark:bg-zinc-950" style={{ height: "calc(100svh - 3.5rem)" }}>
+
+        {/* ── 固定ヘッダーエリア（タイトル・タブ・統計・アラート） ── */}
+        <div className="flex-shrink-0 w-full px-4 md:px-8 pt-5 pb-3">
 
           {/* ── タイトル + タブ + 月ナビ ── */}
           <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
@@ -265,7 +267,10 @@ export default function RecordClient({
             </div>
           )}
 
-          {/* ── テーブル ── */}
+        </div>{/* /固定ヘッダーエリア */}
+
+        {/* ── スクロールエリア（テーブルのみ） ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 pb-4">
           {isFuture ? (
             <p className="text-[13px] text-zinc-500 text-center py-10">未来の月は表示できません</p>
           ) : (
@@ -379,7 +384,7 @@ export default function RecordClient({
               </table>
             </div>
           )}
-        </div>
+        </div>{/* /スクロールエリア */}
       </main>
 
       {/* 修正申請モーダル */}
