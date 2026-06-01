@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import LineConnectionSection from "@/app/(portal)/admin/[projectId]/settings/LineConnectionSection";
 import { LineGroupSection, LineNotifySettings } from "@/app/(portal)/admin/[projectId]/settings/SettingsClient";
 import type { NotificationSettings } from "@/app/(portal)/admin/[projectId]/settings/notify-config";
 import NotifyHistory from "./NotifyHistory";
 import type { NotifyLog } from "./notify-history-actions";
+import { sendRemindReportNowAction } from "./remind-report-action";
 
 type Member = {
   staffId: string;
@@ -42,6 +43,16 @@ export default function LineSettingsClient({
   const [tab, setTab] = useState<Tab>("connection");
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
+  const [isPending, startTransition] = useTransition();
+  const [reportResult, setReportResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  function handleSendReport() {
+    startTransition(async () => {
+      const result = await sendRemindReportNowAction();
+      setReportResult(result);
+      setTimeout(() => setReportResult(null), 5000);
+    });
+  }
 
   useEffect(() => {
     const el = headerRef.current;
@@ -107,6 +118,35 @@ export default function LineSettingsClient({
       {/* 通知設定タブ */}
       {tab === "notify" && (
         <div className="space-y-8 pt-4">
+          <div className="border-t border-zinc-100 dark:border-zinc-800" />
+
+          {/* 翌日出勤リマインド 手動送信 */}
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">手動送信</h2>
+              <p className="text-[10px] text-zinc-400 mt-0.5">今すぐグループへレポートを送信します（個人へのリマインドも同時送信）</p>
+            </div>
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-4 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">翌日出勤リマインドレポート</p>
+                <p className="text-xs text-zinc-400 mt-0.5">翌日出勤予定者への個人通知＋グループへの一覧レポートを今すぐ送信</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSendReport}
+                disabled={isPending}
+                className="flex-shrink-0 px-4 py-2 rounded-xl bg-[#0d1b35] text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-[#162b50] transition-colors"
+              >
+                {isPending ? "送信中…" : "今すぐ送信"}
+              </button>
+            </div>
+            {reportResult && (
+              <p className={`text-sm font-medium px-1 ${reportResult.ok ? "text-emerald-600" : "text-red-500"}`}>
+                {reportResult.ok ? "✓ " : "✗ "}{reportResult.message}
+              </p>
+            )}
+          </section>
+
           <div className="border-t border-zinc-100 dark:border-zinc-800" />
 
           <section className="space-y-3">
