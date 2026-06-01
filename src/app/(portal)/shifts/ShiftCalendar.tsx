@@ -154,39 +154,39 @@ export default function ShiftCalendar({
     <div className={cx("bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 flex flex-col overflow-hidden", className)}>
 
       {/* 月ナビ + 統計 */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="flex items-center gap-2">
+      <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="flex items-center gap-3">
           <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
-            <ChevronLeftIcon className="w-3.5 h-3.5 text-zinc-500" />
+            className="w-8 h-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
+            <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
           </button>
-          <span className="text-[15px] font-bold text-[#0d1b35] dark:text-white tabular-nums w-24 text-center">
-            {year}年{month}月
+          <span className="text-[20px] font-bold text-[#0d1b35] dark:text-white tabular-nums min-w-[120px] text-center">
+            {year}年 {month}月
           </span>
           <button type="button" onClick={() => goMonth(1)} disabled={!canNext}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
-            <ChevronRightIcon className="w-3.5 h-3.5 text-zinc-500" />
+            className="w-8 h-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
+            <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
           </button>
         </div>
         {(workCount > 0 || holidayCount > 0) && (
-          <div className="flex items-center gap-3 text-zinc-500 dark:text-zinc-400">
-            <div className="flex items-center gap-1">
+          <div className="flex items-center gap-4 text-zinc-500 dark:text-zinc-400">
+            <div className="flex items-center gap-1.5">
               <BriefcaseIcon />
-              <span className="text-[12px]">出勤 <b className="text-[#0d1b35] dark:text-white">{workCount}</b>日</span>
+              <span className="text-[13px]">出勤 <b className="text-[#0d1b35] dark:text-white">{workCount}</b>日</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <CalendarIcon />
-              <span className="text-[12px]">公休 <b className="text-[#0d1b35] dark:text-white">{holidayCount}</b>日</span>
+              <span className="text-[13px]">公休 <b className="text-[#0d1b35] dark:text-white">{holidayCount}</b>日</span>
             </div>
           </div>
         )}
       </div>
 
       {/* 曜日ヘッダー */}
-      <div className="flex-shrink-0 grid grid-cols-7 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="flex-shrink-0 grid grid-cols-7 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/30">
         {WEEKDAY_SHORT.map((w, i) => (
           <div key={w} className={cx(
-            "text-center text-[12px] font-semibold py-1.5",
+            "text-center text-[13px] font-bold py-2",
             i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-zinc-500 dark:text-zinc-400",
           )}>{w}</div>
         ))}
@@ -222,57 +222,61 @@ export default function ShiftCalendar({
               type="button"
               onClick={() => onSelectDate?.(ds)}
               className={cx(
-                "relative flex flex-col p-2 border-r border-b transition-all group",
+                "relative flex flex-col justify-between p-2.5 border-r border-b transition-all",
                 isSel
                   ? "bg-[#0d1b35]/[0.04] dark:bg-blue-950/30"
                   : isToday
-                  ? "border-2 border-[#0d1b35] dark:border-blue-400 z-10 -m-px bg-[#0d1b35]/[0.02]"
-                  : "border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/40",
+                  ? "border-[1.5px] border-[#0d1b35] dark:border-blue-400 z-10 bg-[#0d1b35]/[0.02]"
+                  : "border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40",
               )}
             >
-              {/* 日付：今日は塗り丸、それ以外はテキスト */}
-              <div className="flex items-start justify-between mb-1">
-                {isToday ? (
-                  <span className="w-7 h-7 rounded-full bg-[#0d1b35] dark:bg-blue-500 text-white text-[13px] font-bold flex items-center justify-center flex-shrink-0">
-                    {d}
-                  </span>
-                ) : (
-                  <span className={cx(
-                    "text-[16px] font-bold leading-none",
-                    isRed  ? "text-red-500 dark:text-red-400"
-                    : isBlue ? "text-blue-500 dark:text-blue-400"
-                    : isSel  ? "text-[#0d1b35] dark:text-blue-300"
-                    : "text-zinc-800 dark:text-zinc-200",
-                  )}>
-                    {d}
-                  </span>
-                )}
-                {hasLog && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1 flex-shrink-0" />
+              {/* 上部：日付 + 祝日名 */}
+              <div>
+                <div className="flex items-center justify-between">
+                  {isToday ? (
+                    <span className="w-8 h-8 rounded-full bg-[#0d1b35] dark:bg-blue-500 text-white text-[15px] font-bold flex items-center justify-center">
+                      {d}
+                    </span>
+                  ) : (
+                    <span className={cx(
+                      "text-[18px] font-bold leading-none",
+                      isRed   ? "text-red-500 dark:text-red-400"
+                      : isBlue  ? "text-blue-500 dark:text-blue-400"
+                      : isSel   ? "text-[#0d1b35] dark:text-blue-300"
+                      : "text-zinc-800 dark:text-zinc-200",
+                    )}>
+                      {d}
+                    </span>
+                  )}
+                  {hasLog && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                  )}
+                </div>
+                {holidayName && (
+                  <p className="text-[9px] text-red-400 leading-tight mt-0.5 truncate font-medium">{holidayName}</p>
                 )}
               </div>
 
-              {/* 祝日名 */}
-              {holidayName && (
-                <p className="text-[8px] text-red-400 leading-none mb-1 truncate">{holidayName}</p>
-              )}
-
-              {/* シフトバッジ */}
-              {s?.shift_name && badge && (
-                <div className={cx(
-                  "px-1.5 py-1 rounded-lg text-[11px] font-bold text-center leading-none w-full",
-                  badge.bg, badge.text, badge.border,
-                )}>
-                  {s.shift_name}
-                </div>
-              )}
-
-              {/* 勤務時間 */}
-              {s?.shift_start && !["公休","休","公休日","希望休","有休","特別休暇","代休","振替休日","欠勤"].includes(s.shift_name ?? "") && (
-                <p className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums text-center mt-1 leading-none">
-                  {s.shift_start.slice(0,5)}–{s.shift_end?.slice(0,5) ?? "--:--"}
-                </p>
-              )}
+              {/* 下部：シフトバッジ + 時間（常に下揃え） */}
+              <div className="mt-1.5">
+                {s?.shift_name && badge ? (
+                  <>
+                    <div className={cx(
+                      "py-1 px-1 rounded-lg text-[11px] font-bold text-center leading-tight w-full",
+                      badge.bg, badge.text, badge.border,
+                    )}>
+                      {s.shift_name}
+                    </div>
+                    {s.shift_start && !["公休","休","公休日","希望休","有休","特別休暇","代休","振替休日","欠勤"].includes(s.shift_name) && (
+                      <p className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums text-center mt-0.5 font-medium">
+                        {s.shift_start.slice(0,5)}–{s.shift_end?.slice(0,5) ?? "--:--"}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="h-[28px]" /> /* バッジなし日も高さを確保して揃える */
+                )}
+              </div>
             </button>
           );
         })}
