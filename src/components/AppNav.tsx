@@ -64,14 +64,7 @@ export default function AppNav({
     return () => clearInterval(id);
   }, []);
 
-  // シフト・勤怠実績ページではページスクロールを封じる
-  const isNoScrollPage = pathname.startsWith("/shifts") || pathname.startsWith("/record") || pathname.startsWith("/post") || pathname.startsWith("/notices") || pathname === "/inquiries" || pathname.startsWith("/inquiries/") && !pathname.startsWith("/inquiries/manage");
-  useEffect(() => {
-    if (!isNoScrollPage) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, [isNoScrollPage]);
+  const isNoScrollPage = pathname.startsWith("/shifts") || pathname.startsWith("/record") || pathname.startsWith("/post") || pathname.startsWith("/notices") || pathname === "/inquiries";
 
   const toggle = () => {
     const next = !collapsed;
@@ -128,7 +121,7 @@ export default function AppNav({
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f4f6fa] dark:bg-zinc-950">
+    <div className={`flex bg-[#f4f6fa] dark:bg-zinc-950 ${isNoScrollPage ? "h-screen overflow-hidden" : "min-h-screen"}`}>
 
       {/* ── PC サイドバー（ネイビー） ── */}
       <aside
@@ -251,7 +244,7 @@ export default function AppNav({
       </aside>
 
       {/* ── メインコンテンツ ── */}
-      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out pb-safe md:pb-0 ${
+      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out pb-safe md:pb-0 ${isNoScrollPage ? "overflow-hidden" : ""} ${
         isCol ? "md:pl-14" : "md:pl-60"
       }`}>
 

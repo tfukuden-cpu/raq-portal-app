@@ -84,7 +84,7 @@ export function InquiryClient({ inquiries }: { inquiries: Inquiry[] }) {
   const latestReply = inquiries.find(i => i.reply);
 
   return (
-    <main className="flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 overflow-hidden" style={{ height: "calc(100svh - 3.5rem)" }}>
+    <main className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 overflow-hidden min-h-0">
 
       {/* ── 固定タイトルバー ── */}
       <div className="flex-shrink-0 px-4 md:px-8 pt-5 pb-3">

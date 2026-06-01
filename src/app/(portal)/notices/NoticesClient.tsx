@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -113,7 +113,7 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
 
   return (
     <>
-      <main className="flex flex-col bg-[#f4f6fa] dark:bg-zinc-950" style={{ height: "calc(100svh - 3.5rem)" }}>
+      <main className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 overflow-hidden min-h-0">
 
         {/* ── 固定ヘッダー ── */}
         <div className="flex-shrink-0 w-full px-4 md:px-8 pt-5 pb-3">
