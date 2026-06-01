@@ -96,7 +96,7 @@ export default async function PunchPage({
       .eq("assignment_date", today),
     admin
       .from("mota_slot_assignments")
-      .select("assigned_account")
+      .select("assigned_account, slot, account_number")
       .eq("project_id", projectId)
       .eq("assignment_date", today),
   ]);
@@ -240,6 +240,19 @@ export default async function PunchPage({
     .map(r => r.assigned_account as string | null)
     .filter((v): v is string => Boolean(v));
 
+  // assigned_account → { slot, positionAccount } のマップ（複数スロット対応）
+  type MotaSlotInfo = { slot: string; positionAccount: string };
+  const motaSlotInfoMap: Record<string, MotaSlotInfo[]> = {};
+  for (const r of motaAssignmentRows ?? []) {
+    const ac = r.assigned_account as string | null;
+    if (!ac) continue;
+    if (!motaSlotInfoMap[ac]) motaSlotInfoMap[ac] = [];
+    motaSlotInfoMap[ac].push({
+      slot:            r.slot as string,
+      positionAccount: r.account_number as string,
+    });
+  }
+
   return (
     <TerminalPunchClient
       projectId={projectId}
@@ -250,6 +263,7 @@ export default async function PunchPage({
       breakAssignmentMap={breakAssignmentMap}
       breakSlots={breakSlots}
       motaAccountNumbers={motaAccountNumbers}
+      motaSlotInfoMap={motaSlotInfoMap}
     />
   );
 }

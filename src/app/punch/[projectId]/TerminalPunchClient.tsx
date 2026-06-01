@@ -57,6 +57,8 @@ export type BreakSlotInfo = {
   endTime: string;
 };
 
+type MotaSlotInfo = { slot: string; positionAccount: string };
+
 interface Props {
   projectId: string;
   projectName: string;
@@ -66,6 +68,7 @@ interface Props {
   breakAssignmentMap?: Record<string, number>;
   breakSlots?: BreakSlotInfo[];
   motaAccountNumbers?: string[];
+  motaSlotInfoMap?: Record<string, MotaSlotInfo[]>;
 }
 
 // ── ステータス表示定義 ──────────────────────────────────────────
@@ -282,7 +285,7 @@ function LiveClock() {
 }
 
 // ── メインコンポーネント ──────────────────────────────────────
-export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [] }: Props) {
+export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [], motaSlotInfoMap = {} }: Props) {
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [localMembers, setLocalMembers] = useState(members);
   const [isPending, startTransition] = useTransition();
@@ -658,12 +661,25 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                               {hMember.breakNote}
                             </p>
                           )}
-                          {hasMota && (
-                            <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-zinc-700">
-                              <span className="text-[9px] font-bold bg-purple-600 text-white px-1.5 py-0.5 rounded-full">H MOTA</span>
-                              <span className="text-[10px] text-zinc-400">割り当て済み</span>
-                            </div>
-                          )}
+                          {hasMota && (() => {
+                            const slots = hMember.accountNumber ? motaSlotInfoMap[hMember.accountNumber] : null;
+                            return (
+                              <div className="mt-1.5 pt-1.5 border-t border-zinc-700 space-y-0.5">
+                                {slots && slots.length > 0 ? slots.map((s, i) => (
+                                  <div key={i} className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[9px] font-bold bg-purple-600 text-white px-1.5 py-0.5 rounded-full">H MOTA</span>
+                                    <span className="text-[9px] font-semibold text-purple-300 tabular-nums">{s.slot}</span>
+                                    <span className="text-[9px] text-zinc-500">{s.positionAccount}</span>
+                                  </div>
+                                )) : (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[9px] font-bold bg-purple-600 text-white px-1.5 py-0.5 rounded-full">H MOTA</span>
+                                    <span className="text-[10px] text-zinc-400">割り当て済み</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                         {/* 吹き出し矢印 */}
                         <div className={`absolute left-1/2 -translate-x-1/2 w-0 h-0 ${showAbove ? "bottom-[-6px] border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-zinc-600" : "top-[-6px] border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-zinc-600"}`} />
@@ -742,12 +758,24 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                                 {BREAK_SLOT_LABEL[breakAssignmentMap[seat.staffId]] ?? ""}
                               </span>
                             )}
-                            {/* H MOTAバッジ */}
-                            {hasMota && (
-                              <span className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-bold bg-purple-600 text-white">
-                                M
-                              </span>
-                            )}
+                            {/* H MOTAバッジ + スロット情報 */}
+                            {hasMota && (() => {
+                              const slots = member?.accountNumber ? motaSlotInfoMap[member.accountNumber] : null;
+                              const slotLabel = slots?.map(s => s.slot.slice(0, 5)).join("/") ?? "";
+                              const posLabel  = slots?.map(s => s.positionAccount).join("/") ?? "";
+                              return (
+                                <>
+                                  <span className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-bold bg-purple-600 text-white">
+                                    M
+                                  </span>
+                                  {slotLabel && (
+                                    <span className="absolute bottom-0 left-0 right-0 text-center text-[7px] font-bold text-purple-300 leading-none pb-0.5 truncate px-0.5">
+                                      {posLabel} {slotLabel}
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </>
                         ) : (
                           <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-600" : "text-zinc-600"}`}>
