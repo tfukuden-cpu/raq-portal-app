@@ -32,6 +32,92 @@ function formatShift(name: string | null, start: string | null, end: string | nu
   return name ?? "";
 }
 
+/** レポート本文を生成して返す（送信しない） */
+export async function previewRemindReportAction(): Promise<{ ok: boolean; text?: string; message?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "未認証です" };
+
+  const projectId = await getCurrentProjectId();
+  if (!projectId) return { ok: false, message: "案件が選択されていません" };
+
+  const admin = createAdminClient();
+  const tmrw  = tomorrowJST();
+  const yday  = yesterdayJST();
+
+  const { data: tShifts } = await admin
+    .from("shifts")
+    .select("staff_id, shift_start, shift_end, shift_name")
+    .eq("project_id", projectId)
+    .eq("shift_date", tmrw)
+    .not("shift_start", "is", null);
+
+  if (!tShifts?.length) return { ok: false, message: `翌日（${fmtMD(tmrw)}）の出勤予定者がいません` };
+
+  const staffIds = [...new Set(tShifts.map(s => s.staff_id))];
+
+  const [{ data: staffRows }, { data: memberRows }, { data: ydayAbsences }] = await Promise.all([
+    admin.from("staffs").select("id, display_name, name, line_user_id, account_number").in("id", staffIds),
+    admin.from("project_members").select("staff_id, section").eq("project_id", projectId).in("staff_id", staffIds),
+    admin.from("absence_reports").select("staff_id").eq("project_id", projectId).eq("absence_date", yday),
+  ]);
+
+  const staffMap   = Object.fromEntries((staffRows ?? []).map(s => [s.id, s]));
+  const sectionMap = Object.fromEntries((memberRows ?? []).map(m => [m.staff_id as string, (m.section as string | null) ?? "セクション設定なし"]));
+  const absentYday = new Set((ydayAbsences ?? []).map(a => a.staff_id as string));
+
+  type Entry = { name: string; accountNumber: string; section: string; star: boolean; lineRegistered: boolean };
+  const entries: Entry[] = tShifts.map(shift => {
+    const staff = staffMap[shift.staff_id] as { display_name: string | null; name: string | null; line_user_id: string | null; account_number: string | null } | undefined;
+    return {
+      name:           staff?.display_name ?? staff?.name ?? shift.staff_id,
+      accountNumber:  (staff?.account_number as string | null) ?? shift.staff_id,
+      section:        sectionMap[shift.staff_id] ?? "セクション設定なし",
+      star:           absentYday.has(shift.staff_id),
+      lineRegistered: !!staff?.line_user_id,
+    };
+  });
+
+  const sectionOrder: string[] = [];
+  const bySection = new Map<string, Entry[]>();
+  for (const e of entries) {
+    if (!bySection.has(e.section)) { bySection.set(e.section, []); sectionOrder.push(e.section); }
+    bySection.get(e.section)!.push(e);
+  }
+  const unregistered = entries.filter(e => !e.lineRegistered);
+
+  const lines: string[] = [
+    `【 翌日（${fmtMD(tmrw)}）出勤リマインドレポート】`,
+    "",
+    `合計 ${entries.length}名`,
+    ...sectionOrder.map(sec => `${sec} ${bySection.get(sec)!.length}名`),
+  ];
+
+  if (unregistered.length > 0) {
+    lines.push("");
+    lines.push(`⚠️ 送信失敗 ${unregistered.length}名`);
+    for (const e of unregistered) {
+      lines.push(`・${e.accountNumber} ${e.name}`);
+      lines.push(`　→ LINE未登録`);
+    }
+  }
+
+  lines.push("");
+  lines.push("----------");
+
+  for (let i = 0; i < sectionOrder.length; i++) {
+    if (i > 0) lines.push("");
+    const sec = sectionOrder[i];
+    lines.push(`【${sec}】`);
+    for (const e of bySection.get(sec)!) {
+      const suffix = [e.star ? "※前日欠勤" : "", !e.lineRegistered ? "✗未送信" : ""].filter(Boolean).join(" ");
+      lines.push(`・${e.accountNumber} ${e.name}${suffix ? " " + suffix : ""}`);
+    }
+  }
+
+  return { ok: true, text: lines.join("\n") };
+}
+
 export async function sendRemindReportNowAction(): Promise<{ ok: boolean; message: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

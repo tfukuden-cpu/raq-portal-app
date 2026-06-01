@@ -6,7 +6,7 @@ import { LineGroupSection, LineNotifySettings } from "@/app/(portal)/admin/[proj
 import type { NotificationSettings } from "@/app/(portal)/admin/[projectId]/settings/notify-config";
 import NotifyHistory from "./NotifyHistory";
 import type { NotifyLog } from "./notify-history-actions";
-import { sendRemindReportNowAction } from "./remind-report-action";
+import { sendRemindReportNowAction, previewRemindReportAction } from "./remind-report-action";
 
 type Member = {
   staffId: string;
@@ -45,12 +45,23 @@ export default function LineSettingsClient({
   const [headerHeight, setHeaderHeight] = useState(0);
   const [isPending, startTransition] = useTransition();
   const [reportResult, setReportResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [previewText, setPreviewText]   = useState<string | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
 
   function handleSendReport() {
     startTransition(async () => {
       const result = await sendRemindReportNowAction();
       setReportResult(result);
       setTimeout(() => setReportResult(null), 5000);
+    });
+  }
+
+  function handlePreview() {
+    setIsPreviewing(true);
+    startTransition(async () => {
+      const result = await previewRemindReportAction();
+      setPreviewText(result.ok ? (result.text ?? null) : (result.message ?? "エラー"));
+      setIsPreviewing(false);
     });
   }
 
@@ -131,15 +142,45 @@ export default function LineSettingsClient({
                 <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">翌日出勤リマインドレポート</p>
                 <p className="text-xs text-zinc-400 mt-0.5">翌日出勤予定者への個人通知＋グループへの一覧レポートを今すぐ送信</p>
               </div>
-              <button
-                type="button"
-                onClick={handleSendReport}
-                disabled={isPending}
-                className="flex-shrink-0 px-4 py-2 rounded-xl bg-[#0d1b35] text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-[#162b50] transition-colors"
-              >
-                {isPending ? "送信中…" : "今すぐ送信"}
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={handlePreview}
+                  disabled={isPending || isPreviewing}
+                  className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-[13px] font-semibold text-zinc-600 dark:text-zinc-300 disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  {isPreviewing ? "生成中…" : "プレビュー"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendReport}
+                  disabled={isPending}
+                  className="px-4 py-2 rounded-xl bg-[#0d1b35] text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-[#162b50] transition-colors"
+                >
+                  {isPending ? "送信中…" : "今すぐ送信"}
+                </button>
+              </div>
             </div>
+
+            {/* プレビュー表示 */}
+            {previewText && (
+              <div className="bg-zinc-50 dark:bg-zinc-800 rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">グループ送信レポート（プレビュー）</p>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewText(null)}
+                    className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
+                  >
+                    閉じる
+                  </button>
+                </div>
+                <pre className="text-[13px] text-zinc-700 dark:text-zinc-200 whitespace-pre-wrap font-sans leading-relaxed">
+                  {previewText}
+                </pre>
+              </div>
+            )}
+
             {reportResult && (
               <p className={`text-sm font-medium px-1 ${reportResult.ok ? "text-emerald-600" : "text-red-500"}`}>
                 {reportResult.ok ? "✓ " : "✗ "}{reportResult.message}

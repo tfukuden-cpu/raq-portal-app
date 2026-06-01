@@ -31,6 +31,7 @@ type Props = {
   controlledYear?: number;
   controlledMonth?: number;
   onGoMonth?: (delta: number) => void;
+  className?: string;
 };
 
 const WEEKDAY_SHORT = ["日", "月", "火", "水", "木", "金", "土"];
@@ -88,7 +89,7 @@ function CalendarOffIcon() {
 
 export default function ShiftCalendar({
   shifts, changeLogs = [], todayStr, initialYear, initialMonth, minMonth, maxMonth,
-  controlledYear, controlledMonth, onGoMonth,
+  controlledYear, controlledMonth, onGoMonth, className = "",
 }: Props) {
   const [internalYear,  setInternalYear]  = useState(initialYear);
   const [internalMonth, setInternalMonth] = useState(initialMonth);
@@ -148,10 +149,10 @@ export default function ShiftCalendar({
 
   return (
     <>
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+      <div className={cx("bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden flex flex-col", className)}>
 
         {/* ── 月ナビ + 統計 ── */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
           {/* ← 月 年 → */}
           <div className="flex items-center gap-3">
             <button
@@ -191,10 +192,10 @@ export default function ShiftCalendar({
         </div>
 
         {/* ── 曜日ヘッダー ── */}
-        <div className="grid grid-cols-7 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="flex-shrink-0 grid grid-cols-7 border-b border-zinc-100 dark:border-zinc-800">
           {WEEKDAY_SHORT.map((w, i) => (
             <div key={w} className={cx(
-              "text-center text-[12px] font-semibold py-2.5",
+              "text-center text-[12px] font-semibold py-2",
               i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-zinc-500 dark:text-zinc-400",
             )}>
               {w}
@@ -203,11 +204,11 @@ export default function ShiftCalendar({
         </div>
 
         {/* ── カレンダーグリッド ── */}
-        <div className="grid grid-cols-7">
+        <div className="flex-1 min-h-0 grid grid-cols-7" style={{ gridAutoRows: "1fr" }}>
 
           {/* 先月末の日 */}
           {Array.from({ length: firstDow }, (_, i) => (
-            <div key={`pre${i}`} className="border-r border-b border-zinc-50 dark:border-zinc-800/50 p-2 min-h-[72px] md:min-h-[88px]">
+            <div key={`pre${i}`} className="border-r border-b border-zinc-50 dark:border-zinc-800/50 p-1.5">
               <span className="text-[12px] text-zinc-300 dark:text-zinc-700">
                 {prevDays - firstDow + i + 1}
               </span>
@@ -229,7 +230,7 @@ export default function ShiftCalendar({
                 type="button"
                 onClick={() => setModal(ds)}
                 className={cx(
-                  "relative text-left p-2 min-h-[72px] md:min-h-[88px] border-r border-b transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40",
+                  "relative text-left p-1.5 border-r border-b transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40",
                   isToday
                     ? "border-2 border-[#0d1b35] dark:border-blue-500 -m-px z-10"
                     : "border-zinc-100 dark:border-zinc-800",
@@ -266,7 +267,7 @@ export default function ShiftCalendar({
 
           {/* 来月頭の日 */}
           {Array.from({ length: trailing }, (_, i) => (
-            <div key={`post${i}`} className="border-r border-b border-zinc-50 dark:border-zinc-800/50 p-2 min-h-[72px] md:min-h-[88px]">
+            <div key={`post${i}`} className="border-r border-b border-zinc-50 dark:border-zinc-800/50 p-1.5">
               <span className="text-[12px] text-zinc-300 dark:text-zinc-700">{i + 1}</span>
             </div>
           ))}

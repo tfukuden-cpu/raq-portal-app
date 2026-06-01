@@ -84,14 +84,13 @@ export default function ShiftsTabs({
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#f4f6fa] dark:bg-zinc-950">
+    <div className="flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 md:h-[calc(100vh-3.5rem)] md:overflow-hidden">
 
       {/* ── ページヘッダー ── */}
-      <div className="max-w-6xl mx-auto w-full px-4 md:px-8 pt-6 pb-4 flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-[22px] md:text-[24px] font-bold text-[#0d1b35] dark:text-white">
+      <div className="max-w-6xl mx-auto w-full px-4 md:px-8 pt-4 pb-3 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
+        <h1 className="text-[20px] md:text-[22px] font-bold text-[#0d1b35] dark:text-white">
           勤務スケジュール
         </h1>
-        {/* タブボタン群 */}
         <div className="flex items-center gap-2">
           {TABS.map(({ key, label }) => (
             <button
@@ -112,10 +111,11 @@ export default function ShiftsTabs({
       </div>
 
       {/* ── コンテンツ ── */}
-      <div className="max-w-6xl mx-auto w-full px-4 md:px-8 pb-28 md:pb-12 flex-1">
+      <div className="max-w-6xl mx-auto w-full px-4 md:px-8 pb-20 md:pb-4 flex-1 min-h-0">
 
         {tab === "shift" && (
           <ShiftCalendar
+            className="h-full"
             shifts={shifts}
             changeLogs={changeLogs}
             todayStr={todayStr}
