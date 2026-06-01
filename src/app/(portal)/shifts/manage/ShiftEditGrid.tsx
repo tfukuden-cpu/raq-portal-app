@@ -881,8 +881,8 @@ export default function ShiftEditGrid({
   const [showSummaryRows, setShowSummaryRows] = useState(true);
   // 並び順：番号順 or セクション順（props の初期値を引き継ぐ）
   const [sortByAccountLocal, setSortByAccountLocal] = useState(sortByAccount ?? false);
-  // SV並び替えオーバーライド（staffId[]）
-  const [svOrderOverride, setSvOrderOverride] = useState<string[]>([]);
+  // 全スタッフ並び替えオーバーライド（staffId[]）
+  const [rowOrderOverride, setRowOrderOverride] = useState<string[]>([]);
   // セクションフィルタ（"" = 全員表示）
   const [filterSection, setFilterSection] = useState<string>("");
   // インラインパターンピッカー
@@ -1432,6 +1432,15 @@ export default function ShiftEditGrid({
   const SV_SUB_ORDER: Record<string, number> = { "早番": 0, "遅番": 1, "中番": 2, "その他": 3 };
 
   const sortedMembersBySection = useMemo(() => {
+    // 手動並び替えが設定されている場合は最優先
+    if (rowOrderOverride.length > 0) {
+      const orderMap = new Map(rowOrderOverride.map((id, i) => [id, i]));
+      return [...activeMembers].sort((a, b) => {
+        const ia = orderMap.has(a.id) ? orderMap.get(a.id)! : 9999;
+        const ib = orderMap.has(b.id) ? orderMap.get(b.id)! : 9999;
+        return ia !== ib ? ia - ib : a.name.localeCompare(b.name, "ja");
+      });
+    }
     if (sortByAccountLocal) {
       // 番号順モード：SV を上部固定（名前順）、SV以外をアカウント番号昇順
       return [...activeMembers].sort((a, b) => {
@@ -1444,7 +1453,7 @@ export default function ShiftEditGrid({
         return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
       });
     }
-    // デフォルト：セクション順 → SVはsvOrderOverride順・その他はアカウント番号順
+    // デフォルト：セクション順 → SVはsvSubType順・その他はアカウント番号順
     return [...activeMembers].sort((a, b) => {
       const ra = sectionRank(a.section);
       const rb = sectionRank(b.section);
@@ -1452,12 +1461,6 @@ export default function ShiftEditGrid({
       const aIsSV = a.section === "SV";
       const bIsSV = b.section === "SV";
       if (aIsSV && bIsSV) {
-        const ai = svOrderOverride.indexOf(a.id);
-        const bi = svOrderOverride.indexOf(b.id);
-        if (ai !== -1 && bi !== -1) return ai - bi; // 手動並び替えが優先
-        if (ai !== -1) return -1;
-        if (bi !== -1) return 1;
-        // デフォルト: 早番→遅番→中番→その他の順
         const ra = SV_SUB_ORDER[svSubType(a)] ?? 3;
         const rb = SV_SUB_ORDER[svSubType(b)] ?? 3;
         if (ra !== rb) return ra - rb;
@@ -1470,7 +1473,7 @@ export default function ShiftEditGrid({
       }
       return a.name.localeCompare(b.name, "ja");
     });
-  }, [activeMembers, sortByAccountLocal, svOrderOverride]);
+  }, [activeMembers, sortByAccountLocal, rowOrderOverride]);
 
   // セクションフィルタ適用済みリスト
   const displayMembers = useMemo(() =>
@@ -2505,63 +2508,61 @@ export default function ShiftEditGrid({
                           )}
                           <div className="min-w-0 flex-1">
                             <span className={[
-                              "text-[11px] font-semibold block leading-tight truncate",
+                              "text-[11px] font-semibold block leading-tight truncate tabular-nums",
                               isFocusedRow ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-200",
                             ].join(" ")}>
-                              {member.name}
+                              {member.accountNumber
+                                ? `${member.accountNumber}│${member.name}`
+                                : member.name}
                             </span>
-                            <div className="flex items-center gap-1 flex-wrap">
-                              {member.accountNumber && (
-                                <span className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums leading-none">
-                                  {member.accountNumber}
-                                </span>
-                              )}
-                              {effChurnRisk && (
-                                <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none shrink-0">
-                                  離脱
-                                </span>
-                              )}
-                              {member.endDate && (
-                                <span className="text-[9px] text-amber-500 dark:text-amber-400 tabular-nums leading-none">
-                                  〜{member.endDate.slice(5).replace("-", "/")}
-                                </span>
-                              )}
-                            </div>
+                            {(effChurnRisk || member.endDate) && (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {effChurnRisk && (
+                                  <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none shrink-0">
+                                    離脱
+                                  </span>
+                                )}
+                                {member.endDate && (
+                                  <span className="text-[9px] text-amber-500 dark:text-amber-400 tabular-nums leading-none">
+                                    〜{member.endDate.slice(5).replace("-", "/")}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          {member.section === "SV" && (
-                            <div className="flex flex-col gap-0 shrink-0 ml-auto">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSvOrderOverride(prev => {
-                                    const list = prev.length ? prev : sortedMembersBySection.filter(m => m.section === "SV").map(m => m.id);
-                                    const i = list.indexOf(member.id);
-                                    if (i <= 0) return list;
-                                    const next = [...list];
-                                    [next[i - 1], next[i]] = [next[i], next[i - 1]];
-                                    return next;
-                                  });
-                                }}
-                                className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none"
-                              >▲</button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSvOrderOverride(prev => {
-                                    const list = prev.length ? prev : sortedMembersBySection.filter(m => m.section === "SV").map(m => m.id);
-                                    const i = list.indexOf(member.id);
-                                    if (i < 0 || i >= list.length - 1) return list;
-                                    const next = [...list];
-                                    [next[i], next[i + 1]] = [next[i + 1], next[i]];
-                                    return next;
-                                  });
-                                }}
-                                className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none"
-                              >▼</button>
-                            </div>
-                          )}
+                          {/* 全スタッフ対応の並び替えボタン */}
+                          <div className="flex flex-col gap-0 shrink-0 ml-auto">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRowOrderOverride(prev => {
+                                  const list = prev.length ? prev : displayMembers.map(m => m.id);
+                                  const i = list.indexOf(member.id);
+                                  if (i <= 0) return list;
+                                  const next = [...list];
+                                  [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                                  return next;
+                                });
+                              }}
+                              className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none"
+                            >▲</button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRowOrderOverride(prev => {
+                                  const list = prev.length ? prev : displayMembers.map(m => m.id);
+                                  const i = list.indexOf(member.id);
+                                  if (i < 0 || i >= list.length - 1) return list;
+                                  const next = [...list];
+                                  [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                                  return next;
+                                });
+                              }}
+                              className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none"
+                            >▼</button>
+                          </div>
                         </div>
                       </td>
                       {/* 前月末セル（読み取り専用・グレー表示） */}
