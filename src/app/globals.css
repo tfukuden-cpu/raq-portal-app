@@ -33,6 +33,14 @@ body {
   display: none;
 }
 
+/* ページスクロール完全封止 */
+html.noscroll,
+html.noscroll body {
+  overflow: hidden !important;
+  height: 100% !important;
+  overscroll-behavior: none !important;
+}
+
 /* iPhone ホームインジケーター対応 */
 @utility pb-safe {
   padding-bottom: calc(5rem + env(safe-area-inset-bottom));
