@@ -64,12 +64,6 @@ export default async function NoticesPage() {
     };
   });
 
-  return (
-    <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
-      {/* ヘッダーは NoticesClient 内で管理（isAdmin によるボタン表示のため） */}
-      <NoticesClient notices={notices} readIds={readIds} isAdmin={isAdmin} />
-      {/* コンテンツ余白は NoticesClient 内で完結 */}
-    </main>
-  );
+  return <NoticesClient notices={notices} readIds={readIds} isAdmin={isAdmin} />;
 }
 
