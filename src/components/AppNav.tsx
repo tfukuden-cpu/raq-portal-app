@@ -249,7 +249,7 @@ export default function AppNav({
       </aside>
 
       {/* ── メインコンテンツ ── */}
-      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out pb-safe md:pb-0 ${isNoScrollPage ? "overflow-hidden" : ""} ${
+      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out ${isNoScrollPage ? "overflow-hidden pb-0" : "pb-safe md:pb-0"} ${
         isCol ? "md:pl-14" : "md:pl-60"
       }`}>
 
