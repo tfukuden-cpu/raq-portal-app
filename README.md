@@ -3,7 +3,7 @@
 合同会社Raq の社内ポータルサイト（既存：GAS Webアプリ）を、
 **Next.js + Supabase 製の PWA** に全面移行するプロジェクト。
 
-詳細な進捗・設計・残タスクは **[HANDOVER.md](./HANDOVER.md)** を参照。
+詳細な進捗・設計・残タスクは **[SPEC.md](./SPEC.md)** を参照。
 
 ## クイックスタート
 
@@ -42,7 +42,7 @@ GOOGLE_CLIENT_SECRET=...
 GOOGLE_REFRESH_TOKEN=...
 ```
 
-`.env.local.example` をコピーして使うのが楽。詳細は HANDOVER.md セクション12。
+`.env.local.example` をコピーして使うのが楽。詳細は SPEC.md セクション9。
 
 ## 技術スタック
 
@@ -115,6 +115,6 @@ node migration/migrate-staffs.mjs
 
 ## 補足ドキュメント
 
-- [HANDOVER.md](./HANDOVER.md) — 全体引継ぎ資料・設計・残タスク
+- [SPEC.md](./SPEC.md) — 全体仕様・DB設計・環境変数・外部連携情報
 - [AGENTS.md](./AGENTS.md) — AI（Claude等）に作業させるときのルール
 - [migration/README.md](./migration/README.md) — 社員データ移行手順
