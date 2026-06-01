@@ -276,10 +276,10 @@ export default function RecordClient({
           ) : (
             <div className="record-table bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden shadow-sm">
               <table className="w-full min-w-[700px] border-collapse">
-                <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/90 backdrop-blur-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800">
                     {["日付","曜日","ステータス","予定時間","開始時間","終了時間","勤務時間","備考","修正申請"].map((h, i) => (
-                      <th key={h} className={`px-4 py-3 text-[11px] font-bold text-zinc-500 dark:text-zinc-400 whitespace-nowrap ${i <= 1 ? "text-left" : "text-center"} ${i >= 7 ? "no-print" : ""}`}>
+                      <th key={h} className={`sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-[11px] font-bold text-zinc-500 dark:text-zinc-400 whitespace-nowrap ${i <= 1 ? "text-left" : "text-center"} ${i >= 7 ? "no-print" : ""}`}>
                         {h}
                       </th>
                     ))}
