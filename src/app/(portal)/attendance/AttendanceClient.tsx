@@ -771,11 +771,26 @@ export default function AttendanceClient({
                             </div>
                           )}
                         </div>
-                        {absCnt > 0 && (
-                          <span className="text-[11px] font-bold text-red-500 dark:text-red-400 block mt-0.5">
-                            欠員 {absCnt}名
-                          </span>
-                        )}
+                        {/* 遅刻・欠勤 */}
+                        {(() => {
+                          const lateCnt = allMembers.filter(m =>
+                            (localStatuses.get(m.staffId) ?? m.status) === "late"
+                          ).length;
+                          return (lateCnt > 0 || absCnt > 0) ? (
+                            <div className="flex gap-2 mt-0.5">
+                              {lateCnt > 0 && (
+                                <span className="text-[11px] font-bold text-amber-500 dark:text-amber-400">
+                                  遅刻 {lateCnt}名
+                                </span>
+                              )}
+                              {absCnt > 0 && (
+                                <span className="text-[11px] font-bold text-red-500 dark:text-red-400">
+                                  欠勤 {absCnt}名
+                                </span>
+                              )}
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                       );
                     })()}
@@ -786,33 +801,15 @@ export default function AttendanceClient({
                       style={{ scrollbarWidth: "none" }}
                     >
                       {groups.map(({ shiftName, members }, gi) => {
-                        // シフトグループ内の出勤中人数
-                        const groupPresent = members.filter(m => {
-                          const s = localStatuses.get(m.staffId) ?? m.status;
-                          return s === "working" || s === "clocked_out" || s === "departed";
-                        }).length;
-                        const groupTotal = members.length;
-                        const groupDiff  = groupPresent - groupTotal;
                         return (
                         <React.Fragment key={shiftName}>
-                          {/* 複数シフトグループがある場合のみサブヘッダー */}
+                          {/* 複数シフトグループがある場合のみサブヘッダー（シフト名のみ） */}
                           {groups.length > 1 && (
                             <div className={`flex items-center gap-1.5 ${gi > 0 ? "mt-1" : ""}`}>
-                              <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 shrink-0 tabular-nums">
+                              <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
                                 {shiftName}
                               </span>
                               <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
-                              <span className="text-[10px] font-bold tabular-nums shrink-0">
-                                <span className={groupPresent >= groupTotal ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}>
-                                  {groupPresent}
-                                </span>
-                                <span className="text-zinc-400 font-normal">/{groupTotal}</span>
-                              </span>
-                              {groupDiff !== 0 && (
-                                <span className={`text-[10px] font-bold tabular-nums shrink-0 ${groupDiff < 0 ? "text-red-500 dark:text-red-400" : "text-blue-500 dark:text-blue-400"}`}>
-                                  {groupDiff > 0 ? `+${groupDiff}` : groupDiff}
-                                </span>
-                              )}
                             </div>
                           )}
                       {members.map(m => {
@@ -958,53 +955,6 @@ export default function AttendanceClient({
           </div>
         )}
 
-        {/* 本日休みスタッフ（補填調整用） */}
-        {activeTab === "today" && offMembers.length > 0 && (
-          <details className="group mt-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-            <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none list-none hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-              <div className="flex items-center gap-2">
-                <ChevronRight className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-90 flex-shrink-0" />
-                <span className="text-sm font-bold text-zinc-500 dark:text-zinc-400">本日休み（補填調整）</span>
-                <span className="text-xs text-zinc-400">{offMembers.length}名</span>
-              </div>
-            </summary>
-            <div className="border-t border-zinc-100 dark:border-zinc-800 divide-y divide-zinc-100 dark:divide-zinc-800">
-              {offMembers.map(m => {
-                const isSelected = selectedIds.has(m.staffId);
-                const isLocked   = selectedMode === "reminder";
-                return (
-                  <div
-                    key={m.staffId}
-                    className={`flex items-center gap-2 px-3 py-2 transition-colors ${isSelected ? "bg-amber-50 dark:bg-amber-950/20" : ""}`}
-                  >
-                    <span className="w-16 text-xs font-mono text-zinc-400 tabular-nums flex-shrink-0 truncate" title={m.accountNumber ?? ""}>
-                      {m.accountNumber ?? ""}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name, churnRisk: false })}
-                      className="flex-1 min-w-0 text-sm font-semibold text-zinc-700 dark:text-zinc-300 truncate text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                    >
-                      {m.name}
-                    </button>
-                    <span className="text-xs text-zinc-400 flex-shrink-0">{m.shiftName}</span>
-                    <button
-                      onClick={() => !isLocked && toggleReminder(m.staffId, "request")}
-                      disabled={isLocked}
-                      className={`flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-lg border transition-colors whitespace-nowrap disabled:opacity-30 ${
-                        isSelected
-                          ? "bg-amber-500 text-white border-amber-500 hover:bg-amber-600"
-                          : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800"
-                      }`}
-                    >
-                      {isSelected ? "✓ 選択中" : "依頼する"}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </details>
-        )}
       </div>
 
       {/* まとめて送るアクションバー */}
