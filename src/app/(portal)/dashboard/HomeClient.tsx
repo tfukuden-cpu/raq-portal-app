@@ -49,6 +49,15 @@ function nowHHMM(): string {
   });
 }
 
+function getGreeting(): string {
+  const h = parseInt(
+    new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", hour: "numeric", hour12: false })
+  );
+  if (h >= 5  && h < 11) return "おはようございます";
+  if (h >= 11 && h < 18) return "こんにちは";
+  return "こんばんは";
+}
+
 function fmtMD(dateStr: string): string {
   const [, m, d] = dateStr.split("-");
   return `${parseInt(m)}/${parseInt(d)}`;
@@ -153,11 +162,13 @@ export default function HomeClient({
   const [isPending,    startTransition] = useTransition();
   const [feedback,     setFeedback]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [optDeparture, setOptDeparture] = useState(departureTime);
-  const [liveTime,     setLiveTime]     = useState(nowHHMM);
+  const [liveTime,  setLiveTime]  = useState(nowHHMM);
+  const [greeting,  setGreeting]  = useState(getGreeting);
 
   useEffect(() => {
-    setLiveTime(nowHHMM());
-    const id = setInterval(() => setLiveTime(nowHHMM()), 15000);
+    const tick = () => { setLiveTime(nowHHMM()); setGreeting(getGreeting()); };
+    tick();
+    const id = setInterval(tick, 15000);
     return () => clearInterval(id);
   }, []);
 
@@ -229,6 +240,19 @@ export default function HomeClient({
         </div>
 
         <div className="max-w-6xl mx-auto px-4 md:px-8 pt-5 md:pt-6 pb-32 md:pb-12 space-y-4">
+
+          {/* ── 挨拶ヘッダー ── */}
+          <div className="flex items-center gap-4 pb-2">
+            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[17px] font-bold flex-shrink-0 shadow-sm">
+              {displayName.charAt(0)}
+            </div>
+            <div>
+              <p className="text-[12px] text-zinc-400 leading-none mb-1">{greeting}</p>
+              <p className="text-[18px] font-bold text-[#0d1b35] dark:text-white leading-none">
+                {displayName}<span className="text-[14px] font-medium text-zinc-400 ml-1">さん</span>
+              </p>
+            </div>
+          </div>
 
           {/* ── 上段 3カラム ── */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
