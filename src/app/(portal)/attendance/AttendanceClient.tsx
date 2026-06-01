@@ -162,6 +162,7 @@ interface Props {
   notClocked: number;
   grouped: SectionGroup[];
   offMembers: OffMember[];
+  shiftRequired?: Record<string, number>;
   enableDeparture: boolean;
   publishedAt: string | null;
   shiftChanges: ShiftChangeEntry[];
@@ -185,7 +186,7 @@ type ModalState = null | "confirm" | "sending" | "results";
 export default function AttendanceClient({
   projectId, today, prevDate, nextDate, dateLabel, projectName,
   total, departed, clockedIn, late, absent, notClocked,
-  grouped, offMembers, enableDeparture,
+  grouped, offMembers, shiftRequired = {}, enableDeparture,
   publishedAt, shiftChanges,
   myStaffId, churnRiskAlerts,
   seatData, wallData, seatStaffList,
@@ -285,8 +286,11 @@ export default function AttendanceClient({
       const groups: BoardGroup[] = [];
       for (const [key, val] of shiftMap) {
         const sepIdx = key.indexOf("|||");
-        if (key.slice(0, sepIdx) === sec)
-          groups.push({ shiftName: key.slice(sepIdx + 3), shiftStart: val.shiftStart, members: val.members });
+        if (key.slice(0, sepIdx) === sec) {
+          const getAccNum = (acct: string | null) => parseInt((acct ?? "").replace(/\D/g, "")) || 9999;
+          const sortedMembers = [...val.members].sort((a, b) => getAccNum(a.accountNumber) - getAccNum(b.accountNumber));
+          groups.push({ shiftName: key.slice(sepIdx + 3), shiftStart: val.shiftStart, members: sortedMembers });
+        }
       }
       // 開始時刻昇順（早番→遅番）
       groups.sort((a, b) => {
@@ -724,6 +728,30 @@ export default function AttendanceClient({
                         <span className="text-xs font-bold tabular-nums text-green-600 dark:text-green-400">
                           {present}<span className="text-zinc-400 font-normal">/{allMembers.length}</span>
                         </span>
+                      </div>
+                      {/* 充足数：シフトグループ別 */}
+                      <div className="mt-1 space-y-0.5">
+                        {groups.map(({ shiftName, members: grpMembers }) => {
+                          const required = shiftRequired[shiftName] ?? 0;
+                          const assigned = grpMembers.length;
+                          const diff = assigned - required;
+                          if (required === 0) return null;
+                          return (
+                            <div key={shiftName} className="flex items-center gap-1">
+                              {groups.length > 1 && (
+                                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 shrink-0">
+                                  {shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName}
+                                </span>
+                              )}
+                              <span className="text-[10px] tabular-nums font-semibold text-zinc-600 dark:text-zinc-300">
+                                {assigned}/{required}
+                              </span>
+                              <span className={`text-[10px] font-bold tabular-nums ${diff < 0 ? "text-red-500 dark:text-red-400" : diff > 0 ? "text-blue-500 dark:text-blue-400" : "text-zinc-400"}`}>
+                                {diff > 0 ? `+${diff}` : diff < 0 ? diff : "✓"}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                       {absCnt > 0 && (
                         <span className="text-[11px] font-bold text-red-500 dark:text-red-400 block mt-0.5">

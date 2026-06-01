@@ -175,6 +175,7 @@ export default async function AttendancePage({
     breakSlots,
     breakAssignments,
     breakShortSettings,
+    { data: slotRequirementRows },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -204,7 +205,7 @@ export default async function AttendancePage({
       .eq("project_id", projectId)
       .eq("late_date", today),
     admin.from("shift_patterns")
-      .select("name, start_time, end_time, section")
+      .select("name, start_time, end_time, section, required_count, required_weekday, required_weekend")
       .eq("project_id", projectId),
     admin.from("project_settings")
       .select("enable_departure_report")
@@ -237,6 +238,10 @@ export default async function AttendancePage({
     getBreakSlotSettingsAction(projectId),
     getBreakSlotAssignmentsAction(projectId, today),
     getBreakShortSettingsAction(projectId, today),
+    admin.from("slot_requirements")
+      .select("pattern_name, required_count")
+      .eq("project_id", projectId)
+      .eq("shift_date", today),
   ]);
 
   // 今日・明日でデータを分割
@@ -576,6 +581,25 @@ export default async function AttendancePage({
     }
   }
 
+  // ── シフトパターン別 必要枠数マップ ─────────────────────────
+  const todayDow = new Date(today + "T00:00:00+09:00").getDay(); // 0=日, 6=土
+  const isWeekend = todayDow === 0 || todayDow === 6;
+  const slotOverrideMap = new Map(
+    (slotRequirementRows ?? []).map(r => [r.pattern_name as string, r.required_count as number])
+  );
+  const shiftRequired: Record<string, number> = {};
+  for (const p of shiftPatterns ?? []) {
+    const name = p.name as string;
+    if (slotOverrideMap.has(name)) {
+      shiftRequired[name] = slotOverrideMap.get(name)!;
+    } else {
+      const base = isWeekend
+        ? ((p as { required_weekend?: number | null }).required_weekend ?? (p as { required_count?: number | null }).required_count ?? 0)
+        : ((p as { required_weekday?: number | null }).required_weekday ?? (p as { required_count?: number | null }).required_count ?? 0);
+      shiftRequired[name] = base as number;
+    }
+  }
+
   // ── 全体サマリー ─────────────────────────────────────────
   const total      = allInternal.length;
   const departed   = allInternal.filter(m => m.departureTime || m.clockIn).length;
@@ -607,6 +631,7 @@ export default async function AttendancePage({
       notClocked={notClocked}
       grouped={grouped}
       offMembers={offMembers}
+      shiftRequired={shiftRequired}
       enableDeparture={enableDeparture}
       publishedAt={publishedAt}
       shiftChanges={shiftChanges}
