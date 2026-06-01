@@ -95,6 +95,19 @@ export default function ShiftsTabs({
   const [selectedDate, setSelected] = useState<string | null>(todayStr);
   const [memo, setMemo]             = useState("");
 
+  // ページ全体のスクロールを封じる
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = { html: html.style.overflow, body: body.style.overflow };
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prev.html;
+      body.style.overflow = prev.body;
+    };
+  }, []);
+
   const goMonth = (delta: number) => {
     const d = new Date(year, month - 1 + delta, 1);
     setYear(d.getFullYear()); setMonth(d.getMonth() + 1);
