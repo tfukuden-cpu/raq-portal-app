@@ -64,6 +64,15 @@ export default function AppNav({
     return () => clearInterval(id);
   }, []);
 
+  // シフトページではページスクロールを封じる（ヘッダーはDOMの外なので影響なし）
+  const isShiftPage = pathname.startsWith("/shifts");
+  useEffect(() => {
+    if (!isShiftPage) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [isShiftPage]);
+
   const toggle = () => {
     const next = !collapsed;
     setCollapsed(next);
