@@ -26,7 +26,7 @@ const STAFF_ITEMS: NavItem[] = [
   { href: "/shifts",     icon: "Calendar",      label: "シフト" },
   { href: "/record",     icon: "BarChart2",     label: "勤怠実績" },
   { href: "/post",       icon: "PenSquare",     label: "投稿" },
-  { href: "/notices",    icon: "Bell",          label: "お知らせ" },
+  { href: "/notices",    icon: "Bell",          label: "周知事項" },
   { href: "/inquiries",  icon: "MessageSquare", label: "問い合わせ" },
   { href: "/help",       icon: "HelpCircle",    label: "ヘルプ" },
 ];
