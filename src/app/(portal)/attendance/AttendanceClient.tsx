@@ -742,33 +742,35 @@ export default function AttendanceClient({
                             )}
                           </div>
                         </div>
-                        {/* 早番/遅番 別内訳（複数シフトグループがあるセクション） */}
-                        {groups.length > 1 && (
-                          <div className="mt-1 space-y-0.5 pl-1">
-                            {groups.map(({ shiftName, members: grpMembers }) => {
-                              const grpPresent = grpMembers.filter(m => {
-                                const s = localStatuses.get(m.staffId) ?? m.status;
-                                return s === "working" || s === "clocked_out" || s === "departed";
-                              }).length;
-                              const grpAssigned = grpMembers.length;
-                              const grpRequired = shiftRequired[shiftName] ?? 0;
-                              const grpSufficiency = grpRequired > 0 ? grpAssigned - grpRequired : null;
-                              const label = shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName;
-                              return (
-                                <div key={shiftName} className="flex items-center gap-1 tabular-nums">
-                                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 w-8 shrink-0">{label}</span>
-                                  <span className={`text-[10px] font-bold ${grpPresent > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500"}`}>{grpPresent}</span>
-                                  <span className="text-[10px] text-zinc-400">/{grpAssigned}</span>
-                                  {grpSufficiency !== null && (
-                                    <span className={`text-[10px] font-bold ${grpSufficiency > 0 ? "text-blue-500 dark:text-blue-400" : grpSufficiency < 0 ? "text-red-500 dark:text-red-400" : "text-emerald-500"}`}>
-                                      （{grpSufficiency > 0 ? `+${grpSufficiency}` : grpSufficiency === 0 ? "✓" : grpSufficiency}）
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                        {/* 早番/遅番 別内訳（査定・販売のみ。他セクションは高さ合わせのスペーサー） */}
+                        <div className="mt-1 pl-1" style={{ minHeight: "38px" }}>
+                          {(section === "査定" || section === "販売") && (
+                            <div className="space-y-0.5">
+                              {groups.map(({ shiftName, members: grpMembers }) => {
+                                const grpPresent = grpMembers.filter(m => {
+                                  const s = localStatuses.get(m.staffId) ?? m.status;
+                                  return s === "working" || s === "clocked_out" || s === "departed";
+                                }).length;
+                                const grpAssigned = grpMembers.length;
+                                const grpRequired = shiftRequired[shiftName] ?? 0;
+                                const grpSufficiency = grpRequired > 0 ? grpAssigned - grpRequired : null;
+                                const label = shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName;
+                                return (
+                                  <div key={shiftName} className="flex items-center gap-1 tabular-nums">
+                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 w-8 shrink-0">{label}</span>
+                                    <span className={`text-[10px] font-bold ${grpPresent > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500"}`}>{grpPresent}</span>
+                                    <span className="text-[10px] text-zinc-400">/{grpAssigned}</span>
+                                    {grpSufficiency !== null && (
+                                      <span className={`text-[10px] font-bold ${grpSufficiency > 0 ? "text-blue-500 dark:text-blue-400" : grpSufficiency < 0 ? "text-red-500 dark:text-red-400" : "text-emerald-500"}`}>
+                                        （{grpSufficiency > 0 ? `+${grpSufficiency}` : grpSufficiency === 0 ? "✓" : grpSufficiency}）
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                         {absCnt > 0 && (
                           <span className="text-[11px] font-bold text-red-500 dark:text-red-400 block mt-0.5">
                             欠員 {absCnt}名
