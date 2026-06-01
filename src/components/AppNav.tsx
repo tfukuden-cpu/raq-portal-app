@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import type { NavItem, NavSection } from "@/app/(portal)/layout";
 import { ICON_MAP, MenuIcon } from "@/components/icons";
@@ -16,9 +16,36 @@ interface AppNavProps {
   children: React.ReactNode;
 }
 
+const WD = ["日","月","火","水","木","金","土"];
+
+function nowHHMM(): string {
+  return new Date().toLocaleTimeString("ja-JP", {
+    timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+}
+
+function fmtDateHeader(): string {
+  const d   = new Date();
+  const jst = new Date(d.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  const y   = jst.getFullYear();
+  const m   = String(jst.getMonth() + 1).padStart(2, "0");
+  const day = String(jst.getDate()).padStart(2, "0");
+  const wd  = WD[jst.getDay()];
+  return `${y}.${m}.${day}（${wd}）`;
+}
+
+function BellIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+    </svg>
+  );
+}
+
 export default function AppNav({
   sections,
   staffName,
+  projectName,
   logoutAction,
   switchProjectAction,
   initialCollapsed,
@@ -28,6 +55,14 @@ export default function AppNav({
   const router   = useRouter();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [switching, startSwitch]  = useTransition();
+  const [liveTime,  setLiveTime]  = useState(nowHHMM);
+  const [dateStr,   setDateStr]   = useState(fmtDateHeader);
+
+  useEffect(() => {
+    const tick = () => { setLiveTime(nowHHMM()); setDateStr(fmtDateHeader()); };
+    const id = setInterval(tick, 15000);
+    return () => clearInterval(id);
+  }, []);
 
   const toggle = () => {
     const next = !collapsed;
@@ -61,7 +96,6 @@ export default function AppNav({
   const activeSection = sections[activeSectionIdx] ?? sections[0];
   const showSectionTabs = sections.length > 1;
 
-  // ── 案件タブコンポーネント（モバイル用） ─────────────
   function ProjectTabsMobile({ tabs }: { tabs: NonNullable<NavSection["projectTabs"]> }) {
     return (
       <div className="flex overflow-x-auto gap-1.5 px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800" style={{ scrollbarWidth: "none" }}>
@@ -73,7 +107,7 @@ export default function AppNav({
             className={[
               "flex-shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-colors whitespace-nowrap",
               tab.isActive
-                ? "bg-blue-600 text-white"
+                ? "bg-[#0d1b35] text-white"
                 : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400",
             ].join(" ")}
           >
@@ -85,44 +119,46 @@ export default function AppNav({
   }
 
   return (
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex min-h-screen bg-[#f4f6fa] dark:bg-zinc-950">
 
-      {/* ── PC サイドバー（常にダーク） ── */}
+      {/* ── PC サイドバー（ネイビー） ── */}
       <aside
-        className={`hidden md:flex flex-col fixed left-0 top-0 h-full z-40 bg-[#111111] border-r border-white/[0.06] transition-[width] duration-200 ease-in-out overflow-hidden ${
+        className={`hidden md:flex flex-col fixed left-0 top-0 h-full z-40 bg-[#0d1b35] transition-[width] duration-200 ease-in-out overflow-hidden ${
           isCol ? "w-14" : "w-60"
         }`}
       >
         {/* ロゴ + トグル */}
-        <div className={`flex items-center h-12 flex-shrink-0 border-b border-white/[0.06] ${
-          isCol ? "justify-center" : "px-3.5 gap-2.5"
+        <div className={`flex items-center h-14 flex-shrink-0 border-b border-white/[0.08] ${
+          isCol ? "justify-center" : "px-4 gap-3"
         }`}>
           <button
             onClick={toggle}
             aria-label={isCol ? "メニューを開く" : "メニューを閉じる"}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-600 hover:text-zinc-300 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/80 transition-colors flex-shrink-0"
           >
-            <MenuIcon className="w-[15px] h-[15px]" />
+            <MenuIcon className="w-4 h-4" />
           </button>
           {!isCol && (
-            <span className="text-[13px] font-semibold text-zinc-200 tracking-tight select-none">
-              RaqWorks
-            </span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-6 h-6 rounded-full border-2 border-white/60 flex-shrink-0" />
+              <span className="text-[14px] font-semibold text-white truncate">
+                RaqWorks
+              </span>
+            </div>
           )}
         </div>
 
         {/* ナビゲーション */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-px">
+        <nav className="flex-1 overflow-y-auto py-4 px-2.5 space-y-0.5">
           {sections.map((section, si) => (
             <div key={si}>
               {si > 0 && (
-                <div className="my-2.5 mx-1 border-t border-white/[0.06]" />
+                <div className="my-3 mx-1 border-t border-white/[0.08]" />
               )}
               {!isCol && (
                 section.projectTabs && section.projectTabs.length > 0 ? (
-                  /* ── 案件タブ（ファイル見出し風） ── */
                   <div
-                    className="flex overflow-x-auto mt-1 mb-0.5 border-b border-white/[0.08]"
+                    className="flex overflow-x-auto mt-1 mb-1 border-b border-white/[0.08]"
                     style={{ scrollbarWidth: "none" }}
                   >
                     {section.projectTabs.map(tab => (
@@ -134,8 +170,8 @@ export default function AppNav({
                         className={[
                           "flex-shrink-0 px-3 py-1.5 text-[11px] font-medium whitespace-nowrap transition-colors border-b-2 -mb-px",
                           tab.isActive
-                            ? "border-blue-500 text-zinc-100"
-                            : "border-transparent text-zinc-600 hover:text-zinc-300",
+                            ? "border-blue-400 text-white"
+                            : "border-transparent text-white/40 hover:text-white/70",
                         ].join(" ")}
                       >
                         {tab.name.length > 7 ? tab.name.slice(0, 7) + "…" : tab.name}
@@ -143,7 +179,7 @@ export default function AppNav({
                     ))}
                   </div>
                 ) : section.title ? (
-                  <p className="px-2.5 pt-2 pb-1.5 text-[9px] font-semibold text-zinc-700 uppercase tracking-[0.12em] select-none">
+                  <p className="px-2 pt-2 pb-1.5 text-[9px] font-semibold text-white/30 uppercase tracking-[0.12em] select-none">
                     {section.title}
                   </p>
                 ) : null
@@ -156,18 +192,17 @@ export default function AppNav({
                     key={item.href}
                     href={item.href}
                     title={isCol ? item.label : undefined}
-                    className={`relative flex items-center h-8 rounded-md transition-colors overflow-hidden ${
-                      isCol ? "justify-center" : "gap-2.5 px-2.5"
+                    className={`flex items-center h-10 rounded-xl transition-colors ${
+                      isCol ? "justify-center" : "gap-3 px-3"
                     } ${
-                      active ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-200"
+                      active
+                        ? "bg-white/[0.12] text-white"
+                        : "text-white/50 hover:bg-white/[0.06] hover:text-white/80"
                     }`}
                   >
-                    {active && (
-                      <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] bg-blue-500 rounded-r-full" />
-                    )}
-                    <Icon className="w-[15px] h-[15px] flex-shrink-0" />
+                    <Icon className="w-[18px] h-[18px] flex-shrink-0" />
                     {!isCol && (
-                      <span className={`text-[13px] leading-none ${active ? "font-medium" : "font-normal"}`}>
+                      <span className={`text-[13.5px] leading-none ${active ? "font-semibold" : "font-normal"}`}>
                         {item.label}
                       </span>
                     )}
@@ -179,24 +214,24 @@ export default function AppNav({
         </nav>
 
         {/* ユーザーフッター */}
-        <div className="border-t border-white/[0.06] p-2 flex-shrink-0">
+        <div className="border-t border-white/[0.08] p-2.5 flex-shrink-0">
           <form action={logoutAction}>
             <button
               type="submit"
               title={isCol ? `${staffName} — ログアウト` : undefined}
-              className={`w-full flex items-center h-10 rounded-md transition-colors hover:bg-white/[0.04] group ${
-                isCol ? "justify-center" : "gap-2.5 px-2"
+              className={`w-full flex items-center h-10 rounded-xl transition-colors hover:bg-white/[0.06] group ${
+                isCol ? "justify-center" : "gap-3 px-2"
               }`}
             >
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0">
                 {initial}
               </div>
               {!isCol && (
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="text-[12px] font-medium text-zinc-300 truncate leading-tight">
+                  <p className="text-[12px] font-medium text-white/80 truncate leading-tight">
                     {staffName}
                   </p>
-                  <p className="text-[10px] text-zinc-700 group-hover:text-zinc-500 leading-tight transition-colors">
+                  <p className="text-[10px] text-white/30 group-hover:text-white/50 leading-tight transition-colors">
                     ログアウト
                   </p>
                 </div>
@@ -207,16 +242,33 @@ export default function AppNav({
       </aside>
 
       {/* ── メインコンテンツ ── */}
-      <div className={`flex-1 min-w-0 transition-[padding] duration-200 ease-in-out pb-safe md:pb-0 ${
+      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out pb-safe md:pb-0 ${
         isCol ? "md:pl-14" : "md:pl-60"
       }`}>
+
+        {/* ── PC トップヘッダー ── */}
+        <header className="hidden md:flex sticky top-0 z-30 h-14 bg-white border-b border-zinc-100 dark:bg-zinc-900 dark:border-zinc-800 items-center px-6 gap-3 flex-shrink-0">
+          {projectName && (
+            <>
+              <span className="text-[14px] font-semibold text-[#0d1b35] dark:text-zinc-100">{projectName}</span>
+              <span className="text-zinc-200 dark:text-zinc-700 select-none">|</span>
+            </>
+          )}
+          <span className="text-[13px] text-zinc-400 tabular-nums">{dateStr}</span>
+          <span className="text-[20px] font-bold tabular-nums text-zinc-800 dark:text-zinc-100 ml-0.5">{liveTime}</span>
+          <div className="ml-auto flex items-center gap-1">
+            <Link href="/notices" className="relative p-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+              <BellIcon className="w-5 h-5 text-zinc-400" />
+            </Link>
+          </div>
+        </header>
+
         {children}
       </div>
 
       {/* ── モバイル bottom nav ── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/85 dark:bg-zinc-900/85 backdrop-blur-xl border-t border-zinc-200/60 dark:border-zinc-800/60" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border-t border-zinc-200/60 dark:border-zinc-800/60" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
 
-        {/* セクション切り替えタブ */}
         {showSectionTabs && (
           <div className="px-3 pt-2 pb-1">
             <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
@@ -244,12 +296,10 @@ export default function AppNav({
           </div>
         )}
 
-        {/* 案件切り替えタブ（管理セクション表示中のみ） */}
         {activeSection.projectTabs && activeSection.projectTabs.length > 0 && (
           <ProjectTabsMobile tabs={activeSection.projectTabs} />
         )}
 
-        {/* ナビアイテム */}
         <nav className="flex overflow-x-auto px-1 pb-1" style={{ scrollbarWidth: "none" }}>
           {activeSection.items.map((item) => {
             const active = isActive(item.href);
@@ -259,11 +309,11 @@ export default function AppNav({
                 key={item.href}
                 href={item.href}
                 className={`flex-shrink-0 flex flex-col items-center justify-center py-2 px-2.5 gap-1 min-w-[58px] transition-colors ${
-                  active ? "text-blue-600 dark:text-blue-400" : "text-zinc-400 dark:text-zinc-500"
+                  active ? "text-[#0d1b35] dark:text-blue-400" : "text-zinc-400 dark:text-zinc-500"
                 }`}
               >
                 <div className={`w-10 h-7 flex items-center justify-center rounded-xl transition-all ${
-                  active ? "bg-blue-100 dark:bg-blue-950/70" : ""
+                  active ? "bg-blue-50 dark:bg-blue-950/70" : ""
                 }`}>
                   <Icon className={`w-[22px] h-[22px] transition-transform ${active ? "scale-105" : ""}`} />
                 </div>
@@ -274,7 +324,6 @@ export default function AppNav({
             );
           })}
         </nav>
-
       </div>
     </div>
   );
