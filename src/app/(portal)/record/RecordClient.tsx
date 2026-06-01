@@ -275,7 +275,7 @@ export default function RecordClient({
             <p className="text-[13px] text-zinc-500 text-center py-10">未来の月は表示できません</p>
           ) : (
             <div className="record-table bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden shadow-sm">
-              <table className="w-full min-w-[700px] border-collapse">
+              <table className="w-full min-w-[700px] border-separate border-spacing-0">
                 <thead>
                   <tr className="border-b border-zinc-100 dark:border-zinc-800">
                     {["日付","曜日","ステータス","予定時間","開始時間","終了時間","勤務時間","備考","修正申請"].map((h, i) => (
