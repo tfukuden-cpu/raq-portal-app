@@ -36,11 +36,24 @@ function todayJST(): string {
 
 /** JST翌日の日付 YYYY-MM-DD（UTC環境でも正しく計算） */
 function tomorrowJST(): string {
-  const today = todayJST(); // "YYYY-MM-DD" in JST
+  const today = todayJST();
   const [y, m, d] = today.split("-").map(Number);
-  // UTC midnight の翌日 → JST では同日09:00 なので正しい日付になる
   return new Date(Date.UTC(y, m - 1, d + 1))
     .toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+}
+
+/** JST昨日の日付 YYYY-MM-DD */
+function yesterdayJST(): string {
+  const today = todayJST();
+  const [y, m, d] = today.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d - 1))
+    .toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+}
+
+/** YYYY-MM-DD → M/D */
+function fmtMD(dateStr: string): string {
+  const [, m, d] = dateStr.split("-");
+  return `${parseInt(m)}/${parseInt(d)}`;
 }
 
 /** "HH:MM" または "HH:MM:SS" → 分 */
@@ -82,10 +95,11 @@ type ShiftRow = {
 };
 
 type StaffRow = {
-  id:           string;
-  display_name: string | null;
-  name:         string | null;
-  line_user_id: string | null;
+  id:             string;
+  display_name:   string | null;
+  name:           string | null;
+  line_user_id:   string | null;
+  account_number: string | null;
 };
 
 // ── ハンドラー ───────────────────────────────────────────────────────────────
@@ -122,7 +136,8 @@ export async function GET(req: NextRequest) {
 
     // ── rest_day_remind：翌日出勤アナウンス（設定時刻に1回） ─────────────────
     if (settings.rest_day_remind.enabled) {
-      const cfg = settings.rest_day_remind;
+      const cfg  = settings.rest_day_remind;
+      const yday = yesterdayJST();
       if (isNearTime(cfg.time ?? "20:00")) {
         const { data: tShifts } = await admin
           .from("shifts")
@@ -133,29 +148,126 @@ export async function GET(req: NextRequest) {
 
         if ((tShifts ?? []).length > 0) {
           const staffIds = [...new Set(tShifts!.map(s => s.staff_id))];
+
+          // スタッフ情報（アカウント番号含む）
           const { data: staffRows } = await admin
             .from("staffs")
-            .select("id, display_name, name, line_user_id")
+            .select("id, display_name, name, line_user_id, account_number")
             .in("id", staffIds) as { data: StaffRow[] | null };
-          const staffMap: Record<string, StaffRow> = Object.fromEntries(
-            (staffRows ?? []).map(s => [s.id, s])
+          const staffMap = Object.fromEntries((staffRows ?? []).map(s => [s.id, s]));
+
+          // セクション情報
+          const { data: memberRows } = await admin
+            .from("project_members")
+            .select("staff_id, section")
+            .eq("project_id", projectId)
+            .in("staff_id", staffIds);
+          const sectionMap = Object.fromEntries(
+            (memberRows ?? []).map(m => [
+              m.staff_id as string,
+              (m.section as string | null) ?? "セクション設定なし",
+            ])
           );
 
+          // 昨日の欠勤者
+          const { data: ydayAbsences } = await admin
+            .from("absence_reports")
+            .select("staff_id")
+            .eq("project_id", projectId)
+            .eq("absence_date", yday);
+          const absentYday = new Set((ydayAbsences ?? []).map(a => a.staff_id as string));
+
+          // 個人送信 + 結果追跡
+          type SendResult = {
+            staffId: string;
+            name: string;
+            accountNumber: string;
+            section: string;
+            star: boolean;
+            success: boolean;
+            failReason: string | null;
+          };
+          const results: SendResult[] = [];
+
           for (const shift of tShifts!) {
-            const staff = staffMap[shift.staff_id];
-            if (!staff?.line_user_id) continue;
-            const name    = staff.display_name ?? staff.name ?? shift.staff_id;
+            const staff   = staffMap[shift.staff_id] as StaffRow | undefined;
+            const name    = staff?.display_name ?? staff?.name ?? shift.staff_id;
+            const acct    = staff?.account_number ?? shift.staff_id;
+            const section = sectionMap[shift.staff_id] ?? "セクション設定なし";
+            const star    = absentYday.has(shift.staff_id);
+
+            if (!staff?.line_user_id) {
+              results.push({ staffId: shift.staff_id, name, accountNumber: acct, section, star, success: false, failReason: "LINE未登録" });
+              continue;
+            }
+
             const message = resolveMessage(
               cfg.message ?? DEFAULT_NOTIFY_MESSAGES.rest_day_remind,
               {
-                "名前": name,
-                "翌日": tmrw,
+                "名前":  name,
+                "翌日":  tmrw,
                 "シフト": formatShift(shift.shift_name, shift.shift_start, shift.shift_end),
               }
             );
-            await pushLine(staff.line_user_id, message);
-            if (groupId) await pushLine(groupId, message);
-            void logNotify({ projectId, notifyType: "rest_day_remind", recipientType: "staff", recipientId: shift.staff_id, recipientName: name, message });
+
+            let success = true;
+            let failReason: string | null = null;
+            try {
+              await pushLine(staff.line_user_id, message);
+              void logNotify({ projectId, notifyType: "rest_day_remind", recipientType: "staff", recipientId: shift.staff_id, recipientName: name, message });
+              sent++;
+            } catch {
+              success = false;
+              failReason = "送信エラー";
+            }
+            results.push({ staffId: shift.staff_id, name, accountNumber: acct, section, star, success, failReason });
+          }
+
+          // グループへまとめレポート1通
+          if (groupId && results.length > 0) {
+            // セクション別集計・グループ化
+            const sectionOrder: string[] = [];
+            const bySection = new Map<string, SendResult[]>();
+            for (const r of results) {
+              if (!bySection.has(r.section)) {
+                bySection.set(r.section, []);
+                sectionOrder.push(r.section);
+              }
+              bySection.get(r.section)!.push(r);
+            }
+            const failures = results.filter(r => !r.success);
+            const dateFmt  = fmtMD(tmrw);
+
+            const lines: string[] = [
+              `翌日（${dateFmt}）出勤者`,
+              "──────────────",
+              `合計　${results.length}人`,
+              ...sectionOrder.map(sec => `　${sec}　${bySection.get(sec)!.length}人`),
+            ];
+
+            for (const sec of sectionOrder) {
+              lines.push("──────────────");
+              lines.push(sec);
+              for (const r of bySection.get(sec)!) {
+                const mark   = r.star ? "★" : "　";
+                const status = r.success ? "成功" : "失敗";
+                lines.push(`${mark}${r.accountNumber}　${r.name}　${status}`);
+              }
+            }
+
+            if (failures.length > 0) {
+              lines.push("──────────────");
+              lines.push("送信失敗者");
+              for (const r of failures) {
+                lines.push(`　${r.section}　${r.accountNumber}　${r.name}`);
+                lines.push(`　　${r.failReason}`);
+              }
+            }
+
+            lines.push("──────────────");
+            lines.push("★：前日欠勤者");
+
+            await pushLine(groupId, lines.join("\n"));
             sent++;
           }
         }
