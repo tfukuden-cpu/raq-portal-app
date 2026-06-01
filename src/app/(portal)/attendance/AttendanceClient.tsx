@@ -692,6 +692,8 @@ export default function AttendanceClient({
                             {isHMotaDragTarget ? "ドロップで複製配置" : "スロット配置"}
                           </span>
                         </div>
+                        {/* 他セクションと高さ揃え用スペーサー */}
+                        <div style={{ minHeight: "38px" }} />
                       </div>
                       <HMotaPanel
                         ref={hMotaPanelRef}
@@ -727,7 +729,7 @@ export default function AttendanceClient({
                       const totalAssigned   = allMembers.length;
                       const totalSufficiency = totalRequired > 0 ? totalAssigned - totalRequired : null;
                       const totalLate = allMembers.filter(m => (localStatuses.get(m.staffId) ?? m.status) === "late").length;
-                      const suffixFmt = (suf: number | null) => suf === null ? null : suf > 0 ? `+${suf}` : suf === 0 ? "✓" : String(suf);
+                      const suffixFmt = (suf: number | null) => suf === null ? null : suf > 0 ? `+${suf}` : String(suf);
                       const sufColor  = (suf: number | null) => suf === null ? "" : suf > 0 ? "text-blue-500 dark:text-blue-400" : suf < 0 ? "text-red-500 dark:text-red-400" : "text-emerald-500";
                       return (
                       <div className={`px-3 pt-2.5 pb-2 border-b shrink-0 rounded-t-2xl ${secCol.headerBg} ${secCol.border.replace("border-", "border-b-")}`}>
