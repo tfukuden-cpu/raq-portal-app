@@ -1,10 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import ShiftCalendar, { type ShiftChangeLog } from "./ShiftCalendar";
 import HolidayTab from "./HolidayTab";
 import RequestClient from "./request/RequestClient";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
 type ShiftData = {
   shift_date: string;
@@ -63,8 +62,8 @@ type Props = {
 type TabKey = "shift" | "holiday" | "request";
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: "shift",   label: "シフト" },
-  { key: "holiday", label: "希望休" },
+  { key: "shift",   label: "月間カレンダー" },
+  { key: "holiday", label: "希望休申請" },
   { key: "request", label: "追加申請" },
 ];
 
@@ -74,13 +73,9 @@ export default function ShiftsTabs({
   holidayRequests, shiftRequests, shiftOpenings,
   holidayOpenDay = null, holidayDeadlineDay = null, holidayMaxDaysPerMonth = null, holidayWeekendLimit = null,
 }: Props) {
-  const [tab, setTab] = useState<TabKey>("shift");
+  const [tab, setTab]     = useState<TabKey>("shift");
   const [year, setYear]   = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
-
-  const monthStr = `${year}-${String(month).padStart(2, "0")}`;
-  const canPrev  = monthStr > minMonth;
-  const canNext  = monthStr < maxMonth;
 
   const goMonth = (delta: number) => {
     const d = new Date(year, month - 1 + delta, 1);
@@ -88,54 +83,36 @@ export default function ShiftsTabs({
     setMonth(d.getMonth() + 1);
   };
 
-  // 月ナビはシフト・希望休タブで共有（追加申請タブは不要）
-  const showMonthNav = tab === "shift" || tab === "holiday";
-
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col min-h-screen bg-[#f4f6fa] dark:bg-zinc-950">
 
-      {/* ── 固定ヘッダー ── */}
-      <div className="sticky top-0 z-30 shrink-0 bg-[#F5F5F7]/90 dark:bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-200/60 dark:border-zinc-800">
-        {/* タイトル行 */}
-        <div className="max-w-6xl mx-auto px-5 pt-5 pb-0">
-          <h1 className="text-[26px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">シフト</h1>
-        </div>
-        {/* タブバー */}
-        <div className="max-w-6xl mx-auto flex overflow-x-auto px-4 mt-2" style={{ scrollbarWidth: "none" }}>
+      {/* ── ページヘッダー ── */}
+      <div className="max-w-6xl mx-auto w-full px-4 md:px-8 pt-6 pb-4 flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-[22px] md:text-[24px] font-bold text-[#0d1b35] dark:text-white">
+          勤務スケジュール
+        </h1>
+        {/* タブボタン群 */}
+        <div className="flex items-center gap-2">
           {TABS.map(({ key, label }) => (
             <button
               key={key}
               type="button"
               onClick={() => setTab(key)}
               className={[
-                "px-4 py-2.5 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-colors flex-shrink-0",
+                "px-4 py-2 rounded-xl text-[13px] font-semibold transition-colors whitespace-nowrap",
                 tab === key
-                  ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
-                  : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
+                  ? "bg-[#0d1b35] text-white shadow-sm"
+                  : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800",
               ].join(" ")}
-            >{label}</button>
+            >
+              {label}
+            </button>
           ))}
         </div>
-        {/* 月ナビ（シフト・希望休タブで共有） */}
-        {showMonthNav && (
-          <div className="max-w-6xl mx-auto flex items-center justify-center gap-2 px-4 py-2">
-            <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
-              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 disabled:opacity-30 transition-colors shadow-sm active:bg-zinc-50">
-              <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
-            </button>
-            <span className="text-[14px] font-bold tabular-nums text-zinc-900 dark:text-zinc-50 w-28 text-center">
-              {year}年 {month}月
-            </span>
-            <button type="button" onClick={() => goMonth(1)} disabled={!canNext}
-              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 disabled:opacity-30 transition-colors shadow-sm active:bg-zinc-50">
-              <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* ── タブコンテンツ ── */}
-      <div className="flex-1 min-h-0 bg-[#F5F5F7] dark:bg-zinc-950 px-4 pt-3">
+      {/* ── コンテンツ ── */}
+      <div className="max-w-6xl mx-auto w-full px-4 md:px-8 pb-28 md:pb-12 flex-1">
 
         {tab === "shift" && (
           <ShiftCalendar
@@ -153,20 +130,22 @@ export default function ShiftsTabs({
         )}
 
         {tab === "holiday" && (
-          <HolidayTab
-            projectId={projectId}
-            holidayRequests={holidayRequests}
-            initialYear={year}
-            initialMonth={month}
-            openDay={holidayOpenDay}
-            deadlineDay={holidayDeadlineDay}
-            maxDaysPerMonth={holidayMaxDaysPerMonth}
-            weekendLimit={holidayWeekendLimit}
-          />
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+            <HolidayTab
+              projectId={projectId}
+              holidayRequests={holidayRequests}
+              initialYear={year}
+              initialMonth={month}
+              openDay={holidayOpenDay}
+              deadlineDay={holidayDeadlineDay}
+              maxDaysPerMonth={holidayMaxDaysPerMonth}
+              weekendLimit={holidayWeekendLimit}
+            />
+          </div>
         )}
 
         {tab === "request" && (
-          <div className="h-full overflow-y-auto">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
             <RequestClient
               openings={shiftOpenings}
               existingRequests={shiftRequests}
@@ -176,6 +155,7 @@ export default function ShiftsTabs({
             />
           </div>
         )}
+
       </div>
     </div>
   );

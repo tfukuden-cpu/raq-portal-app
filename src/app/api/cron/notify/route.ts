@@ -225,7 +225,6 @@ export async function GET(req: NextRequest) {
 
           // グループへまとめレポート1通
           if (groupId && results.length > 0) {
-            // セクション別集計・グループ化
             const sectionOrder: string[] = [];
             const bySection = new Map<string, SendResult[]>();
             for (const r of results) {
@@ -239,33 +238,36 @@ export async function GET(req: NextRequest) {
             const dateFmt  = fmtMD(tmrw);
 
             const lines: string[] = [
-              `翌日（${dateFmt}）出勤者`,
-              "──────────────",
-              `合計　${results.length}人`,
-              ...sectionOrder.map(sec => `　${sec}　${bySection.get(sec)!.length}人`),
+              `【 翌日（${dateFmt}）出勤リマインドレポート】`,
+              "",
+              `合計 ${results.length}名`,
+              ...sectionOrder.map(sec => `${sec} ${bySection.get(sec)!.length}名`),
             ];
 
-            for (const sec of sectionOrder) {
-              lines.push("──────────────");
-              lines.push(sec);
-              for (const r of bySection.get(sec)!) {
-                const mark   = r.star ? "★" : "　";
-                const status = r.success ? "成功" : "失敗";
-                lines.push(`${mark}${r.accountNumber}　${r.name}　${status}`);
-              }
-            }
-
             if (failures.length > 0) {
-              lines.push("──────────────");
-              lines.push("送信失敗者");
+              lines.push("");
+              lines.push(`⚠️ 送信失敗 ${failures.length}名`);
               for (const r of failures) {
-                lines.push(`　${r.section}　${r.accountNumber}　${r.name}`);
-                lines.push(`　　${r.failReason}`);
+                lines.push(`・${r.accountNumber} ${r.name}`);
+                lines.push(`　→ ${r.failReason}`);
               }
             }
 
-            lines.push("──────────────");
-            lines.push("★：前日欠勤者");
+            lines.push("");
+            lines.push("----------");
+
+            for (let i = 0; i < sectionOrder.length; i++) {
+              if (i > 0) lines.push("");
+              const sec = sectionOrder[i];
+              lines.push(`【${sec}】`);
+              for (const r of bySection.get(sec)!) {
+                const suffix = [
+                  r.star    ? "※前日欠勤" : "",
+                  !r.success ? "✗未送信"   : "",
+                ].filter(Boolean).join(" ");
+                lines.push(`・${r.accountNumber} ${r.name}${suffix ? " " + suffix : ""}`);
+              }
+            }
 
             await pushLine(groupId, lines.join("\n"));
             sent++;

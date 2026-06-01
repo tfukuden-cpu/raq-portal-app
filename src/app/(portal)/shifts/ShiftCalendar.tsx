@@ -36,67 +36,23 @@ type Props = {
 const WEEKDAY_SHORT = ["日", "月", "火", "水", "木", "金", "土"];
 const WEEKDAY_FULL  = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
 
-// ── シフト色定義（管理ビューと統一） ─────────────────────────────
-const SECTION_COLORS: Record<string, { early: string; late: string; def: string; text: string }> = {
-  "SV":       { early: "bg-blue-100 dark:bg-blue-900/60",     late: "bg-blue-300 dark:bg-blue-700/80",     def: "bg-blue-200 dark:bg-blue-800/70",    text: "text-blue-900 dark:text-blue-100" },
-  "査定":     { early: "bg-emerald-100 dark:bg-emerald-900/60", late: "bg-emerald-300 dark:bg-emerald-700/80", def: "bg-emerald-200 dark:bg-emerald-800/70", text: "text-emerald-900 dark:text-emerald-100" },
-  "販売":     { early: "bg-orange-100 dark:bg-orange-900/60",  late: "bg-orange-300 dark:bg-orange-700/80",  def: "bg-orange-200 dark:bg-orange-800/70",   text: "text-orange-900 dark:text-orange-100" },
-  "MOTA":     { early: "bg-red-100 dark:bg-red-900/60",       late: "bg-red-300 dark:bg-red-700/80",       def: "bg-red-200 dark:bg-red-800/70",         text: "text-red-900 dark:text-red-100" },
-  "リメイク": { early: "bg-pink-100 dark:bg-pink-900/60",     late: "bg-pink-300 dark:bg-pink-700/80",     def: "bg-pink-200 dark:bg-pink-800/70",       text: "text-pink-900 dark:text-pink-100" },
-  "ローン":   { early: "bg-violet-100 dark:bg-violet-900/60", late: "bg-violet-300 dark:bg-violet-700/80", def: "bg-violet-200 dark:bg-violet-800/70",   text: "text-violet-900 dark:text-violet-100" },
-};
-const FALLBACK = { early: "bg-sky-100 dark:bg-sky-900/60", late: "bg-sky-300 dark:bg-sky-700/80", def: "bg-sky-200 dark:bg-sky-800/70", text: "text-sky-900 dark:text-sky-100" };
+// ── シフトバッジ色 ─────────────────────────────────────────────────────────────
 
-type ShiftKind = "work" | "off" | "dayoff" | "none";
-
-function classifyShift(name: string | null): ShiftKind {
-  if (!name) return "none";
-  if (name === "公休") return "off";
-  if (name === "希望休" || name === "有休" || name === "特別休暇") return "dayoff";
-  return "work";
+function getShiftBadge(name: string | null): { bg: string; text: string } | null {
+  if (!name) return null;
+  if (["公休", "休", "公休日"].includes(name))
+    return { bg: "bg-blue-50 dark:bg-blue-950/50",   text: "text-blue-600 dark:text-blue-300" };
+  if (["希望休", "有休", "特別休暇", "代休", "振替休日", "欠勤"].includes(name))
+    return { bg: "bg-zinc-100 dark:bg-zinc-800",      text: "text-zinc-500 dark:text-zinc-400" };
+  if (name.includes("早番"))
+    return { bg: "bg-green-50 dark:bg-green-950/50",  text: "text-green-700 dark:text-green-300" };
+  if (name.includes("遅番"))
+    return { bg: "bg-amber-50 dark:bg-amber-950/50",  text: "text-amber-700 dark:text-amber-300" };
+  return { bg: "bg-sky-50 dark:bg-sky-950/50",        text: "text-sky-700 dark:text-sky-300" };
 }
 
-function detectSection(name: string): string | null {
-  for (const sec of ["SV", "MOTA", "リメイク", "ローン", "査定", "販売"]) {
-    if (name.startsWith(sec)) return sec;
-  }
-  return null;
-}
-
-/** セル背景色と文字色を返す */
-function getShiftColors(name: string | null): { bg: string; text: string } | null {
-  const kind = classifyShift(name);
-  if (kind === "none") return null;
-  if (kind === "off")   return { bg: "bg-zinc-200 dark:bg-zinc-700",  text: "text-zinc-500 dark:text-zinc-400" };
-  if (kind === "dayoff") return { bg: "bg-zinc-700 dark:bg-zinc-700", text: "text-white" };
-  // work
-  const sec = detectSection(name!);
-  const cols = SECTION_COLORS[sec ?? ""] ?? FALLBACK;
-  if (name!.includes("早番")) return { bg: cols.early, text: cols.text };
-  if (name!.includes("遅番")) return { bg: cols.late,  text: cols.text };
-  return { bg: cols.def, text: cols.text };
-}
-
-/** カレンダーセル内の略称（2文字を基本に） */
-function shiftAbbr(name: string): string {
-  if (name === "公休")    return "公休";
-  if (name === "希望休")  return "希休";
-  if (name === "有休")    return "有休";
-  if (name === "特別休暇") return "特休";
-  // セクション頭1文字 + "早"/"遅" で2文字
-  if (name.includes("早番")) {
-    const sec = detectSection(name);
-    return (sec ? sec.slice(0, 1) : name.slice(0, 1)) + "早";
-  }
-  if (name.includes("遅番")) {
-    const sec = detectSection(name);
-    return (sec ? sec.slice(0, 1) : name.slice(0, 1)) + "遅";
-  }
-  return name.slice(0, 2);
-}
-
-function isHoliday(name: string | null) {
-  return name === "公休" || name === "休" || name === "公休日";
+function isOff(name: string | null): boolean {
+  return ["公休", "休", "公休日", "希望休", "有休", "特別休暇", "代休", "振替休日", "欠勤"].includes(name ?? "");
 }
 
 function fmtLogAt(iso: string): string {
@@ -110,13 +66,33 @@ function cx(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(" ");
 }
 
+// ── アイコン ──────────────────────────────────────────────────────────────────
+
+function BriefcaseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+    </svg>
+  );
+}
+
+function CalendarOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function ShiftCalendar({
   shifts, changeLogs = [], todayStr, initialYear, initialMonth, minMonth, maxMonth,
   controlledYear, controlledMonth, onGoMonth,
 }: Props) {
-  const [internalYear, setInternalYear]   = useState(initialYear);
+  const [internalYear,  setInternalYear]  = useState(initialYear);
   const [internalMonth, setInternalMonth] = useState(initialMonth);
-  const [selected, setSelected]           = useState<string | null>(todayStr);
+  const [modal, setModal] = useState<string | null>(null);
 
   const isControlled = controlledYear !== undefined;
   const year  = isControlled ? controlledYear!  : internalYear;
@@ -134,9 +110,10 @@ export default function ShiftCalendar({
       setInternalYear(d.getFullYear());
       setInternalMonth(d.getMonth() + 1);
     }
-    setSelected(null);
+    setModal(null);
   };
 
+  // データ構築
   const shiftMap = new Map<string, ShiftData>();
   for (const s of shifts) {
     if (s.shift_date.startsWith(monthStr)) shiftMap.set(s.shift_date, s);
@@ -151,154 +128,153 @@ export default function ShiftCalendar({
 
   const firstDow    = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
+  const prevDays    = new Date(year, month - 1, 0).getDate();
   const trailing    = 42 - firstDow - daysInMonth;
 
   let workCount = 0, holidayCount = 0;
   for (let i = 1; i <= daysInMonth; i++) {
     const s = shiftMap.get(`${monthStr}-${String(i).padStart(2, "0")}`);
     if (!s) continue;
-    isHoliday(s.shift_name) ? holidayCount++ : workCount++;
+    isOff(s.shift_name) ? holidayCount++ : workCount++;
   }
 
-  // モーダル用（selected とは別管理）
-  const [modal, setModal] = useState<string | null>(null);
-
-  const getSelInfo = (ds: string | null) => {
-    if (!ds) return null;
-    const shift = shiftMap.get(ds) ?? null;
-    const dow   = new Date(ds + "T00:00:00+09:00").getDay();
-    const [, mm, dd] = ds.split("-");
-    return {
-      label:  `${Number(mm)}月${Number(dd)}日（${WEEKDAY_FULL[dow]}）`,
-      shift,
-      kind:   classifyShift(shift?.shift_name ?? null),
-      colors: getShiftColors(shift?.shift_name ?? null),
-    };
-  };
-  const modalInfo = getSelInfo(modal);
+  // モーダル情報
+  const modalShift = modal ? shiftMap.get(modal) ?? null : null;
+  const modalDow   = modal ? new Date(modal + "T00:00:00+09:00").getDay() : 0;
+  const modalLabel = modal ? (() => {
+    const [, mm, dd] = modal.split("-");
+    return `${Number(mm)}月${Number(dd)}日（${WEEKDAY_FULL[modalDow]}）`;
+  })() : "";
 
   return (
-    <div className="flex flex-col gap-2 h-full">
+    <>
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
 
-      {/* 月ナビ（非制御モード） */}
-      {!isControlled && (
-        <div className="flex items-center justify-between flex-shrink-0">
-          <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
-            <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
-          </button>
-          <div className="text-center">
-            <p className="text-base font-bold text-zinc-900 dark:text-zinc-50">{year}年 {month}月</p>
-            {(workCount > 0 || holidayCount > 0) && (
-              <p className="text-[10px] text-zinc-400">出勤 {workCount}日　公休 {holidayCount}日</p>
-            )}
-          </div>
-          <button type="button" onClick={() => goMonth(1)} disabled={!canNext}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
-            <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
-          </button>
-        </div>
-      )}
-      {/* 制御モード：出勤/公休カウント */}
-      {isControlled && (workCount > 0 || holidayCount > 0) && (
-        <p className="text-[11px] text-zinc-400 text-center flex-shrink-0">
-          出勤 {workCount}日　公休 {holidayCount}日
-        </p>
-      )}
-
-      {/* 曜日ヘッダー */}
-      <div className="grid grid-cols-7 flex-shrink-0">
-        {WEEKDAY_SHORT.map((w, i) => (
-          <div key={w} className={cx(
-            "text-center text-[11px] font-semibold py-0.5",
-            i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-zinc-400",
-          )}>{w}</div>
-        ))}
-      </div>
-
-      {/* カレンダーグリッド（常に6行 = 42マス） */}
-      <div
-        className="flex-1 min-h-0 grid grid-cols-7 gap-0.5"
-        style={{ gridAutoRows: "minmax(52px, 1fr)" }}
-      >
-        {Array.from({ length: firstDow }).map((_, i) => <div key={`pre${i}`} />)}
-
-        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-          const ds      = `${monthStr}-${String(d).padStart(2, "0")}`;
-          const s       = shiftMap.get(ds);
-          const isToday = ds === todayStr;
-          const isSel   = false; // セル選択状態は廃止（モーダルに移行）
-          const dow     = new Date(year, month - 1, d).getDay();
-          const kind    = classifyShift(s?.shift_name ?? null);
-          const colors  = getShiftColors(s?.shift_name ?? null);
-          const hasLog  = logMap.has(ds);
-
-          // セル背景
-          const cellBg = isSel
-            ? kind === "dayoff" ? "bg-zinc-800 dark:bg-zinc-700 ring-2 ring-inset ring-zinc-500"
-            : kind === "off"    ? "bg-zinc-400 dark:bg-zinc-500 ring-2 ring-inset ring-zinc-500"
-            : colors            ? cx(colors.bg, "ring-2 ring-inset ring-zinc-400 dark:ring-zinc-500")
-                                : "bg-zinc-200 dark:bg-zinc-700 ring-2 ring-inset ring-zinc-400"
-            : kind === "dayoff" ? "bg-zinc-700 dark:bg-zinc-700 hover:bg-zinc-600"
-            : kind === "off"    ? "bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600"
-            : colors            ? cx(colors.bg, "hover:brightness-95")
-                                : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60";
-
-          // 日付数字の色
-          const numCls = isToday && !isSel
-            ? "bg-blue-600 text-white rounded-full w-6 h-6"
-            : isSel
-            ? kind === "dayoff" || kind === "off" ? "text-white font-bold"
-            : colors ? cx(colors.text, "font-bold") : "text-zinc-900 dark:text-zinc-50 font-bold"
-            : dow === 0 ? "text-red-500 dark:text-red-400"
-            : dow === 6 ? "text-blue-500 dark:text-blue-400"
-            : kind === "dayoff" ? "text-white font-semibold"
-            : colors ? cx(colors.text, "font-semibold") : "text-zinc-700 dark:text-zinc-300";
-
-          // シフト名テキストの色
-          const nameCls =
-            kind === "dayoff" ? "text-zinc-300"
-            : isSel ? (colors ? cx(colors.text, "opacity-80") : "text-zinc-600 dark:text-zinc-400")
-            : colors ? colors.text : "text-zinc-500";
-
-          return (
+        {/* ── 月ナビ + 統計 ── */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
+          {/* ← 月 年 → */}
+          <div className="flex items-center gap-3">
             <button
-              key={ds}
               type="button"
-              onClick={() => setModal(ds)}
-              className={cx(
-                "flex flex-col items-center justify-center gap-0 rounded-xl transition-colors relative overflow-hidden",
-                cellBg,
-              )}
+              onClick={() => goMonth(-1)}
+              disabled={!canPrev}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors"
             >
-              {/* 日付数字 */}
-              <span className={cx("text-sm flex items-center justify-center leading-none", numCls)}>
-                {d}
-              </span>
-
-              {/* シフト名（フルネーム・セル幅に合わせてリサイズ） */}
-              {s?.shift_name && (
-                <span
-                  className={cx("leading-none font-bold mt-0.5 w-full text-center truncate px-0.5", nameCls)}
-                  style={{ fontSize: "clamp(8px, 3.2vw, 12px)" }}
-                >
-                  {s.shift_name}
-                </span>
-              )}
-
-              {/* 変更ログインジケーター */}
-              {hasLog && !isSel && (
-                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
-              )}
+              <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
             </button>
-          );
-        })}
+            <span className="text-[16px] font-bold text-[#0d1b35] dark:text-white tabular-nums w-28 text-center">
+              {year}年{month}月
+            </span>
+            <button
+              type="button"
+              onClick={() => goMonth(1)}
+              disabled={!canNext}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors"
+            >
+              <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
+            </button>
+          </div>
 
-        {Array.from({ length: trailing }).map((_, i) => <div key={`post${i}`} />)}
+          {/* 出勤/公休カウント */}
+          {(workCount > 0 || holidayCount > 0) && (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                <BriefcaseIcon />
+                <span className="text-[13px]">出勤 <span className="font-bold text-[#0d1b35] dark:text-white tabular-nums">{workCount}</span>日</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                <CalendarOffIcon />
+                <span className="text-[13px]">公休 <span className="font-bold text-[#0d1b35] dark:text-white tabular-nums">{holidayCount}</span>日</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── 曜日ヘッダー ── */}
+        <div className="grid grid-cols-7 border-b border-zinc-100 dark:border-zinc-800">
+          {WEEKDAY_SHORT.map((w, i) => (
+            <div key={w} className={cx(
+              "text-center text-[12px] font-semibold py-2.5",
+              i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-zinc-500 dark:text-zinc-400",
+            )}>
+              {w}
+            </div>
+          ))}
+        </div>
+
+        {/* ── カレンダーグリッド ── */}
+        <div className="grid grid-cols-7">
+
+          {/* 先月末の日 */}
+          {Array.from({ length: firstDow }, (_, i) => (
+            <div key={`pre${i}`} className="border-r border-b border-zinc-50 dark:border-zinc-800/50 p-2 min-h-[72px] md:min-h-[88px]">
+              <span className="text-[12px] text-zinc-300 dark:text-zinc-700">
+                {prevDays - firstDow + i + 1}
+              </span>
+            </div>
+          ))}
+
+          {/* 当月の日 */}
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
+            const ds      = `${monthStr}-${String(d).padStart(2, "0")}`;
+            const s       = shiftMap.get(ds);
+            const isToday = ds === todayStr;
+            const dow     = new Date(year, month - 1, d).getDay();
+            const badge   = getShiftBadge(s?.shift_name ?? null);
+            const hasLog  = logMap.has(ds);
+
+            return (
+              <button
+                key={ds}
+                type="button"
+                onClick={() => setModal(ds)}
+                className={cx(
+                  "relative text-left p-2 min-h-[72px] md:min-h-[88px] border-r border-b transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40",
+                  isToday
+                    ? "border-2 border-[#0d1b35] dark:border-blue-500 -m-px z-10"
+                    : "border-zinc-100 dark:border-zinc-800",
+                )}
+              >
+                {/* 日付数字 */}
+                <span className={cx(
+                  "text-[13px] font-semibold leading-none",
+                  isToday   ? "text-[#0d1b35] dark:text-blue-400"
+                  : dow === 0 ? "text-red-500 dark:text-red-400"
+                  : dow === 6 ? "text-blue-500 dark:text-blue-400"
+                  : "text-zinc-700 dark:text-zinc-300",
+                )}>
+                  {d}
+                </span>
+
+                {/* シフトバッジ */}
+                {s?.shift_name && badge && (
+                  <div className={cx(
+                    "mt-1.5 px-1.5 py-1 rounded-lg text-[11px] font-semibold text-center leading-none w-full",
+                    badge.bg, badge.text,
+                  )}>
+                    {s.shift_name.length > 4 ? s.shift_name.slice(0, 4) : s.shift_name}
+                  </div>
+                )}
+
+                {/* 変更ログドット */}
+                {hasLog && (
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                )}
+              </button>
+            );
+          })}
+
+          {/* 来月頭の日 */}
+          {Array.from({ length: trailing }, (_, i) => (
+            <div key={`post${i}`} className="border-r border-b border-zinc-50 dark:border-zinc-800/50 p-2 min-h-[72px] md:min-h-[88px]">
+              <span className="text-[12px] text-zinc-300 dark:text-zinc-700">{i + 1}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* ── モーダル ── */}
-      {modal && modalInfo && (
+      {/* ── 詳細モーダル ── */}
+      {modal && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/40"
           onClick={() => setModal(null)}
@@ -307,53 +283,46 @@ export default function ShiftCalendar({
             className="w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 shadow-xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* ヘッダー：日付 ｜ シフト名 */}
+            {/* ヘッダー */}
             <div className={cx(
-              "flex items-center justify-between px-5 py-4",
-              modalInfo.kind === "dayoff" ? "bg-zinc-700 text-white"
-              : modalInfo.kind === "off"  ? "bg-zinc-200 dark:bg-zinc-700"
-              : modalInfo.colors          ? cx(modalInfo.colors.bg)
-                                          : "bg-zinc-100 dark:bg-zinc-800",
+              "px-5 py-4 flex items-center justify-between",
+              modalShift?.shift_name ? (getShiftBadge(modalShift.shift_name)?.bg ?? "bg-zinc-100 dark:bg-zinc-800") : "bg-zinc-50 dark:bg-zinc-800",
             )}>
               <span className={cx(
-                "text-sm font-semibold",
-                modalInfo.kind === "dayoff" ? "text-white"
-                : modalInfo.colors ? modalInfo.colors.text : "text-zinc-700 dark:text-zinc-300",
+                "text-[13px] font-semibold",
+                modalShift?.shift_name ? (getShiftBadge(modalShift.shift_name)?.text ?? "text-zinc-700") : "text-zinc-500",
               )}>
-                {modalInfo.label}
+                {modalLabel}
               </span>
               <span className={cx(
-                "text-base font-bold",
-                modalInfo.kind === "dayoff" ? "text-white"
-                : modalInfo.colors ? modalInfo.colors.text : "text-zinc-700 dark:text-zinc-300",
+                "text-[15px] font-bold",
+                modalShift?.shift_name ? (getShiftBadge(modalShift.shift_name)?.text ?? "text-zinc-700") : "text-zinc-400",
               )}>
-                {modalInfo.shift?.shift_name ?? "シフト未登録"}
+                {modalShift?.shift_name ?? "シフト未登録"}
               </span>
             </div>
 
             {/* ボディ */}
             <div className="px-5 py-5 space-y-3">
-              {/* 開始〜終了時間 */}
-              {modalInfo.kind === "work" && (modalInfo.shift?.shift_start || modalInfo.shift?.shift_end) ? (
-                <p className="text-3xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 text-center leading-tight">
-                  {modalInfo.shift.shift_start?.slice(0, 5) ?? "--:--"}
-                  <span className="text-zinc-300 dark:text-zinc-600 text-xl font-light mx-3">〜</span>
-                  {modalInfo.shift.shift_end?.slice(0, 5) ?? "--:--"}
+              {modalShift?.shift_start && (
+                <p className="text-[32px] font-bold tabular-nums text-[#0d1b35] dark:text-white text-center">
+                  {modalShift.shift_start.slice(0, 5)}
+                  <span className="text-zinc-300 dark:text-zinc-600 text-2xl font-light mx-3">〜</span>
+                  {modalShift.shift_end?.slice(0, 5) ?? "--:--"}
                 </p>
-              ) : modalInfo.kind === "none" ? (
-                <p className="text-sm text-zinc-400 text-center">シフトは登録されていません</p>
-              ) : null}
-
-              {/* メモ */}
-              {modalInfo.shift?.note && (
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center">{modalInfo.shift.note}</p>
+              )}
+              {!modalShift && (
+                <p className="text-[13px] text-zinc-400 text-center">シフトは登録されていません</p>
+              )}
+              {modalShift?.note && (
+                <p className="text-[13px] text-zinc-500 dark:text-zinc-400 text-center">{modalShift.note}</p>
               )}
 
               {/* 変更履歴 */}
               {(logMap.get(modal) ?? []).length > 0 && (
-                <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 space-y-1">
-                  <p className="text-[11px] text-zinc-400 flex items-center gap-1 mb-1.5">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
+                <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 space-y-1.5">
+                  <p className="text-[11px] text-zinc-400 flex items-center gap-1.5 mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
                     変更履歴
                   </p>
                   {(logMap.get(modal) ?? []).map((l, i) => (
@@ -375,7 +344,7 @@ export default function ShiftCalendar({
               <button
                 type="button"
                 onClick={() => setModal(null)}
-                className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-[13px] font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
               >
                 閉じる
               </button>
@@ -383,6 +352,6 @@ export default function ShiftCalendar({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
