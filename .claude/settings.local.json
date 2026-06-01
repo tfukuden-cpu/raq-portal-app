@@ -121,7 +121,21 @@
       "Bash(Remove-Item \"C:\\\\dev\\\\raq-portal-app\\\\src\\\\app\\\\\\(portal\\)\\\\shifts\\\\manage\\\\SheetsSync.tsx\" -Force)",
       "Bash(Remove-Item \"C:\\\\dev\\\\raq-portal-app\\\\src\\\\app\\\\\\(portal\\)\\\\dev\\\\actions.ts\" -Force)",
       "Bash(Remove-Item \"C:\\\\dev\\\\raq-portal-app\\\\src\\\\components\\\\DevBanner.tsx\" -Force)",
-      "Bash(Write-Host \"Deleted 4 files\")"
+      "Bash(Write-Host \"Deleted 4 files\")",
+      "Bash(npx.cmd tsc *)",
+      "Bash(node_modules\\\\.bin\\\\tsc --noEmit)",
+      "Bash(node node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(vercel ls *)",
+      "Bash(gh api *)",
+      "Bash(curl -s https://raq-portal-app.vercel.app/api/admin/send-group-line -X POST -H \"Content-Type: application/json\" -d '{\"secret\":\"tmp-raq-send-2026\",\"message\":\"test\"}')",
+      "Bash(node node_modules/.bin/tsc --noEmit)",
+      "PowerShell(cd C:\\\\dev\\\\raq-portal-app; $node = \"C:\\\\Users\\\\fukud\\\\OneDrive\\\\デスクトップ\\\\Rap\\\\node.exe\"; & $node \"C:\\\\dev\\\\raq-portal-app\\\\node_modules\\\\typescript\\\\bin\\\\tsc\" --noEmit 2>&1 | Select-Object -First 60)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(./node_modules/.bin/vercel --prod)",
+      "Bash(node node_modules/typescript/lib/tsc.js --noEmit --project tsconfig.json)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d.get\\('devDependencies',{}\\).keys\\(\\)\\)\\)\")",
+      "Bash(C:/Users/fukud/OneDrive/デスクトップ/Rap/node.exe --version)",
+      "Bash(gh deployment *)"
     ]
   }
 }
