@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Myページ（全ロール共通）
  */
 import { createClient } from "@/lib/supabase/server";
@@ -7,10 +7,34 @@ import { cookies } from "next/headers";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { logoutAction } from "@/app/login/actions";
 import { unlinkLineAction } from "./actions";
-import { ChevronRightIcon, UserCircleIcon } from "@/components/icons";
 import AvatarEditor from "@/app/(portal)/admin/my/AvatarEditor";
 import type { AvatarConfig } from "@/app/(portal)/admin/my/avatar-types";
 import PushNotifyToggle from "./PushNotifyToggle";
+
+function ChevronRightIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-zinc-300"><polyline points="9 18 15 12 9 6"/></svg>;
+}
+function PersonIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+}
+function LockIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+}
+function LogoutIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+}
+function LineIcon() {
+  return <svg viewBox="0 0 24 24" className="w-5 h-5" style={{ fill: "#06C755" }}><path d="M12 2C6.477 2 2 6.036 2 11c0 2.67 1.28 5.063 3.306 6.73.145.122.203.316.151.496l-.47 1.717c-.073.266.107.538.378.538.07 0 .14-.018.202-.054L8.05 19.05c.131-.076.284-.09.427-.039C9.357 19.332 10.666 19.5 12 19.5c5.523 0 10-4.036 10-9s-4.477-9-10-9z"/></svg>;
+}
+function BriefcaseIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-zinc-500"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>;
+}
+function ShieldIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-zinc-500"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
+}
+function IdIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-zinc-500"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="8" y1="10" x2="8" y2="10"/><line x1="12" y1="10" x2="16" y2="10"/><line x1="12" y1="14" x2="16" y2="14"/></svg>;
+}
 
 export default async function MyPage({
   searchParams,
@@ -19,9 +43,7 @@ export default async function MyPage({
 }) {
   const sp = await searchParams;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
@@ -33,37 +55,32 @@ export default async function MyPage({
     .maybeSingle();
 
   const projectId = await getCurrentProjectId();
-  const { data: membership } = projectId
-    ? await supabase
-        .from("project_members")
-        .select("role")
-        .eq("staff_id", staffId)
-        .eq("project_id", projectId)
-        .maybeSingle()
-    : { data: null };
+  const [{ data: membership }, { data: projectData }] = await Promise.all([
+    projectId
+      ? supabase.from("project_members").select("role").eq("staff_id", staffId).eq("project_id", projectId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    projectId
+      ? supabase.from("projects").select("name").eq("id", projectId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
-  const displayName  = staff?.display_name ?? staff?.name ?? staffId;
-  const lineLinked   = !!staff?.line_user_id;
-  const avatarConfig = (staff as { avatar_config?: AvatarConfig | null } | null)?.avatar_config ?? null;
-
-  // 当日欠勤かつ未報告チェック（経過報告ボタン表示用）
   const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
   let isAbsentToday = false;
   if (projectId) {
     const { data: absenceToday } = await supabase
-      .from("absence_reports")
-      .select("id")
-      .eq("project_id", projectId)
-      .eq("staff_id", staffId)
-      .eq("absence_date", todayStr)
-      .maybeSingle();
+      .from("absence_reports").select("id")
+      .eq("project_id", projectId).eq("staff_id", staffId).eq("absence_date", todayStr).maybeSingle();
     isAbsentToday = !!absenceToday;
   }
 
-  const isExecutiveOrAdmin =
-    staff?.global_role === "admin" || staff?.global_role === "executive";
-  const isProjectAdmin = membership?.role === "project_admin";
-  const isStaffOnly    = !isExecutiveOrAdmin && !isProjectAdmin;
+  const displayName  = staff?.display_name ?? staff?.name ?? staffId;
+  const lineLinked   = !!staff?.line_user_id;
+  const avatarConfig = (staff as { avatar_config?: AvatarConfig | null } | null)?.avatar_config ?? null;
+  const projectName  = projectData?.name ?? "未所属";
+
+  const isExecutiveOrAdmin = staff?.global_role === "admin" || staff?.global_role === "executive";
+  const isProjectAdmin     = membership?.role === "project_admin";
+  const isStaffOnly        = !isExecutiveOrAdmin && !isProjectAdmin;
 
   const roleLabel =
     staff?.global_role === "admin"      ? "システム管理者"
@@ -72,170 +89,191 @@ export default async function MyPage({
     : "スタッフ";
 
   const roleBadgeClass =
-    staff?.global_role === "admin"       ? "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400"
-    : staff?.global_role === "executive" ? "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400"
-    : isProjectAdmin                     ? "bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400"
-    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500";
+    staff?.global_role === "admin"       ? "bg-blue-100 text-blue-600"
+    : staff?.global_role === "executive" ? "bg-purple-100 text-purple-600"
+    : isProjectAdmin                     ? "bg-amber-100 text-amber-600"
+    : "bg-zinc-100 text-zinc-500";
 
   const lineFlash =
-    sp.success === "line_linked"         ? "LINEアカウントを連携しました"
-    : sp.error === "line_already_used"   ? "このLINEアカウントは他のスタッフに紐付いています"
-    : sp.error === "line_cancelled"      ? "LINE連携をキャンセルしました"
+    sp.success === "line_linked"       ? "LINEアカウントを連携しました"
+    : sp.error === "line_already_used" ? "このLINEアカウントは他のスタッフに紐付いています"
+    : sp.error === "line_cancelled"    ? "LINE連携をキャンセルしました"
     : null;
 
+  const nowJST = new Date().toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+    weekday: "short", hour: "2-digit", minute: "2-digit",
+  });
+
   return (
-    <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
-      {/* ── Sticky header ── */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-6xl mx-auto px-4 pt-5 pb-4">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">My</h1>
+    <main className="min-h-screen bg-[#f4f6fa] dark:bg-zinc-950 px-4 md:px-8 pt-6 pb-16">
+
+      {/* ── タイトル ── */}
+      <h1 className="text-[22px] font-bold text-[#0d1b35] dark:text-white mb-5">My</h1>
+
+      {/* ── プロフィールカード ── */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm p-6 mb-6">
+        <div className="flex flex-col md:flex-row items-start gap-6">
+
+          {/* アバター */}
+          <div className="flex-shrink-0">
+            {isExecutiveOrAdmin ? (
+              <AvatarEditor initialConfig={avatarConfig} />
+            ) : (
+              <div className="relative w-24 h-24">
+                <div className="w-24 h-24 rounded-full bg-[#0d1b35] dark:bg-zinc-700 flex items-center justify-center text-white text-[36px] font-bold select-none">
+                  {displayName.charAt(0)}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 名前 + 情報 */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <h2 className="text-[24px] font-bold text-[#0d1b35] dark:text-white">{displayName}</h2>
+              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${roleBadgeClass}`}>{roleLabel}</span>
+            </div>
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-3">
+                <IdIcon />
+                <span className="text-[13px] text-zinc-500 w-20 flex-shrink-0">社員ID</span>
+                <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200 font-mono">{staffId}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <ShieldIcon />
+                <span className="text-[13px] text-zinc-500 w-20 flex-shrink-0">権限</span>
+                <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">{roleLabel}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <BriefcaseIcon />
+                <span className="text-[13px] text-zinc-500 w-20 flex-shrink-0">所属案件</span>
+                <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">{projectName}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ステータスカード群 */}
+          <div className="flex flex-row md:flex-col gap-3 flex-shrink-0 w-full md:w-auto">
+            {/* 所属案件 */}
+            <div className="flex-1 md:w-44 bg-zinc-50 dark:bg-zinc-800 rounded-xl p-3.5 text-center border border-zinc-100 dark:border-zinc-700">
+              <BriefcaseIcon />
+              <p className="text-[11px] text-zinc-400 mb-1 mt-1.5">所属案件</p>
+              <p className="text-[12px] font-bold text-[#0d1b35] dark:text-white truncate">{projectName}</p>
+            </div>
+            {/* LINE連携 */}
+            <div className="flex-1 md:w-44 bg-zinc-50 dark:bg-zinc-800 rounded-xl p-3.5 text-center border border-zinc-100 dark:border-zinc-700">
+              <div className="flex justify-center"><LineIcon /></div>
+              <p className="text-[11px] text-zinc-400 mb-1 mt-1.5">LINE連携</p>
+              {lineLinked ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#06C755]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#06C755]" />連携済み
+                </span>
+              ) : (
+                <span className="text-[11px] text-zinc-400">未連携</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-      <div className="max-w-6xl mx-auto px-4 pt-4 pb-28 space-y-5">
 
-        {/* プロフィールカード */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
-          {isExecutiveOrAdmin ? (
-            /* 運用者・管理者：アバター付き */
-            <div className="flex flex-col items-center gap-3">
-              <AvatarEditor initialConfig={avatarConfig} />
-              <div className="text-center">
-                <p className="text-xl font-bold text-zinc-900 dark:text-zinc-50 leading-tight">{displayName}</p>
-                <p className="text-xs text-zinc-400 font-mono mt-0.5">{staffId}</p>
-                <span className={`inline-block mt-2 text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${roleBadgeClass}`}>
-                  {roleLabel}
-                </span>
+      {/* LINE フラッシュ */}
+      {lineFlash && (
+        <div className={`mb-4 px-4 py-3 rounded-xl text-[13px] font-medium ${
+          sp.success ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-600 border border-red-200"
+        }`}>{lineFlash}</div>
+      )}
+
+      {/* ── アカウント設定 ── */}
+      <div>
+        <h2 className="text-[15px] font-bold text-[#0d1b35] dark:text-white mb-3">アカウント設定</h2>
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+
+          {/* スタッフのみ */}
+          {isStaffOnly && (
+            <>
+              <a href="/corrections" className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0 text-zinc-500"><LockIcon /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">打刻補正申請</p>
+                  <p className="text-[12px] text-zinc-400 mt-0.5">打刻時刻の修正を申請できます</p>
+                </div>
+                <ChevronRightIcon />
+              </a>
+              {isAbsentToday && (
+                <a href="/absence-followup" className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 bg-red-50 dark:bg-red-950/10 hover:bg-red-100/50 transition-colors">
+                  <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0 text-red-500"><PersonIcon /></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-semibold text-red-600 dark:text-red-400">経過報告</p>
+                    <p className="text-[12px] text-zinc-400 mt-0.5">翌日の出勤可否を報告してください</p>
+                  </div>
+                  <ChevronRightIcon />
+                </a>
+              )}
+            </>
+          )}
+
+          {/* パスワード変更 */}
+          <a href="/change-password" className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+            <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0 text-zinc-500"><LockIcon /></div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">パスワード変更</p>
+              <p className="text-[12px] text-zinc-400 mt-0.5">現在のパスワードの変更ができます</p>
+            </div>
+            <ChevronRightIcon />
+          </a>
+
+          {/* LINE連携 */}
+          {lineLinked ? (
+            <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
+              <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0"><LineIcon /></div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE連携</p>
+                <p className="text-[12px] text-[#06C755] font-medium mt-0.5">● 連携済み</p>
               </div>
+              <form action={unlinkLineAction}>
+                <button type="submit" className="text-[12px] text-zinc-400 hover:text-red-500 transition-colors px-3 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:border-red-200">解除</button>
+              </form>
             </div>
           ) : (
-            /* スタッフ・案件管理者：横並び */
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                <UserCircleIcon className="w-8 h-8 text-zinc-400 dark:text-zinc-500" />
-              </div>
+            <a href="/api/auth/line?mode=link" className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+              <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0"><LineIcon /></div>
               <div className="flex-1 min-w-0">
-                <p className="text-lg font-bold text-zinc-900 dark:text-zinc-50 truncate">{displayName}</p>
-                <p className="text-xs text-zinc-400 font-mono mt-0.5">{staffId}</p>
-                <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${roleBadgeClass}`}>
-                  {roleLabel}
-                </span>
+                <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE連携</p>
+                <p className="text-[12px] text-zinc-400 mt-0.5">LINEとの連携・解除ができます</p>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* アカウントメニュー */}
-        <div>
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-1 mb-2">アカウント</p>
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-            {/* スタッフのみ：打刻補正申請・打刻画面 */}
-            {isStaffOnly && (
-              <>
-                <a
-                  href="/corrections"
-                  className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800"
-                >
-                  <span className="text-sm text-zinc-700 dark:text-zinc-300">打刻補正申請</span>
-                  <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
-                </a>
-                <a
-                  href="/punch"
-                  className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800"
-                >
-                  <span className="text-sm text-zinc-700 dark:text-zinc-300">打刻画面</span>
-                  <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
-                </a>
-                {isAbsentToday && (
-                  <a
-                    href="/absence-followup"
-                    className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800 bg-red-50 dark:bg-red-900/10"
-                  >
-                    <div>
-                      <span className="text-sm font-semibold text-red-600 dark:text-red-400">経過報告</span>
-                      <p className="text-xs text-zinc-400 mt-0.5">翌日の出勤可否を報告してください</p>
-                    </div>
-                    <ChevronRightIcon className="w-4 h-4 text-red-400" />
-                  </a>
-                )}
-              </>
-            )}
-            <a
-              href="/change-password"
-              className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-            >
-              <span className="text-sm text-zinc-700 dark:text-zinc-300">パスワード変更</span>
-              <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
+              <ChevronRightIcon />
             </a>
-          </div>
-        </div>
-
-        {/* LINE連携 */}
-        <div>
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-1 mb-2">LINE連携</p>
-
-          {lineFlash && (
-            <div className={`px-3 py-2 rounded-xl mb-2 space-y-1.5 ${
-              sp.success ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600" : "bg-red-50 dark:bg-red-950/30 text-red-500"
-            }`}>
-              <p className="text-xs">{lineFlash}</p>
-            </div>
           )}
 
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-            {lineLinked ? (
-              <div className="px-5 py-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-2 h-2 rounded-full bg-[#06C755] flex-shrink-0" />
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">連携済み</span>
-                </div>
-                <form action={unlinkLineAction}>
-                  <button type="submit" className="text-xs text-zinc-400 hover:text-red-500 transition-colors">
-                    解除
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <a
-                href="/api/auth/line?mode=link"
-                className="flex items-center justify-between px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" style={{ fill: "#06C755" }}>
-                    <path d="M19.365 9.89c.50 0 .906.407.906.907s-.406.907-.906.907H17.27v1.204h2.094c.5 0 .906.406.906.906s-.406.907-.906.907h-3c-.5 0-.907-.407-.907-.907V9.89c0-.5.407-.907.907-.907h3zm-5.423 0c.5 0 .906.407.906.907v3.924c0 .5-.406.907-.906.907s-.906-.407-.906-.907V10.797c0-.5.406-.907.906-.907zm-2.854 0c.346 0 .657.197.81.504l1.672 3.34c.222.444.041.985-.402 1.207-.443.222-.985.041-1.207-.402l-.22-.44h-1.306l-.22.44c-.222.443-.764.624-1.207.402-.443-.222-.624-.763-.402-1.207l1.672-3.34c.153-.307.464-.504.81-.504zm0 2.27l-.356.71h.713l-.356-.71zM5.84 9.89c.5 0 .906.407.906.907v2.354l1.814-2.682c.183-.27.487-.42.807-.38.32.04.6.26.706.57.044.132.063.267.055.4v3.757c0 .5-.406.907-.906.907s-.907-.407-.907-.907v-2.354l-1.814 2.682c-.21.31-.579.456-.935.376-.357-.08-.627-.376-.669-.74-.01-.083-.01-.167 0-.25V10.797c0-.5.406-.907.906-.907zM12 2C6.477 2 2 6.036 2 11c0 2.67 1.28 5.063 3.306 6.73.145.122.203.316.151.496l-.47 1.717c-.073.266.107.538.378.538.07 0 .14-.018.202-.054L8.05 19.05c.131-.076.284-.09.427-.039C9.357 19.332 10.666 19.5 12 19.5c5.523 0 10-4.036 10-9s-4.477-9-10-9z"/>
-                  </svg>
-                  <span className="text-sm text-zinc-700 dark:text-zinc-300">LINEアカウントを連携する</span>
-                </div>
-                <ChevronRightIcon className="w-4 h-4 text-zinc-400" />
-              </a>
-            )}
-          </div>
-          <p className="text-[10px] text-zinc-400 px-1 mt-1.5">
-            連携するとLINEでログインしたり、各種通知をLINEで受け取れます
-          </p>
-        </div>
-
-        {/* 通知設定 */}
-        <div>
-          <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-1 mb-2">通知設定</p>
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
+          {/* プッシュ通知 */}
+          <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
+            <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-blue-500">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">プッシュ通知</p>
+              <p className="text-[12px] text-zinc-400 mt-0.5">端末への通知を受け取れます</p>
+            </div>
             <PushNotifyToggle />
           </div>
-          <p className="text-[10px] text-zinc-400 px-1 mt-1.5">
-            有効にするとLINEと同じ内容がこの端末に届きます（PWAインストール後はiOSでも利用可能）
-          </p>
-        </div>
 
-        {/* ログアウト */}
-        <form action={logoutAction}>
-          <button
-            type="submit"
-            className="w-full py-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-          >
-            ログアウト
-          </button>
-        </form>
+          {/* ログアウト */}
+          <form action={logoutAction}>
+            <button type="submit" className="w-full flex items-center gap-4 px-5 py-4 hover:bg-red-50 dark:hover:bg-red-950/10 transition-colors text-left">
+              <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0 text-zinc-500"><LogoutIcon /></div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-semibold text-red-500">ログアウト</p>
+                <p className="text-[12px] text-zinc-400 mt-0.5">現在のアカウントからログアウトします</p>
+              </div>
+              <ChevronRightIcon />
+            </button>
+          </form>
+
+        </div>
       </div>
     </main>
   );
 }
-
