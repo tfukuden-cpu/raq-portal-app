@@ -118,8 +118,8 @@ export default function AvatarEditor({
         className="relative group"
         aria-label="アバターを変更"
       >
-        <div className="w-24 h-24 rounded-full overflow-hidden shadow-md border-2 border-white dark:border-zinc-700 transition-transform group-active:scale-95">
-          <AvatarSvg config={config} size={96} />
+        <div className="w-36 h-36 rounded-full overflow-hidden shadow-md border-2 border-white dark:border-zinc-700 transition-transform group-active:scale-95">
+          <AvatarSvg config={config} size={144} />
         </div>
         {/* Edit overlay */}
         <div className="absolute inset-0 rounded-full bg-black/25 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">

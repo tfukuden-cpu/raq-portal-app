@@ -134,7 +134,7 @@ export default async function MyPage({
             {isExecutiveOrAdmin ? (
               <AvatarEditor initialConfig={avatarConfig} />
             ) : (
-              <div className="w-24 h-24 rounded-full bg-[#0d1b35] flex items-center justify-center text-white text-[40px] font-bold select-none">
+              <div className="w-36 h-36 rounded-full bg-[#0d1b35] flex items-center justify-center text-white text-[52px] font-bold select-none">
                 {displayName.charAt(0)}
               </div>
             )}
