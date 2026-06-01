@@ -284,19 +284,12 @@ export default function HomeClient({
 
           {/* ── 挨拶カード ── */}
           <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-6 py-5">
-            {/* アイコン + 名前 */}
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[20px] font-bold flex-shrink-0 shadow-sm">
-                {displayName.charAt(0)}
-              </div>
-              <p className="text-[24px] md:text-[28px] font-bold text-[#0d1b35] dark:text-white leading-none">
-                {displayName}<span className="text-[16px] font-medium text-zinc-400 ml-1.5">さん</span>
-              </p>
-            </div>
-            {/* メッセージ */}
-            <div className="pl-1 flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5">
               {greetMsg.message.split("\n").map((line, i) => (
-                <p key={i} className="text-[15px] md:text-[16px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                <p key={i} className={i === 0
+                  ? "text-[20px] md:text-[22px] font-bold text-[#0d1b35] dark:text-white leading-snug"
+                  : "text-[15px] md:text-[16px] text-zinc-500 dark:text-zinc-400 leading-relaxed"
+                }>
                   {line}
                 </p>
               ))}

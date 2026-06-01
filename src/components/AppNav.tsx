@@ -256,10 +256,18 @@ export default function AppNav({
           )}
           <span className="text-[13px] text-zinc-400 tabular-nums">{dateStr}</span>
           <span className="text-[20px] font-bold tabular-nums text-zinc-800 dark:text-zinc-100 ml-0.5">{liveTime}</span>
-          <div className="ml-auto flex items-center gap-1">
-            <Link href="/notices" className="relative p-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+          <div className="ml-auto flex items-center gap-3">
+            <Link href="/notices" className="p-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
               <BellIcon className="w-5 h-5 text-zinc-400" />
             </Link>
+            <div className="flex items-center gap-2.5 pl-2 border-l border-zinc-100 dark:border-zinc-800">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0">
+                {initial}
+              </div>
+              <span className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 hidden lg:block">
+                {staffName}
+              </span>
+            </div>
           </div>
         </header>
 
