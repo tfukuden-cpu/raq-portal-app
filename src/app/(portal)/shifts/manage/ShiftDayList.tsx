@@ -220,7 +220,7 @@ export default function ShiftDayList({
   // 選択日が変わったらストリップを中央にスクロール
   useEffect(() => {
     if (!stripRef.current) return;
-    const LEFT_COL = 80;  // w-20
+    const LEFT_COL = 160; // アカウント番号列(72px) + 氏名列(88px)
     const COL_W    = 44;  // w-11
     const idx = allDates.indexOf(selectedDate);
     if (idx < 0) return;
@@ -361,8 +361,13 @@ export default function ShiftDayList({
         {/* ② 日付ストリップ（全タブ共通） */}
         <div className="flex bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-700">
           {/* 左コーナー */}
-          <div className="sticky left-0 z-10 w-20 flex-shrink-0 h-12 px-2 flex items-end pb-2 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
-            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">日付</span>
+          <div className="sticky left-0 z-10 flex-shrink-0 h-12 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700 flex">
+            <div className="w-[72px] px-1.5 flex items-end pb-2 border-r border-zinc-100 dark:border-zinc-800">
+              <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wide">番号</span>
+            </div>
+            <div className="w-[88px] px-2 flex items-end pb-2">
+              <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wide">氏名</span>
+            </div>
           </div>
           {/* 日付ボタン群 */}
           <div className="overflow-hidden flex-1">
@@ -941,39 +946,54 @@ export default function ShiftDayList({
                   return (
                 <div className="flex min-w-max bg-white dark:bg-zinc-900">
 
-                  {/* 左固定列（スタッフ名） */}
-                  <div className="sticky left-0 z-20 w-20 flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700">
+                  {/* 左固定列1：アカウント番号 */}
+                  <div className="sticky left-0 z-20 w-[72px] flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-100 dark:border-zinc-800">
                     {filtered.map((m, i) => {
                       const isRisk = churnRiskSinceMap.has(m.id);
                       return (
-                      <div key={m.id} className={cx(
-                        "h-9 flex flex-col justify-center px-2",
-                        i < filtered.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : "",
-                        isRisk ? "bg-red-50 dark:bg-red-950/30" : "",
-                      )}>
-                        <span className="text-[9px] font-medium text-zinc-400 dark:text-zinc-500 leading-none truncate">
-                          {m.section ?? "—"}
-                        </span>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setStaffInfoTarget(m)}
-                            className={cx(
-                              "text-[10px] font-semibold hover:underline leading-tight truncate text-left",
-                              isRisk ? "text-red-700 dark:text-red-300" : "text-zinc-700 dark:text-zinc-300",
-                            )}
-                          >
-                            {shortName(m.name)}
-                          </button>
-                          {isRisk && (
-                            <span className="text-[7px] font-bold px-0.5 py-px rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none shrink-0 whitespace-nowrap">
-                              離脱
-                            </span>
-                          )}
+                        <div key={m.id} className={cx(
+                          "h-9 flex items-center px-1.5",
+                          i < filtered.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : "",
+                          isRisk ? "bg-red-50 dark:bg-red-950/30" : "",
+                        )}>
+                          <span className="text-[10px] tabular-nums text-zinc-500 dark:text-zinc-400 truncate">
+                            {(m as { accountNumber?: string | null }).accountNumber ?? "—"}
+                          </span>
                         </div>
-                      </div>
-                    );})}
+                      );
+                    })}
+                  </div>
 
+                  {/* 左固定列2：氏名 */}
+                  <div className="sticky z-20 w-[88px] flex-shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-700" style={{ left: 72 }}>
+                    {filtered.map((m, i) => {
+                      const isRisk = churnRiskSinceMap.has(m.id);
+                      return (
+                        <div key={m.id} className={cx(
+                          "h-9 flex items-center px-2",
+                          i < filtered.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : "",
+                          isRisk ? "bg-red-50 dark:bg-red-950/30" : "",
+                        )}>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => setStaffInfoTarget(m)}
+                              className={cx(
+                                "text-[10px] font-semibold hover:underline leading-tight truncate text-left",
+                                isRisk ? "text-red-700 dark:text-red-300" : "text-zinc-700 dark:text-zinc-300",
+                              )}
+                            >
+                              {m.name}
+                            </button>
+                            {isRisk && (
+                              <span className="text-[7px] font-bold px-0.5 py-px rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none shrink-0 whitespace-nowrap">
+                                離脱
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* 日付列 */}
