@@ -330,11 +330,6 @@ export async function GET(req: NextRequest) {
           }
         );
 
-        const adminIds = await getAdminLineIds(projectId);
-        if (adminIds.length > 0) {
-          await multicastLine(adminIds, message);
-          sent++;
-        }
         const groupId = ps.line_group_id as string | null;
         if (groupId) {
           await pushLine(groupId, message);

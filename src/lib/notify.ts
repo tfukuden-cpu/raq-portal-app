@@ -157,8 +157,7 @@ export async function sendEventNotify(
     const webBody  = message.split("\n").slice(1).join("\n").trim() || message.slice(0, 80);
 
     if (item.recipient === "admin") {
-      const ids = await getAdminLineIds(projectId);
-      if (ids.length > 0) await send(() => multicastLine(ids, message));
+      // 管理者グループへのみ送信（個人LINEは送らない）
       // Web Push: 案件管理者
       await send(() => pushWebToAdmins(projectId, { title: webTitle, body: webBody }));
     } else {

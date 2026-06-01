@@ -9,8 +9,7 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
 import { appendSheetRow, extractSpreadsheetId } from "@/lib/gsheets";
 import { sendEventNotify } from "@/lib/notify";
-import { pushLine, multicastLine } from "@/lib/line";
-import { getAdminLineIds } from "@/lib/notify";
+import { pushLine } from "@/lib/line";
 
 export type ActionResult = {
   success: boolean;
@@ -61,9 +60,7 @@ export async function recordDepartureAction(
       const etaText = etaMinutes ? `約${etaMinutes}分後` : "不明";
       const adminMsg = `【出発報告】\n${name}さんが出発しました。\n到着予定：${etaText}`;
 
-      // 管理者個人 + グループへ通知
-      const adminIds = await getAdminLineIds(projectId);
-      if (adminIds.length > 0) await multicastLine(adminIds, adminMsg);
+      // 管理者グループへ通知
       if (groupId) await pushLine(groupId, adminMsg);
 
       // 出発したスタッフ本人へ確認メッセージ
@@ -202,8 +199,6 @@ export async function submitAbsenceAction(
         .from("project_settings").select("line_group_id")
         .eq("project_id", projectId).maybeSingle();
       const groupId = ps?.line_group_id as string | null;
-      const adminIds = await getAdminLineIds(projectId);
-      if (adminIds.length > 0) await multicastLine(adminIds, message);
       if (groupId) await pushLine(groupId, message);
     } catch (e) {
       console.error("[absence] LINE送信エラー:", e);
