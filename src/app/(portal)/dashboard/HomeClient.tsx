@@ -49,13 +49,48 @@ function nowHHMM(): string {
   });
 }
 
-function getGreeting(): string {
+const GREETINGS = {
+  morning: [
+    "おはようございます！\n今日も一日、よろしくお願いします。",
+    "おはようございます！\n良い朝ですね。今日も元気にいきましょう。",
+    "おはようございます！\n朝から全開で行きましょう！",
+    "おはようございます！\n今日はどんな一日になるかな？楽しみましょう。",
+    "おはようございます！\n今日も安全に、丁寧に仕事していきましょう。",
+    "おはようございます！\n小さなことも積み重ねが大事。今日も頑張りましょう。",
+  ],
+  afternoon: [
+    "こんにちは！\nお昼はしっかり食べましたか？午後も頑張りましょう。",
+    "こんにちは！\n今日も折り返し地点です。ここからもよろしくお願いします。",
+    "こんにちは！\n休憩はしっかり取れていますか？無理せず行きましょう。",
+    "こんにちは！\n調子はどうですか？何かあれば気軽に連絡してください。",
+    "こんにちは！\n午後もチームで力を合わせていきましょう。",
+    "こんにちは！\n今日もありがとうございます。引き続きよろしくお願いします。",
+  ],
+  evening: [
+    "こんばんは！\n今日も一日、本当にお疲れ様でした。",
+    "こんばんは！\nゆっくり休んで、また明日も元気な姿を見せてください。",
+    "こんばんは！\n今夜もよろしくお願いします。安全に気をつけて。",
+    "こんばんは！\n一日の締めくくり、最後まで丁寧にいきましょう。",
+    "こんばんは！\n今日も頑張りましたね。お疲れ様です。",
+    "こんばんは！\nしっかり休んで、明日への英気を養ってください。",
+  ],
+};
+
+function getGreetingMessage(): { word: string; message: string } {
   const h = parseInt(
     new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", hour: "numeric", hour12: false })
   );
-  if (h >= 5  && h < 11) return "おはようございます";
-  if (h >= 11 && h < 18) return "こんにちは";
-  return "こんばんは";
+  let word: string;
+  let pool: string[];
+  if (h >= 5 && h < 11) {
+    word = "おはようございます"; pool = GREETINGS.morning;
+  } else if (h >= 11 && h < 18) {
+    word = "こんにちは"; pool = GREETINGS.afternoon;
+  } else {
+    word = "こんばんは"; pool = GREETINGS.evening;
+  }
+  const message = pool[Math.floor(Math.random() * pool.length)];
+  return { word, message };
 }
 
 function fmtMD(dateStr: string): string {
@@ -163,12 +198,12 @@ export default function HomeClient({
   const [feedback,     setFeedback]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [optDeparture, setOptDeparture] = useState(departureTime);
   const [liveTime,  setLiveTime]  = useState(nowHHMM);
-  const [greeting,  setGreeting]  = useState(getGreeting);
+  const [greetMsg,  setGreetMsg]  = useState(getGreetingMessage);
 
   useEffect(() => {
-    const tick = () => { setLiveTime(nowHHMM()); setGreeting(getGreeting()); };
-    tick();
-    const id = setInterval(tick, 15000);
+    setLiveTime(nowHHMM());
+    setGreetMsg(getGreetingMessage());
+    const id = setInterval(() => setLiveTime(nowHHMM()), 15000);
     return () => clearInterval(id);
   }, []);
 
@@ -241,15 +276,17 @@ export default function HomeClient({
 
         <div className="max-w-6xl mx-auto px-4 md:px-8 pt-5 md:pt-6 pb-32 md:pb-12 space-y-4">
 
-          {/* ── 挨拶ヘッダー ── */}
-          <div className="flex items-center gap-4 pb-2">
-            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[17px] font-bold flex-shrink-0 shadow-sm">
+          {/* ── 挨拶カード ── */}
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-6 py-5 flex items-center gap-5">
+            {/* アバター */}
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[22px] font-bold flex-shrink-0 shadow-sm">
               {displayName.charAt(0)}
             </div>
-            <div>
-              <p className="text-[12px] text-zinc-400 leading-none mb-1">{greeting}</p>
-              <p className="text-[18px] font-bold text-[#0d1b35] dark:text-white leading-none">
-                {displayName}<span className="text-[14px] font-medium text-zinc-400 ml-1">さん</span>
+            {/* メッセージ */}
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium text-zinc-400 mb-1">{displayName}さん</p>
+              <p className="text-[18px] md:text-[20px] font-bold text-[#0d1b35] dark:text-white leading-snug whitespace-pre-line">
+                {greetMsg.message}
               </p>
             </div>
           </div>
