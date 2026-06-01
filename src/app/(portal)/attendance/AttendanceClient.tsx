@@ -722,45 +722,61 @@ export default function AttendanceClient({
                     onDrop={() => handleSectionDrop(section)}
                   >
                     {/* カラムヘッダー（固定） */}
-                    <div className={`px-3 pt-2.5 pb-2 border-b shrink-0 rounded-t-2xl ${secCol.headerBg} ${secCol.border.replace("border-", "border-b-")}`}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{section}</span>
-                        <span className="text-xs font-bold tabular-nums text-green-600 dark:text-green-400">
-                          {present}<span className="text-zinc-400 font-normal">/{allMembers.length}</span>
-                        </span>
-                      </div>
-                      {/* 充足数：シフトグループ別（出勤済み/配置数） */}
-                      {groups.length > 1 && (
-                        <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
-                          {groups.map(({ shiftName, members: grpMembers }) => {
-                            const grpPresent = grpMembers.filter(m => {
-                              const s = localStatuses.get(m.staffId) ?? m.status;
-                              return s === "working" || s === "clocked_out" || s === "departed";
-                            }).length;
-                            const grpTotal = grpMembers.length;
-                            const diff = grpPresent - grpTotal;
-                            const label = shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName;
-                            return (
-                              <div key={shiftName} className="flex items-center gap-1">
-                                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 shrink-0">{label}</span>
-                                <span className={`text-[10px] font-bold tabular-nums ${grpPresent >= grpTotal ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
-                                  {grpPresent}
-                                </span>
-                                <span className="text-[10px] text-zinc-400 font-normal">/{grpTotal}</span>
-                                {diff < 0 && (
-                                  <span className="text-[10px] font-bold tabular-nums text-red-500 dark:text-red-400">{diff}</span>
-                                )}
-                              </div>
-                            );
-                          })}
+                    {(() => {
+                      // セクション全体の必要枠数合計
+                      const totalRequired = groups.reduce((s, g) => s + (shiftRequired[g.shiftName] ?? 0), 0);
+                      const totalAssigned = allMembers.length;
+                      const totalSufficiency = totalRequired > 0 ? totalAssigned - totalRequired : null;
+                      return (
+                      <div className={`px-3 pt-2.5 pb-2 border-b shrink-0 rounded-t-2xl ${secCol.headerBg} ${secCol.border.replace("border-", "border-b-")}`}>
+                        {/* セクション名 + 出勤数/配置数（充足数） */}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100 shrink-0">{section}</span>
+                          <div className="flex items-center gap-1 tabular-nums">
+                            <span className={`text-xs font-bold ${present > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500"}`}>{present}</span>
+                            <span className="text-xs text-zinc-400">/{totalAssigned}</span>
+                            {totalSufficiency !== null && (
+                              <span className={`text-xs font-bold ${totalSufficiency > 0 ? "text-blue-500 dark:text-blue-400" : totalSufficiency < 0 ? "text-red-500 dark:text-red-400" : "text-emerald-500"}`}>
+                                （{totalSufficiency > 0 ? `+${totalSufficiency}` : totalSufficiency === 0 ? "✓" : totalSufficiency}）
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      {absCnt > 0 && (
-                        <span className="text-[11px] font-bold text-red-500 dark:text-red-400 block mt-0.5">
-                          欠員 {absCnt}名
-                        </span>
-                      )}
-                    </div>
+                        {/* 早番/遅番 別内訳（複数シフトグループがあるセクション） */}
+                        {groups.length > 1 && (
+                          <div className="mt-1 space-y-0.5 pl-1">
+                            {groups.map(({ shiftName, members: grpMembers }) => {
+                              const grpPresent = grpMembers.filter(m => {
+                                const s = localStatuses.get(m.staffId) ?? m.status;
+                                return s === "working" || s === "clocked_out" || s === "departed";
+                              }).length;
+                              const grpAssigned = grpMembers.length;
+                              const grpRequired = shiftRequired[shiftName] ?? 0;
+                              const grpSufficiency = grpRequired > 0 ? grpAssigned - grpRequired : null;
+                              const label = shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName;
+                              return (
+                                <div key={shiftName} className="flex items-center gap-1 tabular-nums">
+                                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 w-8 shrink-0">{label}</span>
+                                  <span className={`text-[10px] font-bold ${grpPresent > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500"}`}>{grpPresent}</span>
+                                  <span className="text-[10px] text-zinc-400">/{grpAssigned}</span>
+                                  {grpSufficiency !== null && (
+                                    <span className={`text-[10px] font-bold ${grpSufficiency > 0 ? "text-blue-500 dark:text-blue-400" : grpSufficiency < 0 ? "text-red-500 dark:text-red-400" : "text-emerald-500"}`}>
+                                      （{grpSufficiency > 0 ? `+${grpSufficiency}` : grpSufficiency === 0 ? "✓" : grpSufficiency}）
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {absCnt > 0 && (
+                          <span className="text-[11px] font-bold text-red-500 dark:text-red-400 block mt-0.5">
+                            欠員 {absCnt}名
+                          </span>
+                        )}
+                      </div>
+                      );
+                    })()}
 
                     {/* メンバーカード一覧（独立スクロール・スクロールバー非表示） */}
                     <div

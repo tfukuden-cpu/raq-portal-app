@@ -238,7 +238,7 @@ export default async function AttendancePage({
     getBreakSlotSettingsAction(projectId),
     getBreakSlotAssignmentsAction(projectId, today),
     getBreakShortSettingsAction(projectId, today),
-    admin.from("slot_requirements")
+    admin.from("shift_slot_requirements")
       .select("pattern_name, required_count")
       .eq("project_id", projectId)
       .eq("shift_date", today),
