@@ -1,6 +1,6 @@
 # Raq Works 全機能仕様書
 
-> 最終更新: 2026-06-01（v63）  
+> 最終更新: 2026-06-02（v70）  
 > 対象: 全メニュー（スタッフ / 管理 / 運営）
 
 ---
@@ -66,26 +66,24 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 **対象:** 全スタッフ（ops モード時は `/admin` へリダイレクト）
 
 **主な表示内容:**
-- 今日の日付・案件名・スタッフ名
-- 今日のシフト情報（シフト名・開始・終了時刻）
-- 出発報告ボタン（案件設定で有効化時のみ）
-- 出勤打刻状態（出勤・退勤時刻）
-- 未読お知らせバッジ
-- 今後7日間の出勤予定（公休・有休・欠勤・振替休日・特別休暇・代休は除外）
+- アバター + スタッフ名 + 時間帯別挨拶メッセージ（ランダム24パターン）
+- PC版トップヘッダー: 案件名 | 日付 | ライブ時計 | ベル（/notices へ）| アバター+名前
+- 3カラム上段（PC）: 本日シフト / 勤怠ステータス（丸バッジ）/ 欠勤・遅刻カード
+- お知らせタイムライン（最新N件 + すべて見る）
+- 1週間カレンダーカード（今日をネイビー丸でハイライト）
 
-**アクションボタン（`pre_departure` または `pre_clock_in` 状態のみ表示）:**
+**アクションボタン:**
 - 出発報告（`departure_reports` テーブルに挿入）
 - 欠勤報告 → 当日欠勤報告済みの場合は **経過報告** ボタンに切り替え（`/absence-followup` へリンク）
 - 遅刻報告（ETA選択 → `expected_arrival` を計算してDB・LINE通知に反映）
-- 補正申請（`/corrections` へ遷移）
 - ※ 打刻後（`working` / `clocked_out`）は欠勤・遅刻ボタン非表示
 
 **管理者追加表示（`isAdmin = true` 時）:**
-- タスク管理タブ（`group_tasks` テーブル）
-- LINEグループ抽出タスクの管理・担当者割当・完了マーク
+- 今日のタスクウィジェット（`group_tasks` テーブル・期限当日分）をカレンダー下部に常時表示
+- 「すべて見る →」で `/tasks` へ遷移（タブ切り替えなし）
 
 **関連テーブル:**
-`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `notices`, `notice_reads`, `group_tasks`, `task_extraction_groups`, `project_settings`
+`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `notices`, `notice_reads`, `group_tasks`, `project_settings`
 
 ---
 
@@ -93,37 +91,23 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 **対象:** 全スタッフ
 
-**3タブ構成:**
-
-#### シフトタブ
+**タブなし・カレンダー常時表示:**
 - 月カレンダー形式でシフト表示（前後3ヶ月）
-- 月ナビゲーション（← 年月 →）
-- 各日のシフト名・開始・終了時刻
-- シフト変更ログの表示（変更者・変更前後）
+- カレンダー日付に希望休申請済みバッジを表示（申請=紫・承認=濃紫・却下=赤）
+- 右上「希望休申請」ボタン → オーバーレイで `StaffOffRequestCalendar` を表示
 
-#### 希望休タブ
-- **申請フォーム:** カレンダーUI（`HolidayCalendar`）で日付選択 → 申請
-- **申請ルール（`holiday_rules` テーブル）:**
+#### 希望休申請オーバーレイ（`StaffOffRequestCalendar`）
+- `shift_off_requests` テーブルを使用（優先度付き）
+- 対象月カレンダーで日付をタップ → **優先度モーダル**（第1〜第4希望ボタン）
+- 申請済み日付を色分け表示（第1=青・第2=藍・第3=紫・第4=グレー）
+- 申請済み日をタップ → **取り下げモーダル**
+- 期日（`deadlineDay`）を過ぎると取り下げ不可（バナー表示）
+- 申請枠（`maxDaysPerMonth`）の残数を表示
 
-| `rule_type` | 説明 |
-|-------------|------|
-| `open_day` | 申請受付開始日（毎月X日から翌月分受付開始） |
-| `deadline_day` | 申請終了期日（毎月X日まで） |
-| `monthly_limit_per_person` | 月上限日数（1人あたり） |
-| `weekend_limit` | 土日申請可能日数（月上限のうち土日に使える上限） |
-| `daily_limit_count` | 1日あたりの同時申請上限（プロジェクト全体） |
-| `consecutive_limit` | 連続申請上限日数 |
-
-- **一覧表示:** 今月以降の申請済み希望休（ステータス: 申請中 / 承認済 / 却下）
-- **取り下げ:** 締切前の申請を取り下げ可能（確認モーダル）
-- **提出済み希望休カード:** Googleフォーム経由でインポートされたデータ表示
-
-#### 追加申請タブ
-- シフト募集（`shift_openings`）に対して追加勤務を申請
-- 既存申請一覧表示（ステータス管理）
+**追加申請タブは廃止**
 
 **関連テーブル:**
-`shifts`, `shift_change_logs`, `holiday_requests`, `holiday_rules`, `shift_requests`, `shift_openings`
+`shifts`, `shift_change_logs`, `shift_off_requests`, `holiday_rules`
 
 ---
 
@@ -285,7 +269,9 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 離席タイマー表示（名前リスト・座席カード）
 - 欠勤スタッフの翌日・翌々日出勤予定チェック
 - 離職リスクアラート（`churn_risk = true` スタッフ）
-- **CSV出力ボタン**（出勤簿タブ）: セクション順×アカウント番号順で「セクション・アカウント番号・名前・シフト」をダウンロード（UTF-8 BOM付きでExcel対応）
+- **XLSX出力ボタン**（出勤簿タブ）: 早番シート・遅番シートの2シート構成。欠勤者除外・アカウント番号数値昇順。シフト開始時刻 < 11:00 を早番、≥ 11:00 を遅番として振り分け。
+- **セクションヘッダー充足数表示**: 配置数 / 必要枠数（充足 ±N）を表示。必要枠数は `shift_slot_requirements` テーブルから取得（日付別オーバーライド対応）。販売・査定セクションのみ早番/遅番別内訳を表示。全セクションのカードをアカウント番号数値昇順で表示。
+- **「本日休み（補填調整）」欄は廃止**
 - **確定後変更タブ（比較ビュー）**: セクション別×アカウント番号順で全スタッフを一覧表示し、確定版と当日版を並列表示。差分行はアンバー強調。
 - 座席表インライン表示（`/seating` 統合）
 - **休憩管理タブ**: 査定・販売セクションの休憩スロット（①②③）割り当てを一覧表示。スロット変更・再割り振りが可能。
@@ -332,6 +318,12 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 追加申請（`shift_requests`）の承認・却下
 - 希望休申請（`holiday_requests`）の一覧・承認
 
+**編集グリッドのスタッフ行:**
+- 固定列: アカウント番号列（68px）+ 氏名列（88px）の2列構成
+- ▲▼ボタンで全スタッフの並び替えが可能
+- 並び順は `localStorage` に `shift-row-order-{projectId}-{YYYY-MM}` で保存・復元
+- シフト管理画面（`ShiftDayList`）でも同じ並び順を反映
+
 **シフト変更通知（`notifyShiftChangesAction`）:**
 - 確定後に変更対象スタッフへ個別LINE通知を送信
 - 送信内容は `notification_logs` に記録される（LINE設定 → 通知履歴で確認可）
@@ -358,6 +350,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - LINE連携状態・友達追加状態の確認
 - 研修日程管理
 - **番付タブ**: ASS査定・ASS販売の番付データをExcelインポート。セクション別（査定/販売）に順位表示。休憩スロット割り当てのランク付けに使用。
+- **管理メニューに「番付管理」独立メニューは廃止**（メンバー管理の番付タブに統合）
 
 **関連テーブル:**
 `project_members`, `staffs`, `shift_patterns`, `rankings`
@@ -424,11 +417,36 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 **機能:**
 - LINEグループIDの設定（通知送信先グループ）
-- 通知設定（`notification_settings` JSONB）:
-  - 欠勤通知・遅刻通知・出発通知のON/OFF
-  - 通知タイミング設定
+- **通知設定**（`notification_settings` JSONB）— 有効なイベント通知のみ:
+
+| キー | 説明 |
+|------|------|
+| `absence` | 欠勤申請 → 管理者グループ |
+| `tardiness` | 遅刻申請 → 管理者グループ |
+| `announcement` | お知らせ → スタッフ |
+| `inquiry` / `inquiry_reply` | 問い合わせ往復 |
+| `shift_changed` | シフト変更 → 対象スタッフ（常時有効） |
+| `shift_request` / `shift_request_result` | 追加申請往復 |
+| `correction_result` | 勤怠補正結果 → スタッフ |
+| `rest_day_remind` | 翌日出勤リマインド → スタッフ個人 + **グループへ1通レポート** |
+| `holiday_open_notify` | 希望休受付開始 → スタッフ |
+| `absence_followup_remind` | 欠勤経過報告リマインド → 対象スタッフ |
+| `shift_published` | シフト展開 → スタッフ（UI非表示・展開ボタン制御） |
+| `task_assigned` | タスク割当 → 担当スタッフ（UI非表示） |
+
+- **翌日出勤リマインドレポート（手動送信）**: 通知設定タブに「今すぐ送信」ボタン。翌日出勤者への個人リマインド + グループへ1通のまとめレポートを即時送信。レポート形式:
+  ```
+  【 翌日（M/D）出勤リマインドレポート】
+  合計 N名 / セクションA N名 ...
+  ⚠️ 送信失敗 N名（LINE未登録 or 送信エラー）
+  ----------
+  【セクション名】
+  ・ASS 03 氏名  ※前日欠勤 / ✗未送信
+  ```
+- 研修・導入研修シフトは `shift_off_requests`の shift_name で自動判定し「研修関連」グループとして集計
+- セクション表示順: SV → 査定 → 販売 → MOTA → ローン → 未アポ → インフォ → 研修関連
 - メンバーのLINE連携状態確認
-- スタッフへのLINE通知テスト送信
+- **廃止した通知キー**: `daily_summary`, `shift_start_remind`, `shift_end_remind`, `holiday_reminder`, `daily_task_remind`, `absence_followup_notify`
 
 **関連テーブル:**
 `project_settings`（`line_group_id`, `notification_settings`）
@@ -544,14 +562,17 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 | 通知キー | デフォルト時刻 | 処理内容 |
 |---------|--------------|---------|
-| `shift_start_remind` | シフト開始N分前 | 出勤リマインド（スタッフ個人） |
-| `shift_end_remind` | シフト終了N分後 | 退勤打刻忘れリマインド（スタッフ個人） |
-| `rest_day_remind` | 20:00 | 翌日出勤アナウンス（スタッフ個人） |
-| `daily_summary` | 08:00 | 当日出勤状況サマリー（管理者） |
+| `rest_day_remind` | 20:00 | 翌日出勤スタッフ個人リマインド + グループへ1通まとめレポート |
 | `absence_followup_remind` | 17:00 | 当日欠勤スタッフへ経過報告ボタン通知（翌日シフトありのみ） |
-| `holiday_open_notify` | 09:00 | `holiday_rules.open_day` の日に希望休受付開始通知。締切日は今月の `deadline_day` を表示 |
-| `holiday_reminder` | 09:00 | 希望休締切3日前リマインド（全スタッフ） |
-| `daily_task_remind` | 08:00 | 当日期限タスクのリマインド（担当スタッフ個人） |
+| `holiday_open_notify` | 09:00 | `holiday_rules.open_day` の日に希望休受付開始通知 |
+
+**`rest_day_remind` レポート仕様:**
+- 必要枠数は `shift_slot_requirements` テーブルから取得
+- shift_name に「研修」を含むシフトは `shift_start` が null でも対象に含める
+- 昨日欠勤したスタッフに ★ マーク、LINE未登録・送信エラーは失敗理由を記載
+- セクション表示順: SV → 査定 → 販売 → MOTA → ローン → 未アポ → インフォ → 研修関連
+
+**廃止したCronキー:** `shift_start_remind`, `shift_end_remind`, `daily_summary`, `holiday_reminder`, `daily_task_remind`
 
 **注意:** `holiday_open_notify` は毎月1日ではなく `holiday_rules.open_day`（案件ごとに設定）の日に発火する。`open_day` が未設定の場合は発火しない。
 
@@ -583,7 +604,9 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 | `shift_patterns` | シフト区分マスタ（name, section, sort_order） |
 | `shift_openings` | シフト募集（opening_date, capacity） |
 | `shift_requests` | 追加申請（opening_id, preferred_start, preferred_end, status） |
-| `holiday_requests` | 希望休申請（request_date, status, note） |
+| `shift_off_requests` | 希望休申請・優先度付き（project_id, staff_id, request_date, priority: 第一〜第四希望休, source） |
+| `shift_slot_requirements` | シフト別必要枠数（project_id, section, pattern_name, shift_date, required_count） |
+| `holiday_requests` | 希望休申請・承認制（request_date, status, note） |
 | `holiday_rules` | 希望休ルール（rule_type, value） |
 | `punch_logs` | 打刻ログ（punch_type: clock_in/clock_out, recorded_at） |
 | `departure_reports` | 出発報告（reported_at, eta_minutes） |
@@ -758,6 +781,13 @@ export default async function Page({
 - 運用者が自分の所属していない案件のデータを扱う場合
 - LINE OAuth コールバック（magic link 発行）
 - 打刻端末 `/punch/[projectId]`（認証不要ページ）
+
+### デザインシステム（v70〜）
+
+- **カラー:** サイドバー `#0d1b35`（ダークネイビー）、コンテンツ背景 `#f4f6fa`、アクセント `blue-600`
+- **レイアウト:** PCサイドバー `w-60`（240px）、トップヘッダー `h-14`（日付・時計・ベル・アバター）
+- **コンテナ幅:** `max-w-6xl mx-auto` に統一
+- **アクティブナビ:** 左ライン → `bg-white/10 rounded-xl` の全幅ハイライト
 
 ### Avatar システム（未完成・触らないこと）
 
