@@ -132,7 +132,7 @@ export default async function TasksPage() {
 
   return (
     <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
-      <div className="max-w-5xl mx-auto px-4 pb-24">
+      <div className="max-w-6xl mx-auto px-4 pb-24">
         <TasksClient
           tasks={tasks}
           taskGroups={taskGroups}

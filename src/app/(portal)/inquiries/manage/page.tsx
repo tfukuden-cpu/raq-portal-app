@@ -56,14 +56,14 @@ export default async function InquiryManagePage() {
     <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 pt-5 pb-4">
+        <div className="max-w-6xl mx-auto px-4 pt-5 pb-4">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">問い合わせ管理</h1>
           {!projectId && isExecutive && (
             <p className="text-xs font-medium text-zinc-400 mt-0.5">全案件の問い合わせを表示中</p>
           )}
         </div>
       </div>
-      <div className="max-w-5xl mx-auto px-4 pt-4 pb-24">
+      <div className="max-w-6xl mx-auto px-4 pt-4 pb-24">
         <InquiryManageClient inquiries={list} />
       </div>
     </main>

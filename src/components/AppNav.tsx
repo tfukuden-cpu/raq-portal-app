@@ -90,7 +90,7 @@ export default function AppNav({
       {/* ── PC サイドバー（常にダーク） ── */}
       <aside
         className={`hidden md:flex flex-col fixed left-0 top-0 h-full z-40 bg-[#111111] border-r border-white/[0.06] transition-[width] duration-200 ease-in-out overflow-hidden ${
-          isCol ? "w-14" : "w-52"
+          isCol ? "w-14" : "w-60"
         }`}
       >
         {/* ロゴ + トグル */}
@@ -208,7 +208,7 @@ export default function AppNav({
 
       {/* ── メインコンテンツ ── */}
       <div className={`flex-1 min-w-0 transition-[padding] duration-200 ease-in-out pb-safe md:pb-0 ${
-        isCol ? "md:pl-14" : "md:pl-52"
+        isCol ? "md:pl-14" : "md:pl-60"
       }`}>
         {children}
       </div>

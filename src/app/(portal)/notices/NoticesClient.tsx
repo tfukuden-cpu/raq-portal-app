@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -99,7 +99,7 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
     <>
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-30 bg-[#F5F5F7]/90 dark:bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-200/60 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-5 pt-5 pb-4 flex items-center justify-between gap-3">
+        <div className="max-w-6xl mx-auto px-5 pt-5 pb-4 flex items-center justify-between gap-3">
           <h1 className="text-[26px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">お知らせ</h1>
           {isAdmin && (
             <button
@@ -113,7 +113,7 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 pt-4 pb-24 space-y-2.5">
+      <div className="max-w-6xl mx-auto px-4 pt-4 pb-24 space-y-2.5">
       {notices.length === 0 ? (
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 rounded-2xl p-12 text-center shadow-sm">
           <p className="text-[14px] text-zinc-400">お知らせはありません</p>
@@ -257,3 +257,4 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
     </>
   );
 }
+

@@ -87,7 +87,7 @@ export default async function MembersPage(props: {
 
   return (
     <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
-      <div className="max-w-5xl mx-auto px-4 pb-20">
+      <div className="max-w-6xl mx-auto px-4 pb-20">
         <Suspense>
           <MemberList
             projectId={projectId}
@@ -103,4 +103,5 @@ export default async function MembersPage(props: {
     </main>
   );
 }
+
 

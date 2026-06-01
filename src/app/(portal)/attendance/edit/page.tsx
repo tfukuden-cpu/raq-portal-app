@@ -219,7 +219,7 @@ export default async function AttendanceEditPage({
 
   return (
     <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
-      <div className="max-w-5xl mx-auto px-4 pb-24">
+      <div className="max-w-6xl mx-auto px-4 pb-24">
         <AttendanceEditClient
           projectId={projectId}
           rows={rows}
@@ -233,4 +233,5 @@ export default async function AttendanceEditPage({
     </main>
   );
 }
+
 

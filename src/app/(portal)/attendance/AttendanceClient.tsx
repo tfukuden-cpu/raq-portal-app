@@ -466,7 +466,7 @@ export default function AttendanceClient({
     <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 pt-5 pb-4">
+        <div className="max-w-6xl mx-auto px-4 pt-5 pb-4">
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -483,13 +483,13 @@ export default function AttendanceClient({
           </div>
         </div>
         {/* サマリー（固定） */}
-        <div className="max-w-5xl mx-auto px-4 py-3 grid grid-cols-3 gap-3">
+        <div className="max-w-6xl mx-auto px-4 py-3 grid grid-cols-3 gap-3">
           <SummaryCard value={clockedIn} total={total} label="出勤" color="text-green-500" />
           <SummaryCard value={late}                   label="遅刻" color="text-amber-500" />
           <SummaryCard value={absent}                 label="欠勤" color="text-red-500" />
         </div>
         {/* タブ */}
-        <div className="max-w-5xl mx-auto px-4 pb-1 flex gap-1">
+        <div className="max-w-6xl mx-auto px-4 pb-1 flex gap-1">
           <button
             onClick={() => setActiveTab("today")}
             className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
@@ -550,7 +550,7 @@ export default function AttendanceClient({
           </button>
         </div>
       </div>
-      <div className="max-w-5xl mx-auto px-4 pt-4 pb-32">
+      <div className="max-w-6xl mx-auto px-4 pt-4 pb-32">
 
         {/* ── 確定後変更タブ ── */}
         {activeTab === "changes" && (
@@ -1513,4 +1513,5 @@ function DownloadIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
 

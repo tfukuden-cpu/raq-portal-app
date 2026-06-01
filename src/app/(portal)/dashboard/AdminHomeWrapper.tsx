@@ -39,7 +39,7 @@ export default function AdminHomeWrapper(props: AdminHomeWrapperProps) {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       {/* タブ切り替えバー */}
       <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="flex max-w-5xl mx-auto px-2">
+        <div className="flex max-w-6xl mx-auto px-2">
           <button
             type="button"
             onClick={() => setTab("home")}
@@ -81,7 +81,7 @@ export default function AdminHomeWrapper(props: AdminHomeWrapperProps) {
           <MyTasksWidget tasks={myTodayTasks} onSeeAll={() => setTab("tasks")} />
         </>
       ) : (
-        <div className="max-w-5xl mx-auto px-4 pb-24">
+        <div className="max-w-6xl mx-auto px-4 pb-24">
           <TasksClient
             tasks={tasks}
             taskGroups={taskGroups}

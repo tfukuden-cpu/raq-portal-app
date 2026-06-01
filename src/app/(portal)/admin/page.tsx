@@ -56,7 +56,7 @@ export default async function AdminPage() {
   return (
     <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
       <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 pt-5 pb-4 flex items-center justify-between gap-3">
+        <div className="max-w-6xl mx-auto px-4 pt-5 pb-4 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">案件設定</h1>
             {!isExecutive && !isGlobalAdmin && (
@@ -66,9 +66,10 @@ export default async function AdminPage() {
           {(isExecutive || isGlobalAdmin) && <NewProjectModal />}
         </div>
       </div>
-      <div className="max-w-5xl mx-auto px-4 pt-4 pb-10">
+      <div className="max-w-6xl mx-auto px-4 pt-4 pb-10">
         <ProjectList projects={projectList} />
       </div>
     </main>
   );
 }
+

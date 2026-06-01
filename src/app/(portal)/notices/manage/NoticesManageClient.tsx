@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition, useMemo } from "react";
 import { ChevronRightIcon } from "@/components/icons";
@@ -364,3 +364,4 @@ export default function NoticesManageClient({
     </>
   );
 }
+

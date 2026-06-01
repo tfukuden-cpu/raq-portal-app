@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import ShiftCalendar, { type ShiftChangeLog } from "./ShiftCalendar";
@@ -97,11 +97,11 @@ export default function ShiftsTabs({
       {/* ── 固定ヘッダー ── */}
       <div className="sticky top-0 z-30 shrink-0 bg-[#F5F5F7]/90 dark:bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-200/60 dark:border-zinc-800">
         {/* タイトル行 */}
-        <div className="max-w-5xl mx-auto px-5 pt-5 pb-0">
+        <div className="max-w-6xl mx-auto px-5 pt-5 pb-0">
           <h1 className="text-[26px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50">シフト</h1>
         </div>
         {/* タブバー */}
-        <div className="max-w-5xl mx-auto flex overflow-x-auto px-4 mt-2" style={{ scrollbarWidth: "none" }}>
+        <div className="max-w-6xl mx-auto flex overflow-x-auto px-4 mt-2" style={{ scrollbarWidth: "none" }}>
           {TABS.map(({ key, label }) => (
             <button
               key={key}
@@ -118,7 +118,7 @@ export default function ShiftsTabs({
         </div>
         {/* 月ナビ（シフト・希望休タブで共有） */}
         {showMonthNav && (
-          <div className="max-w-5xl mx-auto flex items-center justify-center gap-2 px-4 py-2">
+          <div className="max-w-6xl mx-auto flex items-center justify-center gap-2 px-4 py-2">
             <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
               className="w-8 h-8 flex items-center justify-center rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 disabled:opacity-30 transition-colors shadow-sm active:bg-zinc-50">
               <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />

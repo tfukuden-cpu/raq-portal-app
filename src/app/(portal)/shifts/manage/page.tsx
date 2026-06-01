@@ -116,7 +116,7 @@ export default async function ManageShiftsPage(props: {
     }));
 
     return (
-      <main className="bg-white dark:bg-zinc-950 max-w-5xl mx-auto pb-24">
+      <main className="bg-white dark:bg-zinc-950 max-w-6xl mx-auto pb-24">
         <HeaderHeightSetter className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
           <div className="flex items-end justify-between">
             <div>
@@ -169,7 +169,7 @@ export default async function ManageShiftsPage(props: {
       });
 
     return (
-      <main className="bg-white dark:bg-zinc-950 max-w-5xl mx-auto pb-24">
+      <main className="bg-white dark:bg-zinc-950 max-w-6xl mx-auto pb-24">
         <HeaderHeightSetter className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
           <div className="flex items-end justify-between">
             <div>
@@ -227,7 +227,7 @@ export default async function ManageShiftsPage(props: {
       });
 
     return (
-      <main className="bg-white dark:bg-zinc-950 max-w-5xl mx-auto pb-24">
+      <main className="bg-white dark:bg-zinc-950 max-w-6xl mx-auto pb-24">
         <HeaderHeightSetter className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
           <div className="flex items-end justify-between">
             <div>
@@ -291,7 +291,7 @@ export default async function ManageShiftsPage(props: {
       : `/shifts/manage?tab=logs&year=`;
 
     return (
-      <main className="bg-white dark:bg-zinc-950 max-w-5xl mx-auto pb-24">
+      <main className="bg-white dark:bg-zinc-950 max-w-6xl mx-auto pb-24">
         <HeaderHeightSetter className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 pt-5 space-y-2">
           <div className="flex items-end justify-between">
             <div>
@@ -581,7 +581,7 @@ export default async function ManageShiftsPage(props: {
     <main className="bg-white dark:bg-zinc-950">
 
       <HeaderHeightSetter id="shift-manage-header" className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 pt-5 space-y-2">
+        <div className="max-w-6xl mx-auto px-4 pt-5 space-y-2">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
               シフト管理
