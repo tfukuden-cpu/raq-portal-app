@@ -214,7 +214,7 @@ export default function RecordClient({
           </div>
 
           {/* ── 統計カード行 ── */}
-          <div className="grid grid-cols-2 md:grid-cols-7 gap-3 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-8 gap-3 mb-4">
             {/* 総勤務時間（大カード） */}
             <div className="col-span-2 bg-[#0d1b35] dark:bg-zinc-800 rounded-2xl p-4 flex flex-col gap-1">
               <div className="flex items-center gap-1.5 text-white/60 text-[11px] font-semibold">
