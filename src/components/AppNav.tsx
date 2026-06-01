@@ -68,7 +68,14 @@ export default function AppNav({
 
   useEffect(() => {
     document.documentElement.classList.toggle("noscroll", isNoScrollPage);
-    return () => document.documentElement.classList.remove("noscroll");
+    if (!isNoScrollPage) return;
+    // スクロールが発生したら即座に0に戻す
+    const reset = () => { window.scrollTo(0, 0); };
+    window.addEventListener("scroll", reset, { passive: true });
+    return () => {
+      document.documentElement.classList.remove("noscroll");
+      window.removeEventListener("scroll", reset);
+    };
   }, [isNoScrollPage]);
 
   const toggle = () => {
