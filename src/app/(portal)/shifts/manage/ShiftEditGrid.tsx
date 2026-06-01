@@ -881,8 +881,17 @@ export default function ShiftEditGrid({
   const [showSummaryRows, setShowSummaryRows] = useState(true);
   // 並び順：番号順 or セクション順（props の初期値を引き継ぐ）
   const [sortByAccountLocal, setSortByAccountLocal] = useState(sortByAccount ?? false);
-  // 全スタッフ並び替えオーバーライド（staffId[]）
-  const [rowOrderOverride, setRowOrderOverride] = useState<string[]>([]);
+  // 全スタッフ並び替えオーバーライド（staffId[]）- localStorage に永続化
+  const rowOrderKey = `shift-row-order-${projectId}-${targetMonth}`;
+  const [rowOrderOverride, setRowOrderOverride] = useState<string[]>(() => {
+    try { const s = localStorage.getItem(rowOrderKey); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+  useEffect(() => {
+    try {
+      if (rowOrderOverride.length > 0) localStorage.setItem(rowOrderKey, JSON.stringify(rowOrderOverride));
+      else localStorage.removeItem(rowOrderKey);
+    } catch {}
+  }, [rowOrderOverride, rowOrderKey]);
   // セクションフィルタ（"" = 全員表示）
   const [filterSection, setFilterSection] = useState<string>("");
   // インラインパターンピッカー
@@ -1654,7 +1663,8 @@ export default function ShiftEditGrid({
   } as const;
   const COL_W = 50;
   const PREV_COL_W = 36; // 前月列幅（当月より狭め）
-  const NAME_W = 100;
+  const ACCT_W = 68;    // アカウント番号列幅
+  const NAME_W = 88;    // 名前列幅
   const TOT_W = 52;     // 合計列幅
   const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
   const SUM_ROW_H = 22; // 22px (充足サマリー行の高さ)
@@ -1732,7 +1742,7 @@ export default function ShiftEditGrid({
     return result;
   }, [prevMonthShifts, shifts, drafts, patternNameSet, allDates]);
 
-  const totalW = NAME_W + PREV_COL_W * prevDates.length + COL_W * allDates.length + TOT_W;
+  const totalW = ACCT_W + NAME_W + PREV_COL_W * prevDates.length + COL_W * allDates.length + TOT_W;
 
   return (
     <div className="flex flex-col h-full">
@@ -2062,6 +2072,7 @@ export default function ShiftEditGrid({
             <table className="border-separate"
               style={{ tableLayout: "fixed", width: `${totalW}px`, minWidth: `${totalW}px`, borderSpacing: 0 }}>
               <colgroup>
+                <col style={{ width: `${ACCT_W}px` }} />
                 <col style={{ width: `${NAME_W}px` }} />
                 {prevDates.map((d) => <col key={`prev-col-s-${d}`} style={{ width: `${PREV_COL_W}px` }} />)}
                 {allDates.map((d) => <col key={`col-s-${d}`} style={{ width: `${COL_W}px` }} />)}
@@ -2069,7 +2080,12 @@ export default function ShiftEditGrid({
               </colgroup>
               <thead>
                 <tr>
-                  <th className="sticky top-0 left-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-r-2 border-zinc-200 dark:border-zinc-700" />
+                  <th className="sticky top-0 left-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-r border-zinc-200 dark:border-zinc-700">
+                    <span className="text-[9px] font-semibold text-zinc-400 px-1">番号</span>
+                  </th>
+                  <th className="sticky top-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-r-2 border-zinc-200 dark:border-zinc-700" style={{ left: ACCT_W }}>
+                    <span className="text-[9px] font-semibold text-zinc-400 px-1">氏名</span>
+                  </th>
                   {prevDates.map((date, pi) => {
                     const day = parseInt(date.slice(8)); const dw = dowLabel(date);
                     const dn = dowNum(date); const isSun = dn === 0, isSat = dn === 6;
@@ -2372,6 +2388,7 @@ export default function ShiftEditGrid({
           <table className="border-separate"
             style={{ tableLayout: "fixed", width: `${totalW}px`, minWidth: `${totalW}px`, borderSpacing: 0 }}>
             <colgroup>
+              <col style={{ width: `${ACCT_W}px` }} />
               <col style={{ width: `${NAME_W}px` }} />
               {prevDates.map((d) => <col key={`prev-col-${d}`} style={{ width: `${PREV_COL_W}px` }} />)}
               {allDates.map((d) => <col key={d} style={{ width: `${COL_W}px` }} />)}
@@ -2381,7 +2398,12 @@ export default function ShiftEditGrid({
             {!showSummaryRows && (
               <thead>
                 <tr>
-                  <th className="sticky top-0 left-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-r-2 border-zinc-200 dark:border-zinc-700" />
+                  <th className="sticky top-0 left-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-r border-zinc-200 dark:border-zinc-700">
+                    <span className="text-[9px] font-semibold text-zinc-400 px-1">番号</span>
+                  </th>
+                  <th className="sticky top-0 z-30 h-11 bg-white dark:bg-zinc-950 border-b border-r-2 border-zinc-200 dark:border-zinc-700" style={{ left: ACCT_W }}>
+                    <span className="text-[9px] font-semibold text-zinc-400 px-1">氏名</span>
+                  </th>
                   {prevDates.map((date, pi) => {
                     const day = parseInt(date.slice(8)); const dw = dowLabel(date);
                     const dn = dowNum(date); const isSun = dn === 0, isSat = dn === 6;
@@ -2468,7 +2490,7 @@ export default function ShiftEditGrid({
                                 </div>
                               </td>
                               {/* 残り列は背景だけ埋める（sticky なし） */}
-                              <td colSpan={prevDates.length + allDates.length + 1}
+                              <td colSpan={prevDates.length + allDates.length + 2}
                                 className={["border-b", headerBg].join(" ")} />
                             </>
                           );
@@ -2480,7 +2502,7 @@ export default function ShiftEditGrid({
                         <td className={`sticky left-0 z-10 px-3 py-0.5 border-b text-[9px] font-bold ${svStyle.header}`}>
                           {svType}
                         </td>
-                        <td colSpan={prevDates.length + allDates.length + 1} className={`border-b ${svStyle.header}`} />
+                        <td colSpan={prevDates.length + allDates.length + 2} className={`border-b ${svStyle.header}`} />
                       </tr>
                     )}
                     <tr
@@ -2489,82 +2511,50 @@ export default function ShiftEditGrid({
                         else staffRowRefs.current.delete(member.id);
                       }}
                     >
-                      {/* 名前セル（クリックでスタッフ情報パネルを開く） */}
-                      <td className={[
-                        "sticky left-0 z-10 border-b border-r-2 border-zinc-200 dark:border-zinc-700 align-middle h-8 transition-colors cursor-pointer",
-                        isFocusedRow
+                      {/* アカウント番号セル + 並び替えボタン */}
+                      {(() => {
+                        const cellBg = isFocusedRow
                           ? "bg-blue-100 dark:bg-blue-900/40"
                           : effChurnRisk
-                          ? "bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40"
+                          ? "bg-red-50 dark:bg-red-950/30"
                           : member.section === "SV"
-                          ? `${svStyle.row} hover:brightness-95`
-                          : "bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-800/60",
-                      ].join(" ")}
-                      onClick={() => setStaffInfoTarget(member)}
-                      >
-                        <div className="px-2 flex items-center gap-1">
-                          {isFocusedRow && (
-                            <span className="w-1.5 h-5 rounded-full bg-blue-500 shrink-0" />
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <span className={[
-                              "text-[11px] font-semibold block leading-tight truncate tabular-nums",
-                              isFocusedRow ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-200",
-                            ].join(" ")}>
-                              {member.accountNumber
-                                ? `${member.accountNumber}│${member.name}`
-                                : member.name}
-                            </span>
-                            {(effChurnRisk || member.endDate) && (
-                              <div className="flex items-center gap-1 flex-wrap">
-                                {effChurnRisk && (
-                                  <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none shrink-0">
-                                    離脱
-                                  </span>
-                                )}
-                                {member.endDate && (
-                                  <span className="text-[9px] text-amber-500 dark:text-amber-400 tabular-nums leading-none">
-                                    〜{member.endDate.slice(5).replace("-", "/")}
-                                  </span>
-                                )}
+                          ? svStyle.row
+                          : "bg-white dark:bg-zinc-950";
+                        return (
+                          <>
+                            <td className={["sticky left-0 z-10 border-b border-r border-zinc-200 dark:border-zinc-700 align-middle h-8", cellBg].join(" ")}>
+                              <div className="px-1.5 flex items-center gap-0.5 h-full">
+                                <span className={["text-[10px] tabular-nums truncate flex-1", isFocusedRow ? "text-blue-700 dark:text-blue-300 font-semibold" : "text-zinc-500 dark:text-zinc-400"].join(" ")}>
+                                  {member.accountNumber ?? "—"}
+                                </span>
+                                <div className="flex flex-col gap-0 shrink-0">
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setRowOrderOverride(prev => { const list = prev.length ? prev : displayMembers.map(m => m.id); const i = list.indexOf(member.id); if (i <= 0) return list; const next = [...list]; [next[i-1], next[i]] = [next[i], next[i-1]]; return next; }); }} className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none">▲</button>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setRowOrderOverride(prev => { const list = prev.length ? prev : displayMembers.map(m => m.id); const i = list.indexOf(member.id); if (i < 0 || i >= list.length - 1) return list; const next = [...list]; [next[i], next[i+1]] = [next[i+1], next[i]]; return next; }); }} className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none">▼</button>
+                                </div>
                               </div>
-                            )}
-                          </div>
-                          {/* 全スタッフ対応の並び替えボタン */}
-                          <div className="flex flex-col gap-0 shrink-0 ml-auto">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRowOrderOverride(prev => {
-                                  const list = prev.length ? prev : displayMembers.map(m => m.id);
-                                  const i = list.indexOf(member.id);
-                                  if (i <= 0) return list;
-                                  const next = [...list];
-                                  [next[i - 1], next[i]] = [next[i], next[i - 1]];
-                                  return next;
-                                });
-                              }}
-                              className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none"
-                            >▲</button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRowOrderOverride(prev => {
-                                  const list = prev.length ? prev : displayMembers.map(m => m.id);
-                                  const i = list.indexOf(member.id);
-                                  if (i < 0 || i >= list.length - 1) return list;
-                                  const next = [...list];
-                                  [next[i], next[i + 1]] = [next[i + 1], next[i]];
-                                  return next;
-                                });
-                              }}
-                              className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none"
-                            >▼</button>
-                          </div>
-                        </div>
-                      </td>
+                            </td>
+                            {/* 名前セル（クリックでスタッフ情報パネルを開く） */}
+                            <td className={["z-10 border-b border-r-2 border-zinc-200 dark:border-zinc-700 align-middle h-8 transition-colors cursor-pointer", cellBg, effChurnRisk ? "hover:bg-red-100 dark:hover:bg-red-900/40" : member.section === "SV" ? "hover:brightness-95" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60"].join(" ")}
+                              style={{ position: "sticky", left: ACCT_W, zIndex: 10 }}
+                              onClick={() => setStaffInfoTarget(member)}>
+                              <div className="px-1.5 flex items-center gap-1 h-full">
+                                {isFocusedRow && <span className="w-1 h-4 rounded-full bg-blue-500 shrink-0" />}
+                                <div className="min-w-0 flex-1">
+                                  <span className={["text-[11px] font-semibold block leading-tight truncate", isFocusedRow ? "text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-200"].join(" ")}>
+                                    {member.name}
+                                  </span>
+                                  {(effChurnRisk || member.endDate) && (
+                                    <div className="flex items-center gap-0.5">
+                                      {effChurnRisk && <span className="text-[8px] font-bold px-1 rounded bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 leading-none">離脱</span>}
+                                      {member.endDate && <span className="text-[9px] text-amber-500 dark:text-amber-400 tabular-nums leading-none">〜{member.endDate.slice(5).replace("-", "/")}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </>
+                        );
+                      })()}
                       {/* 前月末セル（読み取り専用・グレー表示） */}
                       {prevDates.map((date, pi) => {
                         const shiftName = prevShiftsByKey.get(`${member.id}__${date}`) ?? null;
