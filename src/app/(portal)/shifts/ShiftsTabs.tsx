@@ -61,12 +61,16 @@ const JP_HOLIDAYS: Record<string, string> = {
 function getShiftBadge(name: string | null) {
   if (!name) return null;
   if (["公休","休","公休日"].includes(name))
-    return { bg: "bg-blue-50", text: "text-blue-600" };
-  if (["希望休","有休","特別休暇","代休","振替休日","欠勤"].includes(name))
-    return { bg: "bg-zinc-100", text: "text-zinc-500" };
-  if (name.includes("早番")) return { bg: "bg-green-50", text: "text-green-700" };
-  if (name.includes("遅番")) return { bg: "bg-amber-50", text: "text-amber-700" };
-  return { bg: "bg-sky-50", text: "text-sky-700" };
+    return { bg: "bg-blue-100",    text: "text-blue-700",    border: "border border-blue-200" };
+  if (["希望休","有休","特別休暇","代休","振替休日"].includes(name))
+    return { bg: "bg-purple-100",  text: "text-purple-700",  border: "border border-purple-200" };
+  if (["欠勤"].includes(name))
+    return { bg: "bg-red-100",     text: "text-red-700",     border: "border border-red-200" };
+  if (name.includes("早番"))
+    return { bg: "bg-emerald-100", text: "text-emerald-800", border: "border border-emerald-200" };
+  if (name.includes("遅番"))
+    return { bg: "bg-orange-100",  text: "text-orange-800",  border: "border border-orange-200" };
+  return { bg: "bg-sky-100",       text: "text-sky-800",     border: "border border-sky-200" };
 }
 
 function CloseIcon() {
@@ -198,7 +202,7 @@ export default function ShiftsTabs({
                   {shiftForDate?.shift_name ? (
                     <div>
                       {badge && (
-                        <div className={`inline-block px-3 py-1.5 rounded-xl text-[13px] font-bold mb-2 ${badge.bg} ${badge.text}`}>
+                        <div className={`inline-block px-3 py-1.5 rounded-xl text-[13px] font-bold mb-2 ${badge.bg} ${badge.text} ${badge.border}`}>
                           {shiftForDate.shift_name}
                         </div>
                       )}

@@ -61,17 +61,19 @@ const JP_HOLIDAYS: Record<string, string> = {
 };
 
 // ── シフトバッジ色 ─────────────────────────────────────────────────────────────
-function getShiftBadge(name: string | null): { bg: string; text: string } | null {
+function getShiftBadge(name: string | null): { bg: string; text: string; border: string } | null {
   if (!name) return null;
   if (["公休", "休", "公休日"].includes(name))
-    return { bg: "bg-blue-50 dark:bg-blue-950/50",  text: "text-blue-600 dark:text-blue-300" };
-  if (["希望休", "有休", "特別休暇", "代休", "振替休日", "欠勤"].includes(name))
-    return { bg: "bg-zinc-100 dark:bg-zinc-800",     text: "text-zinc-500 dark:text-zinc-400" };
+    return { bg: "bg-blue-100 dark:bg-blue-900/50",    text: "text-blue-700 dark:text-blue-200",    border: "border border-blue-200 dark:border-blue-700" };
+  if (["希望休", "有休", "特別休暇", "代休", "振替休日"].includes(name))
+    return { bg: "bg-purple-100 dark:bg-purple-900/40", text: "text-purple-700 dark:text-purple-200", border: "border border-purple-200 dark:border-purple-700" };
+  if (["欠勤"].includes(name))
+    return { bg: "bg-red-100 dark:bg-red-900/40",      text: "text-red-700 dark:text-red-200",       border: "border border-red-200 dark:border-red-700" };
   if (name.includes("早番"))
-    return { bg: "bg-green-50 dark:bg-green-950/50", text: "text-green-700 dark:text-green-300" };
+    return { bg: "bg-emerald-100 dark:bg-emerald-900/40", text: "text-emerald-800 dark:text-emerald-200", border: "border border-emerald-200 dark:border-emerald-700" };
   if (name.includes("遅番"))
-    return { bg: "bg-amber-50 dark:bg-amber-950/50", text: "text-amber-700 dark:text-amber-300" };
-  return { bg: "bg-sky-50 dark:bg-sky-950/50",       text: "text-sky-700 dark:text-sky-300" };
+    return { bg: "bg-orange-100 dark:bg-orange-900/40",   text: "text-orange-800 dark:text-orange-200",   border: "border border-orange-200 dark:border-orange-700" };
+  return { bg: "bg-sky-100 dark:bg-sky-900/40",        text: "text-sky-800 dark:text-sky-200",       border: "border border-sky-200 dark:border-sky-700" };
 }
 
 function isOff(name: string | null): boolean {
@@ -202,16 +204,16 @@ export default function ShiftCalendar({
 
         {/* 当月 */}
         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-          const ds        = `${monthStr}-${String(d).padStart(2, "0")}`;
-          const s         = shiftMap.get(ds);
-          const isToday   = ds === todayStr;
-          const isSel     = ds === selectedDate;
-          const dow       = new Date(year, month - 1, d).getDay();
-          const isHoliday = !!JP_HOLIDAYS[ds];
-          const badge     = getShiftBadge(s?.shift_name ?? null);
-          const hasLog    = logMap.has(ds);
-          const isRed     = dow === 0 || isHoliday;
-          const isBlue    = dow === 6;
+          const ds          = `${monthStr}-${String(d).padStart(2, "0")}`;
+          const s           = shiftMap.get(ds);
+          const isToday     = ds === todayStr;
+          const isSel       = ds === selectedDate;
+          const dow         = new Date(year, month - 1, d).getDay();
+          const isHoliday   = !!JP_HOLIDAYS[ds];
+          const badge       = getShiftBadge(s?.shift_name ?? null);
+          const hasLog      = logMap.has(ds);
+          const isRed       = dow === 0 || isHoliday;
+          const isBlue      = dow === 6;
           const holidayName = JP_HOLIDAYS[ds];
 
           return (
@@ -220,46 +222,56 @@ export default function ShiftCalendar({
               type="button"
               onClick={() => onSelectDate?.(ds)}
               className={cx(
-                "relative text-left p-1.5 border-r border-b transition-all",
+                "relative flex flex-col p-2 border-r border-b transition-all group",
                 isSel
-                  ? "bg-[#0d1b35]/5 dark:bg-blue-950/30 border-[#0d1b35]/20"
+                  ? "bg-[#0d1b35]/[0.04] dark:bg-blue-950/30"
                   : isToday
-                  ? "border-2 border-[#0d1b35] dark:border-blue-400 z-10 -m-px"
+                  ? "border-2 border-[#0d1b35] dark:border-blue-400 z-10 -m-px bg-[#0d1b35]/[0.02]"
                   : "border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/40",
               )}
             >
-              {/* 日付数字 */}
-              <span className={cx(
-                "text-[14px] font-bold leading-none",
-                isSel     ? "text-[#0d1b35] dark:text-blue-300"
-                : isToday ? "text-[#0d1b35] dark:text-blue-400"
-                : isRed   ? "text-red-500 dark:text-red-400"
-                : isBlue  ? "text-blue-500 dark:text-blue-400"
-                : "text-zinc-800 dark:text-zinc-200",
-              )}>
-                {d}
-              </span>
+              {/* 日付：今日は塗り丸、それ以外はテキスト */}
+              <div className="flex items-start justify-between mb-1">
+                {isToday ? (
+                  <span className="w-7 h-7 rounded-full bg-[#0d1b35] dark:bg-blue-500 text-white text-[13px] font-bold flex items-center justify-center flex-shrink-0">
+                    {d}
+                  </span>
+                ) : (
+                  <span className={cx(
+                    "text-[16px] font-bold leading-none",
+                    isRed  ? "text-red-500 dark:text-red-400"
+                    : isBlue ? "text-blue-500 dark:text-blue-400"
+                    : isSel  ? "text-[#0d1b35] dark:text-blue-300"
+                    : "text-zinc-800 dark:text-zinc-200",
+                  )}>
+                    {d}
+                  </span>
+                )}
+                {hasLog && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1 flex-shrink-0" />
+                )}
+              </div>
 
               {/* 祝日名 */}
               {holidayName && (
-                <p className="text-[8px] text-red-400 dark:text-red-400 leading-none mt-0.5 truncate">
-                  {holidayName}
-                </p>
+                <p className="text-[8px] text-red-400 leading-none mb-1 truncate">{holidayName}</p>
               )}
 
               {/* シフトバッジ */}
               {s?.shift_name && badge && (
                 <div className={cx(
-                  "mt-1 px-1 py-0.5 rounded-md text-[10px] font-semibold text-center leading-none w-full truncate",
-                  badge.bg, badge.text,
+                  "px-1.5 py-1 rounded-lg text-[11px] font-bold text-center leading-none w-full",
+                  badge.bg, badge.text, badge.border,
                 )}>
                   {s.shift_name}
                 </div>
               )}
 
-              {/* 変更ドット */}
-              {hasLog && (
-                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400" />
+              {/* 勤務時間 */}
+              {s?.shift_start && !["公休","休","公休日","希望休","有休","特別休暇","代休","振替休日","欠勤"].includes(s.shift_name ?? "") && (
+                <p className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums text-center mt-1 leading-none">
+                  {s.shift_start.slice(0,5)}–{s.shift_end?.slice(0,5) ?? "--:--"}
+                </p>
               )}
             </button>
           );
