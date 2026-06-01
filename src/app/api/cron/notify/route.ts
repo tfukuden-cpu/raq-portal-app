@@ -73,6 +73,13 @@ function isNearTime(configTime: string, windowMin = 3): boolean {
   return Math.min(diff, 1440 - diff) <= windowMin;
 }
 
+const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "ローン", "未アポ", "インフォ", "研修関連"];
+
+function sectionRank(sec: string): number {
+  const i = SECTION_ORDER.indexOf(sec);
+  return i === -1 ? SECTION_ORDER.length : i;
+}
+
 /** シフト名と時刻を結合して表示用文字列を作る */
 function formatShift(
   shiftName: string | null,
@@ -225,15 +232,12 @@ export async function GET(req: NextRequest) {
 
           // グループへまとめレポート1通
           if (groupId && results.length > 0) {
-            const sectionOrder: string[] = [];
             const bySection = new Map<string, SendResult[]>();
             for (const r of results) {
-              if (!bySection.has(r.section)) {
-                bySection.set(r.section, []);
-                sectionOrder.push(r.section);
-              }
+              if (!bySection.has(r.section)) bySection.set(r.section, []);
               bySection.get(r.section)!.push(r);
             }
+            const sectionOrder = [...bySection.keys()].sort((a, b) => sectionRank(a) - sectionRank(b));
             const failures = results.filter(r => !r.success);
             const dateFmt  = fmtMD(tmrw);
 

@@ -26,6 +26,9 @@ function fmtMD(dateStr: string): string {
   return `${parseInt(m)}/${parseInt(d)}`;
 }
 
+const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "ローン", "未アポ", "インフォ", "研修関連"];
+const sectionRank = (sec: string) => { const i = SECTION_ORDER.indexOf(sec); return i === -1 ? SECTION_ORDER.length : i; };
+
 function formatShift(name: string | null, start: string | null, end: string | null): string {
   if (name && start && end) return `${name}（${start}〜${end}）`;
   if (start && end) return `${start}〜${end}`;
@@ -78,12 +81,12 @@ export async function previewRemindReportAction(): Promise<{ ok: boolean; text?:
     };
   });
 
-  const sectionOrder: string[] = [];
   const bySection = new Map<string, Entry[]>();
   for (const e of entries) {
-    if (!bySection.has(e.section)) { bySection.set(e.section, []); sectionOrder.push(e.section); }
+    if (!bySection.has(e.section)) bySection.set(e.section, []);
     bySection.get(e.section)!.push(e);
   }
+  const sectionOrder = [...bySection.keys()].sort((a, b) => sectionRank(a) - sectionRank(b));
   const unregistered = entries.filter(e => !e.lineRegistered);
 
   const lines: string[] = [
@@ -218,12 +221,12 @@ export async function sendRemindReportNowAction(): Promise<{ ok: boolean; messag
   }
 
   // グループへまとめレポート
-  const sectionOrder: string[] = [];
   const bySection = new Map<string, SendResult[]>();
   for (const r of results) {
-    if (!bySection.has(r.section)) { bySection.set(r.section, []); sectionOrder.push(r.section); }
+    if (!bySection.has(r.section)) bySection.set(r.section, []);
     bySection.get(r.section)!.push(r);
   }
+  const sectionOrder = [...bySection.keys()].sort((a, b) => sectionRank(a) - sectionRank(b));
   const failures = results.filter(r => !r.success);
 
   const lines: string[] = [
