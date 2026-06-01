@@ -222,19 +222,18 @@ export default function ShiftCalendar({
               type="button"
               onClick={() => onSelectDate?.(ds)}
               className={cx(
-                "relative flex flex-col justify-between p-2.5 border-r border-b transition-all",
-                isSel
-                  ? "bg-[#0d1b35]/[0.04] dark:bg-blue-950/30"
-                  : isToday
-                  ? "border-[1.5px] border-[#0d1b35] dark:border-blue-400 z-10 bg-[#0d1b35]/[0.02]"
-                  : "border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40",
+                "relative flex flex-col justify-between p-2.5 border-r border-b border-zinc-100 dark:border-zinc-800 transition-all",
+                isToday && isSel ? "bg-blue-50 dark:bg-blue-950/30 border-l-2 border-l-[#0d1b35]"
+                : isToday        ? "bg-blue-50/50 dark:bg-blue-950/20"
+                : isSel          ? "bg-[#0d1b35]/[0.04] dark:bg-zinc-800/50 border-l-2 border-l-[#0d1b35] dark:border-l-blue-400"
+                :                  "hover:bg-zinc-50 dark:hover:bg-zinc-800/30",
               )}
             >
               {/* 上部：日付 + 祝日名 */}
               <div>
                 <div className="flex items-center justify-between">
                   {isToday ? (
-                    <span className="w-8 h-8 rounded-full bg-[#0d1b35] dark:bg-blue-500 text-white text-[15px] font-bold flex items-center justify-center">
+                    <span className="w-7 h-7 rounded-full bg-[#0d1b35] dark:bg-blue-500 text-white text-[13px] font-bold flex items-center justify-center leading-none">
                       {d}
                     </span>
                   ) : (
