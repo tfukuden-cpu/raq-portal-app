@@ -723,74 +723,55 @@ export default function AttendanceClient({
                   >
                     {/* カラムヘッダー（固定） */}
                     {(() => {
-                      // セクション全体の必要枠数合計
-                      const totalRequired = groups.reduce((s, g) => s + (shiftRequired[g.shiftName] ?? 0), 0);
-                      const totalAssigned = allMembers.length;
+                      const totalRequired   = groups.reduce((s, g) => s + (shiftRequired[g.shiftName] ?? 0), 0);
+                      const totalAssigned   = allMembers.length;
                       const totalSufficiency = totalRequired > 0 ? totalAssigned - totalRequired : null;
+                      const totalLate = allMembers.filter(m => (localStatuses.get(m.staffId) ?? m.status) === "late").length;
+                      const suffixFmt = (suf: number | null) => suf === null ? null : suf > 0 ? `+${suf}` : suf === 0 ? "✓" : String(suf);
+                      const sufColor  = (suf: number | null) => suf === null ? "" : suf > 0 ? "text-blue-500 dark:text-blue-400" : suf < 0 ? "text-red-500 dark:text-red-400" : "text-emerald-500";
                       return (
                       <div className={`px-3 pt-2.5 pb-2 border-b shrink-0 rounded-t-2xl ${secCol.headerBg} ${secCol.border.replace("border-", "border-b-")}`}>
-                        {/* セクション名 + 出勤数/配置数（充足数） */}
-                        <div className="flex items-center justify-between gap-2">
+
+                        {/* セクション名行：出勤/配置（充足）遅刻N 欠勤N */}
+                        <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 tabular-nums">
                           <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100 shrink-0">{section}</span>
-                          <div className="flex items-center gap-1 tabular-nums">
-                            <span className={`text-xs font-bold ${present > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500"}`}>{present}</span>
-                            <span className="text-xs text-zinc-400">/{totalAssigned}</span>
-                            {totalSufficiency !== null && (
-                              <span className={`text-xs font-bold ${totalSufficiency > 0 ? "text-blue-500 dark:text-blue-400" : totalSufficiency < 0 ? "text-red-500 dark:text-red-400" : "text-emerald-500"}`}>
-                                （{totalSufficiency > 0 ? `+${totalSufficiency}` : totalSufficiency === 0 ? "✓" : totalSufficiency}）
-                              </span>
-                            )}
-                          </div>
+                          <span className={`text-xs font-bold ${present > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500"}`}>{present}</span>
+                          <span className="text-xs text-zinc-400">/{totalAssigned}</span>
+                          {totalSufficiency !== null && (
+                            <span className={`text-xs font-bold ${sufColor(totalSufficiency)}`}>
+                              （{suffixFmt(totalSufficiency)}）
+                            </span>
+                          )}
+                          {totalLate > 0 && <span className="text-[11px] font-bold text-amber-500 dark:text-amber-400">遅刻 {totalLate}名</span>}
+                          {absCnt > 0  && <span className="text-[11px] font-bold text-red-500 dark:text-red-400">欠勤 {absCnt}名</span>}
                         </div>
-                        {/* 早番/遅番 別内訳（査定・販売のみ。他セクションは高さ合わせのスペーサー） */}
+
+                        {/* 早番/遅番 内訳（査定・販売のみ）+ 高さ合わせスペーサー */}
                         <div className="mt-1 pl-1" style={{ minHeight: "38px" }}>
                           {(section === "査定" || section === "販売") && (
                             <div className="space-y-0.5">
                               {groups.map(({ shiftName, members: grpMembers }) => {
-                                const grpPresent = grpMembers.filter(m => {
-                                  const s = localStatuses.get(m.staffId) ?? m.status;
-                                  return s === "working" || s === "clocked_out" || s === "departed";
-                                }).length;
+                                const grpPresent  = grpMembers.filter(m => { const s = localStatuses.get(m.staffId) ?? m.status; return s === "working" || s === "clocked_out" || s === "departed"; }).length;
                                 const grpAssigned = grpMembers.length;
                                 const grpRequired = shiftRequired[shiftName] ?? 0;
-                                const grpSufficiency = grpRequired > 0 ? grpAssigned - grpRequired : null;
-                                const label = shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName;
+                                const grpSuf      = grpRequired > 0 ? grpAssigned - grpRequired : null;
+                                const grpLate     = grpMembers.filter(m => (localStatuses.get(m.staffId) ?? m.status) === "late").length;
+                                const grpAbsent   = grpMembers.filter(m => (localStatuses.get(m.staffId) ?? m.status) === "absent").length;
+                                const label       = shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName;
                                 return (
-                                  <div key={shiftName} className="flex items-center gap-1 tabular-nums">
-                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 w-8 shrink-0">{label}</span>
+                                  <div key={shiftName} className="flex items-center flex-wrap gap-x-1 gap-y-0 tabular-nums">
+                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 w-7 shrink-0">{label}</span>
                                     <span className={`text-[10px] font-bold ${grpPresent > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500"}`}>{grpPresent}</span>
                                     <span className="text-[10px] text-zinc-400">/{grpAssigned}</span>
-                                    {grpSufficiency !== null && (
-                                      <span className={`text-[10px] font-bold ${grpSufficiency > 0 ? "text-blue-500 dark:text-blue-400" : grpSufficiency < 0 ? "text-red-500 dark:text-red-400" : "text-emerald-500"}`}>
-                                        （{grpSufficiency > 0 ? `+${grpSufficiency}` : grpSufficiency === 0 ? "✓" : grpSufficiency}）
-                                      </span>
-                                    )}
+                                    {grpSuf !== null && <span className={`text-[10px] font-bold ${sufColor(grpSuf)}`}>（{suffixFmt(grpSuf)}）</span>}
+                                    {grpLate > 0   && <span className="text-[10px] font-bold text-amber-500">遅刻{grpLate}</span>}
+                                    {grpAbsent > 0 && <span className="text-[10px] font-bold text-red-500">欠勤{grpAbsent}</span>}
                                   </div>
                                 );
                               })}
                             </div>
                           )}
                         </div>
-                        {/* 遅刻・欠勤 */}
-                        {(() => {
-                          const lateCnt = allMembers.filter(m =>
-                            (localStatuses.get(m.staffId) ?? m.status) === "late"
-                          ).length;
-                          return (lateCnt > 0 || absCnt > 0) ? (
-                            <div className="flex gap-2 mt-0.5">
-                              {lateCnt > 0 && (
-                                <span className="text-[11px] font-bold text-amber-500 dark:text-amber-400">
-                                  遅刻 {lateCnt}名
-                                </span>
-                              )}
-                              {absCnt > 0 && (
-                                <span className="text-[11px] font-bold text-red-500 dark:text-red-400">
-                                  欠勤 {absCnt}名
-                                </span>
-                              )}
-                            </div>
-                          ) : null;
-                        })()}
                       </div>
                       );
                     })()}
@@ -1501,17 +1482,17 @@ function exportAttendanceCSV(today: string, dateLabel: string, grouped: SectionG
       lines.push(esc(label));
       lines.push("アカウント番号,名前,シフト");
 
-      // アカウント番号順にソート
-      const sorted = [...members].sort((a, b) =>
-        (a.accountNumber ?? "").localeCompare(b.accountNumber ?? "", "ja")
-      );
+      // 欠勤者除外 → アカウント番号順にソート
+      const sorted = [...members]
+        .filter(m => m.status !== "absent")
+        .sort((a, b) => (a.accountNumber ?? "").localeCompare(b.accountNumber ?? "", "ja"));
       for (const m of sorted) {
         lines.push([esc(m.accountNumber ?? "—"), esc(m.name), esc(shiftName)].join(","));
       }
 
-      // 小計
-      lines.push(`小計,${members.length}名`);
-      sectionTotal += members.length;
+      // 小計（欠勤者除外後の人数）
+      lines.push(`小計,${sorted.length}名`);
+      sectionTotal += sorted.length;
       lines.push("");
     }
 
