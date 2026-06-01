@@ -20,8 +20,6 @@ type Props = {
   todayCount: number;
 };
 
-type FilterTab = "すべて" | "重要" | "シフト連絡" | "お知らせ" | "雑談";
-const TABS: FilterTab[] = ["すべて", "重要", "シフト連絡", "お知らせ", "雑談"];
 
 function fmtDateTime(iso: string): string {
   const d = new Date(iso);
@@ -98,8 +96,6 @@ function ChevronRightIcon() {
 export default function PostClient({ posts, currentStaffId, currentStaffName, isAdmin, todayCount }: Props) {
   const router = useRouter();
   const [body, setBody]             = useState("");
-  const [category, setCategory]     = useState<FilterTab>("すべて");
-  const [activeTab, setActiveTab]   = useState<FilterTab>("すべて");
   const [searchQuery, setSearch]    = useState("");
   const [formError, setFormError]   = useState<string | null>(null);
   const [isPosting, startPostTrans] = useTransition();
@@ -157,19 +153,6 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h1 className="text-[22px] font-bold text-[#0d1b35] dark:text-white">掲示板</h1>
           <div className="flex items-center gap-3">
-            {/* フィルタータブ */}
-            <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 p-1">
-              {TABS.map(tab => (
-                <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors whitespace-nowrap ${
-                    activeTab === tab
-                      ? "bg-[#0d1b35] text-white shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200"
-                  }`}>
-                  {tab}
-                </button>
-              ))}
-            </div>
             {/* 検索 */}
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none">
@@ -210,19 +193,7 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
                     className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[13px] text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 resize-none focus:outline-none focus:ring-2 focus:ring-[#0d1b35]/20 transition"
                   />
                   {formError && <p className="text-[11px] text-red-500 mt-1">{formError}</p>}
-                  <div className="flex items-center justify-between mt-2.5">
-                    {/* カテゴリ選択 */}
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={category}
-                        onChange={e => setCategory(e.target.value as FilterTab)}
-                        className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-medium text-zinc-600 dark:text-zinc-300 focus:outline-none"
-                      >
-                        {(["重要","シフト連絡","お知らせ","雑談"] as FilterTab[]).map(t => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
-                    </div>
+                  <div className="flex items-center justify-end mt-2.5">
                     <button
                       type="button"
                       onClick={handlePost}
