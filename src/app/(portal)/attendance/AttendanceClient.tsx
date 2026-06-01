@@ -610,7 +610,7 @@ export default function AttendanceClient({
             </div>
             <button
               type="button"
-              onClick={() => exportAttendanceCSV(today, dateLabel, grouped)}
+              onClick={() => exportAttendanceXLSX(today, dateLabel, grouped, localStatuses)}
               className="flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
             >
               <DownloadIcon className="w-3.5 h-3.5" />
@@ -1464,57 +1464,61 @@ function ShiftChangesTab({
   );
 }
 
-// ── 出勤簿CSV出力 ────────────────────────────────────────
-function exportAttendanceCSV(today: string, dateLabel: string, grouped: SectionGroup[]) {
-  const BOM = "﻿";
-  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-  const lines: string[] = [];
+// ── 出勤簿XLSX出力（早番シート・遅番シート） ────────────────
+function exportAttendanceXLSX(
+  today: string,
+  dateLabel: string,
+  grouped: SectionGroup[],
+  localStatuses: Map<string, StatusKey>,
+) {
+  // アカウント番号から数値を抽出してソート
+  const getAccNum = (acct: string | null) => parseInt((acct ?? "").replace(/\D/g, "")) || 99999;
 
-  lines.push(`日付,${dateLabel}`);
-  lines.push("");
+  type Row = { section: string; accountNumber: string; name: string };
+  const earlyRows: Row[] = [];
+  const lateRows:  Row[] = [];
 
   for (const { section, shiftGroups } of grouped) {
-    let sectionTotal = 0;
+    for (const { shiftStart, members } of shiftGroups) {
+      // 11:00 未満を早番、以降を遅番
+      const isEarly = shiftStart ? shiftStart.slice(0, 5) < "11:00" : false;
+      const target  = isEarly ? earlyRows : lateRows;
 
-    for (const { shiftName, members } of shiftGroups) {
-      // シフト区分ヘッダー
-      const label = shiftGroups.length > 1
-        ? `${section}（${shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName}）`
-        : section;
-      lines.push(esc(label));
-      lines.push("アカウント番号,名前,シフト");
-
-      // 欠勤者除外 → アカウント番号順にソート
-      const sorted = [...members]
-        .filter(m => m.status !== "absent")
-        .sort((a, b) => (a.accountNumber ?? "").localeCompare(b.accountNumber ?? "", "ja"));
-      for (const m of sorted) {
-        lines.push([esc(m.accountNumber ?? "—"), esc(m.name), esc(shiftName)].join(","));
+      for (const m of members) {
+        const status = localStatuses.get(m.staffId) ?? m.status;
+        if (status === "absent") continue; // 欠勤者除外
+        target.push({
+          section:       section ?? "",
+          accountNumber: m.accountNumber ?? "",
+          name:          m.name,
+        });
       }
-
-      // 小計（欠勤者除外後の人数）
-      lines.push(`小計,${sorted.length}名`);
-      sectionTotal += sorted.length;
-      lines.push("");
-    }
-
-    // セクション合計（複数シフトグループがある場合のみ）
-    if (shiftGroups.length > 1) {
-      lines.push(`${esc(section)} 合計,${sectionTotal}名`);
-      lines.push("");
     }
   }
 
-  const csv = BOM + lines.join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = `出勤簿_${today}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // アカウント番号昇順
+  const sort = (rows: Row[]) => rows.sort((a, b) => getAccNum(a.accountNumber) - getAccNum(b.accountNumber));
+  sort(earlyRows);
+  sort(lateRows);
+
+  // XLSX作成
+  import("xlsx").then(XLSX => {
+    const wb = XLSX.utils.book_new();
+
+    const toSheet = (rows: Row[], label: string) => {
+      const data = [
+        [`${dateLabel}　${label}`, "", ""],
+        ["セクション", "アカウント番号", "氏名"],
+        ...rows.map(r => [r.section, r.accountNumber, r.name]),
+      ];
+      return XLSX.utils.aoa_to_sheet(data);
+    };
+
+    XLSX.utils.book_append_sheet(wb, toSheet(earlyRows, "早番"), "早番");
+    XLSX.utils.book_append_sheet(wb, toSheet(lateRows,  "遅番"), "遅番");
+
+    XLSX.writeFile(wb, `出勤簿_${today}.xlsx`);
+  });
 }
 
 // ── ダウンロードアイコン ──────────────────────────────────
