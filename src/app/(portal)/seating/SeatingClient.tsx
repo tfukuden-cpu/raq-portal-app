@@ -244,6 +244,11 @@ export default function SeatingClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seats, draftMap]);
 
+  // 当日出勤スタッフセット（staffList が空 = シフトデータ無し → 判定しない）
+  const workingStaffSet = useMemo<Set<string> | null>(() => {
+    return staffList.length > 0 ? new Set(staffList.map(s => s.id)) : null;
+  }, [staffList]);
+
   // ソート済みスタッフリスト
   const sortedStaff = useMemo(() => [...staffList].sort((a, b) => {
     const ra = SECTION_ORDER.indexOf(a.section ?? "");
@@ -766,6 +771,9 @@ export default function SeatingClient({
               ? (nowMs - new Date(breakStart).getTime()) / 60000 > 60
               : false;
 
+            // 当日出勤外スタッフ判定（シフトなし・休み）
+            const isNotWorking = !editMode && sfId && workingStaffSet !== null && !workingStaffSet.has(sfId);
+
             // カード本体スタイル
             const headerBg = editMode
               ? "bg-amber-300 dark:bg-amber-800"
@@ -781,7 +789,9 @@ export default function SeatingClient({
                 : isPickTarget ? "border-amber-400 scale-105 z-10"
                 : sfId ? "border-amber-300 dark:border-amber-700"
                 : "border-dashed border-amber-200 dark:border-amber-700")
-              : (effectiveSection ? (SECTION_BORDER[effectiveSection] ?? "border-zinc-300 dark:border-zinc-600")
+              : isNotWorking
+                ? "border-dashed border-orange-400 dark:border-orange-600"
+                : (effectiveSection ? (SECTION_BORDER[effectiveSection] ?? "border-zinc-300 dark:border-zinc-600")
                 : isFree ? "border-emerald-300 dark:border-emerald-700" : "border-zinc-200 dark:border-zinc-700");
 
             // シフト早遅ラベル
@@ -825,6 +835,11 @@ export default function SeatingClient({
                   {!editMode && sfId && breakAssignmentMap[sfId] && (
                     <span className={`text-[8px] font-bold ml-0.5 leading-none ${BREAK_BADGE_CLASS[breakAssignmentMap[sfId]] ?? ""}`}>
                       {BREAK_SLOT_LABEL[breakAssignmentMap[sfId]] ?? ""}
+                    </span>
+                  )}
+                  {isNotWorking && (
+                    <span className="text-[8px] font-bold ml-0.5 leading-none bg-orange-500 text-white rounded-sm px-0.5">
+                      !
                     </span>
                   )}
                 </div>

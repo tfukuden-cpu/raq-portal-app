@@ -116,7 +116,7 @@ export default function PunchModal({
       setDraftShort(d.shortMinutes);
       setRegularIsOther(![30,45,60].includes(d.regularMinutes));
       setShortIsOther(![15,30].includes(d.shortMinutes));
-      setSlotNumber(slot);   // DBの実際の値で初期化
+      setSlotNumber(slot ?? initSlotNumber); // DB値優先、nullならprop値を維持
       setStep("main");
     });
   }, [projectId, staffId, today]);
