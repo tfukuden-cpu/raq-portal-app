@@ -148,8 +148,8 @@ export default async function PortalLayout({ children }: { children: React.React
   const staffName = staff?.display_name ?? staff?.name ?? staffId;
 
   // LINE友達追加ゲート用のURLを取得（line_friend でない場合のみ）
-  let lineAddUrl = "";
-  if (!staff?.line_friend) {
+  let lineAddUrl = process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL ?? "";
+  if (!staff?.line_friend && !lineAddUrl) {
     try {
       const botRes = await fetch("https://api.line.me/v2/bot/info", {
         headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
