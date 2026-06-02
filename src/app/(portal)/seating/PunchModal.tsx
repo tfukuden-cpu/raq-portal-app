@@ -11,10 +11,18 @@ import {
   breakStartAction,
   breakEndAction,
   breakResetAction,
-  judgeClockOut,
   type StaffPunchSummary,
   type ClockOutJudgment,
 } from "./punch-actions";
+
+function judgeClockOut(nowISO: string, shiftEndHHMM: string, today: string): ClockOutJudgment {
+  const [hh, mm] = shiftEndHHMM.split(":").map(Number);
+  const shiftEnd = new Date(`${today}T${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}:00+09:00`);
+  const diffMin = (shiftEnd.getTime() - new Date(nowISO).getTime()) / 60000;
+  if (diffMin > 10) return "early_leave";
+  if (diffMin >= 0) return "on_time";
+  return "overtime_choice";
+}
 
 // ── Props ──────────────────────────────────────────────────
 interface PunchModalProps {

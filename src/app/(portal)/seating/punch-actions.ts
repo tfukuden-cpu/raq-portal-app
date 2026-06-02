@@ -118,19 +118,7 @@ export async function clockInAction(
   return { ok: true };
 }
 
-// ── 退勤フロー ────────────────────────────────────────────
-
 export type ClockOutJudgment = "early_leave" | "on_time" | "overtime_choice";
-
-/** 退勤打刻の事前判定（クライアント側から呼ぶ想定） */
-export function judgeClockOut(nowISO: string, shiftEndHHMM: string, today: string): ClockOutJudgment {
-  const [hh, mm] = shiftEndHHMM.split(":").map(Number);
-  const shiftEnd = new Date(`${today}T${pad(hh)}:${pad(mm)}:00+09:00`);
-  const diffMin = (shiftEnd.getTime() - new Date(nowISO).getTime()) / 60000;
-  if (diffMin > 10) return "early_leave";
-  if (diffMin >= 0) return "on_time";       // 終了10分前〜定時
-  return "overtime_choice";
-}
 
 // ── 退勤打刻（定時・残業） ────────────────────────────────
 // mode="on_time"   → 終了時刻に補正
