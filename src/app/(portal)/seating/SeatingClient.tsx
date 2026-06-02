@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  toggleBreakAction, saveSeatAssignmentsAction, autoAssignSeatsAction,
+  saveSeatAssignmentsAction, autoAssignSeatsAction,
   acquireSeatingEditAction, releaseSeatingEditAction, heartbeatSeatingEditAction,
   getSeatingEditorsAction,
   type SeatingEditor,
@@ -11,6 +11,7 @@ import {
 import { assignBreakSlotsAction } from "./break-actions";
 import { getSeatBgClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 import { createClient } from "@/lib/supabase/client";
+import PunchModal from "./PunchModal";
 
 export type WallData = {
   x1Pct: number;
@@ -84,7 +85,7 @@ function accNum(s: string | null | undefined): number {
 export default function SeatingClient({
   projectId, today, seats, walls = [], isAdmin, myStaffId,
   staffList = [], embedded = false, breakAssignmentMap = {},
-  motaAccountSlotRecord = {},
+  motaAccountSlotRecord = {}, shiftTimeMap = {},
 }: {
   projectId: string;
   today: string;
@@ -96,6 +97,7 @@ export default function SeatingClient({
   embedded?: boolean;
   breakAssignmentMap?: Record<string, number>;
   motaAccountSlotRecord?: Record<string, string>;
+  shiftTimeMap?: Record<string, { start: string | null; end: string | null }>;
 }) {
   const [statuses, setStatuses] = useState<Map<string, NonNullable<SeatData["status"]>>>(() => {
     const m = new Map<string, NonNullable<SeatData["status"]>>();
@@ -298,6 +300,8 @@ export default function SeatingClient({
           if (punchType === "clock_out")   next.set(staffId, "clocked_out");
           if (punchType === "break_start") next.set(staffId, "on_break");
           if (punchType === "break_end")   next.set(staffId, "working");
+          if (punchType === "seat_leave")  next.set(staffId, "working");
+          if (punchType === "seat_return") next.set(staffId, "working");
           return next;
         });
       })
@@ -319,6 +323,12 @@ export default function SeatingClient({
     });
   }
 
+  // ── 打刻モーダル ──────────────────────────────────────────
+  const [punchModal, setPunchModal] = useState<{ staffId: string; staffName: string } | null>(null);
+
+  // ── 右パネルからのドラッグ ────────────────────────────────
+  const [dragPanelStaffId, setDragPanelStaffId] = useState<string | null>(null);
+
   // ── ドラッグ&スワップ（席替えモード） ────────────────────
   function handleDragStart(e: React.DragEvent, seatId: string) {
     setDragSeatId(seatId);
@@ -332,6 +342,21 @@ export default function SeatingClient({
   function handleDragEnd() { setDragSeatId(null); setDropTargetId(null); }
   function handleDrop(e: React.DragEvent, targetSeatId: string) {
     e.preventDefault();
+
+    // 右パネルからのドラッグ（未配置スタッフ → 座席に配置）
+    if (dragPanelStaffId) {
+      const currentSeatOfStaff = assignedSeatBySf.get(dragPanelStaffId);
+      setDraftMap(prev => {
+        const next = new Map(prev);
+        if (currentSeatOfStaff) next.set(currentSeatOfStaff, null); // 既配置を外す
+        next.set(targetSeatId, dragPanelStaffId);
+        return next;
+      });
+      setDragPanelStaffId(null);
+      setDropTargetId(null);
+      return;
+    }
+
     if (!dragSeatId || dragSeatId === targetSeatId) {
       setDragSeatId(null); setDropTargetId(null); return;
     }
@@ -347,20 +372,12 @@ export default function SeatingClient({
     setDragSeatId(null); setDropTargetId(null);
   }
 
-  // 通常モードのタップ（休憩トグル）
+  // 通常モードのタップ → 打刻モーダルを開く
   function handleTap(seat: SeatData) {
     if (!seat.staffId) return;
-    const status = statuses.get(seat.staffId) ?? seat.status;
-    if (status !== "working" && status !== "on_break") return;
-    if (!isAdmin && seat.staffId !== myStaffId) return;
-    startTransition(async () => {
-      const res = await toggleBreakAction(projectId, seat.staffId!);
-      if (res.success && res.newStatus) {
-        setStatuses(prev => new Map(prev).set(seat.staffId!, res.newStatus!));
-        setToast(res.newStatus === "on_break" ? "休憩開始" : "休憩終了");
-        setTimeout(() => setToast(null), 2000);
-      }
-    });
+    const staffInfo = staffNameMap.get(seat.staffId);
+    const name = staffInfo?.name ?? seat.staffName ?? seat.staffId;
+    setPunchModal({ staffId: seat.staffId, staffName: name });
   }
 
   const [, monthStr, dayStr] = today.split("-");
@@ -522,8 +539,9 @@ export default function SeatingClient({
         </div>
       )}
 
-      {/* キャンバス */}
-      <div className={`overflow-x-auto ${embedded ? "px-3 pb-4" : "px-3 pb-28"}`}>
+      {/* キャンバス + 右パネル */}
+      <div className={`flex gap-2 ${embedded ? "px-3 pb-4" : "px-3 pb-28"}`}>
+      <div className="overflow-x-auto flex-1 min-w-0">
         <div
           className={[
             "relative bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden",
@@ -576,12 +594,11 @@ export default function SeatingClient({
               ? (statuses.get(seat.staffId) ?? seat.status ?? "not_arrived")
               : null;
 
+            // ビューモードでスタッフがいる席はすべてタップ可能（打刻モーダル）
             const tappableBreak =
               !editMode &&
               !isDisabled &&
-              seat.staffId &&
-              (status === "working" || status === "on_break") &&
-              (isAdmin || seat.staffId === myStaffId);
+              !!seat.staffId;
 
             const tappableEdit = editMode && !isDisabled;
 
@@ -696,45 +713,79 @@ export default function SeatingClient({
         </div>
       </div>
 
-      {/* ── 未配置スタッフリスト（席替えモード） ── */}
-      {editMode && staffList.length > 0 && (() => {
+      {/* ── 右パネル：未配置スタッフ ── */}
+      {staffList.length > 0 && (() => {
         const unassigned = sortedStaff.filter(s => !assignedSeatBySf.has(s.id));
-        if (unassigned.length === 0) return null;
         return (
-          <div className="px-3 pb-4">
-            <p className="text-[11px] font-semibold text-zinc-400 mb-2 px-1">
+          <div className="w-40 shrink-0 flex flex-col" style={{ maxHeight: "calc(100dvh - 220px)" }}>
+            <p className="text-[11px] font-semibold text-zinc-400 mb-1.5 px-0.5">
               未配置 <span className="font-normal tabular-nums">({unassigned.length}名)</span>
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {unassigned.map(s => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => {
-                    // 未配置スタッフをクリック → pickSeatId がある場合はその席に配置
-                    if (pickSeatId) {
-                      const elsewhereId = assignedSeatBySf.get(s.id);
-                      setDraftMap(prev => {
-                        const next = new Map(prev);
-                        if (elsewhereId && elsewhereId !== pickSeatId) next.set(elsewhereId, null);
-                        next.set(pickSeatId, s.id);
-                        return next;
-                      });
-                      setPickSeatId(null);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700 hover:border-amber-400 transition-colors"
-                >
-                  {s.accountNumber && (
-                    <span className="font-mono text-[10px] opacity-60 tabular-nums">{s.accountNumber}</span>
-                  )}
-                  {s.name}
-                </button>
-              ))}
+            <div className="flex-1 overflow-y-auto space-y-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+              {unassigned.length === 0 ? (
+                <p className="text-[10px] text-zinc-300 dark:text-zinc-600 px-0.5">全員配置済み</p>
+              ) : unassigned.map(s => {
+                const sfStatus = statuses.get(s.id);
+                return (
+                  <div
+                    key={s.id}
+                    draggable={editMode}
+                    onDragStart={e => {
+                      if (!editMode) return;
+                      setDragPanelStaffId(s.id);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragEnd={() => setDragPanelStaffId(null)}
+                    onClick={() => {
+                      if (editMode && pickSeatId) {
+                        // クリックで配置
+                        const elsewhereId = assignedSeatBySf.get(s.id);
+                        setDraftMap(prev => {
+                          const next = new Map(prev);
+                          if (elsewhereId && elsewhereId !== pickSeatId) next.set(elsewhereId, null);
+                          next.set(pickSeatId, s.id);
+                          return next;
+                        });
+                        setPickSeatId(null);
+                      } else if (!editMode) {
+                        // ビューモード：打刻モーダル
+                        setPunchModal({ staffId: s.id, staffName: s.name });
+                      }
+                    }}
+                    className={[
+                      "px-2 py-1.5 rounded-xl border text-[11px] select-none transition-colors",
+                      editMode
+                        ? "cursor-grab active:cursor-grabbing bg-white dark:bg-zinc-800 border-amber-200 dark:border-amber-800 hover:border-amber-400"
+                        : "cursor-pointer bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-blue-400",
+                      dragPanelStaffId === s.id ? "opacity-40" : "",
+                    ].join(" ")}
+                  >
+                    {s.accountNumber && (
+                      <span className="font-mono text-[9px] text-zinc-400 tabular-nums block leading-none mb-0.5">{s.accountNumber}</span>
+                    )}
+                    <span className="font-semibold text-zinc-700 dark:text-zinc-200 block truncate">{s.name}</span>
+                    {!editMode && sfStatus && (
+                      <span className={`text-[9px] font-bold mt-0.5 block ${
+                        sfStatus === "working"     ? "text-green-600 dark:text-green-400" :
+                        sfStatus === "on_break"    ? "text-amber-600 dark:text-amber-400" :
+                        sfStatus === "clocked_out" ? "text-zinc-400" :
+                        sfStatus === "absent"      ? "text-red-500" : "text-zinc-300"
+                      }`}>
+                        {sfStatus === "not_arrived" ? "未出勤" :
+                         sfStatus === "working"     ? "勤務中" :
+                         sfStatus === "on_break"    ? "休憩中" :
+                         sfStatus === "clocked_out" ? "退勤済" :
+                         sfStatus === "absent"      ? "欠勤"   : ""}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
       })()}
+      </div>{/* flex コンテナ閉じ */}
 
       {/* トースト */}
       {toast && (
@@ -859,6 +910,32 @@ export default function SeatingClient({
           </div>
         );
       })()}
+
+      {/* ── 打刻モーダル ── */}
+      {punchModal && (
+        <PunchModal
+          projectId={projectId}
+          staffId={punchModal.staffId}
+          staffName={punchModal.staffName}
+          shiftStart={shiftTimeMap[punchModal.staffId]?.start ?? null}
+          shiftEnd={shiftTimeMap[punchModal.staffId]?.end ?? null}
+          today={today}
+          isAdmin={isAdmin}
+          onClose={() => setPunchModal(null)}
+          onStatusChange={(sfId, status) => {
+            setStatuses(prev => {
+              const next = new Map(prev);
+              const mapped =
+                status === "working"     ? "working" as const :
+                status === "clocked_out" ? "clocked_out" as const :
+                status === "on_break"    ? "on_break" as const :
+                null;
+              if (mapped) next.set(sfId, mapped);
+              return next;
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -49,9 +49,9 @@ export default async function SeatingPage() {
     admin.from("absence_reports")
       .select("staff_id")
       .eq("project_id", projectId).eq("absence_date", today),
-    // 当日シフト名（早番/遅番判定用）
+    // 当日シフト（早番/遅番・開始終了時刻）
     admin.from("shifts")
-      .select("staff_id, shift_name")
+      .select("staff_id, shift_name, shift_start, shift_end")
       .eq("project_id", projectId).eq("shift_date", today),
     admin.from("seat_walls")
       .select("x1_pct, y1_pct, x2_pct, y2_pct")
@@ -91,6 +91,13 @@ export default async function SeatingPage() {
   // 割当マップ / シフト名マップ（早番/遅番判定用）
   const assignMap   = new Map((assignments ?? []).map(a => [a.seat_id, a.staff_id]));
   const shiftNameMap = new Map((shiftRows ?? []).map(r => [r.staff_id as string, r.shift_name as string | null]));
+  const shiftTimeMap: Record<string, { start: string | null; end: string | null }> = {};
+  for (const r of shiftRows ?? []) {
+    shiftTimeMap[r.staff_id as string] = {
+      start: (r as { shift_start?: string | null }).shift_start ?? null,
+      end:   (r as { shift_end?:   string | null }).shift_end   ?? null,
+    };
+  }
 
   const seatData: SeatData[] = (seats ?? []).map(s => {
     const seatType = (s as { seat_type?: string }).seat_type ?? "normal";
@@ -167,6 +174,7 @@ export default async function SeatingPage() {
       myStaffId={myStaffId}
       staffList={staffList}
       breakAssignmentMap={breakAssignmentMap}
+      shiftTimeMap={shiftTimeMap}
     />
   );
 }
