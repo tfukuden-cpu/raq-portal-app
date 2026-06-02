@@ -59,7 +59,7 @@ export default async function MyPage({
 
   const { data: staff } = await supabase
     .from("staffs")
-    .select("id, name, display_name, global_role, line_user_id, avatar_config")
+    .select("id, name, display_name, global_role, line_user_id, line_friend, avatar_config")
     .eq("id", staffId)
     .maybeSingle();
 
@@ -84,7 +84,21 @@ export default async function MyPage({
 
   const displayName  = staff?.display_name ?? staff?.name ?? staffId;
   const lineLinked   = !!staff?.line_user_id;
+  const lineFriend   = !!(staff as { line_friend?: boolean | null } | null)?.line_friend;
   const avatarConfig = (staff as { avatar_config?: AvatarConfig | null } | null)?.avatar_config ?? null;
+
+  // LINE公式アカウントの友達追加URL
+  let lineAddFriendUrl = "";
+  try {
+    const botRes = await fetch("https://api.line.me/v2/bot/info", {
+      headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
+      next: { revalidate: 3600 },
+    });
+    if (botRes.ok) {
+      const botInfo = await botRes.json() as { basicId?: string };
+      if (botInfo.basicId) lineAddFriendUrl = `https://line.me/R/ti/p/${botInfo.basicId}`;
+    }
+  } catch { /* ignore */ }
   const projectName  = projectData?.name ?? "未所属";
 
   const isExecutiveOrAdmin = staff?.global_role === "admin" || staff?.global_role === "executive";
@@ -275,6 +289,48 @@ export default async function MyPage({
               </div>
               <ChevronRightIcon />
             </a>
+          )}
+
+          {/* LINE公式を友達追加 */}
+          {lineLinked && lineAddFriendUrl && (
+            lineFriend ? (
+              <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
+                <div className="w-10 h-10 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" fill="#06C755" className="w-5 h-5"><path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/></svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウント</p>
+                  <p className="text-[12px] text-[#06C755] font-medium mt-0.5">● 友達追加済み</p>
+                </div>
+              </div>
+            ) : (
+              <a
+                href={lineAddFriendUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" fill="#06C755" className="w-5 h-5"><path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/></svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウントを友達追加</p>
+                  <p className="text-[12px] text-amber-500 font-medium mt-0.5">⚠ まだ友達追加されていません</p>
+                </div>
+                <ChevronRightIcon />
+              </a>
+            )
+          )}
+          {!lineLinked && lineAddFriendUrl && (
+            <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 opacity-50">
+              <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="#9ca3af" className="w-5 h-5"><path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/></svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-[14px] font-semibold text-zinc-500">LINE公式アカウントを友達追加</p>
+                <p className="text-[12px] text-zinc-400 mt-0.5">先にLINE連携が必要です</p>
+              </div>
+            </div>
           )}
 
           {/* ログアウト */}

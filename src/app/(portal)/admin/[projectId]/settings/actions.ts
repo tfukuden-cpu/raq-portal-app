@@ -1048,8 +1048,9 @@ export async function unlinkLineAction(fd: FormData): Promise<SettingsResult> {
 export async function sendLineTestAction(
   fd: FormData,
 ): Promise<SettingsResult & { failedStaffIds?: string[] }> {
-  const staffId   = String(fd.get("staffId")   ?? "").trim() || null;
-  const projectId = String(fd.get("projectId") ?? "").trim();
+  const staffId      = String(fd.get("staffId")      ?? "").trim() || null;
+  const staffIdsJson = String(fd.get("staffIdsJson") ?? "").trim() || null;
+  const projectId    = String(fd.get("projectId") ?? "").trim();
 
   await assertAdmin(projectId);
   const admin = adminSupa();
@@ -1068,7 +1069,10 @@ export async function sendLineTestAction(
       ? { success: true,  message: `${name} に送信しました` }
       : { success: false, message: `${name} への送信に失敗しました（ブロックされている可能性）`, failedStaffIds: [staffId] };
   } else {
-    // 全員一括送信
+    // 一括送信（全員 or staffIdsJsonで指定した対象のみ）
+    const filterIds: Set<string> | null = staffIdsJson
+      ? new Set(JSON.parse(staffIdsJson) as string[])
+      : null;
     const { data: members } = await admin
       .from("project_members")
       .select("staff_id, staffs(line_user_id, display_name, name)")
@@ -1084,7 +1088,9 @@ export async function sendLineTestAction(
           name:    s?.display_name ?? s?.name ?? (m.staff_id as string),
         };
       })
-      .filter((t): t is { staffId: string; lineId: string; name: string } => !!t.lineId);
+      .filter((t): t is { staffId: string; lineId: string; name: string } =>
+        !!t.lineId && (!filterIds || filterIds.has(t.staffId))
+      );
 
     if (targets.length === 0) return { success: false, message: "LINE連携済みスタッフがいません" };
 

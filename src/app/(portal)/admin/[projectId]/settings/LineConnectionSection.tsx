@@ -105,11 +105,12 @@ export default function LineConnectionSection({
     });
   }
 
-  function handleTest(staffId: string | null) {
+  function handleTest(staffId: string | null, staffIdsFilter?: string[]) {
     startTransition(async () => {
       const fd = new FormData();
       fd.set("projectId", projectId);
       if (staffId) fd.set("staffId", staffId);
+      if (staffIdsFilter) fd.set("staffIdsJson", JSON.stringify(staffIdsFilter));
       const r = await sendLineTestAction(fd);
       showFlash(r.success, r.message ?? (r.success ? "送信しました" : "送信失敗"));
       if (r.failedStaffIds && r.failedStaffIds.length > 0) {
@@ -163,16 +164,34 @@ export default function LineConnectionSection({
           </button>
         </div>
 
-        {linkedCount > 0 && (
-          <button
-            type="button"
-            onClick={() => handleTest(null)}
-            disabled={isPending}
-            className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors"
-          >
-            {isPending ? "送信中…" : `全員にテスト送信（${linkedCount}名）`}
-          </button>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {linkedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => handleTest(null)}
+              disabled={isPending}
+              className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors"
+            >
+              {isPending ? "送信中…" : `全員にテスト送信（${linkedCount}名）`}
+            </button>
+          )}
+          {(() => {
+            const unconfirmedIds = members
+              .filter(m => m.lineLinked && !confirmMap[m.staffId])
+              .map(m => m.staffId);
+            if (unconfirmedIds.length === 0) return null;
+            return (
+              <button
+                type="button"
+                onClick={() => handleTest(null, unconfirmedIds)}
+                disabled={isPending}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 disabled:opacity-40 transition-colors"
+              >
+                {isPending ? "送信中…" : `未確認者に再送（${unconfirmedIds.length}名）`}
+              </button>
+            );
+          })()}
+        </div>
       </div>
 
       {/* ── 受信確認バー（常に表示） ── */}
