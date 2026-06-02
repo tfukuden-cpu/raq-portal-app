@@ -183,7 +183,7 @@ export async function sendRemindReportNowAction(): Promise<{ ok: boolean; messag
     .eq("absence_date", yday);
   const absentYday = new Set((ydayAbsences ?? []).map(a => a.staff_id as string));
 
-  // グループレポート用にスタッフ情報を集計（個人へのLINE送信はしない）
+  // 個人送信 + 結果記録
   type SendResult = {
     staffId: string;
     name: string;
@@ -193,18 +193,32 @@ export async function sendRemindReportNowAction(): Promise<{ ok: boolean; messag
     success: boolean;
     failReason: string | null;
   };
-  const results: SendResult[] = tShifts.map(shift => {
+  const results: SendResult[] = [];
+
+  for (const shift of tShifts) {
     const staff  = staffMap[shift.staff_id] as { id: string; display_name: string | null; name: string | null; line_user_id: string | null; account_number: string | null } | undefined;
     const name   = staff?.display_name ?? staff?.name ?? shift.staff_id;
     const acct   = (staff?.account_number as string | null) ?? shift.staff_id;
     const section = (shift.shift_name as string ?? "").includes("研修") ? "研修関連" : (sectionMap[shift.staff_id] ?? "セクション設定なし");
     const star   = absentYday.has(shift.staff_id);
-    const hasLine = !!staff?.line_user_id;
-    return {
-      staffId: shift.staff_id, name, accountNumber: acct, section, star,
-      success: hasLine, failReason: hasLine ? null : "LINE未登録",
-    };
-  });
+
+    if (!staff?.line_user_id) {
+      results.push({ staffId: shift.staff_id, name, accountNumber: acct, section, star, success: false, failReason: "LINE未登録" });
+      continue;
+    }
+
+    const msg = `${name}さん、明日（${fmtMD(tmrw)}）の出勤予定となっております。\n${formatShift(shift.shift_name as string | null, shift.shift_start as string | null, shift.shift_end as string | null)}\nよろしくお願いします！`;
+
+    let success = true;
+    let failReason: string | null = null;
+    try {
+      await pushLine(staff.line_user_id, msg);
+    } catch {
+      success = false;
+      failReason = "送信エラー";
+    }
+    results.push({ staffId: shift.staff_id, name, accountNumber: acct, section, star, success, failReason });
+  }
 
   // グループへまとめレポート
   const bySection = new Map<string, SendResult[]>();

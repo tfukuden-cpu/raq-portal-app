@@ -141,7 +141,7 @@ export default function LineSettingsClient({
             <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-4 flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">翌日出勤リマインドレポート</p>
-                <p className="text-xs text-zinc-400 mt-0.5">グループへの一覧レポートを今すぐ送信（個人通知はcron自動送信のみ）</p>
+                <p className="text-xs text-zinc-400 mt-0.5">翌日出勤予定者への個人通知＋グループへの一覧レポートを今すぐ送信</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
