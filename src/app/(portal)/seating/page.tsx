@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "./SeatingClient";
-import { getBreakSlotAssignmentsAction } from "./break-actions";
+import { getBreakSlotAssignmentsAction, getBreakSlotSettingsAction } from "./break-actions";
 
 function tokyoToday() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -31,6 +31,7 @@ export default async function SeatingPage() {
     { data: shiftRows },
     { data: wallRows },
     breakAssignmentRows,
+    breakSlotRows,
   ] = await Promise.all([
     admin.from("seats")
       .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
@@ -57,6 +58,7 @@ export default async function SeatingPage() {
       .select("x1_pct, y1_pct, x2_pct, y2_pct")
       .eq("project_id", projectId),
     getBreakSlotAssignmentsAction(projectId, today),
+    getBreakSlotSettingsAction(projectId),
   ]);
 
   // メンバーマップ
@@ -188,6 +190,7 @@ export default async function SeatingPage() {
       myStaffId={myStaffId}
       staffList={staffList}
       breakAssignmentMap={breakAssignmentMap}
+      breakSlots={breakSlotRows}
       shiftTimeMap={shiftTimeMap}
     />
   );

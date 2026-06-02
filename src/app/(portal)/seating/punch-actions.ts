@@ -427,6 +427,31 @@ export async function setBreakDurationAction(
   return { ok: true };
 }
 
+// ── 休憩スロット割り当てを変更（管理者） ─────────────────
+export async function setBreakSlotAction(
+  projectId: string,
+  staffId: string,
+  date: string,
+  slotNumber: number | null,
+): Promise<PunchResult> {
+  const admin = createAdminClient();
+  if (slotNumber === null) {
+    const { error } = await admin.from("break_slot_assignments")
+      .delete()
+      .eq("project_id", projectId).eq("staff_id", staffId).eq("assignment_date", date);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await admin.from("break_slot_assignments")
+      .upsert(
+        { project_id: projectId, staff_id: staffId, assignment_date: date, slot_number: slotNumber },
+        { onConflict: "project_id,assignment_date,staff_id" },
+      );
+    if (error) return { ok: false, error: error.message };
+  }
+  revalidatePath("/seating");
+  return { ok: true };
+}
+
 // ── ヘルパー ──────────────────────────────────────────────
 function pad(n: number) { return String(n).padStart(2, "0"); }
 

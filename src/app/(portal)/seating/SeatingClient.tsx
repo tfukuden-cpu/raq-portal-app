@@ -9,7 +9,8 @@ import {
   type SeatingEditor,
 } from "./actions";
 import { assignBreakSlotsAction } from "./break-actions";
-import { getSeatBgClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
+import type { BreakSlotSetting } from "./break-actions";
+import { resolveShiftSection } from "@/lib/seatColors";
 import { createClient } from "@/lib/supabase/client";
 import PunchModal from "./PunchModal";
 
@@ -46,22 +47,14 @@ export type StaffInfo = {
   shiftName: string | null;
 };
 
+// 凡例用（ステータス色ドット）
 const STATUS_BG: Record<NonNullable<SeatData["status"]>, string> = {
-  not_arrived: "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-600",
-  working:     "bg-green-200 dark:bg-green-800/80 border-green-500 dark:border-green-500",
-  on_break:    "bg-amber-200 dark:bg-amber-800/80 border-amber-500 dark:border-amber-500",
-  seat_leave:  "bg-blue-200 dark:bg-blue-800/80 border-blue-500 dark:border-blue-500",
-  clocked_out: "bg-zinc-200 dark:bg-zinc-600 border-zinc-400 dark:border-zinc-400",
-  absent:      "bg-red-200 dark:bg-red-800/80 border-red-500 dark:border-red-500",
-};
-
-const STATUS_TEXT: Record<NonNullable<SeatData["status"]>, string> = {
-  not_arrived: "text-zinc-400",
-  working:     "text-green-800 dark:text-green-200",
-  on_break:    "text-amber-800 dark:text-amber-200",
-  seat_leave:  "text-blue-800 dark:text-blue-200",
-  clocked_out: "text-zinc-400 dark:text-zinc-400",
-  absent:      "text-red-700 dark:text-red-300",
+  not_arrived: "bg-white dark:bg-zinc-700 border-zinc-300 dark:border-zinc-500",
+  working:     "bg-green-400 dark:bg-green-600 border-green-500",
+  on_break:    "bg-amber-400 dark:bg-amber-600 border-amber-500",
+  seat_leave:  "bg-zinc-400 dark:bg-zinc-500 border-zinc-500",
+  clocked_out: "bg-zinc-600 dark:bg-zinc-500 border-zinc-700",
+  absent:      "bg-red-400 dark:bg-red-600 border-red-500",
 };
 
 const STATUS_LABEL: Record<NonNullable<SeatData["status"]>, string> = {
@@ -71,6 +64,52 @@ const STATUS_LABEL: Record<NonNullable<SeatData["status"]>, string> = {
   seat_leave:  "離席中",
   clocked_out: "退勤済",
   absent:      "欠勤",
+};
+
+// カードボディ（ステータスで色分け）
+const CARD_BODY_BG: Record<NonNullable<SeatData["status"]>, string> = {
+  not_arrived: "bg-zinc-50 dark:bg-zinc-800",
+  working:     "bg-green-100 dark:bg-green-900/40",
+  on_break:    "bg-amber-100 dark:bg-amber-900/40",
+  seat_leave:  "bg-zinc-200 dark:bg-zinc-700",
+  clocked_out: "bg-zinc-300 dark:bg-zinc-600",
+  absent:      "bg-red-100 dark:bg-red-900/40",
+};
+const CARD_BODY_OVERTIME = "bg-red-200 dark:bg-red-900/60"; // 休憩超過
+
+const CARD_NAME_COLOR: Record<NonNullable<SeatData["status"]>, string> = {
+  not_arrived: "text-zinc-400",
+  working:     "text-green-800 dark:text-green-200",
+  on_break:    "text-amber-800 dark:text-amber-200",
+  seat_leave:  "text-zinc-600 dark:text-zinc-300",
+  clocked_out: "text-zinc-500 dark:text-zinc-400",
+  absent:      "text-red-700 dark:text-red-300",
+};
+
+// カードヘッダー（セクションで色分け）
+const SECTION_HEADER: Record<string, string> = {
+  "SV":       "bg-blue-500 dark:bg-blue-700",
+  "査定":     "bg-emerald-500 dark:bg-emerald-700",
+  "販売":     "bg-orange-500 dark:bg-orange-700",
+  "MOTA":     "bg-red-500 dark:bg-red-700",
+  "H MOTA":   "bg-purple-500 dark:bg-purple-700",
+  "インフォ": "bg-sky-500 dark:bg-sky-700",
+  "未アポ":   "bg-zinc-400 dark:bg-zinc-600",
+  "ローン":   "bg-violet-500 dark:bg-violet-700",
+  "その他":   "bg-zinc-400 dark:bg-zinc-600",
+};
+const SECTION_HEADER_DEFAULT = "bg-zinc-400 dark:bg-zinc-600";
+
+// カードボーダー（セクションで色分け）
+const SECTION_BORDER: Record<string, string> = {
+  "SV":       "border-blue-400 dark:border-blue-600",
+  "査定":     "border-emerald-400 dark:border-emerald-600",
+  "販売":     "border-orange-400 dark:border-orange-600",
+  "MOTA":     "border-red-400 dark:border-red-600",
+  "H MOTA":   "border-purple-400 dark:border-purple-600",
+  "インフォ": "border-sky-400 dark:border-sky-600",
+  "未アポ":   "border-zinc-300 dark:border-zinc-600",
+  "ローン":   "border-violet-400 dark:border-violet-600",
 };
 
 const SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "リメイク", "ローン"];
@@ -90,7 +129,7 @@ function accNum(s: string | null | undefined): number {
 export default function SeatingClient({
   projectId, today, seats, walls = [], isAdmin, myStaffId,
   staffList = [], embedded = false, breakAssignmentMap = {},
-  motaAccountSlotRecord = {}, shiftTimeMap = {},
+  motaAccountSlotRecord = {}, shiftTimeMap = {}, breakSlots = [],
 }: {
   projectId: string;
   today: string;
@@ -103,6 +142,7 @@ export default function SeatingClient({
   breakAssignmentMap?: Record<string, number>;
   motaAccountSlotRecord?: Record<string, string>;
   shiftTimeMap?: Record<string, { start: string | null; end: string | null }>;
+  breakSlots?: BreakSlotSetting[];
 }) {
   const [statuses, setStatuses] = useState<Map<string, NonNullable<SeatData["status"]>>>(() => {
     const m = new Map<string, NonNullable<SeatData["status"]>>();
@@ -354,8 +394,23 @@ export default function SeatingClient({
     });
   }
 
+  // ── 超過判定用 tick（30秒ごと） ──────────────────────────
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   // ── 打刻モーダル ──────────────────────────────────────────
-  const [punchModal, setPunchModal] = useState<{ staffId: string; staffName: string } | null>(null);
+  const [punchModal, setPunchModal] = useState<{
+    staffId: string;
+    staffName: string;
+    accountNumber: string | null;
+    section: string | null;
+    shiftName: string | null;
+    breakSlotNumber: number | null;
+    motaSlot: string | null;
+  } | null>(null);
 
   // ── 右パネルからのドラッグ ────────────────────────────────
   const [dragPanelStaffId, setDragPanelStaffId] = useState<string | null>(null);
@@ -436,7 +491,16 @@ export default function SeatingClient({
     if (!seat.staffId) return;
     const staffInfo = staffNameMap.get(seat.staffId);
     const name = staffInfo?.name ?? seat.staffName ?? seat.staffId;
-    setPunchModal({ staffId: seat.staffId, staffName: name });
+    const acc  = staffInfo?.accountNumber ?? seat.accountNumber ?? null;
+    setPunchModal({
+      staffId: seat.staffId,
+      staffName: name,
+      accountNumber: acc,
+      section: staffInfo?.section ?? null,
+      shiftName: staffInfo?.shiftName ?? seat.shiftName ?? null,
+      breakSlotNumber: breakAssignmentMap[seat.staffId] ?? null,
+      motaSlot: acc ? (motaAccountSlotRecord[acc] ?? null) : null,
+    });
   }
 
   const [, monthStr, dayStr] = today.split("-");
@@ -676,7 +740,7 @@ export default function SeatingClient({
               return (
                 <div key={seat.id}
                   style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
-                  className="absolute w-[70px] h-[58px] rounded-xl border-2 border-zinc-300 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-800 opacity-50 flex flex-col items-center justify-center overflow-hidden"
+                  className="absolute w-[76px] h-[70px] rounded-xl border-2 border-zinc-300 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-800 opacity-40 flex flex-col items-center justify-center overflow-hidden"
                 >
                   <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: "none" }}>
                     <defs>
@@ -686,31 +750,52 @@ export default function SeatingClient({
                     </defs>
                     <rect width="100%" height="100%" fill={`url(#hatch-${seat.id})`} />
                   </svg>
-                  <span className="relative text-[9px] text-zinc-400 leading-none z-10">{seat.label}</span>
-                  <span className="relative text-[9px] text-zinc-400 leading-none z-10 mt-0.5">無効</span>
+                  <span className="relative text-[9px] text-zinc-400 z-10">{seat.label}</span>
                 </div>
               );
             }
 
-            const isPickTarget = pickSeatId === seat.id;
+            const isPickTarget    = pickSeatId === seat.id;
             const effectiveSection = resolveShiftSection(sfShift, seat.section);
-            const sectionLabel = formatSectionShift(effectiveSection, sfShift ?? seat.shiftSlot);
-
             const isDragging   = editMode && dragSeatId   === seat.id;
             const isDropTarget = editMode && dropTargetId === seat.id;
+
+            // 休憩超過判定
+            const breakStart = sfId ? breakStartTimes.get(sfId) : null;
+            const isBreakOvertime = status === "on_break" && breakStart
+              ? (nowMs - new Date(breakStart).getTime()) / 60000 > 60
+              : false;
+
+            // カード本体スタイル
+            const headerBg = editMode
+              ? "bg-amber-300 dark:bg-amber-800"
+              : (effectiveSection ? (SECTION_HEADER[effectiveSection] ?? SECTION_HEADER_DEFAULT) : SECTION_HEADER_DEFAULT);
+            const bodyBg = editMode
+              ? (isDropTarget ? "bg-blue-50 dark:bg-blue-900/40"
+                : isPickTarget ? "bg-amber-50 dark:bg-amber-900/40"
+                : "bg-white dark:bg-zinc-800")
+              : (isBreakOvertime ? CARD_BODY_OVERTIME : status ? CARD_BODY_BG[status] : "bg-zinc-50 dark:bg-zinc-800");
+            const cardBorder = editMode
+              ? (isDropTarget ? "border-blue-400 ring-2 ring-blue-400 scale-105 z-10"
+                : isDragging  ? "border-amber-300 opacity-40 scale-95"
+                : isPickTarget ? "border-amber-400 scale-105 z-10"
+                : sfId ? "border-amber-300 dark:border-amber-700"
+                : "border-dashed border-amber-200 dark:border-amber-700")
+              : (effectiveSection ? (SECTION_BORDER[effectiveSection] ?? "border-zinc-300 dark:border-zinc-600")
+                : isFree ? "border-emerald-300 dark:border-emerald-700" : "border-zinc-200 dark:border-zinc-700");
+
+            // シフト早遅ラベル
+            const shiftLabel = sfShift?.includes("早") ? "早" : sfShift?.includes("遅") ? "遅" : "";
 
             return (
               <button
                 key={seat.id}
                 title={sfName ?? undefined}
                 onClick={() => {
-                  if (dragSeatId) return;   // 席間ドラッグ後は無視
-                  if (isPanning) return;    // パン中は無視
-                  if (tappableEdit) {
-                    setPickSeatId(seat.id);
-                  } else {
-                    handleTap(seat);
-                  }
+                  if (dragSeatId) return;
+                  if (isPanning) return;
+                  if (tappableEdit) { setPickSeatId(seat.id); }
+                  else { handleTap(seat); }
                 }}
                 draggable={editMode && !!sfId}
                 onDragStart={e => editMode && handleDragStart(e, seat.id)}
@@ -721,76 +806,59 @@ export default function SeatingClient({
                 disabled={isPending || (!tappableBreak && !tappableEdit)}
                 style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
                 className={[
-                  "absolute flex flex-col items-center justify-center gap-px",
-                  "w-[70px] h-[58px] rounded-xl border-2 text-center transition-all shadow-sm select-none overflow-hidden",
-                  // 通常モードの色
-                  !editMode && (status ? STATUS_BG[status]
-                    : isFree
-                    ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-700"
-                    : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700"),
-                  // 席替えモードの色
-                  editMode && (isDropTarget
-                    ? "bg-blue-100 dark:bg-blue-900/60 border-blue-400 ring-2 ring-blue-400 scale-105 z-10"
-                    : isDragging
-                    ? "opacity-40 scale-95"
-                    : isPickTarget
-                    ? "bg-amber-100 dark:bg-amber-900/60 border-amber-400 dark:border-amber-500 scale-105 z-10"
-                    : sfId
-                    ? "bg-white dark:bg-zinc-800 border-amber-200 dark:border-amber-800"
-                    : "bg-zinc-50 dark:bg-zinc-800 border-dashed border-amber-200 dark:border-amber-800"),
-                  editMode && sfId ? "cursor-grab active:cursor-grabbing" : (tappableBreak || tappableEdit) ? "cursor-pointer active:scale-95" : "cursor-default",
+                  "absolute flex flex-col w-[76px] h-[70px] rounded-xl border-2 overflow-hidden shadow-sm select-none",
+                  "transition-colors",
+                  cardBorder,
+                  editMode && sfId ? "cursor-grab active:cursor-grabbing"
+                    : (tappableBreak || tappableEdit) ? "cursor-pointer active:scale-95"
+                    : "cursor-default",
                   isPending ? "opacity-60" : "",
                 ].join(" ")}
               >
-                {/* セクション色バー */}
-                {!isFree && effectiveMotaSlot && (
-                  <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-[10px] bg-purple-500" />
-                )}
-                {!isFree && !effectiveMotaSlot && effectiveSection && (
-                  <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(effectiveSection, sfShift ?? seat.shiftSlot)}`} />
-                )}
-
-                {sfName ? (
-                  <>
-                    <span className="text-[10px] font-mono text-zinc-400 tabular-nums leading-none">
-                      {sfAcc ?? ""}
-                    </span>
-                    <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${!editMode && status ? STATUS_TEXT[status] : "text-zinc-700 dark:text-zinc-200"}`}>
-                      {sfName}
-                    </span>
-                    {effectiveMotaSlot ? (
-                      <span className="text-[9px] leading-none text-purple-600 dark:text-purple-400 font-bold truncate px-0.5 w-full text-center">
-                        H {effectiveMotaSlot}
-                      </span>
-                    ) : sectionLabel ? (
-                      <span className="text-[9px] leading-none text-zinc-500 dark:text-zinc-400 truncate px-0.5 w-full text-center">
-                        {sectionLabel}
-                      </span>
-                    ) : null}
-                    {!editMode && sfId && breakAssignmentMap[sfId] && (
-                      <span className={`absolute bottom-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold ${BREAK_BADGE_CLASS[breakAssignmentMap[sfId]] ?? ""}`}>
-                        {BREAK_SLOT_LABEL[breakAssignmentMap[sfId]] ?? ""}
-                      </span>
-                    )}
-                    {/* 経過時間タイマー（休憩中 / 離席中） */}
-                    {!editMode && sfId && status === "on_break" && breakStartTimes.get(sfId) && (
-                      <ElapsedTimer
-                        startISO={breakStartTimes.get(sfId)!}
-                        colorClass="text-amber-800 dark:text-amber-200"
-                      />
-                    )}
-                    {!editMode && sfId && status === "seat_leave" && seatLeaveTimes.get(sfId) && (
-                      <ElapsedTimer
-                        startISO={seatLeaveTimes.get(sfId)!}
-                        colorClass="text-blue-800 dark:text-blue-200"
-                      />
-                    )}
-                  </>
-                ) : (
-                  <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-400 dark:text-emerald-600" : editMode ? "text-amber-400" : "text-zinc-300 dark:text-zinc-600"}`}>
-                    {isFree ? "FREE" : editMode ? "タップで配置" : "空席"}
+                {/* ── ヘッダー（セクション色） ── */}
+                <div className={`w-full px-1 py-0.5 flex items-center justify-between shrink-0 ${headerBg}`}>
+                  <span className="text-[9px] font-bold text-white leading-none truncate flex-1">
+                    {isFree ? "FREE" : effectiveSection
+                      ? `${effectiveSection}${shiftLabel ? `(${shiftLabel})` : ""}`
+                      : seat.label}
                   </span>
-                )}
+                  {!editMode && sfId && breakAssignmentMap[sfId] && (
+                    <span className={`text-[8px] font-bold ml-0.5 leading-none ${BREAK_BADGE_CLASS[breakAssignmentMap[sfId]] ?? ""}`}>
+                      {BREAK_SLOT_LABEL[breakAssignmentMap[sfId]] ?? ""}
+                    </span>
+                  )}
+                </div>
+
+                {/* ── ボディ（ステータス色） ── */}
+                <div className={`flex-1 flex flex-col items-center justify-center px-0.5 py-0.5 ${bodyBg}`}>
+                  {sfName ? (
+                    <>
+                      <span className="text-[9px] font-mono text-zinc-400 tabular-nums leading-none">
+                        {sfAcc ?? ""}
+                      </span>
+                      <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${!editMode && status && !isBreakOvertime ? CARD_NAME_COLOR[status] : "text-zinc-700 dark:text-zinc-200"}`}>
+                        {sfName}
+                      </span>
+                      {/* 休憩中/離席中: タイマー表示 */}
+                      {!editMode && sfId && status === "on_break" && breakStart && (
+                        <ElapsedTimer startISO={breakStart} limitMin={60} isOvertime={isBreakOvertime} />
+                      )}
+                      {!editMode && sfId && status === "seat_leave" && seatLeaveTimes.get(sfId) && (
+                        <ElapsedTimer startISO={seatLeaveTimes.get(sfId)!} limitMin={null} isOvertime={false} />
+                      )}
+                      {/* 通常時: H MOTAスロット */}
+                      {(!editMode ? (status !== "on_break" && status !== "seat_leave") : true) && effectiveMotaSlot && (
+                        <span className="text-[9px] leading-none text-purple-600 dark:text-purple-400 font-bold truncate px-0.5 w-full text-center">
+                          H {effectiveMotaSlot}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className={`text-[10px] ${isFree ? "text-emerald-500 dark:text-emerald-400" : editMode ? "text-amber-400" : "text-zinc-300 dark:text-zinc-600"}`}>
+                      {isFree ? "FREE" : editMode ? "配置" : "空席"}
+                    </span>
+                  )}
+                </div>
               </button>
             );
           })}
@@ -832,8 +900,14 @@ export default function SeatingClient({
                         });
                         setPickSeatId(null);
                       } else if (!editMode) {
-                        // ビューモード：打刻モーダル
-                        setPunchModal({ staffId: s.id, staffName: s.name });
+                        setPunchModal({
+                          staffId: s.id, staffName: s.name,
+                          accountNumber: s.accountNumber ?? null,
+                          section: s.section ?? null,
+                          shiftName: s.shiftName ?? null,
+                          breakSlotNumber: breakAssignmentMap[s.id] ?? null,
+                          motaSlot: s.accountNumber ? (motaAccountSlotRecord[s.accountNumber] ?? null) : null,
+                        });
                       }
                     }}
                     className={[
@@ -1004,18 +1078,22 @@ export default function SeatingClient({
           shiftStart={shiftTimeMap[punchModal.staffId]?.start ?? null}
           shiftEnd={shiftTimeMap[punchModal.staffId]?.end   ?? null}
           today={today}
+          accountNumber={punchModal.accountNumber}
+          section={punchModal.section}
+          shiftName={punchModal.shiftName}
+          breakSlotNumber={punchModal.breakSlotNumber}
+          breakSlots={breakSlots}
+          motaSlot={punchModal.motaSlot}
           isAdmin={isAdmin}
           showBreakEdit={isAdmin && embedded}
           onClose={() => setPunchModal(null)}
-          onStatusChange={(sfId, status) => {
+          onStatusChange={(sfId, newStatus) => {
             setStatuses(prev => {
               const next = new Map(prev);
-              const mapped =
-                status === "working"     ? "working" as const :
-                status === "clocked_out" ? "clocked_out" as const :
-                status === "on_break"    ? "on_break" as const :
-                null;
-              if (mapped) next.set(sfId, mapped);
+              const s = newStatus as NonNullable<SeatData["status"]>;
+              if (["working","clocked_out","on_break","seat_leave","absent","not_arrived"].includes(s)) {
+                next.set(sfId, s);
+              }
               return next;
             });
           }}
@@ -1025,8 +1103,12 @@ export default function SeatingClient({
   );
 }
 
-// ── 経過時間タイマー（各座席カード用・独立 re-render） ────
-function ElapsedTimer({ startISO, colorClass }: { startISO: string; colorClass: string }) {
+// ── 経過時間タイマー（座席カード用・独立 re-render） ─────
+function ElapsedTimer({ startISO, limitMin, isOvertime }: {
+  startISO: string;
+  limitMin: number | null;
+  isOvertime: boolean;
+}) {
   const [elapsed, setElapsed] = useState(() =>
     Math.floor((Date.now() - new Date(startISO).getTime()) / 1000)
   );
@@ -1037,9 +1119,13 @@ function ElapsedTimer({ startISO, colorClass }: { startISO: string; colorClass: 
   }, [startISO]);
   const m = Math.floor(elapsed / 60);
   const s = elapsed % 60;
+  const colorClass = isOvertime
+    ? "text-red-700 dark:text-red-300"
+    : limitMin !== null ? "text-amber-700 dark:text-amber-300" : "text-zinc-500 dark:text-zinc-400";
   return (
     <span className={`text-[9px] font-bold tabular-nums leading-none ${colorClass}`}>
       {m}:{String(s).padStart(2, "0")}
+      {limitMin !== null && <span className="opacity-50 font-normal">/{limitMin}</span>}
     </span>
   );
 }
