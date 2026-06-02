@@ -1509,7 +1509,20 @@ function ShiftChangesTab({
   );
 }
 
-// ── 出勤簿XLSX出力（セクション横並び1シート） ──────────────
+// ── セクション別カラーマップ（出力用） ──────────────────────
+const SECTION_EXCEL_COLORS: Record<string, { header: string; data: string }> = {
+  "SV":       { header: "93C5FD", data: "EFF6FF" },
+  "査定":     { header: "6EE7B7", data: "ECFDF5" },
+  "販売":     { header: "FCD34D", data: "FFFBEB" },
+  "MOTA":     { header: "FCA5A5", data: "FEF2F2" },
+  "H MOTA":   { header: "D8B4FE", data: "FAF5FF" },
+  "インフォ": { header: "7DD3FC", data: "F0F9FF" },
+  "未アポ":   { header: "D4D4D8", data: "FAFAFA" },
+  "ローン":   { header: "C4B5FD", data: "F5F3FF" },
+};
+const EXCEL_DEFAULT_COLORS = { header: "E4E4E7", data: "FAFAFA" };
+
+// ── 出勤簿XLSX出力（セクション横並び・色付き） ──────────────
 function exportAttendanceXLSX(
   today: string,
   dateLabel: string,
@@ -1552,33 +1565,89 @@ function exportAttendanceXLSX(
 
   const maxRows = Math.max(0, ...colGroups.map(g => g.rows.length));
 
-  // 行1: セクションヘッダー（2列ごとにマージ）
-  const row1 = colGroups.flatMap(g => [g.header, ""]);
-  // 行2: 列ラベル
-  const row2 = colGroups.flatMap(() => ["アカウント番号", "名前"]);
-  // データ行
-  const dataRows: (string | number)[][] = Array.from({ length: maxRows }, (_, i) =>
-    colGroups.flatMap(g => {
-      const entry = g.rows[i];
-      return [entry?.accountNumber ?? "", entry?.name ?? ""];
-    })
-  );
+  const getColors = (header: string) => {
+    const base = header.replace(/[早遅]番$/, "").trim();
+    return SECTION_EXCEL_COLORS[base] ?? EXCEL_DEFAULT_COLORS;
+  };
 
-  import("xlsx").then(XLSX => {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([row1, row2, ...dataRows]);
+  void import("exceljs").then(async (ExcelJS) => {
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "Raq Portal";
+    const ws = wb.addWorksheet(dateLabel.slice(0, 31));
 
-    // セクションヘッダーセルをマージ
-    ws["!merges"] = colGroups.map((_, i) => ({
-      s: { r: 0, c: i * 2 },
-      e: { r: 0, c: i * 2 + 1 },
-    }));
+    // Row 1: セクションヘッダー（2列マージ）
+    colGroups.forEach((g, i) => {
+      const col1 = i * 2 + 1;
+      ws.mergeCells(1, col1, 1, col1 + 1);
+      const cell = ws.getCell(1, col1);
+      cell.value = g.header;
+      const c = getColors(g.header);
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + c.header } };
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.border = {
+        top: { style: "medium" as const }, left: { style: "medium" as const },
+        bottom: { style: "thin" as const }, right: { style: "medium" as const },
+      };
+    });
+    ws.getRow(1).height = 22;
 
-    // 列幅設定
-    ws["!cols"] = colGroups.flatMap(() => [{ wch: 16 }, { wch: 12 }]);
+    // Row 2: 列ラベル
+    ws.addRow(colGroups.flatMap(() => ["アカウント番号", "名前"]));
+    colGroups.forEach((g, i) => {
+      const c = getColors(g.header);
+      [i * 2 + 1, i * 2 + 2].forEach(col => {
+        const cell = ws.getCell(2, col);
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + c.header } };
+        cell.font = { bold: true, size: 10 };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = {
+          top: { style: "thin" as const }, left: { style: "medium" as const },
+          bottom: { style: "medium" as const }, right: { style: "medium" as const },
+        };
+      });
+    });
+    ws.getRow(2).height = 16;
 
-    XLSX.utils.book_append_sheet(wb, ws, dateLabel.slice(0, 31));
-    XLSX.writeFile(wb, `出勤簿_${today}.xlsx`);
+    // データ行
+    for (let i = 0; i < maxRows; i++) {
+      ws.addRow(colGroups.flatMap(g => {
+        const e = g.rows[i];
+        return [e?.accountNumber ?? "", e?.name ?? ""];
+      }));
+      colGroups.forEach((g, ci) => {
+        const c = getColors(g.header);
+        [ci * 2 + 1, ci * 2 + 2].forEach(col => {
+          const cell = ws.getCell(i + 3, col);
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + c.data } };
+          cell.font = { size: 10 };
+          cell.border = {
+            top: { style: "hair" as const }, bottom: { style: "hair" as const },
+            left: { style: "medium" as const }, right: { style: "medium" as const },
+          };
+          cell.alignment = { horizontal: "left", vertical: "middle" };
+        });
+      });
+    }
+
+    // 列幅
+    colGroups.forEach((_, i) => {
+      ws.getColumn(i * 2 + 1).width = 16;
+      ws.getColumn(i * 2 + 2).width = 12;
+    });
+
+    // ダウンロード
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer as ArrayBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `出勤簿_${today}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 100);
   });
 }
 
