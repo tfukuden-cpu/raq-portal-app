@@ -111,6 +111,9 @@ export default function SeatingClient({
   const [draftMap, setDraftMap] = useState<Map<string, string | null>>(new Map());
   const [pickSeatId, setPickSeatId] = useState<string | null>(null);
   const [staffSearch, setStaffSearch] = useState("");
+  // ドラッグ＆スワップ
+  const [dragSeatId, setDragSeatId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // ── 同時編集セッション ─────────────────────────────────────
@@ -312,6 +315,34 @@ export default function SeatingClient({
       }
       setTimeout(() => setToast(null), 2500);
     });
+  }
+
+  // ── ドラッグ&スワップ（席替えモード） ────────────────────
+  function handleDragStart(e: React.DragEvent, seatId: string) {
+    setDragSeatId(seatId);
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function handleDragOver(e: React.DragEvent, seatId: string) {
+    e.preventDefault();
+    if (dragSeatId && dragSeatId !== seatId) setDropTargetId(seatId);
+  }
+  function handleDragLeave() { setDropTargetId(null); }
+  function handleDragEnd() { setDragSeatId(null); setDropTargetId(null); }
+  function handleDrop(e: React.DragEvent, targetSeatId: string) {
+    e.preventDefault();
+    if (!dragSeatId || dragSeatId === targetSeatId) {
+      setDragSeatId(null); setDropTargetId(null); return;
+    }
+    // 2席のスタッフを入れ替え
+    const fromStaffId = effectiveStaffId(dragSeatId, seats.find(s => s.id === dragSeatId)?.staffId ?? null);
+    const toStaffId   = effectiveStaffId(targetSeatId, seats.find(s => s.id === targetSeatId)?.staffId ?? null);
+    setDraftMap(prev => {
+      const next = new Map(prev);
+      next.set(dragSeatId,   toStaffId);
+      next.set(targetSeatId, fromStaffId);
+      return next;
+    });
+    setDragSeatId(null); setDropTargetId(null);
   }
 
   // 通常モードのタップ（休憩トグル）
@@ -574,16 +605,27 @@ export default function SeatingClient({
             const effectiveSection = resolveShiftSection(sfShift, seat.section);
             const sectionLabel = formatSectionShift(effectiveSection, sfShift ?? seat.shiftSlot);
 
+            const isDragging   = editMode && dragSeatId   === seat.id;
+            const isDropTarget = editMode && dropTargetId === seat.id;
+
             return (
               <button
                 key={seat.id}
+                title={sfName ?? undefined}
                 onClick={() => {
+                  if (dragSeatId) return; // ドラッグ後のクリックは無視
                   if (tappableEdit) {
                     setPickSeatId(seat.id);
                   } else {
                     handleTap(seat);
                   }
                 }}
+                draggable={editMode && !!sfId}
+                onDragStart={e => editMode && handleDragStart(e, seat.id)}
+                onDragOver={e => editMode && handleDragOver(e, seat.id)}
+                onDragLeave={() => editMode && handleDragLeave()}
+                onDrop={e => editMode && handleDrop(e, seat.id)}
+                onDragEnd={() => editMode && handleDragEnd()}
                 disabled={isPending || (!tappableBreak && !tappableEdit)}
                 style={{ left: `${seat.xPct}%`, top: `${seat.yPct}%`, transform: "translate(-50%, -50%)" }}
                 className={[
@@ -595,12 +637,16 @@ export default function SeatingClient({
                     ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-700"
                     : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700"),
                   // 席替えモードの色
-                  editMode && (isPickTarget
+                  editMode && (isDropTarget
+                    ? "bg-blue-100 dark:bg-blue-900/60 border-blue-400 ring-2 ring-blue-400 scale-105 z-10"
+                    : isDragging
+                    ? "opacity-40 scale-95"
+                    : isPickTarget
                     ? "bg-amber-100 dark:bg-amber-900/60 border-amber-400 dark:border-amber-500 scale-105 z-10"
                     : sfId
                     ? "bg-white dark:bg-zinc-800 border-amber-200 dark:border-amber-800"
                     : "bg-zinc-50 dark:bg-zinc-800 border-dashed border-amber-200 dark:border-amber-800"),
-                  (tappableBreak || tappableEdit) ? "cursor-pointer active:scale-95" : "cursor-default",
+                  editMode && sfId ? "cursor-grab active:cursor-grabbing" : (tappableBreak || tappableEdit) ? "cursor-pointer active:scale-95" : "cursor-default",
                   isPending ? "opacity-60" : "",
                 ].join(" ")}
               >
