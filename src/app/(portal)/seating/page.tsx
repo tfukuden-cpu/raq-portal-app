@@ -72,19 +72,31 @@ export default async function SeatingPage() {
 
   // ステータス計算
   type StaffStatus = SeatData["status"];
-  const absenceIds  = new Set((absenceRows ?? []).map(a => a.staff_id));
-  const latestPunch = new Map<string, string>();
-  const latestBreak = new Map<string, string>();
+  const absenceIds     = new Set((absenceRows ?? []).map(a => a.staff_id));
+  const latestPunch    = new Map<string, string>();
+  const latestBreak    = new Map<string, string>();
+  const latestSeatMove = new Map<string, string>();
+  const breakStartTimeMap = new Map<string, string>();   // staffId → ISO
+  const seatLeaveTimeMap  = new Map<string, string>();   // staffId → ISO
   for (const p of punchLogs ?? []) {
-    if (p.punch_type === "clock_in" || p.punch_type === "clock_out") latestPunch.set(p.staff_id, p.punch_type);
-    if (p.punch_type === "break_start" || p.punch_type === "break_end") latestBreak.set(p.staff_id, p.punch_type);
+    const t = p.punch_type as string;
+    if (t === "clock_in" || t === "clock_out") latestPunch.set(p.staff_id, t);
+    if (t === "break_start") { latestBreak.set(p.staff_id, t); breakStartTimeMap.set(p.staff_id, p.recorded_at as string); }
+    if (t === "break_end")   { latestBreak.set(p.staff_id, t); breakStartTimeMap.delete(p.staff_id); }
+    if (t === "seat_leave")  { latestSeatMove.set(p.staff_id, t); seatLeaveTimeMap.set(p.staff_id, p.recorded_at as string); }
+    if (t === "seat_return") { latestSeatMove.set(p.staff_id, t); seatLeaveTimeMap.delete(p.staff_id); }
   }
   function deriveStatus(staffId: string): NonNullable<StaffStatus> {
     if (absenceIds.has(staffId)) return "absent";
     const punch = latestPunch.get(staffId);
     const brk   = latestBreak.get(staffId);
+    const seat  = latestSeatMove.get(staffId);
     if (punch === "clock_out") return "clocked_out";
-    if (punch === "clock_in")  return brk === "break_start" ? "on_break" : "working";
+    if (punch === "clock_in") {
+      if (brk  === "break_start") return "on_break";
+      if (seat === "seat_leave")  return "seat_leave";
+      return "working";
+    }
     return "not_arrived";
   }
 
@@ -115,8 +127,10 @@ export default async function SeatingPage() {
       staffId,
       staffName:     member?.name ?? null,
       accountNumber: member?.accountNumber ?? null,
-      shiftName:     staffId ? (shiftNameMap.get(staffId) ?? null) : null,
-      status:        staffId ? deriveStatus(staffId) : null,
+      shiftName:      staffId ? (shiftNameMap.get(staffId) ?? null) : null,
+      status:         staffId ? deriveStatus(staffId) : null,
+      breakStartTime: staffId ? (breakStartTimeMap.get(staffId) ?? null) : null,
+      seatLeaveTime:  staffId ? (seatLeaveTimeMap.get(staffId)  ?? null) : null,
     };
   });
 

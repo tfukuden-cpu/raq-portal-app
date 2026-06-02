@@ -32,7 +32,9 @@ export type SeatData = {
   accountNumber: string | null;
   shiftSlot: string | null;
   shiftName: string | null;
-  status: "not_arrived" | "working" | "on_break" | "clocked_out" | "absent" | null;
+  status: "not_arrived" | "working" | "on_break" | "seat_leave" | "clocked_out" | "absent" | null;
+  breakStartTime?: string | null;  // ISO: 休憩開始時刻（経過時間表示用）
+  seatLeaveTime?:  string | null;  // ISO: 離席開始時刻（経過時間表示用）
   motaSlot?: string | null;
 };
 
@@ -48,6 +50,7 @@ const STATUS_BG: Record<NonNullable<SeatData["status"]>, string> = {
   not_arrived: "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-600",
   working:     "bg-green-200 dark:bg-green-800/80 border-green-500 dark:border-green-500",
   on_break:    "bg-amber-200 dark:bg-amber-800/80 border-amber-500 dark:border-amber-500",
+  seat_leave:  "bg-blue-200 dark:bg-blue-800/80 border-blue-500 dark:border-blue-500",
   clocked_out: "bg-zinc-200 dark:bg-zinc-600 border-zinc-400 dark:border-zinc-400",
   absent:      "bg-red-200 dark:bg-red-800/80 border-red-500 dark:border-red-500",
 };
@@ -56,6 +59,7 @@ const STATUS_TEXT: Record<NonNullable<SeatData["status"]>, string> = {
   not_arrived: "text-zinc-400",
   working:     "text-green-800 dark:text-green-200",
   on_break:    "text-amber-800 dark:text-amber-200",
+  seat_leave:  "text-blue-800 dark:text-blue-200",
   clocked_out: "text-zinc-400 dark:text-zinc-400",
   absent:      "text-red-700 dark:text-red-300",
 };
@@ -64,6 +68,7 @@ const STATUS_LABEL: Record<NonNullable<SeatData["status"]>, string> = {
   not_arrived: "未出勤",
   working:     "勤務中",
   on_break:    "休憩中",
+  seat_leave:  "離席中",
   clocked_out: "退勤済",
   absent:      "欠勤",
 };
@@ -102,6 +107,18 @@ export default function SeatingClient({
   const [statuses, setStatuses] = useState<Map<string, NonNullable<SeatData["status"]>>>(() => {
     const m = new Map<string, NonNullable<SeatData["status"]>>();
     seats.forEach(s => { if (s.staffId && s.status) m.set(s.staffId, s.status); });
+    return m;
+  });
+
+  // 休憩・離席の開始時刻（経過時間タイマー用）
+  const [breakStartTimes, setBreakStartTimes] = useState<Map<string, string>>(() => {
+    const m = new Map<string, string>();
+    seats.forEach(s => { if (s.staffId && s.breakStartTime) m.set(s.staffId, s.breakStartTime); });
+    return m;
+  });
+  const [seatLeaveTimes, setSeatLeaveTimes] = useState<Map<string, string>>(() => {
+    const m = new Map<string, string>();
+    seats.forEach(s => { if (s.staffId && s.seatLeaveTime) m.set(s.staffId, s.seatLeaveTime); });
     return m;
   });
   const [isPending, startTransition] = useTransition();
@@ -294,16 +311,30 @@ export default function SeatingClient({
         const staffId   = payload.new["staff_id"];
         const punchType = payload.new["punch_type"];
         if (!staffId || !punchType) return;
+        const recordedAt: string = payload.new["recorded_at"] ?? new Date().toISOString();
         setStatuses(prev => {
           const next = new Map(prev);
           if (punchType === "clock_in")    next.set(staffId, "working");
           if (punchType === "clock_out")   next.set(staffId, "clocked_out");
           if (punchType === "break_start") next.set(staffId, "on_break");
           if (punchType === "break_end")   next.set(staffId, "working");
-          if (punchType === "seat_leave")  next.set(staffId, "working");
+          if (punchType === "seat_leave")  next.set(staffId, "seat_leave");
           if (punchType === "seat_return") next.set(staffId, "working");
           return next;
         });
+        // 開始時刻を追跡
+        if (punchType === "break_start") {
+          setBreakStartTimes(prev => new Map(prev).set(staffId, recordedAt));
+        }
+        if (punchType === "break_end" || punchType === "clock_out") {
+          setBreakStartTimes(prev => { const m = new Map(prev); m.delete(staffId); return m; });
+        }
+        if (punchType === "seat_leave") {
+          setSeatLeaveTimes(prev => new Map(prev).set(staffId, recordedAt));
+        }
+        if (punchType === "seat_return" || punchType === "clock_out") {
+          setSeatLeaveTimes(prev => { const m = new Map(prev); m.delete(staffId); return m; });
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -741,6 +772,19 @@ export default function SeatingClient({
                         {BREAK_SLOT_LABEL[breakAssignmentMap[sfId]] ?? ""}
                       </span>
                     )}
+                    {/* 経過時間タイマー（休憩中 / 離席中） */}
+                    {!editMode && sfId && status === "on_break" && breakStartTimes.get(sfId) && (
+                      <ElapsedTimer
+                        startISO={breakStartTimes.get(sfId)!}
+                        colorClass="text-amber-800 dark:text-amber-200"
+                      />
+                    )}
+                    {!editMode && sfId && status === "seat_leave" && seatLeaveTimes.get(sfId) && (
+                      <ElapsedTimer
+                        startISO={seatLeaveTimes.get(sfId)!}
+                        colorClass="text-blue-800 dark:text-blue-200"
+                      />
+                    )}
                   </>
                 ) : (
                   <span className={`text-[10px] mt-0.5 ${isFree ? "text-emerald-400 dark:text-emerald-600" : editMode ? "text-amber-400" : "text-zinc-300 dark:text-zinc-600"}`}>
@@ -958,7 +1002,7 @@ export default function SeatingClient({
           staffId={punchModal.staffId}
           staffName={punchModal.staffName}
           shiftStart={shiftTimeMap[punchModal.staffId]?.start ?? null}
-          shiftEnd={shiftTimeMap[punchModal.staffId]?.end ?? null}
+          shiftEnd={shiftTimeMap[punchModal.staffId]?.end   ?? null}
           today={today}
           isAdmin={isAdmin}
           showBreakEdit={isAdmin && embedded}
@@ -978,5 +1022,24 @@ export default function SeatingClient({
         />
       )}
     </div>
+  );
+}
+
+// ── 経過時間タイマー（各座席カード用・独立 re-render） ────
+function ElapsedTimer({ startISO, colorClass }: { startISO: string; colorClass: string }) {
+  const [elapsed, setElapsed] = useState(() =>
+    Math.floor((Date.now() - new Date(startISO).getTime()) / 1000)
+  );
+  useEffect(() => {
+    const base = new Date(startISO).getTime();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - base) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [startISO]);
+  const m = Math.floor(elapsed / 60);
+  const s = elapsed % 60;
+  return (
+    <span className={`text-[9px] font-bold tabular-nums leading-none ${colorClass}`}>
+      {m}:{String(s).padStart(2, "0")}
+    </span>
   );
 }
