@@ -13,6 +13,7 @@ type Member = {
   name: string;
   line_user_id: string | null;
   lineLinked: boolean;
+  lineFriend?: boolean;
 };
 
 type Tab = "connection" | "notify" | "history";

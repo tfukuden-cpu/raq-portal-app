@@ -5,7 +5,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { multicastLine, pushLine } from "@/lib/line";
+import { multicastLine, pushLine, pushLineWithButton } from "@/lib/line";
 import {
   pushWebToStaff,
   pushWebToStaffs,
@@ -136,7 +136,8 @@ export async function sendEventNotify(
   projectId: string,
   type: keyof NotificationSettings,
   vars: Record<string, string>,
-  targetStaffId?: string
+  targetStaffId?: string,
+  button?: { label: string; url: string }
 ): Promise<void> {
   try {
     const settings = await getProjectNotifySettings(projectId);
@@ -156,6 +157,11 @@ export async function sendEventNotify(
     const webTitle = message.split("\n")[0].slice(0, 40) || "Raq ポータル";
     const webBody  = message.split("\n").slice(1).join("\n").trim() || message.slice(0, 80);
 
+    // ボタン付き or テキストのみ送信ヘルパー
+    const sendToLine = (lineId: string) => button
+      ? pushLineWithButton(lineId, message, button.label, button.url)
+      : pushLine(lineId, message);
+
     if (item.recipient === "admin") {
       // 管理者グループへのみ送信（個人LINEは送らない）
       // Web Push: 案件管理者
@@ -163,12 +169,19 @@ export async function sendEventNotify(
     } else {
       if (targetStaffId) {
         const lineId = await getStaffLineId(targetStaffId);
-        if (lineId) await send(() => pushLine(lineId, message));
+        if (lineId) await send(() => sendToLine(lineId));
         // Web Push: 特定スタッフ
         await send(() => pushWebToStaff(targetStaffId, { title: webTitle, body: webBody }));
       } else {
         const ids = await getAllStaffLineIds(projectId);
-        if (ids.length > 0) await send(() => multicastLine(ids, message));
+        if (ids.length > 0) {
+          if (button) {
+            // ボタン付きは個別送信（multicastはボタン非対応）
+            await Promise.all(ids.map(id => send(() => sendToLine(id))));
+          } else {
+            await send(() => multicastLine(ids, message));
+          }
+        }
         // Web Push: 全スタッフ
         await send(() => pushWebToProject(projectId, { title: webTitle, body: webBody }));
       }

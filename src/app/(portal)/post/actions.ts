@@ -24,8 +24,6 @@ export async function createPostAction(formData: FormData): Promise<PostResult> 
 
   if (!body && (!imageFile || imageFile.size === 0))
     return { success: false, message: "本文か画像を入力してください" };
-  if (body.length > 2000)
-    return { success: false, message: "2000文字以内で入力してください" };
 
   const supabase  = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

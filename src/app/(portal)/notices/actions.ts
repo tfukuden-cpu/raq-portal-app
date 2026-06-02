@@ -69,11 +69,13 @@ export async function createNoticeAction(
 
   // LINE通知（sendLine=trueの場合のみ）
   if (sendLine) {
+    const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
     void sendEventNotify(
       projectId,
       "announcement",
       { "タイトル": title, "本文": body.length > 100 ? body.slice(0, 100) + "…" : body },
-      targetStaffId ?? undefined,  // null → 全員、値 → 特定スタッフのみ
+      targetStaffId ?? undefined,
+      { label: "周知事項を見る", url: `${appUrl}/notices` },
     );
   }
 
