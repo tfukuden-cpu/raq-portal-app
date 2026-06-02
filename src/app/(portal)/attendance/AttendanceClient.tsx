@@ -154,11 +154,6 @@ interface Props {
   nextDate: string;
   dateLabel: string;
   projectName: string;
-  total: number;
-  departed: number;
-  clockedIn: number;
-  late: number;
-  absent: number;
   notClocked: number;
   grouped: SectionGroup[];
   offMembers: OffMember[];
@@ -186,7 +181,7 @@ type ModalState = null | "confirm" | "sending" | "results";
 // ── メインコンポーネント ──────────────────────────────────
 export default function AttendanceClient({
   projectId, today, prevDate, nextDate, dateLabel, projectName,
-  total, departed, clockedIn, late, absent, notClocked,
+  notClocked,
   grouped, offMembers, shiftRequired = {}, enableDeparture,
   publishedAt, shiftChanges,
   myStaffId, churnRiskAlerts,
@@ -487,12 +482,6 @@ export default function AttendanceClient({
             <span className="text-sm font-semibold text-zinc-500 tabular-nums">{dateLabel}</span>
           </div>
         </div>
-        {/* サマリー（固定） */}
-        <div className="max-w-6xl mx-auto px-4 py-3 grid grid-cols-3 gap-3">
-          <SummaryCard value={clockedIn} total={total} label="出勤" color="text-green-500" />
-          <SummaryCard value={late}                   label="遅刻" color="text-amber-500" />
-          <SummaryCard value={absent}                 label="欠勤" color="text-red-500" />
-        </div>
         {/* タブ */}
         <div className="max-w-6xl mx-auto px-4 pb-1 flex gap-1">
           <button
@@ -661,13 +650,6 @@ export default function AttendanceClient({
             <div className="flex gap-3 pb-4 items-start" style={{ minWidth: "max-content" }}>
               {boardSections.map(({ section, groups }) => {
                 const allMembers = groups.flatMap(g => g.members);
-                const present = allMembers.filter(m => {
-                  const s = localStatuses.get(m.staffId) ?? m.status;
-                  return s === "working" || s === "clocked_out" || s === "departed";
-                }).length;
-                const absCnt = allMembers.filter(m =>
-                  (localStatuses.get(m.staffId) ?? m.status) === "absent"
-                ).length;
                 const isDragTarget = dragOverSection === section;
                 const secCol = SECTION_COL[section] ?? SECTION_COL_FALLBACK;
 
@@ -727,27 +709,33 @@ export default function AttendanceClient({
                   >
                     {/* カラムヘッダー（固定） */}
                     {(() => {
-                      const totalRequired   = groups.reduce((s, g) => s + (shiftRequired[g.shiftName] ?? 0), 0);
-                      const totalAssigned   = allMembers.length;
+                      const totalRequired    = groups.reduce((s, g) => s + (shiftRequired[g.shiftName] ?? 0), 0);
+                      const totalAssigned    = allMembers.length;
                       const totalSufficiency = totalRequired > 0 ? totalAssigned - totalRequired : null;
-                      const totalLate = allMembers.filter(m => (localStatuses.get(m.staffId) ?? m.status) === "late").length;
+                      const getSt = (m: { staffId: string; status: StatusKey }) => localStatuses.get(m.staffId) ?? m.status;
+                      const totalClockedIn   = allMembers.filter(m => { const s = getSt(m); return s === "working" || s === "clocked_out"; }).length;
+                      const totalLate        = allMembers.filter(m => getSt(m) === "late").length;
+                      const totalAbsent      = allMembers.filter(m => getSt(m) === "absent").length;
+                      const totalNotPresent  = totalAssigned - totalClockedIn - totalLate - totalAbsent;
                       const suffixFmt = (suf: number | null) => suf === null ? null : suf > 0 ? `+${suf}` : String(suf);
                       const sufColor  = (suf: number | null) => suf === null ? "" : suf > 0 ? "text-blue-500 dark:text-blue-400" : suf < 0 ? "text-red-500 dark:text-red-400" : "text-emerald-500";
                       return (
                       <div className={`px-3 pt-2.5 pb-2 border-b shrink-0 rounded-t-2xl ${secCol.headerBg} ${secCol.border.replace("border-", "border-b-")}`}>
 
-                        {/* セクション名行：出勤/配置（充足）遅刻N 欠勤N */}
+                        {/* セクション名行：配置/規定（充足）出勤 遅刻 欠勤 未出勤 */}
                         <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 tabular-nums">
                           <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100 shrink-0">{section}</span>
-                          <span className={`text-xs font-bold ${present > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500"}`}>{present}</span>
-                          <span className="text-xs text-zinc-400">/{totalAssigned}</span>
-                          {totalSufficiency !== null && (
-                            <span className={`text-xs font-bold ${sufColor(totalSufficiency)}`}>
-                              （{suffixFmt(totalSufficiency)}）
-                            </span>
+                          <span className="text-xs text-zinc-600 dark:text-zinc-300">{totalAssigned}</span>
+                          {totalRequired > 0 && (
+                            <>
+                              <span className="text-xs text-zinc-400">/{totalRequired}</span>
+                              <span className={`text-xs font-bold ${sufColor(totalSufficiency)}`}>（{suffixFmt(totalSufficiency)}）</span>
+                            </>
                           )}
-                          {totalLate > 0 && <span className="text-[11px] font-bold text-amber-500 dark:text-amber-400">遅刻 {totalLate}名</span>}
-                          {absCnt > 0  && <span className="text-[11px] font-bold text-red-500 dark:text-red-400">欠勤 {absCnt}名</span>}
+                          <span className={`text-[11px] font-bold ${totalClockedIn > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>出{totalClockedIn}</span>
+                          {totalLate > 0 && <span className="text-[11px] font-bold text-amber-500 dark:text-amber-400">遅{totalLate}</span>}
+                          {totalAbsent > 0 && <span className="text-[11px] font-bold text-red-500 dark:text-red-400">欠{totalAbsent}</span>}
+                          {totalNotPresent > 0 && <span className="text-[11px] text-zinc-400 dark:text-zinc-500">未{totalNotPresent}</span>}
                         </div>
 
                         {/* 早番/遅番 内訳（査定・販売のみ）+ 高さ合わせスペーサー */}
@@ -755,21 +743,28 @@ export default function AttendanceClient({
                           {(section === "査定" || section === "販売") && (
                             <div className="space-y-0.5">
                               {groups.map(({ shiftName, members: grpMembers }) => {
-                                const grpPresent  = grpMembers.filter(m => { const s = localStatuses.get(m.staffId) ?? m.status; return s === "working" || s === "clocked_out" || s === "departed"; }).length;
-                                const grpAssigned = grpMembers.length;
-                                const grpRequired = shiftRequired[shiftName] ?? 0;
-                                const grpSuf      = grpRequired > 0 ? grpAssigned - grpRequired : null;
-                                const grpLate     = grpMembers.filter(m => (localStatuses.get(m.staffId) ?? m.status) === "late").length;
-                                const grpAbsent   = grpMembers.filter(m => (localStatuses.get(m.staffId) ?? m.status) === "absent").length;
-                                const label       = shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName;
+                                const grpAssigned   = grpMembers.length;
+                                const grpRequired   = shiftRequired[shiftName] ?? 0;
+                                const grpSuf        = grpRequired > 0 ? grpAssigned - grpRequired : null;
+                                const grpClockedIn  = grpMembers.filter(m => { const s = getSt(m); return s === "working" || s === "clocked_out"; }).length;
+                                const grpLate       = grpMembers.filter(m => getSt(m) === "late").length;
+                                const grpAbsent     = grpMembers.filter(m => getSt(m) === "absent").length;
+                                const grpNotPresent = grpAssigned - grpClockedIn - grpLate - grpAbsent;
+                                const label         = shiftName.includes("早") ? "早番" : shiftName.includes("遅") ? "遅番" : shiftName;
                                 return (
                                   <div key={shiftName} className="flex items-center flex-wrap gap-x-1 gap-y-0 tabular-nums">
                                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400 w-7 shrink-0">{label}</span>
-                                    <span className={`text-[10px] font-bold ${grpPresent > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500"}`}>{grpPresent}</span>
-                                    <span className="text-[10px] text-zinc-400">/{grpAssigned}</span>
-                                    {grpSuf !== null && <span className={`text-[10px] font-bold ${sufColor(grpSuf)}`}>（{suffixFmt(grpSuf)}）</span>}
-                                    {grpLate > 0   && <span className="text-[10px] font-bold text-amber-500">遅刻{grpLate}</span>}
-                                    {grpAbsent > 0 && <span className="text-[10px] font-bold text-red-500">欠勤{grpAbsent}</span>}
+                                    <span className="text-[10px] text-zinc-600 dark:text-zinc-300">{grpAssigned}</span>
+                                    {grpRequired > 0 && (
+                                      <>
+                                        <span className="text-[10px] text-zinc-400">/{grpRequired}</span>
+                                        <span className={`text-[10px] font-bold ${sufColor(grpSuf)}`}>（{suffixFmt(grpSuf)}）</span>
+                                      </>
+                                    )}
+                                    <span className={`text-[10px] font-bold ${grpClockedIn > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>出{grpClockedIn}</span>
+                                    {grpLate > 0   && <span className="text-[10px] font-bold text-amber-500">遅{grpLate}</span>}
+                                    {grpAbsent > 0 && <span className="text-[10px] font-bold text-red-500">欠{grpAbsent}</span>}
+                                    {grpNotPresent > 0 && <span className="text-[10px] text-zinc-400 dark:text-zinc-500">未{grpNotPresent}</span>}
                                   </div>
                                 );
                               })}
@@ -850,7 +845,19 @@ export default function AttendanceClient({
                                   {BREAK_SLOT_LABEL[breakAssignmentMap[m.staffId]] ?? ""}
                                 </span>
                               )}
-                              <div className="relative shrink-0">
+                              <div className="relative shrink-0 flex flex-col items-end gap-0.5">
+                                {/* 打刻ステータス（読み取り専用） */}
+                                <span className={[
+                                  "text-[9px] font-bold px-1 py-0.5 rounded leading-none",
+                                  m.clockIn
+                                    ? (m.clockOut
+                                        ? "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+                                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300")
+                                    : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
+                                ].join(" ")}>
+                                  打:{m.clockIn ? (m.clockOut ? "退勤" : "出勤") : "未打刻"}
+                                </span>
+                                {/* 出勤ステータス（変更可） */}
                                 <button
                                   onClick={e => { e.stopPropagation(); setStatusMenuId(isMenuOpen ? null : m.staffId); }}
                                   className={[
@@ -1220,16 +1227,6 @@ function StatusMenu({ current, onSelect, onClose, enableDeparture }: {
 }
 
 // ── サブコンポーネント ──────────────────────────────────────
-function SummaryCard({ value, total, label, color }: { value: number; total?: number; label: string; color: string }) {
-  return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-center">
-      <div className={`text-xl font-bold tabular-nums ${color}`}>
-        {value}{total !== undefined && <span className="text-sm text-zinc-400 font-normal">/{total}</span>}
-      </div>
-      <div className="text-xs text-zinc-500 mt-0.5">{label}</div>
-    </div>
-  );
-}
 
 function ChevronRight({ className }: { className?: string }) {
   return (
@@ -1466,59 +1463,75 @@ function ShiftChangesTab({
   );
 }
 
-// ── 出勤簿XLSX出力（早番シート・遅番シート） ────────────────
+// ── 出勤簿XLSX出力（セクション横並び1シート） ──────────────
 function exportAttendanceXLSX(
   today: string,
   dateLabel: string,
   grouped: SectionGroup[],
   localStatuses: Map<string, StatusKey>,
 ) {
-  // アカウント番号から数値を抽出してソート
-  const getAccNum = (acct: string | null) => parseInt((acct ?? "").replace(/\D/g, "")) || 99999;
+  const getAccNum = (acct: string) => parseInt(acct.replace(/\D/g, "")) || 99999;
 
-  type Row = { section: string; accountNumber: string; name: string };
-  const earlyRows: Row[] = [];
-  const lateRows:  Row[] = [];
+  type ColGroup = { header: string; rows: { accountNumber: string; name: string }[] };
+  const colGroups: ColGroup[] = [];
+  const SPLIT_SECTIONS = ["査定", "販売"];
 
   for (const { section, shiftGroups } of grouped) {
-    for (const { shiftStart, members } of shiftGroups) {
-      // 11:00 未満を早番、以降を遅番
-      const isEarly = shiftStart ? shiftStart.slice(0, 5) < "11:00" : false;
-      const target  = isEarly ? earlyRows : lateRows;
-
-      for (const m of members) {
-        const status = localStatuses.get(m.staffId) ?? m.status;
-        if (status === "absent") continue; // 欠勤者除外
-        target.push({
-          section:       section ?? "",
-          accountNumber: m.accountNumber ?? "",
-          name:          m.name,
-        });
+    if (SPLIT_SECTIONS.includes(section)) {
+      const earlyRows: { accountNumber: string; name: string }[] = [];
+      const lateRows:  { accountNumber: string; name: string }[] = [];
+      for (const { shiftStart, shiftName, members } of shiftGroups) {
+        const isEarly = shiftStart ? shiftStart.slice(0, 5) < "11:00" : shiftName.includes("早");
+        for (const m of members) {
+          if ((localStatuses.get(m.staffId) ?? m.status) === "absent") continue;
+          (isEarly ? earlyRows : lateRows).push({ accountNumber: m.accountNumber ?? "", name: m.name });
+        }
       }
+      earlyRows.sort((a, b) => getAccNum(a.accountNumber) - getAccNum(b.accountNumber));
+      lateRows.sort((a,  b) => getAccNum(a.accountNumber) - getAccNum(b.accountNumber));
+      colGroups.push({ header: `${section}早番`, rows: earlyRows });
+      colGroups.push({ header: `${section}遅番`, rows: lateRows });
+    } else {
+      const rows: { accountNumber: string; name: string }[] = [];
+      for (const { members } of shiftGroups) {
+        for (const m of members) {
+          if ((localStatuses.get(m.staffId) ?? m.status) === "absent") continue;
+          rows.push({ accountNumber: m.accountNumber ?? "", name: m.name });
+        }
+      }
+      rows.sort((a, b) => getAccNum(a.accountNumber) - getAccNum(b.accountNumber));
+      colGroups.push({ header: section, rows });
     }
   }
 
-  // アカウント番号昇順
-  const sort = (rows: Row[]) => rows.sort((a, b) => getAccNum(a.accountNumber) - getAccNum(b.accountNumber));
-  sort(earlyRows);
-  sort(lateRows);
+  const maxRows = Math.max(0, ...colGroups.map(g => g.rows.length));
 
-  // XLSX作成
+  // 行1: セクションヘッダー（2列ごとにマージ）
+  const row1 = colGroups.flatMap(g => [g.header, ""]);
+  // 行2: 列ラベル
+  const row2 = colGroups.flatMap(() => ["アカウント番号", "名前"]);
+  // データ行
+  const dataRows: (string | number)[][] = Array.from({ length: maxRows }, (_, i) =>
+    colGroups.flatMap(g => {
+      const entry = g.rows[i];
+      return [entry?.accountNumber ?? "", entry?.name ?? ""];
+    })
+  );
+
   import("xlsx").then(XLSX => {
     const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([row1, row2, ...dataRows]);
 
-    const toSheet = (rows: Row[], label: string) => {
-      const data = [
-        [`${dateLabel}　${label}`, "", ""],
-        ["セクション", "アカウント番号", "氏名"],
-        ...rows.map(r => [r.section, r.accountNumber, r.name]),
-      ];
-      return XLSX.utils.aoa_to_sheet(data);
-    };
+    // セクションヘッダーセルをマージ
+    ws["!merges"] = colGroups.map((_, i) => ({
+      s: { r: 0, c: i * 2 },
+      e: { r: 0, c: i * 2 + 1 },
+    }));
 
-    XLSX.utils.book_append_sheet(wb, toSheet(earlyRows, "早番"), "早番");
-    XLSX.utils.book_append_sheet(wb, toSheet(lateRows,  "遅番"), "遅番");
+    // 列幅設定
+    ws["!cols"] = colGroups.flatMap(() => [{ wch: 16 }, { wch: 12 }]);
 
+    XLSX.utils.book_append_sheet(wb, ws, dateLabel.slice(0, 31));
     XLSX.writeFile(wb, `出勤簿_${today}.xlsx`);
   });
 }

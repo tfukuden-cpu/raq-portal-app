@@ -628,11 +628,6 @@ export default async function AttendancePage({
       nextDate={tomorrow}
       dateLabel={dateLabel}
       projectName={project?.name ?? ""}
-      total={total}
-      departed={departed}
-      clockedIn={clockedIn}
-      late={late}
-      absent={absent}
       notClocked={notClocked}
       grouped={grouped}
       offMembers={offMembers}
