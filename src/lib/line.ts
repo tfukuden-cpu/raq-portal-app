@@ -172,42 +172,50 @@ export async function pushLineWithButton(
   if (!token) { console.error("[LINE] LINE_CHANNEL_ACCESS_TOKEN が未設定"); return; }
   if (!lineUserId) { console.error("[LINE] lineUserId が空"); return; }
 
-  // テキスト（全文）+ ボタンの2メッセージを1回のAPIで送信
+  // テキスト全文＋ボタンを1つのFlex Messageで送信
   const res = await fetch(`${LINE_API}/v2/bot/message/push`, {
     method:  "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       to: lineUserId,
-      messages: [
-        // 1通目：テキスト全文（切れない）
-        {
-          type: "text",
-          text,
-        },
-        // 2通目：ボタンのみのFlex
-        {
-          type: "flex",
-          altText: buttonLabel,
-          contents: {
-            type: "bubble",
-            body: {
-              type: "box",
-              layout: "vertical",
-              contents: [{
-                type: "button",
-                action: {
-                  type: "uri",
-                  label: buttonLabel,
-                  uri: buttonUrl,
-                },
-                style: "primary",
-                color: buttonColor,
-                height: "sm",
-              }],
-            },
+      messages: [{
+        type: "flex",
+        altText: text.split("\n")[0].slice(0, 60),
+        contents: {
+          type: "bubble",
+          body: {
+            type: "box",
+            layout: "vertical",
+            spacing: "md",
+            paddingAll: "lg",
+            contents: [
+              {
+                type: "text",
+                text,
+                wrap: true,
+                size: "sm",
+                color: "#1f2937",
+              },
+            ],
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            paddingAll: "md",
+            contents: [{
+              type: "button",
+              action: {
+                type: "uri",
+                label: buttonLabel,
+                uri: buttonUrl,
+              },
+              style: "primary",
+              color: buttonColor,
+              height: "sm",
+            }],
           },
         },
-      ],
+      }],
     }),
   });
   if (!res.ok) {
