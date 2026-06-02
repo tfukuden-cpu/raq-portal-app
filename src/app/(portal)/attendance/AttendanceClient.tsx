@@ -99,6 +99,19 @@ const SECTION_CARD_FALLBACK: ShiftColorSet = {
   def:   "bg-sky-50 border-sky-200 dark:bg-sky-950/50 dark:border-sky-800",
 };
 
+/** セクションバッジ用カラー */
+const SECTION_BADGE_COLOR: Record<string, string> = {
+  "SV":       "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  "査定":     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  "販売":     "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  "MOTA":     "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  "H MOTA":   "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  "インフォ": "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+  "未アポ":   "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
+  "ローン":   "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+};
+const SECTION_BADGE_FALLBACK = "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300";
+
 /** section + shiftName + shiftStart からカードの bg + border クラスを返す */
 function getCardBg(section: string, shiftName: string, shiftStart: string | null): string {
   const entry = SECTION_CARD[section] ?? SECTION_CARD_FALLBACK;
@@ -831,9 +844,9 @@ export default function AttendanceClient({
                                 : getCardBg(section, m.shiftName, m.shiftStart),
                             ].join(" ")}
                           >
-                            {/* メイン行：番号│名前│休憩時間│打刻ステータス│勤怠ステータス */}
-                            <div className="flex items-center gap-1 min-w-0">
-                              <span className="text-[10px] font-mono text-zinc-400 tabular-nums shrink-0 leading-none">
+                            {/* Row 1: アカウント番号 │ 名前 │ セクションバッジ */}
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-[10px] font-mono text-zinc-400 tabular-nums w-10 shrink-0 leading-none truncate">
                                 {m.accountNumber ?? "—"}
                               </span>
                               <button
@@ -845,7 +858,13 @@ export default function AttendanceClient({
                                   {m.name}
                                 </span>
                               </button>
-                              {/* 休憩時間バッジ（スロット記号＋開始時刻） */}
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shrink-0 ${SECTION_BADGE_COLOR[m.section] ?? SECTION_BADGE_FALLBACK}`}>
+                                {m.section}
+                              </span>
+                            </div>
+
+                            {/* Row 2: (indent) │ 休憩時間 │ 打刻ステータス │ 勤怠ステータス */}
+                            <div className="flex items-center gap-1 mt-0.5 pl-[46px]">
                               {breakAssignmentMap[m.staffId] && (
                                 <span className={`text-[9px] font-bold px-1 py-0.5 rounded leading-none shrink-0 ${BREAK_BADGE_CLASS[breakAssignmentMap[m.staffId]] ?? ""}`}>
                                   {BREAK_SLOT_LABEL[breakAssignmentMap[m.staffId]] ?? ""}
@@ -854,7 +873,6 @@ export default function AttendanceClient({
                                     : ""}
                                 </span>
                               )}
-                              {/* 打刻ステータス（打刻済 / 打刻未） */}
                               <span className={[
                                 "text-[9px] font-bold px-1 py-0.5 rounded leading-none shrink-0",
                                 m.clockIn
@@ -863,8 +881,7 @@ export default function AttendanceClient({
                               ].join(" ")}>
                                 {m.clockIn ? "打刻済" : "打刻未"}
                               </span>
-                              {/* 勤怠ステータス（変更可） */}
-                              <div className="relative shrink-0">
+                              <div className="relative shrink-0 ml-auto">
                                 <button
                                   onClick={e => { e.stopPropagation(); setStatusMenuId(isMenuOpen ? null : m.staffId); }}
                                   className={[
@@ -886,9 +903,9 @@ export default function AttendanceClient({
                               </div>
                             </div>
 
-                            {/* セクションバッジ各種（欠勤・遅刻・催促・移動） */}
+                            {/* アクションバッジ（欠勤・遅刻・催促・移動） */}
                             {(currentStatus === "absent" || currentStatus === "late" || canRemind || isMoved) && (
-                              <div className="flex flex-wrap items-center gap-1 mt-1">
+                              <div className="flex flex-wrap items-center gap-1 mt-1 pl-[46px]">
                                 {currentStatus === "absent" && (
                                   <>
                                     <button type="button" onClick={() => toggleSelect(m.staffId, "followup")}
