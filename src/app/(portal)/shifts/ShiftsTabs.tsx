@@ -125,7 +125,7 @@ export default function ShiftsTabs({
   const badge = getShiftBadge(shiftForDate?.shift_name ?? null);
 
   return (
-    <div className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 overflow-hidden min-h-0">
+    <div className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 md:overflow-hidden min-h-0">
       {/* ── ページヘッダー ── */}
       <div className="flex-shrink-0 px-4 md:px-8 pt-4 pb-3 flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-[20px] md:text-[22px] font-bold text-[#0d1b35] dark:text-white">

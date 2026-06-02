@@ -133,7 +133,7 @@ export default function AppNav({
   }
 
   return (
-    <div className={`flex bg-[#f4f6fa] dark:bg-zinc-950 ${isNoScrollPage ? "h-screen overflow-hidden" : "min-h-screen"}`}>
+    <div className={`flex bg-[#f4f6fa] dark:bg-zinc-950 ${isNoScrollPage ? "md:h-screen md:overflow-hidden min-h-screen" : "min-h-screen"}`}>
 
       {/* ── PC サイドバー（ネイビー） ── */}
       <aside
@@ -256,7 +256,7 @@ export default function AppNav({
       </aside>
 
       {/* ── メインコンテンツ ── */}
-      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out ${isNoScrollPage ? "overflow-hidden pb-0" : "pb-safe md:pb-0"} ${
+      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out ${isNoScrollPage ? "md:overflow-hidden pb-safe md:pb-0" : "pb-safe md:pb-0"} ${
         isCol ? "md:pl-14" : "md:pl-60"
       }`}>
 

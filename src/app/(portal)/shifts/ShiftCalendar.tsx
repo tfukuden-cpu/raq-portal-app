@@ -228,7 +228,7 @@ export default function ShiftCalendar({
               type="button"
               onClick={() => onSelectDate?.(ds)}
               className={cx(
-                "relative flex flex-col justify-between p-2.5 border-r border-b border-zinc-100 dark:border-zinc-800 transition-all",
+                "relative flex flex-col justify-between p-1 md:p-2.5 border-r border-b border-zinc-100 dark:border-zinc-800 transition-all",
                 isToday && isSel ? "bg-blue-50 dark:bg-blue-950/30 border-l-2 border-l-[#0d1b35]"
                 : isToday        ? "bg-blue-50/50 dark:bg-blue-950/20"
                 : isSel          ? "bg-[#0d1b35]/[0.04] dark:bg-zinc-800/50 border-l-2 border-l-[#0d1b35] dark:border-l-blue-400"
@@ -239,12 +239,12 @@ export default function ShiftCalendar({
               <div>
                 <div className="flex items-center justify-between">
                   {isToday ? (
-                    <span className="w-7 h-7 rounded-full bg-[#0d1b35] dark:bg-blue-500 text-white text-[13px] font-bold flex items-center justify-center leading-none">
+                    <span className="w-5 h-5 md:w-7 md:h-7 rounded-full bg-[#0d1b35] dark:bg-blue-500 text-white text-[10px] md:text-[13px] font-bold flex items-center justify-center leading-none">
                       {d}
                     </span>
                   ) : (
                     <span className={cx(
-                      "text-[18px] font-bold leading-none",
+                      "text-[13px] md:text-[18px] font-bold leading-none",
                       isRed   ? "text-red-500 dark:text-red-400"
                       : isBlue  ? "text-blue-500 dark:text-blue-400"
                       : isSel   ? "text-[#0d1b35] dark:text-blue-300"
@@ -279,7 +279,7 @@ export default function ShiftCalendar({
                 {s?.shift_name && badge ? (
                   <>
                     <div className={cx(
-                      "py-1 px-1 rounded-lg text-[11px] font-bold text-center leading-tight w-full",
+                      "py-0.5 md:py-1 px-0.5 md:px-1 rounded md:rounded-lg text-[8px] md:text-[11px] font-bold text-center leading-tight w-full",
                       badge.bg, badge.text, badge.border,
                     )}>
                       {s.shift_name}

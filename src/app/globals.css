@@ -33,12 +33,14 @@ body {
   display: none;
 }
 
-/* ページスクロール完全封止 */
-html.noscroll,
-html.noscroll body {
-  overflow: hidden !important;
-  height: 100% !important;
-  overscroll-behavior: none !important;
+/* ページスクロール完全封止（デスクトップのみ） */
+@media (min-width: 768px) {
+  html.noscroll,
+  html.noscroll body {
+    overflow: hidden !important;
+    height: 100% !important;
+    overscroll-behavior: none !important;
+  }
 }
 
 /* iPhone ホームインジケーター対応 */
