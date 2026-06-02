@@ -179,7 +179,7 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
   const popularPosts = [...posts].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 3);
 
   return (
-    <main className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 overflow-hidden min-h-0">
+    <main className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 md:overflow-hidden min-h-0">
 
       {/* ── 固定ヘッダー ── */}
       <div className="flex-shrink-0 w-full px-4 md:px-8 pt-5 pb-3">
@@ -207,7 +207,7 @@ export default function PostClient({ posts, currentStaffId, currentStaffName, is
       </div>{/* /固定ヘッダー */}
 
       {/* ── スクロールエリア ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 pb-6">
+      <div className="flex-1 md:min-h-0 overflow-y-auto px-4 md:px-8 pb-6">
         {/* ── 2カラムレイアウト ── */}
         <div className="flex gap-5 items-start">
 

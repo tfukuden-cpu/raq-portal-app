@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -84,7 +84,7 @@ export function InquiryClient({ inquiries }: { inquiries: Inquiry[] }) {
   const latestReply = inquiries.find(i => i.reply);
 
   return (
-    <main className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 overflow-hidden min-h-0">
+    <main className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 md:overflow-hidden min-h-0">
 
       {/* ── 固定タイトルバー ── */}
       <div className="flex-shrink-0 px-4 md:px-8 pt-5 pb-3">
@@ -92,7 +92,7 @@ export function InquiryClient({ inquiries }: { inquiries: Inquiry[] }) {
       </div>
 
       {/* ── スクロールエリア ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 pb-6">
+      <div className="flex-1 md:min-h-0 overflow-y-auto px-4 md:px-8 pb-6">
         <div className="flex gap-5 items-start">
 
           {/* ── LEFT: フォーム ── */}
