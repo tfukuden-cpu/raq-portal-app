@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/admin/work-records/compliance
  * 勤怠順守率を返す（JSON）
  * query: projectId, staffIds (comma), startDate (YYYY-MM-DD), endDate (YYYY-MM-DD)
@@ -157,7 +157,7 @@ export async function GET(req: NextRequest) {
     let isEarlyLeave  = false;
     if (clockOut && resolvedEnd) {
       const endMs = new Date(`${shift.shift_date}T${resolvedEnd}:00+09:00`).getTime();
-      isEarlyLeave = new Date(clockOut).getTime() < endMs - 15 * 60000;
+      isEarlyLeave = new Date(clockOut).getTime() < endMs - 10 * 60000;
     }
 
     row.totalShiftDays++;

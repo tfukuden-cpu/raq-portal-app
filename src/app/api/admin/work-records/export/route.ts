@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/admin/work-records/export
  * 稼働実績をExcel(.xlsx)で返す
  * query: projectId, staffIds (comma), startDate (YYYY-MM-DD), endDate (YYYY-MM-DD), mode (company|individual)
@@ -436,7 +436,7 @@ export async function GET(req: NextRequest) {
         if (endDt) {
           const endMs = endDt.getTime();
           overtimeMinutes = Math.max(0, Math.round((outMs - endMs) / 60000));
-          isEarlyLeave = outMs < endMs - 15 * 60000;
+          isEarlyLeave = outMs < endMs - 10 * 60000;
         }
       }
     }

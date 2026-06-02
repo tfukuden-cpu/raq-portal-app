@@ -171,7 +171,7 @@ export default async function AttendanceEditPage({
     if (punch?.clockOut && shiftEnd) {
       const endDt  = new Date(`${shift.shift_date}T${shiftEnd}:00+09:00`);
       const outDt  = new Date(punch.clockOut);
-      isEarlyLeave = outDt.getTime() < endDt.getTime() - 15 * 60000;
+      isEarlyLeave = outDt.getTime() < endDt.getTime() - 10 * 60000;
     }
 
     // ステータス
