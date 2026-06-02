@@ -135,7 +135,8 @@
       "Bash(node node_modules/typescript/lib/tsc.js --noEmit --project tsconfig.json)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d.get\\('devDependencies',{}\\).keys\\(\\)\\)\\)\")",
       "Bash(C:/Users/fukud/OneDrive/デスクトップ/Rap/node.exe --version)",
-      "Bash(gh deployment *)"
+      "Bash(gh deployment *)",
+      "Bash(grep -n \"} // end.*rest_day\\\\|// グループへまとめ\\\\|await pushLine.*groupId\\\\|sent++\\\\s*$\" C:/dev/raq-portal-app/src/app/api/cron/notify/route.ts)"
     ]
   }
 }

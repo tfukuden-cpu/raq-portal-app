@@ -145,7 +145,19 @@ export async function GET(req: NextRequest) {
     if (settings.rest_day_remind.enabled) {
       const cfg  = settings.rest_day_remind;
       const yday = yesterdayJST();
-      if (isNearTime(cfg.time ?? "20:00")) {
+      // windowMin=5 で確実に発火。重複防止のため当日送信済みチェック
+      const alreadySent = await (async () => {
+        const { data } = await admin
+          .from("notification_logs")
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("notify_type", "rest_day_remind")
+          .gte("sent_at", `${today}T00:00:00+09:00`)
+          .limit(1)
+          .maybeSingle();
+        return !!data;
+      })();
+      if (isNearTime(cfg.time ?? "19:00", 5) && !alreadySent) {
         const { data: tShifts } = await admin
           .from("shifts")
           .select("staff_id, shift_start, shift_end, shift_name")
