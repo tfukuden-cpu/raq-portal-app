@@ -128,7 +128,7 @@ export function InquiryClient({ inquiries }: { inquiries: Inquiry[] }) {
                 <label className="block text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 mb-1.5">
                   件名 <span className="text-red-500 text-[10px] px-1.5 py-0.5 rounded bg-red-50 ml-1">必須</span>
                 </label>
-                <input type="text" value={subject} onChange={e => setSubject(e.target.value)} maxLength={200}
+                <input type="text" value={subject} onChange={e => setSubject(e.target.value)} 
                   placeholder="お問い合わせの件名を入力してください"
                   className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[13px] text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#0d1b35]/20" />
               </div>
@@ -138,7 +138,7 @@ export function InquiryClient({ inquiries }: { inquiries: Inquiry[] }) {
                 <label className="block text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 mb-1.5">
                   詳細内容 <span className="text-red-500 text-[10px] px-1.5 py-0.5 rounded bg-red-50 ml-1">必須</span>
                 </label>
-                <textarea value={body} onChange={e => setBody(e.target.value)} rows={5} maxLength={2000}
+                <textarea value={body} onChange={e => setBody(e.target.value)} rows={5} 
                   placeholder="お問い合わせ内容を詳しく入力してください"
                   className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[13px] text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 resize-none focus:outline-none focus:ring-2 focus:ring-[#0d1b35]/20" />
                 <p className="text-[11px] text-zinc-400 mt-1 text-right tabular-nums">{body.length} / 2000</p>

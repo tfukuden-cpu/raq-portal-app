@@ -26,7 +26,7 @@ export default async function LineSettingsPage() {
   const [{ data: project }, { data: members }, { data: settings }, { logs: initialLogs, nextCursor: initialCursor }] = await Promise.all([
     supabase.from("projects").select("name").eq("id", projectId).maybeSingle(),
     supabase.from("project_members")
-      .select("staff_id, role, staffs(name, display_name, line_user_id)")
+      .select("staff_id, role, staffs(name, display_name, line_user_id, line_friend)")
       .eq("project_id", projectId),
     admin.from("project_settings")
       .select("line_group_id, notification_settings")
@@ -44,12 +44,13 @@ export default async function LineSettingsPage() {
 
   const memberList = (members ?? []).map((m) => {
     const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
-      { name: string | null; display_name: string | null; line_user_id: string | null } | null;
+      { name: string | null; display_name: string | null; line_user_id: string | null; line_friend?: boolean | null } | null;
     return {
       staffId:      m.staff_id,
       name:         s?.display_name ?? s?.name ?? m.staff_id,
       line_user_id: s?.line_user_id ?? null,
       lineLinked:   !!s?.line_user_id,
+      lineFriend:   !!s?.line_friend,
     };
   });
 

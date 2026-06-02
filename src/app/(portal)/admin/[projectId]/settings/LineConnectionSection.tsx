@@ -8,6 +8,7 @@ type Member = {
   name: string;
   line_user_id: string | null;
   lineLinked: boolean;
+  lineFriend?: boolean;
 };
 
 function shortId(id: string) {
@@ -45,6 +46,7 @@ export default function LineConnectionSection({
 
   const linkedCount    = members.filter(m => m.lineLinked).length;
   const unlinkedCount  = members.length - linkedCount;
+  const friendCount    = members.filter(m => m.lineFriend).length;
   const confirmedCount = Object.keys(confirmMap).filter(id =>
     members.some(m => m.staffId === id && m.lineLinked)
   ).length;
@@ -150,6 +152,9 @@ export default function LineConnectionSection({
           </span>
           <span className="text-xs text-zinc-400">
             未連携 <span className="tabular-nums">{unlinkedCount}</span>名
+          </span>
+          <span className="text-xs text-zinc-400">
+            友達追加済み <span className="text-[#06C755] font-semibold tabular-nums">{friendCount}</span>名
           </span>
           <button
             type="button"
@@ -277,11 +282,22 @@ export default function LineConnectionSection({
               </span>
 
               {/* LINE ID */}
-              <span className="text-[11px] text-zinc-400 font-mono truncate flex-1 min-w-0">
+              <span className="text-[11px] text-zinc-400 font-mono truncate min-w-0" style={{ flex: "1 1 0" }}>
                 {m.line_user_id ? shortId(m.line_user_id) : (
                   <span className="text-zinc-300 dark:text-zinc-600">未連携</span>
                 )}
               </span>
+
+              {/* 友達追加状態 */}
+              {m.lineLinked && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                  m.lineFriend
+                    ? "bg-[#06C755]/10 text-[#06C755]"
+                    : "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
+                }`}>
+                  {m.lineFriend ? "友達✓" : "未追加"}
+                </span>
+              )}
 
               {/* 確認状態バッジ */}
               {m.lineLinked && (() => {
