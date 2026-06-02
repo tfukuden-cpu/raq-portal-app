@@ -209,6 +209,20 @@ export async function sendRemindReportNowAction(): Promise<{ ok: boolean; messag
 
     const msg = `${name}さん、明日（${fmtMD(tmrw)}）の出勤予定となっております。\n${formatShift(shift.shift_name as string | null, shift.shift_start as string | null, shift.shift_end as string | null)}\nよろしくお願いします！`;
 
+    // 安全チェック：スタッフのline_user_idがグループIDや不正な形式でないことを確認
+    if (!staff.line_user_id.startsWith("U")) {
+      console.error(`[remind] 不正なline_user_id: ${staff.line_user_id} (staff: ${shift.staff_id})`);
+      results.push({ staffId: shift.staff_id, name, accountNumber: acct, section, star, success: false, failReason: "不正なLINE ID形式" });
+      continue;
+    }
+    if (staff.line_user_id === groupId) {
+      console.error(`[remind] line_user_idがgroupIdと一致: ${staff.line_user_id} (staff: ${shift.staff_id})`);
+      results.push({ staffId: shift.staff_id, name, accountNumber: acct, section, star, success: false, failReason: "グループIDと一致のためスキップ" });
+      continue;
+    }
+
+    console.log(`[remind] 個人送信: ${shift.staff_id} → ${staff.line_user_id.slice(0, 8)}...`);
+
     let success = true;
     let failReason: string | null = null;
     try {
@@ -258,6 +272,7 @@ export async function sendRemindReportNowAction(): Promise<{ ok: boolean; messag
     }
   }
 
+  console.log(`[remind] グループ送信: ${groupId.slice(0, 8)}... (${results.length}名分レポート)`);
   try {
     await pushLine(groupId, lines.join("\n"));
   } catch {
