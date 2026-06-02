@@ -1,6 +1,6 @@
 # Raq Works 全機能仕様書
 
-> 最終更新: 2026-06-02（v70）  
+> 最終更新: 2026-06-02（v80）  
 > 対象: 全メニュー（スタッフ / 管理 / 運営）
 
 ---
@@ -60,6 +60,20 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 ---
 
 ## 3. スタッフメニュー
+
+### 3-0. My (`/my`) ※更新
+
+**LINE関連の追加項目:**
+- **LINE公式アカウントを友達追加** — LINE連携済みの場合、友達追加状況を表示
+  - 友達追加済み → 「友達追加済み ●」（緑）
+  - 未追加 → タップで公式LINE友達追加ページへ（`NEXT_PUBLIC_LINE_ADD_FRIEND_URL` または LINE API から取得した URL）
+  - LINE未連携 → グレーで「先にLINE連携が必要」
+- 上部ミニカードのLINE欄にも友達状態（友達追加済み / 友達未追加）を表示
+
+**環境変数:**
+`NEXT_PUBLIC_LINE_ADD_FRIEND_URL=https://line.me/R/ti/p/@xxxxxxx` を Vercel に設定すると API 呼び出しなしで確実に表示される。
+
+---
 
 ### 3-1. ホーム (`/dashboard`)
 
@@ -413,6 +427,42 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ---
 
+### 4-6b. 周知管理 LINE通知仕様（更新）
+
+周知事項投稿時に「LINE通知する」にチェックを入れると以下が送信される：
+
+**個人宛メッセージ（スタッフ）— Flex Message 1通:**
+```
+【お知らせ】
+宛先：〇〇さん / 全スタッフ
+送信者：〇〇
+─────────────────
+タイトル
+
+本文（全文・文字切れなし）
+─────────────────
+[周知事項を見る]  ← ボタン（同一メッセージ内）
+```
+
+**管理グループメッセージ（追加プレフィックス）:**
+```
+📢 周知事項送信
+送信者：〇〇
+送信先：全スタッフ / 〇〇さん
+
+（以下、通常のお知らせ内容）
+```
+
+**実装詳細:**
+- `notices/actions.ts` で送信者名・宛先を取得してメッセージを組み立て
+- `sendEventNotify()` に `staffMessageOverride`（個人向け書式）と `groupPrefix`（グループ向け前置き）を渡す
+- `pushLineWithButton()` は Flex Message 1通でテキスト全文＋ボタンを同梱
+- 全員送信時はボタン付き個別 push（multicast はボタン非対応のため）
+
+**文字数制限:** 投稿・周知の文字数制限は廃止済み
+
+---
+
 ### 4-7. LINE連携 (`/line-settings`)
 
 **機能:**
@@ -447,6 +497,8 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - セクション表示順: SV → 査定 → 販売 → MOTA → ローン → 未アポ → インフォ → 研修関連
 - メンバーのLINE連携状態確認
 - **廃止した通知キー**: `daily_summary`, `shift_start_remind`, `shift_end_remind`, `holiday_reminder`, `daily_task_remind`, `absence_followup_notify`
+- **未確認者への再送ボタン**: 連携管理タブに「未確認者に再送（N名）」ボタン追加。LINE連携済みでテスト通知をまだ確認していないスタッフのみに再送できる
+- **友達追加状況**: 各スタッフ行に「友達✓ / 未追加」バッジを表示。サマリーに友達追加済み人数を表示
 
 **関連テーブル:**
 `project_settings`（`line_group_id`, `notification_settings`）
@@ -556,6 +608,26 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
   - `multicastLine(userIds, message)` — 複数人宛テキスト
   - `pushLineWithButton(userId, message, label, url)` — ボタン付きメッセージ
 
+### 6-2b. LINE通知共通関数（更新）
+
+`src/lib/notify.ts` の `sendEventNotify` シグネチャ：
+
+```typescript
+sendEventNotify(
+  projectId: string,
+  type: keyof NotificationSettings,
+  vars: Record<string, string>,
+  targetStaffId?: string,           // null → 全スタッフ
+  button?: { label: string; url: string },  // ボタン付き送信
+  groupPrefix?: string,             // グループ通知の前置きテキスト
+  staffMessageOverride?: string,    // 個人向けメッセージを完全上書き
+)
+```
+
+`pushLineWithButton()` は **Flex Message 1通** にテキスト＋ボタンを同梱して送信。
+
+---
+
 ### 6-3. Cron Jobs（Vercel）
 
 `/api/cron/notify` を5分ごとに実行。内部で現在時刻を確認し、設定時刻に合致した処理のみ発火する。
@@ -605,6 +677,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 | `shift_openings` | シフト募集（opening_date, capacity） |
 | `shift_requests` | 追加申請（opening_id, preferred_start, preferred_end, status） |
 | `shift_off_requests` | 希望休申請・優先度付き（project_id, staff_id, request_date, priority: 第一〜第四希望休, source） |
+| `staffs.line_friend` | LINE公式アカウントを友達追加済みか（follow WebHookで true、unfollow で false） |
 | `shift_slot_requirements` | シフト別必要枠数（project_id, section, pattern_name, shift_date, required_count） |
 | `holiday_requests` | 希望休申請・承認制（request_date, status, note） |
 | `holiday_rules` | 希望休ルール（rule_type, value） |
