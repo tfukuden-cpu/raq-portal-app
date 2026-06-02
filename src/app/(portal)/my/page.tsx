@@ -198,13 +198,17 @@ export default async function MyPage({
             {/* LINE連携 */}
             <div className="flex-1 lg:w-36 bg-zinc-50 dark:bg-zinc-800 rounded-2xl border border-zinc-100 dark:border-zinc-700 p-4 flex flex-col items-center gap-2 text-center">
               <LineIcon size={22} />
-              <p className="text-[11px] text-zinc-400 font-medium">LINE連携</p>
-              {lineLinked ? (
+              <p className="text-[11px] text-zinc-400 font-medium">LINE</p>
+              {!lineLinked ? (
+                <span className="text-[12px] text-zinc-400">未連携</span>
+              ) : lineFriend ? (
                 <span className="flex items-center gap-1 text-[12px] font-bold text-[#06C755]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#06C755]" />連携済み
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#06C755]" />友達追加済み
                 </span>
               ) : (
-                <span className="text-[12px] text-zinc-400">未連携</span>
+                <span className="flex items-center gap-1 text-[12px] font-bold text-amber-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />友達未追加
+                </span>
               )}
             </div>
             {/* 最終ログイン */}
@@ -292,46 +296,58 @@ export default async function MyPage({
           )}
 
           {/* LINE公式を友達追加 */}
-          {lineLinked && lineAddFriendUrl && (
-            lineFriend ? (
-              <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
-                <div className="w-10 h-10 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" fill="#06C755" className="w-5 h-5"><path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/></svg>
+          {(() => {
+            const lineIcon = (
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#06C755]">
+                <path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/>
+              </svg>
+            );
+            if (!lineLinked) {
+              return (
+                <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 opacity-50">
+                  <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">{lineIcon}</div>
+                  <div className="flex-1">
+                    <p className="text-[14px] font-semibold text-zinc-500">LINE公式アカウントを友達追加</p>
+                    <p className="text-[12px] text-zinc-400 mt-0.5">先にLINE連携が必要です</p>
+                  </div>
                 </div>
+              );
+            }
+            if (lineFriend) {
+              return (
+                <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
+                  <div className="w-10 h-10 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center">{lineIcon}</div>
+                  <div className="flex-1">
+                    <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウント</p>
+                    <p className="text-[12px] text-[#06C755] font-medium mt-0.5">● 友達追加済み</p>
+                  </div>
+                </div>
+              );
+            }
+            // 未追加 → リンクあれば遷移、なければボタン表示
+            if (lineAddFriendUrl) {
+              return (
+                <a href={lineAddFriendUrl} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">{lineIcon}</div>
+                  <div className="flex-1">
+                    <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウントを友達追加</p>
+                    <p className="text-[12px] text-amber-500 font-medium mt-0.5">⚠ タップして友達追加してください</p>
+                  </div>
+                  <ChevronRightIcon />
+                </a>
+              );
+            }
+            return (
+              <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">{lineIcon}</div>
                 <div className="flex-1">
                   <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウント</p>
-                  <p className="text-[12px] text-[#06C755] font-medium mt-0.5">● 友達追加済み</p>
-                </div>
-              </div>
-            ) : (
-              <a
-                href={lineAddFriendUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
-              >
-                <div className="w-10 h-10 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" fill="#06C755" className="w-5 h-5"><path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/></svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウントを友達追加</p>
                   <p className="text-[12px] text-amber-500 font-medium mt-0.5">⚠ まだ友達追加されていません</p>
                 </div>
-                <ChevronRightIcon />
-              </a>
-            )
-          )}
-          {!lineLinked && lineAddFriendUrl && (
-            <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 opacity-50">
-              <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" fill="#9ca3af" className="w-5 h-5"><path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/></svg>
               </div>
-              <div className="flex-1">
-                <p className="text-[14px] font-semibold text-zinc-500">LINE公式アカウントを友達追加</p>
-                <p className="text-[12px] text-zinc-400 mt-0.5">先にLINE連携が必要です</p>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ログアウト */}
           <form action={logoutAction}>
