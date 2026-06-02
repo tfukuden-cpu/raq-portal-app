@@ -462,6 +462,7 @@ export async function setBreakDurationAction(
 }
 
 // ── 当日の休憩スロット割り当てを取得 ─────────────────────
+// .maybeSingle() は複数行あると null を返すため .limit(1) を使用
 export async function getBreakSlotAssignmentAction(
   projectId: string,
   staffId: string,
@@ -472,11 +473,11 @@ export async function getBreakSlotAssignmentAction(
   const { data } = await admin
     .from("break_slot_assignments")
     .select("slot_number")
-    .eq("project_id", projectId)
     .eq("staff_id", staffId)
     .eq("assignment_date", today)
-    .maybeSingle();
-  return (data as { slot_number?: number } | null)?.slot_number ?? null;
+    .limit(1);
+  const rows = data as { slot_number?: number }[] | null;
+  return rows?.[0]?.slot_number ?? null;
 }
 
 // ── 休憩スロット割り当てを変更（管理者） ─────────────────
