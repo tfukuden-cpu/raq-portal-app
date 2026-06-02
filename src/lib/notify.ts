@@ -138,7 +138,8 @@ export async function sendEventNotify(
   vars: Record<string, string>,
   targetStaffId?: string,
   button?: { label: string; url: string },
-  groupPrefix?: string
+  groupPrefix?: string,
+  staffMessageOverride?: string
 ): Promise<void> {
   try {
     const settings = await getProjectNotifySettings(projectId);
@@ -146,7 +147,7 @@ export async function sendEventNotify(
     if (!item.enabled) return;
 
     const template = item.message ?? DEFAULT_NOTIFY_MESSAGES[type] ?? "";
-    const message  = resolveMessage(template, vars);
+    const message  = staffMessageOverride ?? resolveMessage(template, vars);
 
     const groupId = await getProjectGroupId(projectId);
 

@@ -85,6 +85,12 @@ export async function createNoticeAction(
       recipientLabel = `${recipientName}さん`;
     }
 
+    const sep = "─────────────────";
+
+    // 個人向けメッセージ（宛先・送信者を明記）
+    const staffMessage = `【お知らせ】\n宛先：${recipientLabel}\n送信者：${senderName}\n${sep}\n${title}\n\n${body}\n${sep}`;
+
+    // グループ向けプレフィックス
     const groupPrefix = `📢 周知事項送信\n送信者：${senderName}\n送信先：${recipientLabel}`;
 
     void sendEventNotify(
@@ -94,6 +100,7 @@ export async function createNoticeAction(
       targetStaffId ?? undefined,
       { label: "周知事項を見る", url: `${appUrl}/notices` },
       groupPrefix,
+      staffMessage,
     );
   }
 
