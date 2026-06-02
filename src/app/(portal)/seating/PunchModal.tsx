@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import {
   getStaffPunchSummaryAction,
   getBreakDurationAction,
+  getBreakSlotAssignmentAction,
   setBreakDurationAction,
   setBreakSlotAction,
   clockInAction,
@@ -102,18 +103,20 @@ export default function PunchModal({
   const [slotNumber, setSlotNumber] = useState<number | null>(initSlotNumber);
   const [slotIsOther, setSlotIsOther] = useState(false);
 
-  // ── 初回ロード ─────────────────────────────────────────
+  // ── 初回ロード（スロット番号もDBから直接取得） ───────────
   useEffect(() => {
     Promise.all([
       getStaffPunchSummaryAction(projectId, staffId),
       getBreakDurationAction(projectId, staffId, today),
-    ]).then(([s, d]) => {
+      getBreakSlotAssignmentAction(projectId, staffId, today),
+    ]).then(([s, d, slot]) => {
       setSummary(s);
       setBreakDuration({ regular: d.regularMinutes, short: d.shortMinutes });
       setDraftRegular(d.regularMinutes);
       setDraftShort(d.shortMinutes);
       setRegularIsOther(![30,45,60].includes(d.regularMinutes));
       setShortIsOther(![15,30].includes(d.shortMinutes));
+      setSlotNumber(slot);   // DBの実際の値で初期化
       setStep("main");
     });
   }, [projectId, staffId, today]);

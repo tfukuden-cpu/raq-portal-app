@@ -461,6 +461,24 @@ export async function setBreakDurationAction(
   return { ok: true };
 }
 
+// ── 当日の休憩スロット割り当てを取得 ─────────────────────
+export async function getBreakSlotAssignmentAction(
+  projectId: string,
+  staffId: string,
+  date?: string,
+): Promise<number | null> {
+  const admin = createAdminClient();
+  const today = date ?? tokyoToday();
+  const { data } = await admin
+    .from("break_slot_assignments")
+    .select("slot_number")
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .eq("assignment_date", today)
+    .maybeSingle();
+  return (data as { slot_number?: number } | null)?.slot_number ?? null;
+}
+
 // ── 休憩スロット割り当てを変更（管理者） ─────────────────
 export async function setBreakSlotAction(
   projectId: string,
