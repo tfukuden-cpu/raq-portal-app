@@ -94,6 +94,7 @@ function buildGrouped(members: InternalMember[], sectionOrder: string[]): Sectio
         lateReason:        m.lateReason,
         lateReportedAt:    m.lateReportedAt,
         expectedArrival:   m.expectedArrival,
+        sections:          m.sections ?? [],
       })),
     }));
 
@@ -179,7 +180,7 @@ export default async function AttendancePage({
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
-      .select("staff_id, section, churn_risk, staffs(id, name, display_name, account_number)")
+      .select("staff_id, section, sections, churn_risk, staffs(id, name, display_name, account_number)")
       .eq("project_id", projectId),
     admin.from("shifts")
       .select("staff_id, shift_name, shift_start, shift_end, shift_date")
@@ -260,7 +261,7 @@ export default async function AttendancePage({
   const enableDeparture = (projectSettings as { enable_departure_report?: boolean | null } | null)?.enable_departure_report ?? true;
 
   // メンバーマップ
-  type MemberInfo = { name: string; section: string | null; accountNumber: string | null };
+  type MemberInfo = { name: string; section: string | null; accountNumber: string | null; sections: string[] };
   const memberMap = new Map<string, MemberInfo>();
   for (const m of memberRows ?? []) {
     const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as {
@@ -270,6 +271,7 @@ export default async function AttendancePage({
       name:          s?.display_name ?? s?.name ?? m.staff_id,
       section:       m.section ?? null,
       accountNumber: (s?.account_number as string | null | undefined) ?? null,
+      sections:      ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean) as string[],
     });
   }
 
@@ -438,6 +440,7 @@ export default async function AttendancePage({
       expectedArrival:   late?.expectedArrival      ?? null,
       lateReportedAt:    late?.reportedAt            ?? null,
       churnRisk:         churnRiskStaffIds.has(shift.staff_id),
+      sections:          member.sections,
       shiftName,
       shiftStart:     shift.shift_start ?? pattern?.start ?? null,
       shiftEnd:       shift.shift_end   ?? pattern?.end   ?? null,

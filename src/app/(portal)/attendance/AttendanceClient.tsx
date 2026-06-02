@@ -31,6 +31,7 @@ export type MemberRow = {
   lateReportedAt: string | null;
   expectedArrival: string | null;
   churnRisk?: boolean;
+  sections?: string[];
 };
 
 export type ChurnRiskAlert = {
@@ -712,7 +713,7 @@ export default function AttendanceClient({
                   <div
                     key={section}
                     className={[
-                      "flex flex-col rounded-2xl border-2 transition-all w-64 shrink-0",
+                      "flex flex-col rounded-2xl border-2 transition-all w-72 shrink-0",
                       "h-[calc(100dvh-280px)]",
                       isDragTarget
                         ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20 shadow-lg"
@@ -844,114 +845,128 @@ export default function AttendanceClient({
                                 : getCardBg(section, m.shiftName, m.shiftStart),
                             ].join(" ")}
                           >
-                            {/* Row 1: アカウント番号 │ 名前 │ セクションバッジ */}
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="text-[10px] font-mono text-zinc-400 tabular-nums w-10 shrink-0 leading-none truncate">
+                            {/* 2列グリッド: Col1=AccNum(auto幅), Col2=コンテンツ(1fr) */}
+                            <div className="grid gap-x-2 gap-y-1" style={{ gridTemplateColumns: "auto 1fr" }}>
+                              {/* Row 1 Col 1: アカウント番号 */}
+                              <span className="text-[10px] font-mono text-zinc-400 tabular-nums whitespace-nowrap self-center leading-none">
                                 {m.accountNumber ?? "—"}
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name, churnRisk: effectiveChurnRisk })}
-                                className="flex-1 min-w-0 text-left"
-                              >
-                                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-100 truncate block leading-none hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                                  {m.name}
-                                </span>
-                              </button>
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shrink-0 ${SECTION_BADGE_COLOR[m.section] ?? SECTION_BADGE_FALLBACK}`}>
-                                {m.section}
-                              </span>
-                            </div>
-
-                            {/* Row 2: (indent) │ 休憩時間 │ 打刻ステータス │ 勤怠ステータス */}
-                            <div className="flex items-center gap-1 mt-0.5 pl-[46px]">
-                              {breakAssignmentMap[m.staffId] && (
-                                <span className={`text-[9px] font-bold px-1 py-0.5 rounded leading-none shrink-0 ${BREAK_BADGE_CLASS[breakAssignmentMap[m.staffId]] ?? ""}`}>
-                                  {BREAK_SLOT_LABEL[breakAssignmentMap[m.staffId]] ?? ""}
-                                  {breakSlotTimeMap[breakAssignmentMap[m.staffId]]
-                                    ? `${breakSlotTimeMap[breakAssignmentMap[m.staffId]]}～`
-                                    : ""}
-                                </span>
-                              )}
-                              <span className={[
-                                "text-[9px] font-bold px-1 py-0.5 rounded leading-none shrink-0",
-                                m.clockIn
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-                                  : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
-                              ].join(" ")}>
-                                {m.clockIn ? "打刻済" : "打刻未"}
-                              </span>
-                              <div className="relative shrink-0 ml-auto">
+                              {/* Row 1 Col 2: 名前 + セクションバッジ（複数対応） */}
+                              <div className="flex items-center gap-1 min-w-0">
                                 <button
-                                  onClick={e => { e.stopPropagation(); setStatusMenuId(isMenuOpen ? null : m.staffId); }}
-                                  className={[
-                                    "text-[10px] font-bold px-1.5 py-0.5 rounded leading-none whitespace-nowrap",
-                                    STATUS_COLOR[currentStatus],
-                                    isPending ? "opacity-50" : "",
-                                  ].join(" ")}
+                                  type="button"
+                                  onClick={() => setStaffMenu({ staffId: m.staffId, staffName: m.name, churnRisk: effectiveChurnRisk })}
+                                  className="flex-1 min-w-0 text-left"
                                 >
-                                  {(!enableDeparture && currentStatus === "not_departed") ? "未出勤" : STATUS_LABEL[currentStatus]} ▾
+                                  <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-100 truncate block leading-none hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                                    {m.name}
+                                  </span>
                                 </button>
-                                {isMenuOpen && (
-                                  <StatusMenu
-                                    current={currentStatus}
-                                    onSelect={s => handleStatusChange(m.staffId, s)}
-                                    onClose={() => setStatusMenuId(null)}
-                                    enableDeparture={enableDeparture}
-                                  />
-                                )}
+                                {(m.sections && m.sections.length > 0
+                                  ? [...new Set(m.sections)]
+                                  : [m.section]
+                                ).map(sec => (
+                                  <span key={sec} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shrink-0 ${SECTION_BADGE_COLOR[sec] ?? SECTION_BADGE_FALLBACK}`}>
+                                    {sec}
+                                  </span>
+                                ))}
                               </div>
-                            </div>
 
-                            {/* アクションバッジ（欠勤・遅刻・催促・移動） */}
-                            {(currentStatus === "absent" || currentStatus === "late" || canRemind || isMoved) && (
-                              <div className="flex flex-wrap items-center gap-1 mt-1 pl-[46px]">
-                                {currentStatus === "absent" && (
-                                  <>
-                                    <button type="button" onClick={() => toggleSelect(m.staffId, "followup")}
-                                      className={[
-                                        "text-[9px] font-bold px-1.5 py-0.5 rounded-full border leading-none transition-colors",
-                                        selectedIds.has(m.staffId) && selectedMode === "followup"
-                                          ? "bg-red-600 text-white border-red-600"
-                                          : "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800",
-                                      ].join(" ")}>
-                                      {selectedIds.has(m.staffId) && selectedMode === "followup" ? "✓ 催促選択中" : "経過報告催促"}
-                                    </button>
-                                    <button type="button" onClick={() => setDetailMember(m)}
-                                      className="text-[9px] text-red-400 underline leading-none truncate max-w-[90px]">
-                                      {m.absenceReason || "欠勤"}詳細
-                                    </button>
-                                  </>
+                              {/* Row 2 Col 1: spacer */}
+                              <div />
+                              {/* Row 2 Col 2: 休憩時間 | 打刻ステータス | 勤怠ステータス（全要素同サイズ） */}
+                              <div className="flex items-center gap-1">
+                                {breakAssignmentMap[m.staffId] && (
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded leading-none shrink-0 ${BREAK_BADGE_CLASS[breakAssignmentMap[m.staffId]] ?? ""}`}>
+                                    {BREAK_SLOT_LABEL[breakAssignmentMap[m.staffId]] ?? ""}
+                                    {breakSlotTimeMap[breakAssignmentMap[m.staffId]]
+                                      ? `${breakSlotTimeMap[breakAssignmentMap[m.staffId]]}～`
+                                      : ""}
+                                  </span>
                                 )}
-                                {currentStatus === "late" && (
-                                  <button type="button" onClick={() => setDetailMember(m)}
-                                    className="text-[9px] text-amber-500 underline leading-none truncate max-w-[110px]">
-                                    {m.lateReason || "遅刻連絡"}詳細
-                                  </button>
-                                )}
-                                {canRemind && (
-                                  <button type="button" onClick={() => toggleSelect(m.staffId, "reminder")}
+                                <span className={[
+                                  "text-[10px] font-bold px-1.5 py-0.5 rounded leading-none shrink-0",
+                                  m.clockIn
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                    : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
+                                ].join(" ")}>
+                                  {m.clockIn ? "打刻済" : "打刻未"}
+                                </span>
+                                <div className="relative shrink-0 ml-auto">
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setStatusMenuId(isMenuOpen ? null : m.staffId); }}
                                     className={[
-                                      "text-[9px] font-bold px-1.5 py-0.5 rounded-full border leading-none transition-colors",
-                                      isSelected
-                                        ? "bg-blue-600 text-white border-blue-600"
-                                        : "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
-                                    ].join(" ")}>
-                                    {isSelected ? "✓ 催促選択中" : "催促"}
+                                      "text-[10px] font-bold px-1.5 py-0.5 rounded leading-none whitespace-nowrap",
+                                      STATUS_COLOR[currentStatus],
+                                      isPending ? "opacity-50" : "",
+                                    ].join(" ")}
+                                  >
+                                    {(!enableDeparture && currentStatus === "not_departed") ? "未出勤" : STATUS_LABEL[currentStatus]} ▾
                                   </button>
-                                )}
-                                {isMoved && (
-                                  <>
-                                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">← 移動</span>
-                                    <button type="button"
-                                      onClick={e => { e.stopPropagation(); handleSectionRevert(m.staffId, m.section); }}
-                                      className="text-[9px] text-zinc-400 hover:text-zinc-600 underline">
-                                      元に戻す
-                                    </button>
-                                  </>
-                                )}
+                                  {isMenuOpen && (
+                                    <StatusMenu
+                                      current={currentStatus}
+                                      onSelect={s => handleStatusChange(m.staffId, s)}
+                                      onClose={() => setStatusMenuId(null)}
+                                      enableDeparture={enableDeparture}
+                                    />
+                                  )}
+                                </div>
                               </div>
-                            )}
+
+                              {/* Row 3（条件付き）: アクションバッジ */}
+                              {(currentStatus === "absent" || currentStatus === "late" || canRemind || isMoved) && (
+                                <>
+                                  <div />
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    {currentStatus === "absent" && (
+                                      <>
+                                        <button type="button" onClick={() => toggleSelect(m.staffId, "followup")}
+                                          className={[
+                                            "text-[9px] font-bold px-1.5 py-0.5 rounded-full border leading-none transition-colors",
+                                            selectedIds.has(m.staffId) && selectedMode === "followup"
+                                              ? "bg-red-600 text-white border-red-600"
+                                              : "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800",
+                                          ].join(" ")}>
+                                          {selectedIds.has(m.staffId) && selectedMode === "followup" ? "✓ 催促選択中" : "経過報告催促"}
+                                        </button>
+                                        <button type="button" onClick={() => setDetailMember(m)}
+                                          className="text-[9px] text-red-400 underline leading-none truncate max-w-[100px]">
+                                          {m.absenceReason || "欠勤"}詳細
+                                        </button>
+                                      </>
+                                    )}
+                                    {currentStatus === "late" && (
+                                      <button type="button" onClick={() => setDetailMember(m)}
+                                        className="text-[9px] text-amber-500 underline leading-none truncate max-w-[120px]">
+                                        {m.lateReason || "遅刻連絡"}詳細
+                                      </button>
+                                    )}
+                                    {canRemind && (
+                                      <button type="button" onClick={() => toggleSelect(m.staffId, "reminder")}
+                                        className={[
+                                          "text-[9px] font-bold px-1.5 py-0.5 rounded-full border leading-none transition-colors",
+                                          isSelected
+                                            ? "bg-blue-600 text-white border-blue-600"
+                                            : "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
+                                        ].join(" ")}>
+                                        {isSelected ? "✓ 催促選択中" : "催促"}
+                                      </button>
+                                    )}
+                                    {isMoved && (
+                                      <>
+                                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">← 移動</span>
+                                        <button type="button"
+                                          onClick={e => { e.stopPropagation(); handleSectionRevert(m.staffId, m.section); }}
+                                          className="text-[9px] text-zinc-400 hover:text-zinc-600 underline">
+                                          元に戻す
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
