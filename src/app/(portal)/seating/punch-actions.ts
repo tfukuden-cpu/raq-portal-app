@@ -382,7 +382,7 @@ export async function updateExceptionStatusAction(
 }
 
 // ── 休憩持ち時間（分数）の取得 ────────────────────────────
-// staff_break_overrides があればそれを、なければデフォルト(60/15)を返す
+// 優先順: 個人オーバーライド → スロット時間幅 → デフォルト(60/15)
 export async function getBreakDurationAction(
   projectId: string,
   staffId: string,
@@ -391,7 +391,8 @@ export async function getBreakDurationAction(
   const admin = createAdminClient();
   const today = date ?? tokyoToday();
 
-  const { data } = await admin
+  // ① 個人オーバーライドを確認
+  const { data: override } = await admin
     .from("staff_break_overrides")
     .select("regular_minutes, short_minutes")
     .eq("project_id", projectId)
@@ -399,10 +400,43 @@ export async function getBreakDurationAction(
     .eq("override_date", today)
     .maybeSingle();
 
-  return {
-    regularMinutes: (data as { regular_minutes?: number } | null)?.regular_minutes ?? 60,
-    shortMinutes:   (data as { short_minutes?: number }  | null)?.short_minutes   ?? 15,
-  };
+  if (override) {
+    return {
+      regularMinutes: (override as { regular_minutes?: number }).regular_minutes ?? 60,
+      shortMinutes:   (override as { short_minutes?: number }).short_minutes   ?? 15,
+    };
+  }
+
+  // ② スロット割当から時間幅を計算
+  const { data: slotAssign } = await admin
+    .from("break_slot_assignments")
+    .select("slot_number")
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .eq("assignment_date", today)
+    .maybeSingle();
+
+  if (slotAssign) {
+    const slotNum = (slotAssign as { slot_number?: number }).slot_number;
+    if (slotNum) {
+      const { data: slotSetting } = await admin
+        .from("break_slot_settings")
+        .select("start_time, end_time")
+        .eq("project_id", projectId)
+        .eq("slot_number", slotNum)
+        .maybeSingle();
+
+      if (slotSetting) {
+        const [sh, sm] = ((slotSetting as { start_time: string }).start_time).split(":").map(Number);
+        const [eh, em] = ((slotSetting as { end_time:   string }).end_time).split(":").map(Number);
+        const slotMinutes = (eh * 60 + em) - (sh * 60 + sm);
+        if (slotMinutes > 0) return { regularMinutes: slotMinutes, shortMinutes: 15 };
+      }
+    }
+  }
+
+  // ③ デフォルト
+  return { regularMinutes: 60, shortMinutes: 15 };
 }
 
 // ── 休憩持ち時間（分数）の設定（管理者） ─────────────────

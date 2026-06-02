@@ -816,11 +816,11 @@ export default function SeatingClient({
                 ].join(" ")}
               >
                 {/* ── ヘッダー（セクション色） ── */}
-                <div className={`w-full px-1 py-0.5 flex items-center justify-between shrink-0 ${headerBg}`}>
-                  <span className="text-[9px] font-bold text-white leading-none truncate flex-1">
-                    {isFree ? "FREE" : effectiveSection
+                <div className={`w-full px-1.5 py-1 flex items-center justify-between shrink-0 ${headerBg}`}>
+                  <span className="text-[10px] font-bold text-white leading-none truncate flex-1">
+                    {effectiveSection
                       ? `${effectiveSection}${shiftLabel ? `(${shiftLabel})` : ""}`
-                      : seat.label}
+                      : isFree ? "FREE" : seat.label}
                   </span>
                   {!editMode && sfId && breakAssignmentMap[sfId] && (
                     <span className={`text-[8px] font-bold ml-0.5 leading-none ${BREAK_BADGE_CLASS[breakAssignmentMap[sfId]] ?? ""}`}>
