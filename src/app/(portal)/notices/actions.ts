@@ -70,12 +70,30 @@ export async function createNoticeAction(
   // LINE通知（sendLine=trueの場合のみ）
   if (sendLine) {
     const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+
+    // 送信者名を取得
+    const { data: senderData } = await supabase
+      .from("staffs").select("display_name, name").eq("id", staffId).maybeSingle();
+    const senderName = senderData?.display_name ?? senderData?.name ?? staffId;
+
+    // 送信先名を取得（個人宛の場合）
+    let recipientLabel = "全スタッフ";
+    if (targetStaffId) {
+      const { data: recipientData } = await supabase
+        .from("staffs").select("display_name, name").eq("id", targetStaffId).maybeSingle();
+      const recipientName = recipientData?.display_name ?? recipientData?.name ?? targetStaffId;
+      recipientLabel = `${recipientName}さん`;
+    }
+
+    const groupPrefix = `📢 周知事項送信\n送信者：${senderName}\n送信先：${recipientLabel}`;
+
     void sendEventNotify(
       projectId,
       "announcement",
       { "タイトル": title, "本文": body },
       targetStaffId ?? undefined,
       { label: "周知事項を見る", url: `${appUrl}/notices` },
+      groupPrefix,
     );
   }
 

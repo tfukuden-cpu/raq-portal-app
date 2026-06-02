@@ -137,7 +137,8 @@ export async function sendEventNotify(
   type: keyof NotificationSettings,
   vars: Record<string, string>,
   targetStaffId?: string,
-  button?: { label: string; url: string }
+  button?: { label: string; url: string },
+  groupPrefix?: string
 ): Promise<void> {
   try {
     const settings = await getProjectNotifySettings(projectId);
@@ -187,8 +188,11 @@ export async function sendEventNotify(
       }
     }
 
-    // グループにも送信（個別送信の失敗に関わらず必ず試みる）
-    if (groupId) await send(() => pushLine(groupId, message));
+    // グループにも送信（groupPrefixがあれば先頭に付加）
+    if (groupId) {
+      const groupMsg = groupPrefix ? `${groupPrefix}\n\n${message}` : message;
+      await send(() => pushLine(groupId, groupMsg));
+    }
 
     // ログ記録
     const recipientName = vars["名前"] ?? undefined;
