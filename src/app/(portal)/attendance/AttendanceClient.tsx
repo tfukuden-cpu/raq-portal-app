@@ -197,6 +197,11 @@ export default function AttendanceClient({
   for (const a of breakAssignments) {
     breakAssignmentMap[a.staff_id] = a.slot_number;
   }
+  // 休憩スロット番号 → 開始時刻（HH:MM）
+  const breakSlotTimeMap: Record<number, string> = {};
+  for (const s of breakSlots) {
+    breakSlotTimeMap[s.slot_number] = s.start_time.slice(0, 5);
+  }
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
@@ -826,8 +831,8 @@ export default function AttendanceClient({
                                 : getCardBg(section, m.shiftName, m.shiftStart),
                             ].join(" ")}
                           >
-                            {/* 1行：番号 ＋ 名前 ＋ 休憩スロット ＋ ステータス */}
-                            <div className="flex items-center gap-1.5 min-w-0">
+                            {/* メイン行：番号│名前│休憩時間│打刻ステータス│勤怠ステータス */}
+                            <div className="flex items-center gap-1 min-w-0">
                               <span className="text-[10px] font-mono text-zinc-400 tabular-nums shrink-0 leading-none">
                                 {m.accountNumber ?? "—"}
                               </span>
@@ -840,24 +845,26 @@ export default function AttendanceClient({
                                   {m.name}
                                 </span>
                               </button>
+                              {/* 休憩時間バッジ（スロット記号＋開始時刻） */}
                               {breakAssignmentMap[m.staffId] && (
                                 <span className={`text-[9px] font-bold px-1 py-0.5 rounded leading-none shrink-0 ${BREAK_BADGE_CLASS[breakAssignmentMap[m.staffId]] ?? ""}`}>
                                   {BREAK_SLOT_LABEL[breakAssignmentMap[m.staffId]] ?? ""}
+                                  {breakSlotTimeMap[breakAssignmentMap[m.staffId]]
+                                    ? `${breakSlotTimeMap[breakAssignmentMap[m.staffId]]}～`
+                                    : ""}
                                 </span>
                               )}
-                              <div className="relative shrink-0 flex flex-col items-end gap-0.5">
-                                {/* 打刻ステータス（読み取り専用） */}
-                                <span className={[
-                                  "text-[9px] font-bold px-1 py-0.5 rounded leading-none",
-                                  m.clockIn
-                                    ? (m.clockOut
-                                        ? "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
-                                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300")
-                                    : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
-                                ].join(" ")}>
-                                  打:{m.clockIn ? (m.clockOut ? "退勤" : "出勤") : "未打刻"}
-                                </span>
-                                {/* 出勤ステータス（変更可） */}
+                              {/* 打刻ステータス（打刻済 / 打刻未） */}
+                              <span className={[
+                                "text-[9px] font-bold px-1 py-0.5 rounded leading-none shrink-0",
+                                m.clockIn
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                  : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
+                              ].join(" ")}>
+                                {m.clockIn ? "打刻済" : "打刻未"}
+                              </span>
+                              {/* 勤怠ステータス（変更可） */}
+                              <div className="relative shrink-0">
                                 <button
                                   onClick={e => { e.stopPropagation(); setStatusMenuId(isMenuOpen ? null : m.staffId); }}
                                   className={[
@@ -879,46 +886,53 @@ export default function AttendanceClient({
                               </div>
                             </div>
 
-                            {/* サブ情報（欠勤・遅刻・催促・移動）*/}
-                            {currentStatus === "absent" && (
-                              <button type="button" onClick={() => toggleSelect(m.staffId, "followup")}
-                                className={["mt-1 w-full text-[10px] font-bold py-0.5 rounded border transition-colors",
-                                  selectedIds.has(m.staffId) && selectedMode === "followup"
-                                    ? "bg-red-600 text-white border-red-600"
-                                    : "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800",
-                                ].join(" ")}>
-                                {selectedIds.has(m.staffId) && selectedMode === "followup" ? "✓ 選択中" : "経過報告催促"}
-                              </button>
-                            )}
-                            {currentStatus === "absent" && (
-                              <button type="button" onClick={() => setDetailMember(m)}
-                                className="mt-0.5 text-[10px] text-red-400 w-full text-left truncate block underline leading-none">
-                                {m.absenceReason || "欠勤"}　詳細→
-                              </button>
-                            )}
-                            {currentStatus === "late" && (
-                              <button type="button" onClick={() => setDetailMember(m)}
-                                className="mt-0.5 text-[10px] text-amber-500 w-full text-left truncate block underline leading-none">
-                                {m.lateReason || "遅刻連絡あり"}　詳細→
-                              </button>
-                            )}
-                            {canRemind && (
-                              <button type="button" onClick={() => toggleSelect(m.staffId, "reminder")}
-                                className={["mt-1 w-full text-[10px] font-bold py-0.5 rounded border transition-colors",
-                                  isSelected ? "bg-blue-600 text-white border-blue-600"
-                                    : "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
-                                ].join(" ")}>
-                                {isSelected ? "✓ 選択中" : "催促する"}
-                              </button>
-                            )}
-                            {isMoved && (
-                              <div className="flex items-center justify-between mt-0.5">
-                                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">← 移動</span>
-                                <button type="button"
-                                  onClick={e => { e.stopPropagation(); handleSectionRevert(m.staffId, m.section); }}
-                                  className="text-[9px] text-zinc-400 hover:text-zinc-600 underline">
-                                  元に戻す
-                                </button>
+                            {/* セクションバッジ各種（欠勤・遅刻・催促・移動） */}
+                            {(currentStatus === "absent" || currentStatus === "late" || canRemind || isMoved) && (
+                              <div className="flex flex-wrap items-center gap-1 mt-1">
+                                {currentStatus === "absent" && (
+                                  <>
+                                    <button type="button" onClick={() => toggleSelect(m.staffId, "followup")}
+                                      className={[
+                                        "text-[9px] font-bold px-1.5 py-0.5 rounded-full border leading-none transition-colors",
+                                        selectedIds.has(m.staffId) && selectedMode === "followup"
+                                          ? "bg-red-600 text-white border-red-600"
+                                          : "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800",
+                                      ].join(" ")}>
+                                      {selectedIds.has(m.staffId) && selectedMode === "followup" ? "✓ 催促選択中" : "経過報告催促"}
+                                    </button>
+                                    <button type="button" onClick={() => setDetailMember(m)}
+                                      className="text-[9px] text-red-400 underline leading-none truncate max-w-[90px]">
+                                      {m.absenceReason || "欠勤"}詳細
+                                    </button>
+                                  </>
+                                )}
+                                {currentStatus === "late" && (
+                                  <button type="button" onClick={() => setDetailMember(m)}
+                                    className="text-[9px] text-amber-500 underline leading-none truncate max-w-[110px]">
+                                    {m.lateReason || "遅刻連絡"}詳細
+                                  </button>
+                                )}
+                                {canRemind && (
+                                  <button type="button" onClick={() => toggleSelect(m.staffId, "reminder")}
+                                    className={[
+                                      "text-[9px] font-bold px-1.5 py-0.5 rounded-full border leading-none transition-colors",
+                                      isSelected
+                                        ? "bg-blue-600 text-white border-blue-600"
+                                        : "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
+                                    ].join(" ")}>
+                                    {isSelected ? "✓ 催促選択中" : "催促"}
+                                  </button>
+                                )}
+                                {isMoved && (
+                                  <>
+                                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">← 移動</span>
+                                    <button type="button"
+                                      onClick={e => { e.stopPropagation(); handleSectionRevert(m.staffId, m.section); }}
+                                      className="text-[9px] text-zinc-400 hover:text-zinc-600 underline">
+                                      元に戻す
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             )}
                           </div>
