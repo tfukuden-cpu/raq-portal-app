@@ -11,7 +11,10 @@ import {
   breakStartAction,
   breakEndAction,
   breakResetAction,
+  updatePunchLogTimeAction,
+  deletePunchLogAction,
   type StaffPunchSummary,
+  type BreakRecord,
   type ClockOutJudgment,
 } from "./punch-actions";
 
@@ -33,6 +36,7 @@ interface PunchModalProps {
   shiftEnd:   string | null; // "HH:MM"
   today: string;             // "YYYY-MM-DD"
   isAdmin: boolean;
+  showBreakEdit?: boolean;   // 管理者の当日状況座席表のみtrue
   onClose: () => void;
   onStatusChange: (staffId: string, status: string) => void;
 }
@@ -62,7 +66,7 @@ type Step =
 
 export default function PunchModal({
   projectId, staffId, staffName, shiftStart, shiftEnd, today,
-  isAdmin, onClose, onStatusChange,
+  isAdmin, showBreakEdit = false, onClose, onStatusChange,
 }: PunchModalProps) {
   const [step, setStep]           = useState<Step>("loading");
   const [summary, setSummary]     = useState<StaffPunchSummary | null>(null);
@@ -73,6 +77,13 @@ export default function PunchModal({
   const [limitMin, setLimitMin]   = useState(60);
   const [toast, setToast]         = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // 休憩時間編集
+  const [editingBreak, setEditingBreak] = useState<{
+    record: BreakRecord;
+    field: "start" | "end";
+    value: string;
+  } | null>(null);
 
   // ── 初回ロード ─────────────────────────────────────────
   useEffect(() => {
@@ -223,6 +234,34 @@ export default function PunchModal({
     });
   }
 
+  // ── 休憩時間編集 ──────────────────────────────────────
+  function handleBreakEditSave() {
+    if (!editingBreak) return;
+    const { record, field, value } = editingBreak;
+    if (!value) return;
+    const id = field === "start" ? record.startId : record.endId;
+    if (!id) return;
+    startTransition(async () => {
+      const res = await updatePunchLogTimeAction(id, value);
+      if (!res.ok) { showToast(`⚠️ ${res.error}`); return; }
+      showToast("時刻を更新しました");
+      setEditingBreak(null);
+      await refresh();
+    });
+  }
+
+  function handleBreakDelete(record: BreakRecord) {
+    if (!confirm("この休憩記録を削除しますか？")) return;
+    startTransition(async () => {
+      // 終了レコードがあれば先に削除
+      if (record.endId) await deletePunchLogAction(record.endId);
+      const res = await deletePunchLogAction(record.startId);
+      if (!res.ok) { showToast(`⚠️ ${res.error}`); return; }
+      showToast("休憩記録を削除しました");
+      await refresh();
+    });
+  }
+
   // ── レンダリング ──────────────────────────────────────
   return (
     <div
@@ -330,6 +369,56 @@ export default function PunchModal({
                   退勤済（{fmtTime(summary.clockOut)}）
                 </p>
               )}
+
+              {/* 休憩記録（管理者・showBreakEdit時のみ） */}
+              {showBreakEdit && summary.breakRecords.length > 0 && (
+                <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 mt-1">
+                  <p className="text-xs font-semibold text-zinc-400 mb-2">休憩記録</p>
+                  <div className="space-y-2">
+                    {summary.breakRecords.map((rec, i) => (
+                      <div key={rec.startId} className="flex items-center gap-1.5 text-xs">
+                        <span className="text-zinc-400 w-4 shrink-0">{i + 1}</span>
+                        {/* 開始時刻 */}
+                        <button
+                          type="button"
+                          onClick={() => setEditingBreak({ record: rec, field: "start", value: fmtTime(rec.startTime) })}
+                          className="tabular-nums font-mono bg-zinc-100 dark:bg-zinc-800 rounded px-1.5 py-0.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                          {fmtTime(rec.startTime)}
+                        </button>
+                        <span className="text-zinc-400">〜</span>
+                        {/* 終了時刻 */}
+                        {rec.endId ? (
+                          <button
+                            type="button"
+                            onClick={() => setEditingBreak({ record: rec, field: "end", value: fmtTime(rec.endTime!) })}
+                            className="tabular-nums font-mono bg-zinc-100 dark:bg-zinc-800 rounded px-1.5 py-0.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                          >
+                            {fmtTime(rec.endTime)}
+                          </button>
+                        ) : (
+                          <span className="text-amber-500 font-semibold tabular-nums">進行中</span>
+                        )}
+                        {/* 経過時間 */}
+                        {rec.endTime && (
+                          <span className="text-zinc-400 ml-1">
+                            {Math.round((new Date(rec.endTime).getTime() - new Date(rec.startTime).getTime()) / 60000)}分
+                          </span>
+                        )}
+                        {/* 削除 */}
+                        <button
+                          type="button"
+                          onClick={() => handleBreakDelete(rec)}
+                          className="ml-auto text-zinc-300 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-1.5">時刻をタップして編集</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -393,6 +482,34 @@ export default function PunchModal({
           )}
 
         </div>
+
+        {/* 休憩時刻編集インラインフォーム */}
+        {editingBreak && (
+          <div className="px-5 pb-4 border-t border-zinc-100 dark:border-zinc-800">
+            <p className="text-xs font-semibold text-zinc-500 mt-3 mb-2">
+              {editingBreak.field === "start" ? "開始時刻" : "終了時刻"}を編集
+            </p>
+            <div className="flex gap-2 items-center">
+              <input
+                type="time"
+                value={editingBreak.value}
+                onChange={e => setEditingBreak(prev => prev ? { ...prev, value: e.target.value } : null)}
+                className="flex-1 text-sm bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:text-zinc-100 tabular-nums"
+              />
+              <button
+                type="button"
+                onClick={handleBreakEditSave}
+                disabled={isPending}
+                className="px-3 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-500 disabled:opacity-50"
+              >保存</button>
+              <button
+                type="button"
+                onClick={() => setEditingBreak(null)}
+                className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-xs rounded-xl hover:bg-zinc-200"
+              >キャンセル</button>
+            </div>
+          </div>
+        )}
 
         {/* トースト */}
         {toast && (

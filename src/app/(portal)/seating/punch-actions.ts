@@ -18,14 +18,24 @@ function dayRange(today: string) {
 
 export type PunchResult = { ok: boolean; error?: string };
 
+export type BreakRecord = {
+  startId:   string;
+  startTime: string;        // ISO
+  endId:     string | null;
+  endTime:   string | null; // ISO
+};
+
 export type StaffPunchSummary = {
+  clockInId:      string | null;
   clockIn:        string | null;
+  clockOutId:     string | null;
   clockOut:       string | null;
   isOnBreak:      boolean;
   isOnSeatLeave:  boolean;
   breakStartTime: string | null;
   seatLeaveTime:  string | null;
   breakCount:     number;
+  breakRecords:   BreakRecord[];
   derivedStatus:  "not_arrived" | "working" | "on_break" | "seat_leave" | "clocked_out";
 };
 
@@ -40,43 +50,94 @@ export async function getStaffPunchSummaryAction(
 
   const { data: logs } = await admin
     .from("punch_logs")
-    .select("punch_type, recorded_at")
+    .select("id, punch_type, recorded_at")
     .eq("project_id", projectId)
     .eq("staff_id", staffId)
     .gte("recorded_at", start)
     .lte("recorded_at", end)
     .order("recorded_at");
 
+  let clockInId:      string | null = null;
   let clockIn:        string | null = null;
+  let clockOutId:     string | null = null;
   let clockOut:       string | null = null;
   let isOnBreak      = false;
   let isOnSeatLeave  = false;
   let breakStartTime: string | null = null;
   let seatLeaveTime:  string | null = null;
   let breakCount     = 0;
+  const breakRecords: BreakRecord[] = [];
+  let currentBreak:  { id: string; time: string } | null = null;
 
   for (const l of logs ?? []) {
     switch (l.punch_type) {
-      case "clock_in":    clockIn = l.recorded_at; break;
-      case "clock_out":   clockOut = l.recorded_at; break;
-      case "break_start": isOnBreak = true;  breakStartTime = l.recorded_at; breakCount++; break;
-      case "break_end":   isOnBreak = false; breakStartTime = null; break;
+      case "clock_in":
+        clockInId = l.id; clockIn = l.recorded_at; break;
+      case "clock_out":
+        clockOutId = l.id; clockOut = l.recorded_at; break;
+      case "break_start":
+        isOnBreak = true; breakStartTime = l.recorded_at; breakCount++;
+        currentBreak = { id: l.id, time: l.recorded_at };
+        break;
+      case "break_end":
+        isOnBreak = false; breakStartTime = null;
+        if (currentBreak) {
+          breakRecords.push({ startId: currentBreak.id, startTime: currentBreak.time, endId: l.id, endTime: l.recorded_at });
+          currentBreak = null;
+        }
+        break;
       case "seat_leave":  isOnSeatLeave = true;  seatLeaveTime = l.recorded_at; break;
       case "seat_return": isOnSeatLeave = false; seatLeaveTime = null; break;
     }
   }
+  // 終了していない休憩
+  if (currentBreak) {
+    breakRecords.push({ startId: currentBreak.id, startTime: currentBreak.time, endId: null, endTime: null });
+  }
 
   let derivedStatus: StaffPunchSummary["derivedStatus"];
-  if (!clockIn)         derivedStatus = "not_arrived";
-  else if (clockOut)    derivedStatus = "clocked_out";
-  else if (isOnBreak)   derivedStatus = "on_break";
+  if (!clockIn)           derivedStatus = "not_arrived";
+  else if (clockOut)      derivedStatus = "clocked_out";
+  else if (isOnBreak)     derivedStatus = "on_break";
   else if (isOnSeatLeave) derivedStatus = "seat_leave";
-  else                  derivedStatus = "working";
+  else                    derivedStatus = "working";
 
   return {
-    clockIn, clockOut, isOnBreak, isOnSeatLeave,
-    breakStartTime, seatLeaveTime, breakCount, derivedStatus,
+    clockInId, clockIn, clockOutId, clockOut,
+    isOnBreak, isOnSeatLeave, breakStartTime, seatLeaveTime,
+    breakCount, breakRecords, derivedStatus,
   };
+}
+
+// ── 打刻時刻を管理者が手動修正 ────────────────────────────
+export async function updatePunchLogTimeAction(
+  punchLogId: string,
+  newTimeHHMM: string, // "HH:MM"（当日JST）
+): Promise<PunchResult> {
+  const admin = createAdminClient();
+  const today = tokyoToday();
+  const [hh, mm] = newTimeHHMM.split(":").map(Number);
+  const newISO = new Date(`${today}T${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}:00+09:00`).toISOString();
+
+  const { error } = await admin
+    .from("punch_logs")
+    .update({ recorded_at: newISO })
+    .eq("id", punchLogId);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/seating");
+  return { ok: true };
+}
+
+// ── 打刻レコードを管理者が削除 ────────────────────────────
+export async function deletePunchLogAction(
+  punchLogId: string,
+): Promise<PunchResult> {
+  const admin = createAdminClient();
+  const { error } = await admin.from("punch_logs").delete().eq("id", punchLogId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/seating");
+  return { ok: true };
 }
 
 // ── 出勤打刻 ──────────────────────────────────────────────

@@ -329,6 +329,34 @@ export default function SeatingClient({
   // ── 右パネルからのドラッグ ────────────────────────────────
   const [dragPanelStaffId, setDragPanelStaffId] = useState<string | null>(null);
 
+  // ── キャンバス ドラッグパン ────────────────────────────────
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const panRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+
+  function handleCanvasPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    // ボタン・座席カード上はパンしない
+    if ((e.target as HTMLElement).closest("button")) return;
+    if (e.button !== 0) return;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    panRef.current = { startX: e.clientX, startY: e.clientY, baseX: panOffset.x, baseY: panOffset.y };
+    setIsPanning(false);
+  }
+
+  function handleCanvasPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!panRef.current) return;
+    const dx = e.clientX - panRef.current.startX;
+    const dy = e.clientY - panRef.current.startY;
+    if (!isPanning && Math.abs(dx) + Math.abs(dy) > 4) setIsPanning(true);
+    if (!isPanning && Math.abs(dx) + Math.abs(dy) <= 4) return;
+    setPanOffset({ x: panRef.current.baseX + dx, y: panRef.current.baseY + dy });
+  }
+
+  function handleCanvasPointerUp() {
+    panRef.current = null;
+    setTimeout(() => setIsPanning(false), 0);
+  }
+
   // ── ドラッグ&スワップ（席替えモード） ────────────────────
   function handleDragStart(e: React.DragEvent, seatId: string) {
     setDragSeatId(seatId);
@@ -541,7 +569,14 @@ export default function SeatingClient({
 
       {/* キャンバス + 右パネル */}
       <div className={`flex gap-2 ${embedded ? "px-3 pb-4" : "px-3 pb-28"}`}>
-      <div className="overflow-x-auto flex-1 min-w-0">
+      <div
+        className="overflow-hidden flex-1 min-w-0 rounded-2xl select-none"
+        style={{ cursor: isPanning ? "grabbing" : "grab" }}
+        onPointerDown={handleCanvasPointerDown}
+        onPointerMove={handleCanvasPointerMove}
+        onPointerUp={handleCanvasPointerUp}
+        onPointerCancel={handleCanvasPointerUp}
+      >
         <div
           className={[
             "relative bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden",
@@ -549,7 +584,11 @@ export default function SeatingClient({
               ? "border-amber-300 dark:border-amber-700"
               : "border-zinc-200 dark:border-zinc-800",
           ].join(" ")}
-          style={{ width: "max(100%, 1800px)", aspectRatio: "3/2" }}
+          style={{
+            width: "max(100%, 1800px)", aspectRatio: "3/2",
+            transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
+            willChange: "transform",
+          }}
         >
           {seats.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
@@ -634,7 +673,8 @@ export default function SeatingClient({
                 key={seat.id}
                 title={sfName ?? undefined}
                 onClick={() => {
-                  if (dragSeatId) return; // ドラッグ後のクリックは無視
+                  if (dragSeatId) return;   // 席間ドラッグ後は無視
+                  if (isPanning) return;    // パン中は無視
                   if (tappableEdit) {
                     setPickSeatId(seat.id);
                   } else {
@@ -921,6 +961,7 @@ export default function SeatingClient({
           shiftEnd={shiftTimeMap[punchModal.staffId]?.end ?? null}
           today={today}
           isAdmin={isAdmin}
+          showBreakEdit={isAdmin && embedded}
           onClose={() => setPunchModal(null)}
           onStatusChange={(sfId, status) => {
             setStatuses(prev => {
