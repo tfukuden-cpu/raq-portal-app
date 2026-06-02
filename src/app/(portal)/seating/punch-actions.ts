@@ -381,6 +381,52 @@ export async function updateExceptionStatusAction(
   return { ok: true };
 }
 
+// ── 休憩持ち時間（分数）の取得 ────────────────────────────
+// staff_break_overrides があればそれを、なければデフォルト(60/15)を返す
+export async function getBreakDurationAction(
+  projectId: string,
+  staffId: string,
+  date?: string,
+): Promise<{ regularMinutes: number; shortMinutes: number }> {
+  const admin = createAdminClient();
+  const today = date ?? tokyoToday();
+
+  const { data } = await admin
+    .from("staff_break_overrides")
+    .select("regular_minutes, short_minutes")
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .eq("override_date", today)
+    .maybeSingle();
+
+  return {
+    regularMinutes: (data as { regular_minutes?: number } | null)?.regular_minutes ?? 60,
+    shortMinutes:   (data as { short_minutes?: number }  | null)?.short_minutes   ?? 15,
+  };
+}
+
+// ── 休憩持ち時間（分数）の設定（管理者） ─────────────────
+export async function setBreakDurationAction(
+  projectId: string,
+  staffId: string,
+  regularMinutes: number,
+  shortMinutes: number,
+  date?: string,
+): Promise<PunchResult> {
+  const admin = createAdminClient();
+  const today = date ?? tokyoToday();
+
+  const { error } = await admin
+    .from("staff_break_overrides")
+    .upsert(
+      { project_id: projectId, staff_id: staffId, override_date: today, regular_minutes: regularMinutes, short_minutes: shortMinutes },
+      { onConflict: "project_id,staff_id,override_date" },
+    );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 // ── ヘルパー ──────────────────────────────────────────────
 function pad(n: number) { return String(n).padStart(2, "0"); }
 
