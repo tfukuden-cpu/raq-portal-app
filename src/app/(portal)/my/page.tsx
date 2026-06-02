@@ -87,18 +87,20 @@ export default async function MyPage({
   const lineFriend   = !!(staff as { line_friend?: boolean | null } | null)?.line_friend;
   const avatarConfig = (staff as { avatar_config?: AvatarConfig | null } | null)?.avatar_config ?? null;
 
-  // LINE公式アカウントの友達追加URL
-  let lineAddFriendUrl = "";
-  try {
-    const botRes = await fetch("https://api.line.me/v2/bot/info", {
-      headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
-      next: { revalidate: 3600 },
-    });
-    if (botRes.ok) {
-      const botInfo = await botRes.json() as { basicId?: string };
-      if (botInfo.basicId) lineAddFriendUrl = `https://line.me/R/ti/p/${botInfo.basicId}`;
-    }
-  } catch { /* ignore */ }
+  // LINE公式アカウントの友達追加URL（env優先、なければAPI取得）
+  let lineAddFriendUrl = process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL ?? "";
+  if (!lineAddFriendUrl) {
+    try {
+      const botRes = await fetch("https://api.line.me/v2/bot/info", {
+        headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
+        next: { revalidate: 3600 },
+      });
+      if (botRes.ok) {
+        const botInfo = await botRes.json() as { basicId?: string };
+        if (botInfo.basicId) lineAddFriendUrl = `https://line.me/R/ti/p/${botInfo.basicId}`;
+      }
+    } catch { /* ignore */ }
+  }
   const projectName  = projectData?.name ?? "未所属";
 
   const isExecutiveOrAdmin = staff?.global_role === "admin" || staff?.global_role === "executive";
