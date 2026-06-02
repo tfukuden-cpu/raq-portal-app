@@ -590,6 +590,7 @@ export default function AttendanceClient({
               myStaffId={myStaffId}
               staffList={seatStaffList}
               breakAssignmentMap={breakAssignmentMap}
+              breakSlots={breakSlots}
               motaAccountSlotRecord={motaAccountSlotRecord}
               embedded
             />
