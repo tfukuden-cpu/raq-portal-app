@@ -73,7 +73,7 @@ export async function createNoticeAction(
     void sendEventNotify(
       projectId,
       "announcement",
-      { "タイトル": title, "本文": body.length > 100 ? body.slice(0, 100) + "…" : body },
+      { "タイトル": title, "本文": body },
       targetStaffId ?? undefined,
       { label: "周知事項を見る", url: `${appUrl}/notices` },
     );
