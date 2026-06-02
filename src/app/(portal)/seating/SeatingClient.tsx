@@ -84,6 +84,7 @@ function accNum(s: string | null | undefined): number {
 export default function SeatingClient({
   projectId, today, seats, walls = [], isAdmin, myStaffId,
   staffList = [], embedded = false, breakAssignmentMap = {},
+  motaAccountSlotRecord = {},
 }: {
   projectId: string;
   today: string;
@@ -94,6 +95,7 @@ export default function SeatingClient({
   staffList?: StaffInfo[];
   embedded?: boolean;
   breakAssignmentMap?: Record<string, number>;
+  motaAccountSlotRecord?: Record<string, string>;
 }) {
   const [statuses, setStatuses] = useState<Map<string, NonNullable<SeatData["status"]>>>(() => {
     const m = new Map<string, NonNullable<SeatData["status"]>>();
@@ -567,6 +569,8 @@ export default function SeatingClient({
             const sfName = sfId ? (sfInfo?.name ?? seat.staffName ?? sfId) : null;
             const sfAcc  = sfId ? (sfInfo?.accountNumber ?? seat.accountNumber ?? null) : null;
             const sfShift = sfId ? (sfInfo?.shiftName ?? seat.shiftName ?? null) : seat.shiftName;
+            // MOTAスロット：スタッフのアカウント番号から動的に参照（入れ替え時も追従）
+            const effectiveMotaSlot = sfAcc ? (motaAccountSlotRecord[sfAcc] ?? null) : null;
 
             const status = (!isDisabled && seat.staffId)
               ? (statuses.get(seat.staffId) ?? seat.status ?? "not_arrived")
@@ -651,10 +655,10 @@ export default function SeatingClient({
                 ].join(" ")}
               >
                 {/* セクション色バー */}
-                {!isFree && seat.motaSlot && (
+                {!isFree && effectiveMotaSlot && (
                   <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-[10px] bg-purple-500" />
                 )}
-                {!isFree && !seat.motaSlot && effectiveSection && (
+                {!isFree && !effectiveMotaSlot && effectiveSection && (
                   <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-[10px] ${getSeatBgClass(effectiveSection, sfShift ?? seat.shiftSlot)}`} />
                 )}
 
@@ -666,9 +670,9 @@ export default function SeatingClient({
                     <span className={`text-[11px] font-bold leading-tight px-0.5 w-full truncate text-center ${!editMode && status ? STATUS_TEXT[status] : "text-zinc-700 dark:text-zinc-200"}`}>
                       {sfName}
                     </span>
-                    {seat.motaSlot ? (
+                    {effectiveMotaSlot ? (
                       <span className="text-[9px] leading-none text-purple-600 dark:text-purple-400 font-bold truncate px-0.5 w-full text-center">
-                        H {seat.motaSlot}
+                        H {effectiveMotaSlot}
                       </span>
                     ) : sectionLabel ? (
                       <span className="text-[9px] leading-none text-zinc-500 dark:text-zinc-400 truncate px-0.5 w-full text-center">
@@ -691,6 +695,46 @@ export default function SeatingClient({
           })}
         </div>
       </div>
+
+      {/* ── 未配置スタッフリスト（席替えモード） ── */}
+      {editMode && staffList.length > 0 && (() => {
+        const unassigned = sortedStaff.filter(s => !assignedSeatBySf.has(s.id));
+        if (unassigned.length === 0) return null;
+        return (
+          <div className="px-3 pb-4">
+            <p className="text-[11px] font-semibold text-zinc-400 mb-2 px-1">
+              未配置 <span className="font-normal tabular-nums">({unassigned.length}名)</span>
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {unassigned.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    // 未配置スタッフをクリック → pickSeatId がある場合はその席に配置
+                    if (pickSeatId) {
+                      const elsewhereId = assignedSeatBySf.get(s.id);
+                      setDraftMap(prev => {
+                        const next = new Map(prev);
+                        if (elsewhereId && elsewhereId !== pickSeatId) next.set(elsewhereId, null);
+                        next.set(pickSeatId, s.id);
+                        return next;
+                      });
+                      setPickSeatId(null);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700 hover:border-amber-400 transition-colors"
+                >
+                  {s.accountNumber && (
+                    <span className="font-mono text-[10px] opacity-60 tabular-nums">{s.accountNumber}</span>
+                  )}
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* トースト */}
       {toast && (

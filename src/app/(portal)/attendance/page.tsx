@@ -491,6 +491,11 @@ export default async function AttendancePage({
     if (!motaAccountSlotMap.has(key)) motaAccountSlotMap.set(key, []);
     motaAccountSlotMap.get(key)!.push(a.slot);
   }
+  // SeatingClient用：accountNumber → joined slot string
+  const motaAccountSlotRecord: Record<string, string> = {};
+  for (const [acct, slots] of motaAccountSlotMap) {
+    motaAccountSlotRecord[acct] = slots.join(" / ");
+  }
 
   // ── 座席データ ─────────────────────────────────────────
   const seatAssignMap = new Map((assignmentRows ?? []).map(a => [a.seat_id, a.staff_id]));
@@ -640,6 +645,7 @@ export default async function AttendancePage({
       seatData={seatData}
       wallData={wallData}
       seatStaffList={seatStaffList}
+      motaAccountSlotRecord={motaAccountSlotRecord}
       hMotaRows={hMotaRows}
       initialMotaAssignments={initialMotaAssignments}
       breakSlots={breakSlots}

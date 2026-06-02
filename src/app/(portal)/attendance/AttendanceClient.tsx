@@ -171,6 +171,7 @@ interface Props {
   seatData: SeatData[];
   wallData: WallData[];
   seatStaffList: StaffInfo[];
+  motaAccountSlotRecord?: Record<string, string>;
   hMotaRows: MotaRow[];
   initialMotaAssignments: MotaAssignment[];
   breakSlots?: BreakSlotSetting[];
@@ -189,7 +190,7 @@ export default function AttendanceClient({
   grouped, offMembers, shiftRequired = {}, enableDeparture,
   publishedAt, shiftChanges,
   myStaffId, churnRiskAlerts,
-  seatData, wallData, seatStaffList,
+  seatData, wallData, seatStaffList, motaAccountSlotRecord = {},
   hMotaRows, initialMotaAssignments,
   breakSlots = [], breakAssignments = [],
   breakShortSettings = [], breakRecords = [],
@@ -581,6 +582,7 @@ export default function AttendanceClient({
               myStaffId={myStaffId}
               staffList={seatStaffList}
               breakAssignmentMap={breakAssignmentMap}
+              motaAccountSlotRecord={motaAccountSlotRecord}
               embedded
             />
           </div>
