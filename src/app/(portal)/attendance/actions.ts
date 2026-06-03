@@ -66,7 +66,7 @@ export async function changeAttendanceStatusAction(
 
   try {
     if (newStatus === "absent") {
-      // 欠勤: 打刻を削除 → 欠勤レポートを upsert
+      // 欠勤: 打刻・遅刻・出発を削除 → 欠勤レポートを作成（なければ）
       await admin.from("punch_logs").delete()
         .eq("project_id", projectId).eq("staff_id", staffId)
         .gte("recorded_at", dayStart).lte("recorded_at", dayEnd);
@@ -75,17 +75,27 @@ export async function changeAttendanceStatusAction(
       await admin.from("departure_reports").delete()
         .eq("project_id", projectId).eq("staff_id", staffId)
         .gte("reported_at", dayStart).lte("reported_at", dayEnd);
-      await admin.from("absence_reports")
-        .upsert({ project_id: projectId, staff_id: staffId, absence_date: date, reason: null },
-          { onConflict: "project_id,staff_id,absence_date", ignoreDuplicates: true });
+      const { data: existingAbs } = await admin.from("absence_reports")
+        .select("id").eq("project_id", projectId).eq("staff_id", staffId)
+        .eq("absence_date", date).maybeSingle();
+      if (!existingAbs) {
+        const { error } = await admin.from("absence_reports")
+          .insert({ project_id: projectId, staff_id: staffId, absence_date: date, reason: null });
+        if (error) return { ok: false, error: error.message };
+      }
 
     } else if (newStatus === "late") {
-      // 遅刻: 欠勤を解除 → 遅刻レポートを upsert
+      // 遅刻: 欠勤を解除 → 遅刻レポートを作成（なければ）
       await admin.from("absence_reports").delete()
         .eq("project_id", projectId).eq("staff_id", staffId).eq("absence_date", date);
-      await admin.from("late_reports")
-        .upsert({ project_id: projectId, staff_id: staffId, late_date: date, reason: null },
-          { onConflict: "project_id,staff_id,late_date", ignoreDuplicates: true });
+      const { data: existingLate } = await admin.from("late_reports")
+        .select("id").eq("project_id", projectId).eq("staff_id", staffId)
+        .eq("late_date", date).maybeSingle();
+      if (!existingLate) {
+        const { error } = await admin.from("late_reports")
+          .insert({ project_id: projectId, staff_id: staffId, late_date: date, reason: null });
+        if (error) return { ok: false, error: error.message };
+      }
 
     } else if (newStatus === "not_departed") {
       // 未出発: 欠勤・遅刻・出発レポートをすべて削除、打刻は残す
