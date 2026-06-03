@@ -498,9 +498,9 @@ export default function AttendanceClient({
     : `【出勤依頼】{名前}さん、${REQUEST_MSG}`;
 
   return (
-    <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
-      {/* ── Sticky header ── */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+    <main className="h-dvh flex flex-col overflow-hidden bg-[#F5F5F7] dark:bg-zinc-950">
+      {/* ── Header（flex列なのでstickyは不要） ── */}
+      <div className="shrink-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
         <div className="max-w-6xl mx-auto px-4 pt-5 pb-4">
           <div className="flex items-end justify-between gap-3">
             <div>
@@ -594,7 +594,29 @@ export default function AttendanceClient({
           )}
         </div>
       </div>
-      <div className={`max-w-6xl mx-auto px-4 pt-4 ${activeTab !== "today" ? "pb-32" : ""}`}>
+      {/* ── 座席表タブ：全高・パディングなし ── */}
+      {activeTab === "seating" && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <SeatingClient
+            projectId={projectId}
+            today={today}
+            seats={seatData}
+            walls={wallData}
+            isAdmin={true}
+            myStaffId={myStaffId}
+            staffList={seatStaffList}
+            breakAssignmentMap={breakAssignmentMap}
+            breakSlots={breakSlots}
+            motaAccountSlotRecord={motaAccountSlotRecord}
+            embedded
+          />
+        </div>
+      )}
+
+      {/* ── スクロール可能なタブ（出勤簿・確定後変更・打刻記録） ── */}
+      {activeTab !== "seating" && (
+        <div className={`flex-1 min-h-0 ${activeTab === "today" ? "overflow-hidden" : "overflow-y-auto"}`}>
+          <div className={`max-w-6xl mx-auto px-4 pt-4 h-full ${activeTab !== "today" ? "pb-32" : "overflow-hidden"}`}>
 
         {/* ── 確定後変更タブ ── */}
         {activeTab === "changes" && (
@@ -607,26 +629,7 @@ export default function AttendanceClient({
           </div>
         )}
 
-        {/* ── 座席表タブ ── */}
-        {activeTab === "seating" && (
-          <div>
-            <SeatingClient
-              projectId={projectId}
-              today={today}
-              seats={seatData}
-              walls={wallData}
-              isAdmin={true}
-              myStaffId={myStaffId}
-              staffList={seatStaffList}
-              breakAssignmentMap={breakAssignmentMap}
-              breakSlots={breakSlots}
-              motaAccountSlotRecord={motaAccountSlotRecord}
-              embedded
-            />
-          </div>
-        )}
-
-        {/* ── 休憩管理タブ ── */}
+        {/* ── 打刻記録タブ ── */}
         {activeTab === "break" && (
           <div>
             <BreakManagementTab
@@ -1006,7 +1009,9 @@ export default function AttendanceClient({
           </div>
         )}
 
-      </div>
+          </div>
+        </div>
+      )}
 
       {/* まとめて送るアクションバー */}
       {selectedIds.size > 0 && (

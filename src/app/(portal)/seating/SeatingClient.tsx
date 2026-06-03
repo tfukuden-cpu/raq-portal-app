@@ -539,11 +539,11 @@ export default function SeatingClient({
   const dateLabel = `${parseInt(monthStr)}/${parseInt(dayStr)}`;
 
   return (
-    <div className={embedded ? "" : "min-h-screen bg-zinc-50 dark:bg-zinc-950"}>
+    <div className={embedded ? "h-full flex flex-col overflow-hidden" : "h-dvh flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950"}>
 
       {/* ヘッダー */}
       {!embedded && (
-        <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">
+        <div className="shrink-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">
           <div>
             <h1 className="text-base font-bold text-zinc-800 dark:text-zinc-100">座席表</h1>
             <p className="text-xs text-zinc-400 tabular-nums">{dateLabel}</p>
@@ -768,10 +768,10 @@ export default function SeatingClient({
       )}
 
       {/* キャンバス + 右パネル */}
-      <div className={`flex gap-2 ${embedded ? "px-3 pb-4" : "px-3 pb-28"}`}>
+      <div className={`flex gap-2 flex-1 min-h-0 ${embedded ? "px-3 pb-2" : "px-3 pb-4"}`}>
       <div
         ref={scrollRef}
-        className="overflow-auto flex-1 min-w-0 rounded-2xl select-none"
+        className="overflow-auto flex-1 min-w-0 min-h-0 rounded-2xl select-none"
         style={{ cursor: isPanning ? "grabbing" : "grab" }}
         onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
