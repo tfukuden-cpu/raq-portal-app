@@ -9,6 +9,8 @@ interface Props {
   breakSlots: BreakSlotSetting[];
   slotByStaff: Record<string, number>;
   onSlotChange: (staffId: string, slot: number) => void;
+  shortByStaff: Record<string, number>;
+  onShortBreakChange: (staffId: string, minutes: number) => void;
   disabled?: boolean;
 }
 
@@ -46,7 +48,7 @@ function fmtDur(min: number): string {
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}m` : `${m}m`;
 }
 
-export default function PunchTimelineSection({ punchTimelines, grouped, breakSlots, slotByStaff, onSlotChange, disabled }: Props) {
+export default function PunchTimelineSection({ punchTimelines, grouped, breakSlots, slotByStaff, onSlotChange, shortByStaff, onShortBreakChange, disabled }: Props) {
   const tlMap = new Map(punchTimelines.map(t => [t.staffId, t]));
   const nowMin = toMin(new Date().toISOString());
 
@@ -84,7 +86,8 @@ export default function PunchTimelineSection({ punchTimelines, grouped, breakSlo
 
   return (
     <TimelineView rows={rows} tlMap={tlMap} ticks={ticks} pct={pct} nowMin={nowMin}
-      breakSlots={breakSlots} slotByStaff={slotByStaff} onSlotChange={onSlotChange} disabled={disabled} />
+      breakSlots={breakSlots} slotByStaff={slotByStaff} onSlotChange={onSlotChange}
+      shortByStaff={shortByStaff} onShortBreakChange={onShortBreakChange} disabled={disabled} />
   );
 }
 
@@ -97,10 +100,12 @@ type ViewProps = {
   breakSlots: BreakSlotSetting[];
   slotByStaff: Record<string, number>;
   onSlotChange: (staffId: string, slot: number) => void;
+  shortByStaff: Record<string, number>;
+  onShortBreakChange: (staffId: string, minutes: number) => void;
   disabled?: boolean;
 };
 
-function TimelineView({ rows, tlMap, ticks, pct, nowMin, breakSlots, slotByStaff, onSlotChange, disabled }: ViewProps) {
+function TimelineView({ rows, tlMap, ticks, pct, nowMin, breakSlots, slotByStaff, onSlotChange, shortByStaff, onShortBreakChange, disabled }: ViewProps) {
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between mb-2">
@@ -119,7 +124,8 @@ function TimelineView({ rows, tlMap, ticks, pct, nowMin, breakSlots, slotByStaff
           <TimelineHeader ticks={ticks} pct={pct} />
           {rows.map(row => (
             <TimelineRow key={row.staffId} row={row} tl={tlMap.get(row.staffId)} ticks={ticks} pct={pct} nowMin={nowMin}
-              breakSlots={breakSlots} slotNumber={slotByStaff[row.staffId] ?? null} onSlotChange={onSlotChange} disabled={disabled} />
+              breakSlots={breakSlots} slotNumber={slotByStaff[row.staffId] ?? null} onSlotChange={onSlotChange}
+              shortMinutes={shortByStaff[row.staffId] ?? null} onShortBreakChange={onShortBreakChange} disabled={disabled} />
           ))}
         </div>
       </div>
@@ -144,6 +150,8 @@ function TimelineHeader({ ticks, pct }: { ticks: number[]; pct: (min: number) =>
   );
 }
 
+const SHORT_BREAK_OPTIONS = [0, 10, 15, 20, 30];
+
 type RowProps = {
   row: { staffId: string; name: string; accountNumber: string | null; section: string };
   tl: StaffTimeline | undefined;
@@ -153,10 +161,12 @@ type RowProps = {
   breakSlots: BreakSlotSetting[];
   slotNumber: number | null;
   onSlotChange: (staffId: string, slot: number) => void;
+  shortMinutes: number | null;
+  onShortBreakChange: (staffId: string, minutes: number) => void;
   disabled?: boolean;
 };
 
-function TimelineRow({ row, tl, ticks, pct, nowMin, breakSlots, slotNumber, onSlotChange, disabled }: RowProps) {
+function TimelineRow({ row, tl, ticks, pct, nowMin, breakSlots, slotNumber, onSlotChange, shortMinutes, onShortBreakChange, disabled }: RowProps) {
   const canSlot = row.section === "査定" || row.section === "販売";
   const segs = tl?.segments ?? [];
   let workMin = 0, breakMin = 0, leaveMin = 0;
@@ -184,6 +194,18 @@ function TimelineRow({ row, tl, ticks, pct, nowMin, breakSlots, slotNumber, onSl
               <option key={s.slot_number} value={s.slot_number}>
                 {s.label}{s.start_time.slice(0, 5)}-{s.end_time.slice(0, 5)}
               </option>
+            ))}
+          </select>
+        )}
+        {canSlot && (
+          <select
+            value={shortMinutes ?? 15}
+            onChange={e => onShortBreakChange(row.staffId, parseInt(e.target.value))}
+            disabled={disabled}
+            className="mt-0.5 text-[9px] px-1 py-0.5 rounded border-0 tabular-nums disabled:opacity-40 focus:outline-none bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
+          >
+            {SHORT_BREAK_OPTIONS.map(m => (
+              <option key={m} value={m}>{m === 0 ? "小休憩なし" : `小休憩 ${m}分`}</option>
             ))}
           </select>
         )}
