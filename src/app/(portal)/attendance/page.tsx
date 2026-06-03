@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceClient from "./AttendanceClient";
-import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry, ChurnRiskAlert } from "./AttendanceClient";
+import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry, ChurnRiskAlert, StaffTimeline, PunchSegment } from "./AttendanceClient";
 import type { SeatData, WallData, StaffInfo } from "../seating/SeatingClient";
 import type { MotaRow } from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
@@ -609,6 +609,47 @@ export default async function AttendancePage({
     }
   }
 
+  const eventsByStaff = new Map<string, { type: string; at: string; note: string | null }[]>();
+  for (const p of punchLogs ?? []) {
+    if (!eventsByStaff.has(p.staff_id)) eventsByStaff.set(p.staff_id, []);
+    eventsByStaff.get(p.staff_id)!.push({
+      type: p.punch_type as string,
+      at:   p.recorded_at as string,
+      note: (p as { note?: string | null }).note ?? null,
+    });
+  }
+  const punchTimelines: StaffTimeline[] = [];
+  for (const [staffId, events] of eventsByStaff) {
+    const segments: PunchSegment[] = [];
+    let clockIn:  string | null = null;
+    let clockOut: string | null = null;
+    let openStart: string | null = null;
+    let openType:  PunchSegment["type"] | null = null;
+    let openNote:  string | null = null;
+    const closeOpen = (end: string | null) => {
+      if (openStart && openType) segments.push({ type: openType, start: openStart, end, note: openNote });
+      openStart = null; openType = null; openNote = null;
+    };
+    for (const e of events) {
+      if (e.type === "clock_in") {
+        if (!clockIn) clockIn = e.at;
+        closeOpen(e.at); openStart = e.at; openType = "working"; openNote = null;
+      } else if (e.type === "break_start") {
+        closeOpen(e.at); openStart = e.at; openType = "break"; openNote = e.note;
+      } else if (e.type === "break_end") {
+        closeOpen(e.at); openStart = e.at; openType = "working"; openNote = null;
+      } else if (e.type === "seat_leave") {
+        closeOpen(e.at); openStart = e.at; openType = "seat_leave"; openNote = null;
+      } else if (e.type === "seat_return") {
+        closeOpen(e.at); openStart = e.at; openType = "working"; openNote = null;
+      } else if (e.type === "clock_out") {
+        closeOpen(e.at); clockOut = e.at;
+      }
+    }
+    if (!clockOut && openStart && openType) segments.push({ type: openType, start: openStart, end: null, note: openNote });
+    punchTimelines.push({ staffId, clockIn, clockOut, segments });
+  }
+
   // ── シフトパターン別 必要枠数マップ ─────────────────────────
   const todayDow = new Date(today + "T00:00:00+09:00").getDay(); // 0=日, 6=土
   const isWeekend = todayDow === 0 || todayDow === 6;
@@ -670,6 +711,7 @@ export default async function AttendancePage({
       breakAssignments={breakAssignments}
       breakShortSettings={breakShortSettings}
       breakRecords={breakRecords}
+      punchTimelines={punchTimelines}
     />
   );
 }

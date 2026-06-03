@@ -8,7 +8,8 @@ import {
   updateBreakShortSettingAction,
 } from "@/app/(portal)/seating/break-actions";
 import type { BreakSlotSetting, BreakSlotAssignment, BreakShortSetting, BreakRecord } from "@/app/(portal)/seating/break-actions";
-import type { SectionGroup } from "./AttendanceClient";
+import type { SectionGroup, StaffTimeline } from "./AttendanceClient";
+import PunchTimelineSection from "./PunchTimelineSection";
 
 const SLOT_THEME: Record<number, {
   badge: string; slotCol: string; cardBorder: string; cardBg: string; dot: string;
@@ -52,6 +53,7 @@ interface Props {
   breakAssignments: BreakSlotAssignment[];
   breakShortSettings: BreakShortSetting[];
   breakRecords: BreakRecord[];
+  punchTimelines?: StaffTimeline[];
   grouped: SectionGroup[];
 }
 
@@ -63,7 +65,7 @@ function fmtTime(ts: string): string {
 
 export default function BreakManagementTab({
   projectId, today, breakSlots, breakAssignments,
-  breakShortSettings, breakRecords, grouped,
+  breakShortSettings, breakRecords, punchTimelines = [], grouped,
 }: Props) {
   const router = useRouter();
   const [assignments, setAssignments] = useState<BreakSlotAssignment[]>(breakAssignments);
@@ -277,6 +279,8 @@ export default function BreakManagementTab({
           })}
         </div>
       )}
+
+      <PunchTimelineSection punchTimelines={punchTimelines} grouped={grouped} />
 
       {toast && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-zinc-800 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium shadow-lg whitespace-nowrap">

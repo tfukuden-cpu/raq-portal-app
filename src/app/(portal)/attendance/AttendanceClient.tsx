@@ -59,6 +59,20 @@ export type OffMember = {
   shiftName: string;
 };
 
+export type PunchSegment = {
+  type: "working" | "break" | "seat_leave";
+  start: string;
+  end: string | null;
+  note: string | null;
+};
+
+export type StaffTimeline = {
+  staffId: string;
+  clockIn: string | null;
+  clockOut: string | null;
+  segments: PunchSegment[];
+};
+
 export type ShiftChangeEntry = {
   staffId: string;
   staffName: string;
@@ -187,6 +201,7 @@ interface Props {
   breakAssignments?: BreakSlotAssignment[];
   breakShortSettings?: BreakShortSetting[];
   breakRecords?: BreakRecord[];
+  punchTimelines?: StaffTimeline[];
 }
 
 type SelectionMode = "reminder" | "request" | "followup";
@@ -203,6 +218,7 @@ export default function AttendanceClient({
   hMotaRows, initialMotaAssignments,
   breakSlots = [], breakAssignments = [],
   breakShortSettings = [], breakRecords = [],
+  punchTimelines = [],
 }: Props) {
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating" | "break">("today");
 
@@ -608,6 +624,7 @@ export default function AttendanceClient({
               breakAssignments={breakAssignments}
               breakShortSettings={breakShortSettings}
               breakRecords={breakRecords}
+              punchTimelines={punchTimelines}
               grouped={grouped}
             />
           </div>
