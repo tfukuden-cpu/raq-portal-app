@@ -736,8 +736,8 @@ export default function ShiftDayList({
                     return (
                   <div className="flex min-w-max bg-white dark:bg-zinc-900">
 
-                    {/* 左固定列（シフトパターン名） */}
-                    <div className="sticky left-0 z-20 w-[90px] flex-shrink-0 bg-white dark:bg-zinc-900 border-r-2 border-zinc-400 dark:border-zinc-500">
+                    {/* 左固定列（シフトパターン名）幅=番号72px+氏名88px=160px でヘッダーと揃える */}
+                    <div className="sticky left-0 z-20 w-[160px] flex-shrink-0 bg-white dark:bg-zinc-900 border-r-2 border-zinc-400 dark:border-zinc-500">
                       {visibleShiftPatterns.map((pattern, i, arr) => {
                         const grayed = isGrayed(pattern);
                         const isFirst = i === 0;
@@ -783,7 +783,7 @@ export default function ShiftDayList({
                         const isSat     = dayOfWeek === 6;
                         const isToday   = d === todayJST;
                         return (
-                          <div key={d} className={cx("w-[50px] flex-shrink-0 flex flex-col",
+                          <div key={d} className={cx("w-11 flex-shrink-0 flex flex-col",
                             isSel ? "bg-blue-50/80 dark:bg-blue-950/20"
                             : (isSun || isSat) ? "bg-red-50/20 dark:bg-red-950/10" : "",
                           )}>
