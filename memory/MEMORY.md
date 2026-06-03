@@ -15,7 +15,29 @@
 
 ## 現在の開発状態（2026-06-04）
 
-### 直近の作業（UI/UXリファクタリング）
+### 直近の作業（バグ修正）
+
+#### シフト管理 充足テーブル日付ずれ修正
+- **ShiftDayList（シフトタブ）**: 充足テーブルの左固定列が90pxでヘッダー（番号72+氏名88=160px）と不一致 → `w-[160px]` に修正。日付列幅も `w-[50px]`→`w-11`(44px) に統一
+- **ShiftEditGrid（編集モード）**: 充足行ラベル`<td>`に `colSpan={2}` が無くNAME_W(88px)列がprevDate[0]に吸収→全日付列が1列ずれていた。ラベルセルに `colSpan={2}` 追加（3箇所：通常行・SV合計行・全体合計行）
+- **ShiftEditGrid スクロール同期**: `showSummaryRows` ON時にstaffPaneのscrollLeftを同期するuseEffect追加
+
+#### シフト編集モード 稼働日数合計バグ修正
+- `monthTotal` が `patternNameSet`（登録済みパターンのみ）でカウントしていたため研修等の特殊シフトが未計上
+- 「公休・希望休・有休・特別休暇」以外を全て稼働日としてカウントするよう変更（ShiftEditGrid.tsx）
+
+#### LINE連携エラーハンドリング改善
+- `getRedirectUri()` のフォールバックを `http://localhost:3000` → `https://raq-portal-app.vercel.app` に修正
+- mode=link のエラー時は `/login` ではなく `/link-line?error=...` にリダイレクトするよう変更
+- セッション切れの場合は `/login?next=/link-line` に誘導
+- `/link-line` ページにエラーメッセージ表示を追加（searchParams対応）
+
+#### LINE連携 未解決事項（川島さん S069）
+- `line_user_id=null, line_friend=null` → IDPW ログイン → LINE連携ボタン押下 → line_failed エラー
+- URL設定は正常（NEXT_PUBLIC_BASE_URL = LINE Developer ConsoleのCallback URL と一致）
+- **要確認**: LINE Login チャネルが「Developing」ステータスのままで未公開の可能性。Developingの場合はチャネルメンバー以外はOAuth不可
+
+### 前の作業（UI/UXリファクタリング）
 
 #### 当日状況 `/attendance` タブ構成変更
 - **タブ名変更**: 「休憩管理」→「打刻記録」
@@ -185,6 +207,12 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | ページ固定レイアウトは `h-dvh flex flex-col overflow-hidden` | `min-h-screen` + `sticky` の組み合わせは全体スクロールが発生する。固定ページは main を `h-dvh flex flex-col`、ヘッダーは `shrink-0`、コンテンツは `flex-1 min-h-0` にする |
 | embedded SeatingClient は `h-full flex flex-col` が必須 | 親コンテナが `flex-1 min-h-0` でも SeatingClient が `min-h-screen` だと突き破ってスクロールが発生する |
 | 打刻状態と勤怠ステータスは別軸（`note="admin_manual"`方式） | 出勤簿で手動「勤務中」にすると `clock_in` を `note="admin_manual"` 付きで作成。出勤簿は勤怠ステータス導出にこれを含めて「勤務中」を永続表示するが、打刻バッジ(realClockIn)とスタッフ用判定はadmin_manualを除外＝打刻状態は「打刻未」のままスタッフ本人が出勤打刻できる。**admin_manual除外が必要な箇所**: `seating/punch-actions.ts getStaffPunchSummaryAction`・`attendance/page.tsx realClockIn`・`punch/[projectId]/page.tsx clockedIn`・`api/punch/[projectId]/statuses/route.ts clockedIn`(打刻端末のポーリング上書き注意) |
+| ShiftEditGrid 充足行は `colSpan={2}` 必須 | 充足tbody各行の左ラベル`<td>`はACCT_W+NAME_Wを合わせて `colSpan={2}` でスパンしないと、prevDate列がNAME_W(88px)列に入り全日付が1列ずれる |
+| ShiftDayList 充足テーブルの左固定幅はヘッダーと合わせる | 充足テーブル左固定=番号(72)+氏名(88)=160px、日付列幅=w-11(44px) でなければscrollLeft同期しても列がずれる |
+| ShiftEditGrid monthTotalはpatternNameSetで絞らない | `patternNameSet` でフィルタすると研修等の特殊シフトが稼働日数にカウントされない。「公休・希望休・有休・特別休暇」以外を全て稼働日とする |
+| LINE連携 mode=link のエラーは `/link-line` に戻す | `/login?error=line_failed` に戻すと「LINEログイン失敗」と表示されてユーザーが混乱する。mode=link のエラーは `/link-line?error=...` にリダイレクト |
+| `getRedirectUri()` のフォールバックは本番URL | `http://localhost:3000` がフォールバックだとVercelで `NEXT_PUBLIC_BASE_URL` 未設定時にLINEトークン交換失敗。`https://raq-portal-app.vercel.app` に修正済み |
+| LINE Login チャネルが Developing だと一般スタッフはOAuth不可 | チャネルメンバー以外は認証できない。LINE Login を全スタッフに使わせるには Publish 必要 |
 
 ---
 
