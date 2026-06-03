@@ -514,7 +514,6 @@ export default function AttendanceClient({
               </div>
               <p className="text-sm font-semibold text-zinc-400 mt-0.5">{projectName}</p>
             </div>
-            <span className="text-sm font-semibold text-zinc-500 tabular-nums">{dateLabel}</span>
           </div>
         </div>
         {/* タブ */}
@@ -578,13 +577,28 @@ export default function AttendanceClient({
             )}
           </button>
         </div>
+        {/* 日付ナビ + タブ別アクション */}
+        <div className="max-w-6xl mx-auto px-4 pb-2 flex items-center gap-2">
+          <div className="flex-1">
+            <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} noMargin />
+          </div>
+          {activeTab === "today" && (
+            <button
+              type="button"
+              onClick={() => exportAttendanceXLSX(today, dateLabel, grouped, localStatuses)}
+              className="flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
+            >
+              <DownloadIcon className="w-3.5 h-3.5" />
+              出力
+            </button>
+          )}
+        </div>
       </div>
       <div className="max-w-6xl mx-auto px-4 pt-4 pb-32">
 
         {/* ── 確定後変更タブ ── */}
         {activeTab === "changes" && (
           <div>
-            <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} />
             <ShiftChangesTab
               publishedAt={publishedAt}
               shiftChanges={shiftChanges}
@@ -596,7 +610,6 @@ export default function AttendanceClient({
         {/* ── 座席表タブ ── */}
         {activeTab === "seating" && (
           <div>
-            <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} />
             <SeatingClient
               projectId={projectId}
               today={today}
@@ -616,7 +629,6 @@ export default function AttendanceClient({
         {/* ── 休憩管理タブ ── */}
         {activeTab === "break" && (
           <div>
-            <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} />
             <BreakManagementTab
               projectId={projectId}
               today={today}
@@ -627,23 +639,6 @@ export default function AttendanceClient({
               punchTimelines={punchTimelines}
               grouped={grouped}
             />
-          </div>
-        )}
-
-        {/* ── 出勤簿タブ：日付ナビ + 出力ボタン ── */}
-        {activeTab === "today" && (
-          <div className="flex items-center gap-2 mb-4">
-            <div className="flex-1">
-              <DateNav prevDate={prevDate} nextDate={nextDate} dateLabel={dateLabel} noMargin />
-            </div>
-            <button
-              type="button"
-              onClick={() => exportAttendanceXLSX(today, dateLabel, grouped, localStatuses)}
-              className="flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
-            >
-              <DownloadIcon className="w-3.5 h-3.5" />
-              出力
-            </button>
           </div>
         )}
 

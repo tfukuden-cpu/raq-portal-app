@@ -136,7 +136,7 @@ function TimelineView({ rows, tlMap, ticks, pct, nowMin, breakSlots, slotByStaff
 
 function TimelineHeader({ ticks, pct }: { ticks: number[]; pct: (min: number) => number }) {
   return (
-    <div className="flex border-b border-zinc-200 dark:border-zinc-700 sticky top-0 bg-zinc-50 dark:bg-zinc-900">
+    <div className="flex border-b border-zinc-200 dark:border-zinc-700 sticky top-[176px] z-10 bg-zinc-50 dark:bg-zinc-900">
       <div className="w-32 shrink-0 px-3 py-2 text-[11px] font-semibold text-zinc-400">スタッフ</div>
       <div className="relative flex-1 h-8">
         {ticks.map(t => (
