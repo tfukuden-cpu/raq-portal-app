@@ -66,7 +66,7 @@ export async function checkLineFriendship(accessToken: string): Promise<boolean>
 }
 
 function getRedirectUri() {
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
   return `${base}/api/auth/line/callback`;
 }
 

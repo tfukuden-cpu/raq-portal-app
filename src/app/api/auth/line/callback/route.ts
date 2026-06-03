@@ -17,8 +17,11 @@ function adminClient() {
   );
 }
 
-function errRedirect(req: NextRequest, code: string) {
+function loginErrRedirect(req: NextRequest, code: string) {
   return NextResponse.redirect(new URL(`/login?error=${code}`, req.url));
+}
+function linkErrRedirect(req: NextRequest, code: string) {
+  return NextResponse.redirect(new URL(`/link-line?error=${code}`, req.url));
 }
 
 export async function GET(req: NextRequest) {
@@ -28,13 +31,13 @@ export async function GET(req: NextRequest) {
 
   // キャンセルまたはエラー
   if (searchParams.get("error") || !code || !state) {
-    return errRedirect(req, "line_cancelled");
+    return loginErrRedirect(req, "line_cancelled");
   }
 
   // state 検証（CSRF対策）
   const storedState = req.cookies.get("line_oauth_state")?.value;
   if (!storedState || storedState !== state) {
-    return errRedirect(req, "line_state_mismatch");
+    return loginErrRedirect(req, "line_state_mismatch");
   }
 
   // state をパース
@@ -42,7 +45,7 @@ export async function GET(req: NextRequest) {
   try {
     parsedState = JSON.parse(Buffer.from(state, "base64url").toString());
   } catch {
-    return errRedirect(req, "line_state_invalid");
+    return loginErrRedirect(req, "line_state_invalid");
   }
 
   const clearState = (res: NextResponse) => {
@@ -52,13 +55,22 @@ export async function GET(req: NextRequest) {
 
   // LINEプロフィール取得
   const profile = await fetchLineProfile(code);
-  if (!profile) return errRedirect(req, "line_failed");
+  if (!profile) {
+    // mode=link のエラーは /link-line に戻す（ログイン画面ではなく）
+    if (parsedState.mode === "link") {
+      return clearState(linkErrRedirect(req, "line_failed"));
+    }
+    return loginErrRedirect(req, "line_failed");
+  }
 
   // ── 連携モード（ログイン済みユーザーが LINE を紐付け）────
   if (parsedState.mode === "link") {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return errRedirect(req, "not_logged_in");
+    // セッション切れ → 再ログイン後に /link-line へ
+    if (!user) {
+      return clearState(NextResponse.redirect(new URL("/login?next=/link-line", req.url)));
+    }
 
     const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
     const admin   = adminClient();
@@ -72,7 +84,7 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (conflict) {
-      return clearState(NextResponse.redirect(new URL("/my?error=line_already_used", req.url)));
+      return clearState(linkErrRedirect(req, "line_already_used"));
     }
 
     await admin
@@ -99,7 +111,7 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   if (!staff) {
-    return clearState(errRedirect(req, "line_not_registered"));
+    return clearState(loginErrRedirect(req, "line_not_registered"));
   }
 
   // magic link 生成（パスワード不要でセッションを確立）
@@ -114,7 +126,7 @@ export async function GET(req: NextRequest) {
 
   if (linkError || !linkData?.properties?.action_link) {
     console.error("magic link error:", linkError);
-    return clearState(errRedirect(req, "line_auth_failed"));
+    return clearState(loginErrRedirect(req, "line_auth_failed"));
   }
 
   return clearState(NextResponse.redirect(linkData.properties.action_link));

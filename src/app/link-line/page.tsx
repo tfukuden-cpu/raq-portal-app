@@ -5,7 +5,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
-export default async function LinkLinePage() {
+const ERROR_MESSAGES: Record<string, string> = {
+  line_failed:       "LINEとの連携に失敗しました。もう一度お試しください。",
+  line_already_used: "このLINEアカウントは別のスタッフに登録済みです。管理者にお問い合わせください。",
+};
+
+export default async function LinkLinePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -21,6 +31,8 @@ export default async function LinkLinePage() {
 
   // すでに連携済みならダッシュボードへ
   if (staff?.line_user_id) redirect("/dashboard");
+
+  const errorMessage = error ? (ERROR_MESSAGES[error] ?? "エラーが発生しました。再度お試しください。") : null;
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black p-4">
@@ -41,6 +53,12 @@ export default async function LinkLinePage() {
             ポータルを利用するには<br />LINEアカウントの連携が必要です
           </p>
         </div>
+
+        {errorMessage && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+            {errorMessage}
+          </div>
+        )}
 
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
           <a
