@@ -965,6 +965,13 @@ export default function ShiftEditGrid({
     el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [focusedCandidateId]);
 
+  // 充足テーブルON時: スタッフペインのscrollLeftに合わせて同期
+  useEffect(() => {
+    if (showSummaryRows && sufficiencyPaneRef.current && staffPaneRef.current) {
+      sufficiencyPaneRef.current.scrollLeft = staffPaneRef.current.scrollLeft;
+    }
+  }, [showSummaryRows]);
+
   // ── Lookup maps ─────────────────────────────────────────────────
   const shiftsByKey = useMemo(() => {
     const m = new Map<string, Shift>();
@@ -2143,7 +2150,7 @@ export default function ShiftEditGrid({
                   return (
                     <React.Fragment key={`sum-frag-${pattern.name}`}>
                     <tr style={{ height: `${SUM_ROW_H}px` }} className={isGrayedRow ? "bg-zinc-100 dark:bg-zinc-800/70" : "bg-zinc-50 dark:bg-zinc-900"}>
-                      <td className={["p-0 overflow-hidden border-r-2 border-zinc-400 dark:border-zinc-500 cursor-pointer transition-colors",
+                      <td colSpan={2} className={["p-0 overflow-hidden border-r-2 border-zinc-400 dark:border-zinc-500 cursor-pointer transition-colors",
                         isGrayedRow
                           ? "bg-zinc-300 dark:bg-zinc-600 hover:bg-zinc-400 dark:hover:bg-zinc-500"
                           : "bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600",
@@ -2258,7 +2265,7 @@ export default function ShiftEditGrid({
                       else { elTotDisp = "✓"; elTotText = "text-emerald-400 dark:text-emerald-500 font-bold"; elTotBg = "bg-zinc-200 dark:bg-zinc-700"; }
                       return (
                         <tr key="sv-el-total-row" style={{ height: `${SUM_ROW_H}px` }} className="bg-zinc-100 dark:bg-zinc-800">
-                          <td className="p-0 overflow-hidden bg-zinc-400 dark:bg-zinc-500 border-r-2 border-zinc-500 dark:border-zinc-400 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400"
+                          <td colSpan={2} className="p-0 overflow-hidden bg-zinc-400 dark:bg-zinc-500 border-r-2 border-zinc-500 dark:border-zinc-400 border-t border-t-zinc-400 dark:border-t-zinc-500 border-b-2 border-b-zinc-500 dark:border-b-zinc-400"
                             style={{ position: "sticky", left: 0, zIndex: 10 }}>
                             <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-2">
                               <span className="text-[10px] font-bold text-white dark:text-zinc-900 leading-none truncate block">合計</span>
@@ -2322,7 +2329,7 @@ export default function ShiftEditGrid({
                   else { gtTotDisp = "✓"; gtTotText = "text-emerald-400 dark:text-emerald-500 font-bold"; gtTotBg = "bg-zinc-200 dark:bg-zinc-700"; }
                   return (
                     <tr key="grand-total-row" style={{ height: `${SUM_ROW_H}px` }} className="bg-zinc-200 dark:bg-zinc-700">
-                      <td className="p-0 overflow-hidden bg-zinc-500 dark:bg-zinc-400 border-r-2 border-zinc-600 dark:border-zinc-300 border-t-2 border-t-zinc-500 dark:border-t-zinc-400 border-b-2 border-b-zinc-600 dark:border-b-zinc-300"
+                      <td colSpan={2} className="p-0 overflow-hidden bg-zinc-500 dark:bg-zinc-400 border-r-2 border-zinc-600 dark:border-zinc-300 border-t-2 border-t-zinc-500 dark:border-t-zinc-400 border-b-2 border-b-zinc-600 dark:border-b-zinc-300"
                         style={{ position: "sticky", left: 0, zIndex: 10 }}>
                         <div style={{ height: `${SUM_ROW_H}px`, overflow: "hidden" }} className="flex items-center px-2">
                           <span className="text-[10px] font-bold text-white dark:text-zinc-900 leading-none truncate block">全体合計</span>
@@ -2455,10 +2462,11 @@ export default function ShiftEditGrid({
                 // 離脱リスク（行レベル）オーバーライド込み
                 const _rowChurnOv = churnRiskOverrides.get(member.id);
                 const effChurnRisk = _rowChurnOv !== undefined ? _rowChurnOv.churn_risk : (member.churn_risk ?? false);
-                // 月合計
+                // 月合計（公休・希望休・有休・特別休暇以外を稼働日としてカウント、研修等も含む）
+                const DAYOFF_SET = new Set(["公休", "希望休", "有休", "特別休暇"]);
                 const monthTotal = allDates.filter(d => {
                   const cell = resolveCell(member.id, d);
-                  return cell !== null && cell.shiftName && patternNameSet.has(cell.shiftName);
+                  return cell !== null && cell.shiftName && !DAYOFF_SET.has(cell.shiftName);
                 }).length;
                 const isFocusedRow = focusedCandidateId === member.id;
                 return (
