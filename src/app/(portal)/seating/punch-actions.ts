@@ -50,7 +50,7 @@ export async function getStaffPunchSummaryAction(
 
   const { data: logs } = await admin
     .from("punch_logs")
-    .select("id, punch_type, recorded_at")
+    .select("id, punch_type, recorded_at, note")
     .eq("project_id", projectId)
     .eq("staff_id", staffId)
     .gte("recorded_at", start)
@@ -72,6 +72,8 @@ export async function getStaffPunchSummaryAction(
   for (const l of logs ?? []) {
     switch (l.punch_type) {
       case "clock_in":
+        // 管理者補正(note=admin_manual)は実打刻として扱わない＝スタッフ本人が出勤打刻できる
+        if ((l as { note?: string | null }).note === "admin_manual") break;
         clockInId = l.id; clockIn = l.recorded_at; break;
       case "clock_out":
         clockOutId = l.id; clockOut = l.recorded_at; break;

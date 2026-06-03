@@ -361,12 +361,18 @@ export default async function AttendancePage({
   }
 
   // 打刻マップ
-  const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null }>();
+  //  clockIn      : 勤怠ステータス導出用（管理者補正 admin_manual も含む）
+  //  realClockIn  : 「打刻済/打刻未」バッジ用（実打刻のみ・admin_manual除外）
+  const punchMap = new Map<string, { clockIn: string | null; realClockIn: string | null; clockOut: string | null }>();
   for (const p of punchLogs ?? []) {
-    if (!punchMap.has(p.staff_id)) punchMap.set(p.staff_id, { clockIn: null, clockOut: null });
+    if (!punchMap.has(p.staff_id)) punchMap.set(p.staff_id, { clockIn: null, realClockIn: null, clockOut: null });
     const e = punchMap.get(p.staff_id)!;
-    if (p.punch_type === "clock_in"  && !e.clockIn)  e.clockIn  = p.recorded_at;
-    if (p.punch_type === "clock_out")                 e.clockOut = p.recorded_at;
+    const note = (p as { note?: string | null }).note;
+    if (p.punch_type === "clock_in") {
+      if (!e.clockIn) e.clockIn = p.recorded_at;
+      if (note !== "admin_manual" && !e.realClockIn) e.realClockIn = p.recorded_at;
+    }
+    if (p.punch_type === "clock_out") e.clockOut = p.recorded_at;
   }
 
   const departureMap = new Map(
@@ -416,7 +422,7 @@ export default async function AttendancePage({
     let status: StatusKey;
     if (absence)              status = "absent";
     else if (punch?.clockOut) status = "clocked_out";
-    else if (punch?.clockIn)  status = "working";
+    else if (punch?.clockIn)  status = "working";   // admin_manual含む＝手動「勤務中」も維持
     else if (late)            status = "late";
     else if (departure)       status = "departed";
     else                      status = "not_departed";
@@ -428,7 +434,7 @@ export default async function AttendancePage({
       accountNumber:  member.accountNumber,
       section:        resolveSection(shiftName, member.section, sectionOrderFull),
       status,
-      clockIn:        punch?.clockIn  ?? null,
+      clockIn:        punch?.realClockIn ?? null,   // バッジ用は実打刻のみ（admin_manual除外）
       clockOut:       punch?.clockOut ?? null,
       departureTime:  departure?.reportedAt  ?? null,
       etaMinutes:     departure?.etaMinutes  ?? null,
