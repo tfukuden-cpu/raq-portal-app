@@ -1,11 +1,22 @@
 "use client";
 
 import type { SectionGroup, StaffTimeline, PunchSegment } from "./AttendanceClient";
+import type { BreakSlotSetting } from "@/app/(portal)/seating/break-actions";
 
 interface Props {
   punchTimelines: StaffTimeline[];
   grouped: SectionGroup[];
+  breakSlots: BreakSlotSetting[];
+  slotByStaff: Record<string, number>;
+  onSlotChange: (staffId: string, slot: number) => void;
+  disabled?: boolean;
 }
+
+const SLOT_BADGE: Record<number, string> = {
+  1: "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300",
+  2: "bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300",
+  3: "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300",
+};
 
 const SEG_COLOR: Record<PunchSegment["type"], string> = {
   working:    "bg-green-400 dark:bg-green-600",
@@ -35,16 +46,16 @@ function fmtDur(min: number): string {
   return h > 0 ? `${h}h${String(m).padStart(2, "0")}m` : `${m}m`;
 }
 
-export default function PunchTimelineSection({ punchTimelines, grouped }: Props) {
+export default function PunchTimelineSection({ punchTimelines, grouped, breakSlots, slotByStaff, onSlotChange, disabled }: Props) {
   const tlMap = new Map(punchTimelines.map(t => [t.staffId, t]));
   const nowMin = toMin(new Date().toISOString());
 
-  type Row = { staffId: string; name: string; accountNumber: string | null };
+  type Row = { staffId: string; name: string; accountNumber: string | null; section: string };
   const rows: Row[] = [];
   for (const sec of grouped) {
     for (const sg of sec.shiftGroups) {
       for (const m of sg.members) {
-        rows.push({ staffId: m.staffId, name: m.name, accountNumber: m.accountNumber });
+        rows.push({ staffId: m.staffId, name: m.name, accountNumber: m.accountNumber, section: sec.section });
       }
     }
   }
@@ -72,19 +83,24 @@ export default function PunchTimelineSection({ punchTimelines, grouped }: Props)
   }
 
   return (
-    <TimelineView rows={rows} tlMap={tlMap} ticks={ticks} pct={pct} nowMin={nowMin} />
+    <TimelineView rows={rows} tlMap={tlMap} ticks={ticks} pct={pct} nowMin={nowMin}
+      breakSlots={breakSlots} slotByStaff={slotByStaff} onSlotChange={onSlotChange} disabled={disabled} />
   );
 }
 
 type ViewProps = {
-  rows: { staffId: string; name: string; accountNumber: string | null }[];
+  rows: { staffId: string; name: string; accountNumber: string | null; section: string }[];
   tlMap: Map<string, StaffTimeline>;
   ticks: number[];
   pct: (min: number) => number;
   nowMin: number;
+  breakSlots: BreakSlotSetting[];
+  slotByStaff: Record<string, number>;
+  onSlotChange: (staffId: string, slot: number) => void;
+  disabled?: boolean;
 };
 
-function TimelineView({ rows, tlMap, ticks, pct, nowMin }: ViewProps) {
+function TimelineView({ rows, tlMap, ticks, pct, nowMin, breakSlots, slotByStaff, onSlotChange, disabled }: ViewProps) {
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between mb-2">
@@ -102,7 +118,8 @@ function TimelineView({ rows, tlMap, ticks, pct, nowMin }: ViewProps) {
         <div style={{ minWidth: "720px" }}>
           <TimelineHeader ticks={ticks} pct={pct} />
           {rows.map(row => (
-            <TimelineRow key={row.staffId} row={row} tl={tlMap.get(row.staffId)} ticks={ticks} pct={pct} nowMin={nowMin} />
+            <TimelineRow key={row.staffId} row={row} tl={tlMap.get(row.staffId)} ticks={ticks} pct={pct} nowMin={nowMin}
+              breakSlots={breakSlots} slotNumber={slotByStaff[row.staffId] ?? null} onSlotChange={onSlotChange} disabled={disabled} />
           ))}
         </div>
       </div>
@@ -128,14 +145,19 @@ function TimelineHeader({ ticks, pct }: { ticks: number[]; pct: (min: number) =>
 }
 
 type RowProps = {
-  row: { staffId: string; name: string; accountNumber: string | null };
+  row: { staffId: string; name: string; accountNumber: string | null; section: string };
   tl: StaffTimeline | undefined;
   ticks: number[];
   pct: (min: number) => number;
   nowMin: number;
+  breakSlots: BreakSlotSetting[];
+  slotNumber: number | null;
+  onSlotChange: (staffId: string, slot: number) => void;
+  disabled?: boolean;
 };
 
-function TimelineRow({ row, tl, ticks, pct, nowMin }: RowProps) {
+function TimelineRow({ row, tl, ticks, pct, nowMin, breakSlots, slotNumber, onSlotChange, disabled }: RowProps) {
+  const canSlot = row.section === "査定" || row.section === "販売";
   const segs = tl?.segments ?? [];
   let workMin = 0, breakMin = 0, leaveMin = 0;
   for (const s of segs) {
@@ -150,6 +172,21 @@ function TimelineRow({ row, tl, ticks, pct, nowMin }: RowProps) {
       <div className="w-32 shrink-0 px-3 py-2 min-w-0">
         <span className="text-[9px] font-mono text-zinc-400 tabular-nums block leading-none">{row.accountNumber ?? ""}</span>
         <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200 truncate block">{row.name}</span>
+        {canSlot && breakSlots.length > 0 && (
+          <select
+            value={slotNumber ?? ""}
+            onChange={e => onSlotChange(row.staffId, parseInt(e.target.value))}
+            disabled={disabled}
+            className={`mt-0.5 text-[9px] px-1 py-0.5 rounded border-0 tabular-nums disabled:opacity-40 focus:outline-none ${slotNumber ? SLOT_BADGE[slotNumber] : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"}`}
+          >
+            <option value="">休憩未割当</option>
+            {breakSlots.map(s => (
+              <option key={s.slot_number} value={s.slot_number}>
+                {s.label}{s.start_time.slice(0, 5)}-{s.end_time.slice(0, 5)}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
       <div className="relative flex-1 h-9 my-0.5">
         {ticks.map(t => (
