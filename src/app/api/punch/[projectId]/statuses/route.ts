@@ -53,7 +53,8 @@ export async function GET(
     }
     const e = map.get(p.staff_id)!;
     const note = (p as { note?: string | null }).note ?? null;
-    if (p.punch_type === "clock_in")  e.clockedIn  = true;
+    // 管理者補正(note=admin_manual)は実打刻として扱わない＝本人が出勤打刻できる
+    if (p.punch_type === "clock_in"  && note !== "admin_manual") e.clockedIn  = true;
     if (p.punch_type === "clock_out") e.clockedOut = true;
     if (p.punch_type === "break_start") {
       e.lastBreak      = "break_start";
