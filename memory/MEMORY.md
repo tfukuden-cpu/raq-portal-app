@@ -15,20 +15,32 @@
 
 ## 現在の開発状態（2026-06-04）
 
-### 直近の作業（座席表・打刻機能の大幅実装）
+### 直近の作業（UI/UXリファクタリング）
 
-#### 当日状況（管理者メニュー）
+#### 当日状況 `/attendance` タブ構成変更
+- **タブ名変更**: 「休憩管理」→「打刻記録」
+- **DateNav をstickyヘッダーに統合**: 全タブで日付ナビが常時表示。出力ボタンも同行（出勤簿タブのみ）
+- **ページスクロール廃止**: `h-dvh flex flex-col overflow-hidden` 構造に変更。ヘッダーは `shrink-0`、コンテンツは `flex-1 min-h-0`
+  - 出勤簿: `overflow-hidden`（列カードが内部スクロール）
+  - 座席表: 専用 `flex-1 min-h-0 overflow-hidden` コンテナ（SeatingClient が h-full で充填）
+  - 確定後変更・打刻記録: `overflow-y-auto`（コンテンツ長に応じてスクロール）
+- **打刻タイムライン行に小休憩分数セレクタ追加**: 査定・販売セクションのスタッフ行に「小休憩なし/10分/15分/20分/30分」ドロップダウン（`break_short_settings` に保存）
+
+#### 座席表 `/seating` 改善
+- **「休憩一覧」ボタン追加**: ツールバーに追加。押すとスロット×査定/販売×早番/遅番 の人数・名前一覧パネルをトグル表示
+  - データは `seats`（shiftName含む）＋ `breakAssignmentMap` から `useMemo` で計算
+  - embedded / standalone 両方のツールバーに存在
+- **未配置パネル高さ修正**: `maxHeight` を `embedded ? calc(100dvh-320px) : calc(100dvh-270px)` に
+- **ページスクロール廃止**: SeatingClient も `h-dvh flex flex-col overflow-hidden`（standalone）/ `h-full flex flex-col overflow-hidden`（embedded）に変更
+
+#### 以前の作業（座席表・打刻機能の大幅実装）
 - 出勤簿セクションヘッダーを「配置/規定（充足）出 遅 欠 未」形式に改訂
 - 名前カードを2列グリッドレイアウトに再設計（AccNum自動整列）
 - 複数セクションバッジ表示（project_members.sections[]対応）
 - Excel出力フォーマット変更：セクション横並び1シート＋色分け（exceljs使用）
 - サマリーカード（出勤/遅刻/欠勤）削除
-- 休憩管理タブを打刻タイムラインに一本化（PunchTimelineSection.tsx 新規）
-  - 当日出勤者全員の出勤〜休憩〜離席〜退勤を横棒ガントで表示
-  - 勤務=緑/休憩=橙/離席=グレー、時間軸自動調整、進行中点滅、行末に合計時間
-  - page.tsxでpunch_logsからセグメント列を構築（StaffTimeline/PunchSegment型）
-  - スロットマトリクス表は廃止。各スタッフ行（査定・販売）に休憩スロット変更ドロップダウンを統合
-  - 再割り振りボタンは削除（休憩自動配置は座席表編集の「休憩割り振り」ボタンで実施）
+- 打刻タイムライン（PunchTimelineSection.tsx）：出勤〜休憩〜離席〜退勤を横棒ガントで表示
+  - スタッフ行に休憩スロット変更ドロップダウン（査定・販売のみ）＋小休憩分数セレクタ
 
 #### 座席表の全面改修
 - **打刻モーダル**（PunchModal.tsx 新規）: 全状態遷移対応
@@ -170,6 +182,8 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | `absence_reports`/`late_reports` の `reason` はNOT NULL | 手動欠勤/遅刻設定時は `reason: "管理者設定"` を入れる。`null` で制約違反 |
 | `upsert` の `onConflict` 指定は制約が必要 | DBにUNIQUE制約が無いと失敗。errorチェック無しだと成功扱いになり保存されない。存在チェック→insert方式が安全 |
 | 座席表キャンバスはネイティブスクロール+ドラッグパン併用 | `overflow-auto`コンテナ+`scrollRef`でドラッグ時に`scrollLeft/scrollTop`を操作（transform方式から変更） |
+| ページ固定レイアウトは `h-dvh flex flex-col overflow-hidden` | `min-h-screen` + `sticky` の組み合わせは全体スクロールが発生する。固定ページは main を `h-dvh flex flex-col`、ヘッダーは `shrink-0`、コンテンツは `flex-1 min-h-0` にする |
+| embedded SeatingClient は `h-full flex flex-col` が必須 | 親コンテナが `flex-1 min-h-0` でも SeatingClient が `min-h-screen` だと突き破ってスクロールが発生する |
 | 打刻状態と勤怠ステータスは別軸（`note="admin_manual"`方式） | 出勤簿で手動「勤務中」にすると `clock_in` を `note="admin_manual"` 付きで作成。出勤簿は勤怠ステータス導出にこれを含めて「勤務中」を永続表示するが、打刻バッジ(realClockIn)とスタッフ用判定はadmin_manualを除外＝打刻状態は「打刻未」のままスタッフ本人が出勤打刻できる。**admin_manual除外が必要な箇所**: `seating/punch-actions.ts getStaffPunchSummaryAction`・`attendance/page.tsx realClockIn`・`punch/[projectId]/page.tsx clockedIn`・`api/punch/[projectId]/statuses/route.ts clockedIn`(打刻端末のポーリング上書き注意) |
 
 ---
