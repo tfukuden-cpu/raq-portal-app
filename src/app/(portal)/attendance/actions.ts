@@ -123,21 +123,15 @@ export async function changeAttendanceStatusAction(
       }
 
     } else if (newStatus === "working") {
-      // 勤務中: 欠勤・出発を解除 → 出勤打刻がなければ現在時刻で作成
+      // 勤務中（現場状態）: 欠勤・出発を解除。
+      // ★ 出勤打刻(clock_in)は自動作成しない＝打刻状態と勤怠ステータスを分離。
+      //   未打刻のスタッフはスタッフ用打刻ページ/座席表から本人が出勤打刻できる。
       await admin.from("absence_reports").delete()
         .eq("project_id", projectId).eq("staff_id", staffId).eq("absence_date", date);
       await admin.from("departure_reports").delete()
         .eq("project_id", projectId).eq("staff_id", staffId)
         .gte("reported_at", dayStart).lte("reported_at", dayEnd);
-      const { data: ci } = await admin.from("punch_logs")
-        .select("id").eq("project_id", projectId).eq("staff_id", staffId)
-        .eq("punch_type", "clock_in")
-        .gte("recorded_at", dayStart).lte("recorded_at", dayEnd).maybeSingle();
-      if (!ci) {
-        await admin.from("punch_logs")
-          .insert({ project_id: projectId, staff_id: staffId, punch_type: "clock_in", recorded_at: nowISO });
-      }
-      // 退勤があれば削除（勤務中に戻す）
+      // 退勤があれば削除（現場状態を勤務中に戻す）。出勤打刻は作らない。
       await admin.from("punch_logs").delete()
         .eq("project_id", projectId).eq("staff_id", staffId)
         .eq("punch_type", "clock_out")

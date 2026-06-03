@@ -164,6 +164,7 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | `absence_reports`/`late_reports` の `reason` はNOT NULL | 手動欠勤/遅刻設定時は `reason: "管理者設定"` を入れる。`null` で制約違反 |
 | `upsert` の `onConflict` 指定は制約が必要 | DBにUNIQUE制約が無いと失敗。errorチェック無しだと成功扱いになり保存されない。存在チェック→insert方式が安全 |
 | 座席表キャンバスはネイティブスクロール+ドラッグパン併用 | `overflow-auto`コンテナ+`scrollRef`でドラッグ時に`scrollLeft/scrollTop`を操作（transform方式から変更） |
+| 打刻状態と勤怠ステータスは別軸 | 出勤簿の「勤務中」手動変更で `clock_in` を作らない（`changeAttendanceStatusAction`）。打刻はスタッフ本人が座席表/打刻ページから行う。勤怠ステータス=現場状態(勤務/休憩)、打刻状態=clock_in有無 |
 
 ---
 
