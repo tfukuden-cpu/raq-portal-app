@@ -80,7 +80,7 @@ export async function changeAttendanceStatusAction(
         .eq("absence_date", date).maybeSingle();
       if (!existingAbs) {
         const { error } = await admin.from("absence_reports")
-          .insert({ project_id: projectId, staff_id: staffId, absence_date: date, reason: null });
+          .insert({ project_id: projectId, staff_id: staffId, absence_date: date, reason: "管理者設定" });
         if (error) return { ok: false, error: error.message };
       }
 
@@ -93,7 +93,7 @@ export async function changeAttendanceStatusAction(
         .eq("late_date", date).maybeSingle();
       if (!existingLate) {
         const { error } = await admin.from("late_reports")
-          .insert({ project_id: projectId, staff_id: staffId, late_date: date, reason: null });
+          .insert({ project_id: projectId, staff_id: staffId, late_date: date, reason: "管理者設定" });
         if (error) return { ok: false, error: error.message };
       }
 
