@@ -420,27 +420,29 @@ export default function SeatingClient({
   // ── 右パネルからのドラッグ ────────────────────────────────
   const [dragPanelStaffId, setDragPanelStaffId] = useState<string | null>(null);
 
-  // ── キャンバス ドラッグパン ────────────────────────────────
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-  const panRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+  // ── キャンバス ドラッグパン（ネイティブスクロール連動） ──────
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const panRef = useRef<{ startX: number; startY: number; baseLeft: number; baseTop: number } | null>(null);
   const [isPanning, setIsPanning] = useState(false);
 
   function handleCanvasPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    // ボタン・座席カード上はパンしない
+    // ボタン・座席カード上はパンしない（席タップ・編集を優先）
     if ((e.target as HTMLElement).closest("button")) return;
     if (e.button !== 0) return;
-    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-    panRef.current = { startX: e.clientX, startY: e.clientY, baseX: panOffset.x, baseY: panOffset.y };
+    const el = scrollRef.current;
+    if (!el) return;
+    panRef.current = { startX: e.clientX, startY: e.clientY, baseLeft: el.scrollLeft, baseTop: el.scrollTop };
     setIsPanning(false);
   }
 
   function handleCanvasPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!panRef.current) return;
+    if (!panRef.current || !scrollRef.current) return;
     const dx = e.clientX - panRef.current.startX;
     const dy = e.clientY - panRef.current.startY;
     if (!isPanning && Math.abs(dx) + Math.abs(dy) > 4) setIsPanning(true);
     if (!isPanning && Math.abs(dx) + Math.abs(dy) <= 4) return;
-    setPanOffset({ x: panRef.current.baseX + dx, y: panRef.current.baseY + dy });
+    scrollRef.current.scrollLeft = panRef.current.baseLeft - dx;
+    scrollRef.current.scrollTop  = panRef.current.baseTop  - dy;
   }
 
   function handleCanvasPointerUp() {
@@ -670,7 +672,8 @@ export default function SeatingClient({
       {/* キャンバス + 右パネル */}
       <div className={`flex gap-2 ${embedded ? "px-3 pb-4" : "px-3 pb-28"}`}>
       <div
-        className="overflow-hidden flex-1 min-w-0 rounded-2xl select-none"
+        ref={scrollRef}
+        className="overflow-auto flex-1 min-w-0 rounded-2xl select-none"
         style={{ cursor: isPanning ? "grabbing" : "grab" }}
         onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
@@ -686,8 +689,6 @@ export default function SeatingClient({
           ].join(" ")}
           style={{
             width: "max(100%, 1800px)", aspectRatio: "3/2",
-            transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
-            willChange: "transform",
           }}
         >
           {seats.length === 0 && (

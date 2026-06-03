@@ -56,6 +56,8 @@
 - 非出勤スタッフが座席配置時にオレンジ破線＋「!」バッジで警告
 - 座席カードのヘッダー高さ・シフト表示を調整
 - `break_slot_assignments` にUNIQUE制約(project_id,staff_id,assignment_date)追加済
+- 出勤簿の欠勤/遅刻手動設定が更新後に消える問題修正（upsert失敗→存在チェック+insert、reasonにNOT NULL対応値）
+- 座席表をネイティブ横スクロール+ドラッグパン併用に変更
 
 ### 次に着手できるタスク
 - /attendance/edit に早退・残業申請タブ追加（承認UI）
@@ -159,6 +161,9 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | 休憩時間はスロット時間幅から自動計算 | `getBreakDurationAction`: オーバーライド→スロット幅→デフォルト(60/15)の優先順 |
 | `break_slot_assignments` は `.maybeSingle()` 禁止 | 複数行ヒット時にnullを返す。`.limit(1)` を使う。UNIQUE(project_id,staff_id,assignment_date) 制約済 |
 | 埋め込みSeatingClientには `breakSlots` を必ず渡す | AttendanceClient→SeatingClientで渡し忘れると休憩パターンの選択肢が空になる |
+| `absence_reports`/`late_reports` の `reason` はNOT NULL | 手動欠勤/遅刻設定時は `reason: "管理者設定"` を入れる。`null` で制約違反 |
+| `upsert` の `onConflict` 指定は制約が必要 | DBにUNIQUE制約が無いと失敗。errorチェック無しだと成功扱いになり保存されない。存在チェック→insert方式が安全 |
+| 座席表キャンバスはネイティブスクロール+ドラッグパン併用 | `overflow-auto`コンテナ+`scrollRef`でドラッグ時に`scrollLeft/scrollTop`を操作（transform方式から変更） |
 
 ---
 
