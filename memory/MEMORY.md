@@ -48,7 +48,14 @@
 - breakStartAction, breakEndAction, breakResetAction
 - getBreakDurationAction（スロット時間幅からも自動計算）
 - setBreakDurationAction, setBreakSlotAction
+- getBreakSlotAssignmentAction（`.limit(1)`使用・重複対策）
 - getStaffPunchSummaryAction
+
+#### 動作確認済み（バグ修正完了）
+- 休憩パターン未割当バグ修正：`.maybeSingle()`→`.limit(1)`、AttendanceClient→SeatingClientへbreakSlots伝達
+- 非出勤スタッフが座席配置時にオレンジ破線＋「!」バッジで警告
+- 座席カードのヘッダー高さ・シフト表示を調整
+- `break_slot_assignments` にUNIQUE制約(project_id,staff_id,assignment_date)追加済
 
 ### 次に着手できるタスク
 - /attendance/edit に早退・残業申請タブ追加（承認UI）
@@ -150,6 +157,8 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | `punch_logs.punch_type` の追加タイプ | `seat_leave`/`seat_return`（離席追跡）。CHECK制約を更新済み |
 | `"use server"` ファイルに同期関数エクスポート禁止 | `judgeClockOut` をpunch-actions.tsから分離した経緯あり |
 | 休憩時間はスロット時間幅から自動計算 | `getBreakDurationAction`: オーバーライド→スロット幅→デフォルト(60/15)の優先順 |
+| `break_slot_assignments` は `.maybeSingle()` 禁止 | 複数行ヒット時にnullを返す。`.limit(1)` を使う。UNIQUE(project_id,staff_id,assignment_date) 制約済 |
+| 埋め込みSeatingClientには `breakSlots` を必ず渡す | AttendanceClient→SeatingClientで渡し忘れると休憩パターンの選択肢が空になる |
 
 ---
 
