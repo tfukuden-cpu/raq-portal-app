@@ -171,6 +171,7 @@ export default function SeatingClient({
   const [editMode, setEditMode] = useState(false);
   const [draftMap, setDraftMap] = useState<Map<string, string | null>>(new Map());
   const [pickSeatId, setPickSeatId] = useState<string | null>(null);
+  const [showBreakPanel, setShowBreakPanel] = useState(false);
   const [staffSearch, setStaffSearch] = useState("");
   // ドラッグ＆スワップ
   const [dragSeatId, setDragSeatId] = useState<string | null>(null);
@@ -267,6 +268,30 @@ export default function SeatingClient({
 
   // スタッフ名マップ（id → name）
   const staffNameMap = useMemo(() => new Map(staffList.map(s => [s.id, s])), [staffList]);
+
+  // 休憩一覧：スロット × セクション × 早番/遅番
+  const breakOverview = useMemo(() => {
+    if (!breakSlots.length) return [];
+    const TARGET_SECTIONS = ["査定", "販売"] as const;
+    type SecData = { early: string[]; late: string[] };
+    const rows = breakSlots.map(slot => ({
+      slot,
+      secs: Object.fromEntries(TARGET_SECTIONS.map(sec => [sec, { early: [], late: [] } as SecData])) as Record<string, SecData>,
+    }));
+    for (const seat of seats) {
+      if (!seat.staffId || !seat.staffName || !seat.section) continue;
+      const slotNum = breakAssignmentMap[seat.staffId];
+      if (!slotNum) continue;
+      const row = rows.find(r => r.slot.slot_number === slotNum);
+      if (!row) continue;
+      const sec = seat.section as string;
+      if (!row.secs[sec]) continue;
+      const isEarly = seat.shiftName?.includes("早番") ?? false;
+      if (isEarly) row.secs[sec].early.push(seat.staffName);
+      else row.secs[sec].late.push(seat.staffName);
+    }
+    return rows;
+  }, [seats, breakSlots, breakAssignmentMap]);
 
   useEffect(() => {
     if (pickSeatId !== null) {
@@ -552,6 +577,14 @@ export default function SeatingClient({
                 >
                   休憩割り振り
                 </button>
+                {breakSlots.length > 0 && (
+                  <button
+                    onClick={() => setShowBreakPanel(v => !v)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${showBreakPanel ? "bg-violet-600 text-white border-violet-600" : "text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 border-violet-200 dark:border-violet-800 hover:bg-violet-50"}`}
+                  >
+                    休憩一覧
+                  </button>
+                )}
               </>
             )}
             {editMode ? (
@@ -632,6 +665,14 @@ export default function SeatingClient({
               </button>
             </>
           )}
+          {!editMode && breakSlots.length > 0 && (
+            <button
+              onClick={() => setShowBreakPanel(v => !v)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${showBreakPanel ? "bg-violet-600 text-white border-violet-600" : "text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 border-violet-200 dark:border-violet-800 hover:bg-violet-50"}`}
+            >
+              休憩一覧
+            </button>
+          )}
         </div>
       )}
 
@@ -666,6 +707,63 @@ export default function SeatingClient({
             </div>
           ))}
           <span className="text-[11px] text-zinc-400">・タップで休憩切替</span>
+        </div>
+      )}
+
+      {/* 休憩一覧パネル */}
+      {showBreakPanel && breakOverview.length > 0 && (
+        <div className={`${embedded ? "mx-3" : "mx-3"} mb-2 rounded-2xl border border-violet-200 dark:border-violet-800 bg-white dark:bg-zinc-950 overflow-hidden`}>
+          <div className="px-3 py-2 bg-violet-50 dark:bg-violet-950/30 border-b border-violet-200 dark:border-violet-800 flex items-center justify-between">
+            <p className="text-xs font-bold text-violet-700 dark:text-violet-300">休憩スロット一覧</p>
+            <button onClick={() => setShowBreakPanel(false)} className="text-[11px] text-violet-400 hover:text-violet-600">✕</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]" style={{ minWidth: "500px" }}>
+              <thead>
+                <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+                  <th className="px-3 py-1.5 text-left font-semibold text-zinc-400 w-28">スロット</th>
+                  {["査定", "販売"].map(sec => (
+                    <th key={sec} colSpan={2} className="px-3 py-1.5 text-left font-semibold text-zinc-500 border-l border-zinc-100 dark:border-zinc-800">{sec}</th>
+                  ))}
+                </tr>
+                <tr className="border-b border-zinc-100 dark:border-zinc-800 text-zinc-400">
+                  <th />
+                  {["査定", "販売"].flatMap(sec => [
+                    <th key={`${sec}-early`} className="px-3 py-1 text-left font-normal border-l border-zinc-100 dark:border-zinc-800">早番</th>,
+                    <th key={`${sec}-late`} className="px-3 py-1 text-left font-normal border-l border-zinc-50 dark:border-zinc-900">遅番</th>,
+                  ])}
+                </tr>
+              </thead>
+              <tbody>
+                {breakOverview.map(({ slot, secs }) => {
+                  const slotBg = slot.slot_number === 1 ? "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300"
+                               : slot.slot_number === 2 ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300"
+                               : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300";
+                  return (
+                    <tr key={slot.slot_number} className="border-b last:border-b-0 border-zinc-100 dark:border-zinc-800 align-top">
+                      <td className={`px-3 py-2 font-semibold tabular-nums ${slotBg}`}>
+                        <div>{slot.label} スロット{slot.slot_number}</div>
+                        <div className="text-[10px] opacity-80 mt-0.5">{slot.start_time.slice(0,5)}〜{slot.end_time.slice(0,5)}</div>
+                      </td>
+                      {["査定", "販売"].flatMap(sec => {
+                        const d = secs[sec] ?? { early: [], late: [] };
+                        return [
+                          <td key={`${sec}-early`} className="px-3 py-2 border-l border-zinc-100 dark:border-zinc-800">
+                            <div className="text-zinc-500 font-semibold mb-0.5">{d.early.length}名</div>
+                            {d.early.map(n => <div key={n} className="text-zinc-600 dark:text-zinc-400">{n}</div>)}
+                          </td>,
+                          <td key={`${sec}-late`} className="px-3 py-2 border-l border-zinc-50 dark:border-zinc-900">
+                            <div className="text-zinc-500 font-semibold mb-0.5">{d.late.length}名</div>
+                            {d.late.map(n => <div key={n} className="text-zinc-600 dark:text-zinc-400">{n}</div>)}
+                          </td>,
+                        ];
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -885,7 +983,7 @@ export default function SeatingClient({
       {staffList.length > 0 && (() => {
         const unassigned = sortedStaff.filter(s => !assignedSeatBySf.has(s.id));
         return (
-          <div className="w-40 shrink-0 flex flex-col" style={{ maxHeight: "calc(100dvh - 220px)" }}>
+          <div className="w-40 shrink-0 flex flex-col" style={{ maxHeight: embedded ? "calc(100dvh - 320px)" : "calc(100dvh - 270px)" }}>
             <p className="text-[11px] font-semibold text-zinc-400 mb-1.5 px-0.5">
               未配置 <span className="font-normal tabular-nums">({unassigned.length}名)</span>
             </p>

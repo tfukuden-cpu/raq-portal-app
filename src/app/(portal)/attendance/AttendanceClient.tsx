@@ -565,7 +565,7 @@ export default function AttendanceClient({
                 : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
             }`}
           >
-            休憩管理
+            打刻記録
             {breakAssignments.length > 0 && (
               <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full tabular-nums ${
                 activeTab === "break"
@@ -594,7 +594,7 @@ export default function AttendanceClient({
           )}
         </div>
       </div>
-      <div className="max-w-6xl mx-auto px-4 pt-4 pb-32">
+      <div className={`max-w-6xl mx-auto px-4 pt-4 ${activeTab !== "today" ? "pb-32" : ""}`}>
 
         {/* ── 確定後変更タブ ── */}
         {activeTab === "changes" && (
