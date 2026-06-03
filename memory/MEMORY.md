@@ -208,31 +208,33 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 
 ## MDの更新ルール
 
-### いつ更新するか
+### いつ何を更新するか
 
-| タイミング | 更新するファイル |
-|-----------|----------------|
-| 新しいページ・機能を追加した | `routing-and-pages.md` |
-| 新しいDBテーブルを作った | `db-tables.md` + `SPEC.md §7` |
-| lib/ に新しい関数を追加した | `lib-functions.md` |
-| 新しいAPI Routeを追加した | `api-routes-and-cron.md` |
-| Cronの処理・時刻を変えた | `api-routes-and-cron.md` |
-| 通知キーを追加・廃止した | `notification-settings-types.md` + `SPEC.md §4-7` |
-| 新しいアイコンを追加した | `icons.md` |
-| 新しいバグ注意点が見つかった | `MEMORY.md`（地雷セクション）|
-| 作業フェーズが変わった | `MEMORY.md`（現在の開発状態）|
-| 仕様が変わった | `SPEC.md` を先に更新、MEMORYは差分のみ |
+| 作業内容 | 更新する全ファイル |
+|---------|-----------------|
+| 既存ページ・タブの機能を変更・追加した | `SPEC.md`（該当セクション） + `memory/MEMORY.md`（現在の状態） + `memory/routing-and-pages.md`（タブ名等変更時） |
+| 新しいページを追加した | `SPEC.md`（新セクション追加） + `memory/routing-and-pages.md` + `memory/MEMORY.md`（現在の状態） |
+| 新しいDBテーブルを作った | `SPEC.md §7` + `memory/db-tables.md` |
+| lib/ に新しい関数を追加した | `memory/lib-functions.md` |
+| 新しいAPI Routeを追加した | `memory/api-routes-and-cron.md` |
+| Cronの処理・時刻を変えた | `memory/api-routes-and-cron.md` |
+| 通知キーを追加・廃止した | `memory/notification-settings-types.md` + `SPEC.md §4-7` |
+| 新しいアイコンを追加した | `memory/icons.md` |
+| 新しいバグ・地雷を発見した | `memory/MEMORY.md`（地雷セクション） |
+| UIレイアウト・設計パターンを変えた | `memory/MEMORY.md`（地雷セクション） + ユーザーメモリ `dev-rules.md` |
+| 作業フェーズが完了した | `memory/MEMORY.md`（現在の開発状態） |
 
 ### 更新の原則
 
-1. **SPECとの重複は避ける** — 仕様の詳細はSPEC.mdに書く。ここは「どこを見るか」の案内役
-2. **コードの実態を書く** — SPECに書いてあっても実装が違う場合はMEMORYが正
-3. **廃止情報も残す** — 「使ってはいけないもの」は削除せず廃止済みとして明記する
-4. **現在の開発状態は作業完了時に更新** — 次のAIセッションのために「今どこまで進んだか」を書く
+1. **SPEC.md が一次情報** — 機能仕様はSPEC.mdに書く。memory/ はSPECの場所案内と差分・注意事項のみ
+2. **SPEC.mdとmemory/は必ずセットで更新** — SPECだけ・memoryだけの片方更新は次セッションで矛盾が起きる
+3. **コードの実態を書く** — SPECに書いてあっても実装が違う場合はMEMORYが正
+4. **廃止情報も残す** — 「使ってはいけないもの」は削除せず廃止済みとして明記する
+5. **現在の開発状態は作業完了時に更新** — 次のAIセッションのために「今どこまで進んだか」を書く
 
 ### 更新しなくていいもの
 
-- `SPEC.md` に書いてある内容と完全に同じ情報（コピー不要）
+- `SPEC.md` に書いてある内容と完全に同じ情報（memory/にコピー不要）
 - 一時的なデバッグ情報・実験的な変更
 - node_modules・ビルド成果物の情報
 
