@@ -115,7 +115,11 @@ export async function GET(req: NextRequest) {
   // ─ 認証 ─
   const authHeader = req.headers.get("authorization");
   const secret     = process.env.CRON_SECRET;
-  if (!secret || authHeader !== `Bearer ${secret}`) {
+  const testToken  = process.env.CRON_TEST_TOKEN;
+  const isAuthorized =
+    (secret && authHeader === `Bearer ${secret}`) ||
+    (testToken && authHeader === `Bearer ${testToken}`);
+  if (!isAuthorized) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
