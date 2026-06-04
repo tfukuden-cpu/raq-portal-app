@@ -335,16 +335,18 @@ export default function AttendanceEditClient({
         const shiftStartISO = row.shiftStart ? `${row.date}T${row.shiftStart.slice(0, 5)}:00+09:00` : null;
         const shiftEndISO   = row.shiftEnd   ? `${row.date}T${row.shiftEnd.slice(0, 5)}:00+09:00`   : null;
 
-        const outMs = new Date(newClockOut).getTime();
-        const isNewEarlyLeave = shiftEndISO ? outMs < new Date(shiftEndISO).getTime() - 10 * 60000 : false;
+        const rawOutMs = new Date(newClockOut).getTime();
         const isOvertimeApproved = !!row.overtimeApprover;
 
         const effectiveInMs = (!isLate && shiftStartISO)
           ? new Date(shiftStartISO).getTime()
           : new Date(newClockIn).getTime();
-        const effectiveOutMs = ((isOvertimeApproved || isNewEarlyLeave) || !shiftEndISO)
-          ? outMs
-          : new Date(shiftEndISO).getTime();
+
+        // 残業申請なし → min(実打刻, シフト終了)でキャップ
+        const shiftEndMs = shiftEndISO ? new Date(shiftEndISO).getTime() : rawOutMs;
+        const effectiveOutMs = (isOvertimeApproved || !shiftEndISO)
+          ? rawOutMs
+          : Math.min(rawOutMs, shiftEndMs);
 
         workingMinutes  = Math.max(0, Math.round((effectiveOutMs - effectiveInMs) / 60000) - breakMins);
         regularMinutes  = Math.min(workingMinutes, 480);
