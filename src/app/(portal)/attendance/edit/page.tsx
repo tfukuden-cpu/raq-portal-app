@@ -236,7 +236,9 @@ export default async function AttendanceEditPage({
       earlyLeaveApprover: exception?.earlyLeave ?? null,
       isConfirmed:       confirmedBy !== null,
       confirmedBy,
-      modifiedBy:        punch?.modifiedBy ?? null,
+      modifiedBy:        punch?.modifiedBy
+        ? (memberMap.get(punch.modifiedBy)?.name ?? punch.modifiedBy)
+        : null,
       status,
     });
   }
