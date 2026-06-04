@@ -75,7 +75,7 @@ export default async function AttendanceEditPage({
       .gte("shift_date", startDate).lte("shift_date", endDate)
       .order("shift_date").order("staff_id").limit(20000),
     admin.from("punch_logs")
-      .select("staff_id, punch_type, recorded_at")
+      .select("staff_id, punch_type, recorded_at, note")
       .eq("project_id", projectId)
       .in("punch_type", ["clock_in", "clock_out"])
       .gte("recorded_at", startISO).lte("recorded_at", endISO)
@@ -106,10 +106,10 @@ export default async function AttendanceEditPage({
       .select("staff_id, section, staffs(id, name, display_name, account_number, company_name)")
       .eq("project_id", projectId).order("staff_id"),
     admin.from("punch_corrections")
-      .select("id, target_date, corrected_in, corrected_out, reason, status, review_note, created_at, staff_id, staffs(name, display_name, account_number)")
+      .select("id, target_date, corrected_in, corrected_out, reason, status, review_note, created_at, staff_id")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false })
-      .limit(1000),
+      .limit(2000),
     admin.from("work_exception_requests")
       .select("id, staff_id, shift_date, request_type, signer_name, status, created_at")
       .eq("project_id", projectId)
@@ -135,13 +135,16 @@ export default async function AttendanceEditPage({
       .map(p => [p.name as string, { start: p.start_time as string, end: p.end_time as string }])
   );
 
-  const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null }>();
+  const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null; modifiedBy: string | null }>();
   for (const p of punches ?? []) {
     const key = `${p.staff_id}_${p.recorded_at.slice(0, 10)}`;
-    if (!punchMap.has(key)) punchMap.set(key, { clockIn: null, clockOut: null });
+    if (!punchMap.has(key)) punchMap.set(key, { clockIn: null, clockOut: null, modifiedBy: null });
     const e = punchMap.get(key)!;
     if (p.punch_type === "clock_in"  && !e.clockIn)  e.clockIn  = p.recorded_at;
     if (p.punch_type === "clock_out")                  e.clockOut = p.recorded_at;
+    // 管理者修正ノートを記録（"管理者修正:S001" 形式）
+    const note = (p as { note?: string | null }).note ?? null;
+    if (note?.startsWith("管理者修正:")) e.modifiedBy = note.replace("管理者修正:", "");
   }
 
   const absenceMap = new Map((absences ?? []).map(a => [`${a.staff_id}_${a.absence_date}`, a.reason ?? ""]));
@@ -233,6 +236,7 @@ export default async function AttendanceEditPage({
       earlyLeaveApprover: exception?.earlyLeave ?? null,
       isConfirmed:       confirmedBy !== null,
       confirmedBy,
+      modifiedBy:        punch?.modifiedBy ?? null,
       status,
     });
   }
@@ -250,9 +254,7 @@ export default async function AttendanceEditPage({
   }
 
   const corrections: CorrectionRow[] = (rawCorrections ?? []).map(c => {
-    const s = (Array.isArray(c.staffs) ? c.staffs[0] : c.staffs) as {
-      display_name?: string | null; name?: string | null; account_number?: string | null;
-    } | null;
+    const m = memberMap.get(c.staff_id as string);
     return {
       id:            c.id,
       target_date:   c.target_date,
@@ -263,8 +265,8 @@ export default async function AttendanceEditPage({
       review_note:   c.review_note,
       created_at:    c.created_at,
       staff_id:      c.staff_id,
-      staff_name:    s?.display_name ?? s?.name ?? c.staff_id,
-      accountNumber: s?.account_number ?? null,
+      staff_name:    m?.name ?? c.staff_id,
+      accountNumber: m?.accountNumber ?? null,
       shiftName:     corrShiftMap.get(`${c.staff_id}_${c.target_date}`) ?? null,
     };
   });

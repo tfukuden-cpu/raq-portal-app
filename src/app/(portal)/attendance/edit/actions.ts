@@ -40,7 +40,7 @@ export async function savePunchCorrectionAction(
   isLate: boolean,
   lateReason: string,
 ): Promise<CorrectionResult> {
-  await requireAdmin(projectId);
+  const adminId = await requireAdmin(projectId);
   const admin = createAdminClient();
 
   const dayStart = `${date}T00:00:00+09:00`;
@@ -56,8 +56,9 @@ export async function savePunchCorrectionAction(
     .lte("recorded_at", dayEnd);
 
   const inserts: { project_id: string; staff_id: string; punch_type: string; recorded_at: string }[] = [];
-  if (clockIn)  inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "clock_in",  recorded_at: `${date}T${clockIn}:00+09:00`  });
-  if (clockOut) inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "clock_out", recorded_at: `${date}T${clockOut}:00+09:00` });
+  const modNote = `管理者修正:${adminId}`;
+  if (clockIn)  inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "clock_in",  recorded_at: `${date}T${clockIn}:00+09:00`,  note: modNote });
+  if (clockOut) inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "clock_out", recorded_at: `${date}T${clockOut}:00+09:00`, note: modNote });
   if (inserts.length > 0) {
     const { error } = await admin.from("punch_logs").insert(inserts);
     if (error) return { ok: false, error: error.message };

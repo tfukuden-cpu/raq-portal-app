@@ -38,6 +38,7 @@ export type AttendanceRow = {
   earlyLeaveApprover: string | null;
   isConfirmed: boolean;
   confirmedBy: string | null;
+  modifiedBy: string | null;
   status: "ok" | "no_clockin" | "no_clockout" | "absent" | "late" | "early";
 };
 
@@ -730,6 +731,7 @@ export default function AttendanceEditClient({
                     if (row.earlyLeaveApprover) notes.push(`早退:${row.earlyLeaveApprover}`);
                     if (row.absenceReason)      notes.push(row.absenceReason);
                     if (row.lateReason)         notes.push(row.lateReason);
+                    if (row.modifiedBy)         notes.push(`修正者:${row.modifiedBy}`);
                     return (
                       <tr key={key} className={STATUS_STYLE[row.status]}>
                         <td className="px-2 py-1.5 whitespace-nowrap">
