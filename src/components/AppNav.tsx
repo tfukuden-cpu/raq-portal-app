@@ -155,7 +155,7 @@ export default function AppNav({
             aria-label={isCol ? "メニューを開く" : "メニューを閉じる"}
             className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity flex-shrink-0"
           >
-            <Image src="/icons/icon-512-any.png" alt="RaqWorks" width={28} height={28} className="flex-shrink-0" />
+            <Image src="/icons/icon-512-any.png" alt="RaqWorks" width={40} height={40} className="flex-shrink-0" />
             {!isCol && (
               <span className="text-[14px] font-semibold text-white truncate">
                 RaqWorks
