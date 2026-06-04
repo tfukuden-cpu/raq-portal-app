@@ -5,7 +5,7 @@ import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import type { NavItem, NavSection } from "@/app/(portal)/layout";
-import { ICON_MAP, MenuIcon } from "@/components/icons";
+import { ICON_MAP } from "@/components/icons";
 
 interface AppNavProps {
   sections: NavSection[];
@@ -148,23 +148,20 @@ export default function AppNav({
       >
         {/* ロゴ + トグル */}
         <div className={`flex items-center h-14 flex-shrink-0 border-b border-white/[0.08] ${
-          isCol ? "justify-center" : "px-4 gap-3"
+          isCol ? "justify-center" : "px-4 gap-2"
         }`}>
           <button
             onClick={toggle}
             aria-label={isCol ? "メニューを開く" : "メニューを閉じる"}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/80 transition-colors flex-shrink-0"
+            className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity flex-shrink-0"
           >
-            <MenuIcon className="w-4 h-4" />
-          </button>
-          {!isCol && (
-            <div className="flex items-center gap-2 min-w-0">
-              <Image src="/icons/icon-512-any.png" alt="RaqWorks" width={28} height={28} className="flex-shrink-0" />
+            <Image src="/icons/icon-512-any.png" alt="RaqWorks" width={28} height={28} className="flex-shrink-0" />
+            {!isCol && (
               <span className="text-[14px] font-semibold text-white truncate">
                 RaqWorks
               </span>
-            </div>
-          )}
+            )}
+          </button>
         </div>
 
         {/* ナビゲーション */}
