@@ -342,11 +342,12 @@ export default function AttendanceEditClient({
           ? new Date(shiftStartISO).getTime()
           : new Date(newClockIn).getTime();
 
-        // 残業申請なし → min(実打刻, シフト終了)でキャップ
+        // 残業or早退の申請あり → 実打刻、どちらも申請なし → シフト終了時刻
+        const isEarlyLeaveApproved = !!row.earlyLeaveApprover;
         const shiftEndMs = shiftEndISO ? new Date(shiftEndISO).getTime() : rawOutMs;
-        const effectiveOutMs = (isOvertimeApproved || !shiftEndISO)
+        const effectiveOutMs = (isOvertimeApproved || isEarlyLeaveApproved || !shiftEndISO)
           ? rawOutMs
-          : Math.min(rawOutMs, shiftEndMs);
+          : shiftEndMs;
 
         workingMinutes  = Math.max(0, Math.round((effectiveOutMs - effectiveInMs) / 60000) - breakMins);
         regularMinutes  = Math.min(workingMinutes, 480);

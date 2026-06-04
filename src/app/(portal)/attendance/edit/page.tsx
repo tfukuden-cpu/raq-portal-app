@@ -204,12 +204,13 @@ export default async function AttendanceEditPage({
         ? new Date(`${shift.shift_date}T${shiftStart.slice(0, 5)}:00+09:00`).getTime()
         : new Date(punch.clockIn).getTime();
 
-      // 残業申請あり → 実打刻、なし → min(実打刻, シフト終了)でキャップ（早退も自動対応）
-      const rawOutMs    = new Date(punch.clockOut).getTime();
-      const shiftEndMs  = shiftEnd ? new Date(`${shift.shift_date}T${shiftEnd.slice(0, 5)}:00+09:00`).getTime() : rawOutMs;
-      const effectiveOutMs = (isOvertimeApproved || !shiftEnd)
+      // 残業or早退の申請あり → 実打刻、どちらも申請なし → シフト終了時刻
+      const rawOutMs          = new Date(punch.clockOut).getTime();
+      const shiftEndMs        = shiftEnd ? new Date(`${shift.shift_date}T${shiftEnd.slice(0, 5)}:00+09:00`).getTime() : rawOutMs;
+      const isEarlyLeaveApproved = !!exception?.earlyLeave;
+      const effectiveOutMs = (isOvertimeApproved || isEarlyLeaveApproved || !shiftEnd)
         ? rawOutMs
-        : Math.min(rawOutMs, shiftEndMs);
+        : shiftEndMs;
 
       workingMinutes  = Math.max(0, Math.round((effectiveOutMs - effectiveInMs) / 60000) - breakMinutes);
       regularMinutes  = Math.min(workingMinutes, 480);
