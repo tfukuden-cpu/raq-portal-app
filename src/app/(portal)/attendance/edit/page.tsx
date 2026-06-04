@@ -253,6 +253,13 @@ export default async function AttendanceEditPage({
     corrShiftMap.set(`${s.staff_id}_${s.shift_date}`, s.shift_name ?? "");
   }
 
+  // SV承認者マップ（staff_id_date → signer_name）
+  const signerMap = new Map<string, string>();
+  for (const e of rawExceptions ?? []) {
+    const sn = (e as { signer_name?: string | null }).signer_name;
+    if (sn) signerMap.set(`${e.staff_id}_${e.shift_date}`, sn as string);
+  }
+
   const corrections: CorrectionRow[] = (rawCorrections ?? []).map(c => {
     const m = memberMap.get(c.staff_id as string);
     return {
@@ -268,6 +275,7 @@ export default async function AttendanceEditPage({
       staff_name:    m?.name ?? c.staff_id,
       accountNumber: m?.accountNumber ?? null,
       shiftName:     corrShiftMap.get(`${c.staff_id}_${c.target_date}`) ?? null,
+      svSigner:      signerMap.get(`${c.staff_id}_${c.target_date}`) ?? null,
     };
   });
 

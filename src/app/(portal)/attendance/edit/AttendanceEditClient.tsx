@@ -55,6 +55,7 @@ export type CorrectionRow = {
   staff_name: string;
   accountNumber: string | null;
   shiftName: string | null;
+  svSigner: string | null;
 };
 
 export type ExceptionRow = {
@@ -103,6 +104,11 @@ function fmtHours(mins: number): string {
 function fmtDate(d: string): string {
   const dt = new Date(d + "T00:00:00+09:00");
   return `${dt.getMonth() + 1}/${dt.getDate()}（${WEEKDAY_JP[dt.getDay()]}）`;
+}
+
+function fmtTime(t: string | null): string {
+  if (!t) return "─";
+  return t.slice(0, 5); // "09:00:00" → "09:00"
 }
 
 function fmtApplied(iso: string): string {
@@ -522,7 +528,8 @@ export default function AttendanceEditClient({
                       <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">シフト</th>
                       <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">修正出勤</th>
                       <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">修正退勤</th>
-                      <th className="px-2 py-2 text-left font-semibold text-zinc-500 min-w-[120px]">申請理由</th>
+                      <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">SV承認</th>
+                      <th className="px-2 py-2 text-left font-semibold text-zinc-500 min-w-[160px]">申請理由</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
@@ -553,16 +560,22 @@ export default function AttendanceEditClient({
                         <td className="px-2 py-1.5 whitespace-nowrap font-semibold text-zinc-800 dark:text-zinc-100">{row.staff_name}</td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-zinc-500">{row.shiftName ?? "─"}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums font-mono whitespace-nowrap text-zinc-700 dark:text-zinc-300">
-                          {row.corrected_in ?? "─"}
+                          {fmtTime(row.corrected_in)}
                         </td>
                         <td className="px-2 py-1.5 text-right tabular-nums font-mono whitespace-nowrap text-zinc-700 dark:text-zinc-300">
-                          {row.corrected_out ?? "─"}
+                          {fmtTime(row.corrected_out)}
                         </td>
-                        <td className="px-2 py-1.5 text-zinc-500 max-w-[200px] truncate">
-                          {row.reason}
-                          {row.review_note && (
-                            <span className="ml-1 text-zinc-400">（{row.review_note}）</span>
-                          )}
+                        <td className="px-2 py-1.5 whitespace-nowrap text-zinc-500 dark:text-zinc-400">
+                          {row.svSigner ?? "─"}
+                        </td>
+                        <td className="px-2 py-1.5 text-zinc-500 dark:text-zinc-400 max-w-[240px]"
+                          title={row.reason + (row.review_note ? `\n（${row.review_note}）` : "")}>
+                          <div className="whitespace-pre-wrap break-words text-[11px] leading-relaxed">
+                            {row.reason}
+                            {row.review_note && (
+                              <span className="block text-zinc-400 mt-0.5">（{row.review_note}）</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
