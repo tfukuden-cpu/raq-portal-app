@@ -13,9 +13,37 @@
 
 ---
 
-## 現在の開発状態（2026-06-04）
+## 現在の開発状態（2026-06-09）
 
-### 直近の作業（バグ修正）
+### 直近の作業（勤怠管理メニュー全面改修）
+
+#### `/attendance/edit` を「勤怠管理」に4タブ改修
+- **ナビラベル変更**: 「勤怠実績」→「勤怠管理」
+- **`/attendance/corrections` 廃止**: 管理者向け補正申請審査を `/attendance/edit` に統合
+- **スタッフ側 `/corrections` の管理ボタン**: `/corrections/manage` → `/attendance/edit?tab=corrections` に変更
+
+**タブ構成:**
+
+| タブ | 内容 |
+|------|------|
+| 勤怠修正 | `punch_corrections`（staff申請の打刻修正）一覧。承認/却下モーダル。承認済みに「再適用」ボタン |
+| 申請一覧 | `work_exception_requests`（早退・残業申請）一覧。早退/残業フィルタ |
+| 勤怠実績 | スタッフ一覧→クリックで当月全日カレンダー詳細（公休・希望休含む）。月移動・出力・打刻修正モーダル・確定ボタン |
+| 遵守率 | 既存のWorkRecordsClient |
+
+**バグ修正（重要）:**
+- `punch_corrections` の `staffs` FK join がDB未定義の場合に全件 null になっていた → memberMap による名前解決に変更
+- 打刻修正申請の承認時に `corrected_in/out` が `"HH:MM:SS"` で返るのに `:00` を追加 → `"HH:MM:SS:00+09:00"` という不正タイムスタンプになり insert が無音で失敗していた → `.slice(0,5)` で正規化
+- `corrections/actions.ts` にも同じタイムスタンプバグがあり修正済み
+
+**新機能:**
+- 管理者が打刻を直接修正すると `punch_logs.note = "管理者修正:staffId"` を記録 → 備考欄に修正者名を表示
+- `work_exception_requests.signer_name` を `punch_corrections` とクロス参照して SV承認者列に表示
+- `reapplyCorrectionAction`: 承認済み申請を再適用（タイムスタンプバグで未反映だったデータを修正できる）
+- 勤怠実績詳細: `allShiftMap` で公休・希望休含む全シフトを表示、当月全日付カレンダー生成
+- 勤怠実績詳細: `staffId` を URL に保持し月移動してもスタッフ選択を維持
+
+### 前の作業（バグ修正）
 
 #### シフト管理 充足テーブル日付ずれ修正
 - **ShiftDayList（シフトタブ）**: 充足テーブルの左固定列が90pxでヘッダー（番号72+氏名88=160px）と不一致 → `w-[160px]` に修正。日付列幅も `w-[50px]`→`w-11`(44px) に統一
@@ -100,8 +128,9 @@
 - 座席表をネイティブ横スクロール+ドラッグパン併用に変更
 
 ### 次に着手できるタスク
-- /attendance/edit に早退・残業申請タブ追加（承認UI）
-- 勤怠申請の承認フロー完成
+- 勤怠管理「申請一覧」タブに承認/却下フロー追加（work_exception_requests は現状 view-only）
+- 勤怠実績出力（個人・会社・期間別 Excel/PDF 出力）の実装
+- 承認済み補正申請の再適用ボタン: タイムスタンプバグで未反映のデータは手動で「再適用」を押す必要がある
 
 ---
 
@@ -210,6 +239,9 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | ShiftEditGrid 充足行は `colSpan={2}` 必須 | 充足tbody各行の左ラベル`<td>`はACCT_W+NAME_Wを合わせて `colSpan={2}` でスパンしないと、prevDate列がNAME_W(88px)列に入り全日付が1列ずれる |
 | ShiftDayList 充足テーブルの左固定幅はヘッダーと合わせる | 充足テーブル左固定=番号(72)+氏名(88)=160px、日付列幅=w-11(44px) でなければscrollLeft同期しても列がずれる |
 | ShiftEditGrid monthTotalはpatternNameSetで絞らない | `patternNameSet` でフィルタすると研修等の特殊シフトが稼働日数にカウントされない。「公休・希望休・有休・特別休暇」以外を全て稼働日とする |
+| `punch_corrections` の staffs join は FK 未定義のため使用禁止 | FK が無いと query 全体が null を返す。`memberMap`（project_members から構築）で名前解決する |
+| `punch_corrections.corrected_in/out` は `"HH:MM:SS"` 形式 | DB の time 型は秒付きで返る。`slice(0,5)` で `"HH:MM"` に正規化してから `:00+09:00` を付けること。二重付加すると無音 insert 失敗 |
+| 管理者直接修正は `punch_logs.note = "管理者修正:staffId"` で記録 | `savePunchCorrectionAction` で note 付き insert。勤怠実績詳細の備考欄に修正者名として表示。staffId は memberMap で名前変換 |
 | LINE連携 mode=link のエラーは `/link-line` に戻す | `/login?error=line_failed` に戻すと「LINEログイン失敗」と表示されてユーザーが混乱する。mode=link のエラーは `/link-line?error=...` にリダイレクト |
 | `getRedirectUri()` のフォールバックは本番URL | `http://localhost:3000` がフォールバックだとVercelで `NEXT_PUBLIC_BASE_URL` 未設定時にLINEトークン交換失敗。`https://raq-portal-app.vercel.app` に修正済み |
 | LINE Login チャネルが Developing だと一般スタッフはOAuth不可 | チャネルメンバー以外は認証できない。LINE Login を全スタッフに使わせるには Publish 必要 |

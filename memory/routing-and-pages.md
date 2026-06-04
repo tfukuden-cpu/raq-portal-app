@@ -35,7 +35,7 @@
 | パス | 機能 |
 |------|------|
 | `/attendance` | 当日状況（タブ: 出勤簿 / 確定後変更 / 座席表 / 打刻記録） |
-| `/attendance/edit` | 勤怠管理（打刻ログ編集） |
+| `/attendance/edit` | 勤怠管理（4タブ: 勤怠修正・申請一覧・勤怠実績・遵守率）URLパラメータ: `?tab=corrections\|requests\|records\|compliance&month=YYYY-MM&staffId=S001` |
 | `/shifts/manage` | シフト管理・インポート |
 | `/members` | メンバー管理・番付 |
 | `/seating` | 座席配置 |
@@ -57,6 +57,12 @@
 | `/admin/staffs` | スタッフ一覧（全社） |
 | `/admin/gsheet-oauth` | Google Sheets OAuth設定 |
 | `/admin/work-records` | 勤怠レコード管理 |
+
+## 廃止済みページ
+
+| パス | 廃止理由 |
+|------|---------|
+| `/attendance/corrections` | `/attendance/edit?tab=corrections` に統合（2026-06-09）|
 
 ## ナビゲーション構造
 

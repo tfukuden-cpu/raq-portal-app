@@ -85,6 +85,18 @@ Cookie名: `rqp_project_id`、30日有効
 
 型: `DailyRecord`, `StaffMonthlySummary`（勤怠計算ロジック）
 
+## src/app/(portal)/attendance/edit/actions.ts — 勤怠管理サーバーアクション
+
+| 関数 | 用途 |
+|------|------|
+| `savePunchCorrectionAction(projectId, staffId, date, clockIn, clockOut, isAbsent, absenceReason, isLate, lateReason)` | 管理者による直接打刻修正。punch_logs を削除→再挿入。note に `"管理者修正:staffId"` を記録 |
+| `confirmAttendanceAction(projectId, staffId, date)` | 勤怠確定（attendance_confirmations に upsert） |
+| `unconfirmAttendanceAction(projectId, staffId, date)` | 勤怠確定取消 |
+| `reviewCorrectionAction(formData)` | staff申請の打刻修正を承認/却下。承認時は punch_logs を正しい時刻で上書き＋LINE通知 |
+| `reapplyCorrectionAction(id)` | 承認済み申請を punch_logs に再適用（タイムスタンプバグで未反映だった分の救済用） |
+
+**注意:** `corrected_in/out` は DB から `"HH:MM:SS"` で返る → `.slice(0,5)` で正規化してから `:00+09:00` を付ける（`applyPunchCorrection()` ヘルパーで共通化）
+
 ## src/components/icons.tsx
 
 使えるアイコン → [icons.md](icons.md) 参照
