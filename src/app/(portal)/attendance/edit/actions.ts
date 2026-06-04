@@ -55,7 +55,7 @@ export async function savePunchCorrectionAction(
     .gte("recorded_at", dayStart)
     .lte("recorded_at", dayEnd);
 
-  const inserts: { project_id: string; staff_id: string; punch_type: string; recorded_at: string }[] = [];
+  const inserts: { project_id: string; staff_id: string; punch_type: string; recorded_at: string; note?: string }[] = [];
   const modNote = `管理者修正:${adminId}`;
   if (clockIn)  inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "clock_in",  recorded_at: `${date}T${clockIn}:00+09:00`,  note: modNote });
   if (clockOut) inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "clock_out", recorded_at: `${date}T${clockOut}:00+09:00`, note: modNote });
