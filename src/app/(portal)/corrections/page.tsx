@@ -61,7 +61,7 @@ export default async function CorrectionsPage() {
             <p className="text-sm font-semibold text-zinc-400 mt-0.5">{project?.name}</p>
           </div>
           {isAdmin && (
-            <a href="/corrections/manage" className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors">
+            <a href="/attendance/edit?tab=corrections" className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors">
               管理
             </a>
           )}

@@ -2,6 +2,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { sendEventNotify } from "@/lib/notify";
 
 async function requireAdmin(projectId: string): Promise<string> {
   const supabase = await createClient();
@@ -80,4 +82,108 @@ export async function savePunchCorrectionAction(
   }
 
   return { ok: true };
+}
+
+export async function confirmAttendanceAction(
+  projectId: string,
+  staffId: string,
+  date: string,
+): Promise<CorrectionResult> {
+  const reviewerId = await requireAdmin(projectId);
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("attendance_confirmations")
+    .upsert(
+      { project_id: projectId, staff_id: staffId, work_date: date, confirmed_by: reviewerId },
+      { onConflict: "project_id,staff_id,work_date" },
+    );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function unconfirmAttendanceAction(
+  projectId: string,
+  staffId: string,
+  date: string,
+): Promise<CorrectionResult> {
+  await requireAdmin(projectId);
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("attendance_confirmations")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .eq("work_date", date);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export type ReviewResult = { success: boolean; message?: string };
+
+/** 打刻修正申請 承認・却下（承認時は punch_logs を上書き） */
+export async function reviewCorrectionAction(
+  formData: FormData,
+): Promise<ReviewResult> {
+  const id         = String(formData.get("id") ?? "").trim();
+  const status     = String(formData.get("status") ?? "");
+  const reviewNote = String(formData.get("reviewNote") ?? "").trim() || null;
+
+  if (!id || !["approved", "rejected"].includes(status)) {
+    return { success: false, message: "不正なパラメータです" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const reviewerId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+  const admin = createAdminClient();
+
+  const { data: correction } = await admin
+    .from("punch_corrections")
+    .select("project_id, staff_id, target_date, corrected_in, corrected_out")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!correction) return { success: false, message: "申請が見つかりません" };
+
+  const { error } = await admin
+    .from("punch_corrections")
+    .update({ status, reviewed_by: reviewerId, reviewed_at: new Date().toISOString(), review_note: reviewNote })
+    .eq("id", id);
+
+  if (error) return { success: false, message: "更新失敗：" + error.message };
+
+  if (status === "approved") {
+    const { project_id, staff_id, target_date, corrected_in, corrected_out } = correction;
+    const dateStr  = target_date as string;
+    const startISO = `${dateStr}T00:00:00+09:00`;
+    const endISO   = `${dateStr}T23:59:59+09:00`;
+
+    await admin.from("punch_logs")
+      .delete()
+      .eq("project_id", project_id).eq("staff_id", staff_id)
+      .in("punch_type", ["clock_in", "clock_out"])
+      .gte("recorded_at", startISO).lte("recorded_at", endISO);
+
+    const inserts: { project_id: string; staff_id: string; punch_type: string; recorded_at: string; note: string }[] = [];
+    if (corrected_in)  inserts.push({ project_id, staff_id, punch_type: "clock_in",  recorded_at: `${dateStr}T${corrected_in}:00+09:00`,  note: "勤怠補正申請による修正" });
+    if (corrected_out) inserts.push({ project_id, staff_id, punch_type: "clock_out", recorded_at: `${dateStr}T${corrected_out}:00+09:00`, note: "勤怠補正申請による修正" });
+    if (inserts.length > 0) await admin.from("punch_logs").insert(inserts);
+  }
+
+  const { data: staffRow } = await admin.from("staffs").select("display_name, name").eq("id", correction.staff_id).maybeSingle();
+  const staffName = (staffRow as { display_name?: string | null; name?: string | null } | null)?.display_name
+    ?? (staffRow as { display_name?: string | null; name?: string | null } | null)?.name
+    ?? correction.staff_id;
+
+  await sendEventNotify(
+    correction.project_id as string,
+    "correction_result",
+    { 名前: staffName, 日付: correction.target_date as string, 結果: status === "approved" ? "承認" : "却下" },
+    correction.staff_id as string,
+  );
+
+  revalidatePath("/attendance/edit");
+  return { success: true };
 }
