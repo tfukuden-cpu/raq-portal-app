@@ -61,7 +61,7 @@ export default async function AttendanceEditPage({
     { data: patterns },
     { data: breakOverrides },
     { data: confirmations },
-    { data: exceptions },
+    { data: approvedExceptions },
     { data: staffMembers },
     { data: rawCorrections },
     { data: rawExceptions },
@@ -156,7 +156,7 @@ export default async function AttendanceEditPage({
   );
 
   const exceptionMap = new Map<string, { overtime: string | null; earlyLeave: string | null }>();
-  for (const ex of exceptions ?? []) {
+  for (const ex of approvedExceptions ?? []) {
     const key = `${ex.staff_id}_${ex.shift_date}`;
     if (!exceptionMap.has(key)) exceptionMap.set(key, { overtime: null, earlyLeave: null });
     const e = exceptionMap.get(key)!;
