@@ -364,9 +364,14 @@ export async function GET(req: NextRequest) {
             const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
 
             let followupCount = 0;
+            const followupSentNames: string[] = [];
+            const followupFailedNames: string[] = [];
             for (const staff of staffRows ?? []) {
-              if (!staff.line_user_id) continue;
-              const name    = staff.display_name ?? staff.name ?? staff.id;
+              const name = staff.display_name ?? staff.name ?? staff.id;
+              if (!staff.line_user_id) {
+                followupFailedNames.push(`${name}（LINE未登録）`);
+                continue;
+              }
               const message = resolveMessage(
                 cfg.message ?? DEFAULT_NOTIFY_MESSAGES.absence_followup_remind,
                 { "名前": name, "翌日": tmrw }
@@ -380,9 +385,20 @@ export async function GET(req: NextRequest) {
               void logNotify({ projectId, notifyType: "absence_followup_remind", recipientType: "staff", recipientId: staff.id, recipientName: name, message });
               sent++;
               followupCount++;
+              followupSentNames.push(name);
             }
             if (!testStaffId && groupId && followupCount > 0) {
-              await pushLine(groupId, `【経過報告リマインド】本日欠勤かつ翌日（${fmtMD(tmrw)}）出勤予定の${followupCount}名に経過報告リマインドを送信しました。`);
+              const lines = [
+                `【経過報告リマインド】${fmtMD(tmrw)}出勤予定の欠勤者 ${followupCount}名に送信しました。`,
+                "",
+                ...followupSentNames.map(n => `・${n}`),
+              ];
+              if (followupFailedNames.length > 0) {
+                lines.push("");
+                lines.push(`⚠️ 送信失敗 ${followupFailedNames.length}名`);
+                followupFailedNames.forEach(n => lines.push(`・${n}`));
+              }
+              await pushLine(groupId, lines.join("\n"));
               sent++;
             }
           }
