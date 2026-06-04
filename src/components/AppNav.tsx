@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import type { NavItem, NavSection } from "@/app/(portal)/layout";
 import { ICON_MAP, MenuIcon } from "@/components/icons";
 
@@ -157,8 +158,8 @@ export default function AppNav({
             <MenuIcon className="w-4 h-4" />
           </button>
           {!isCol && (
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-6 h-6 rounded-full border-2 border-white/60 flex-shrink-0" />
+            <div className="flex items-center gap-2 min-w-0">
+              <Image src="/icons/icon-512-any.png" alt="RaqWorks" width={28} height={28} className="flex-shrink-0" />
               <span className="text-[14px] font-semibold text-white truncate">
                 RaqWorks
               </span>
