@@ -48,6 +48,11 @@ body {
   padding-bottom: calc(5rem + env(safe-area-inset-bottom));
 }
 
+/* 管理者・運用者用（セクションタブ+ナビで背高のボトムバー対応） */
+@utility pb-safe-xl {
+  padding-bottom: calc(9rem + env(safe-area-inset-bottom));
+}
+
 @utility nav-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }

@@ -69,8 +69,12 @@ export default function AppNav({
   useEffect(() => {
     document.documentElement.classList.toggle("noscroll", isNoScrollPage);
     if (!isNoScrollPage) return;
-    // スクロールが発生したら即座に0に戻す
-    const reset = () => { window.scrollTo(0, 0); };
+    // デスクトップのみスクロールをリセット（モバイルはページスクロールを許可）
+    const reset = () => {
+      if (window.matchMedia("(min-width: 768px)").matches) {
+        window.scrollTo(0, 0);
+      }
+    };
     window.addEventListener("scroll", reset, { passive: true });
     return () => {
       document.documentElement.classList.remove("noscroll");
@@ -256,7 +260,7 @@ export default function AppNav({
       </aside>
 
       {/* ── メインコンテンツ ── */}
-      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out ${isNoScrollPage ? "md:overflow-hidden pb-safe md:pb-0" : "pb-safe md:pb-0"} ${
+      <div className={`flex-1 min-w-0 flex flex-col transition-[padding] duration-200 ease-in-out ${isNoScrollPage ? "md:overflow-hidden" : ""} ${showSectionTabs ? "pb-safe-xl md:pb-0" : "pb-safe md:pb-0"} ${
         isCol ? "md:pl-14" : "md:pl-60"
       }`}>
 
