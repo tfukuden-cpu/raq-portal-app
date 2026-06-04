@@ -20,10 +20,20 @@ export const metadata: Metadata = {
   },
   description: "RaqWorks 社内ポータル",
   applicationName: "RaqWorks",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/icons/icon-512-any.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "RaqWorks",
+    startupImage: "/icons/apple-touch-icon.png",
   },
   formatDetection: {
     telephone: false,
