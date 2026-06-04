@@ -429,16 +429,27 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ### 4-6. 勤怠管理 (`/attendance/edit`)
 
-**3タブ構成:**
+**ナビラベル:** 「勤怠管理」  
+**URLパラメータ:** `?tab=corrections|requests|records|compliance&month=YYYY-MM&staffId=S001`
+
+**4タブ構成:**
 
 | タブ | 機能 |
 |------|------|
-| 勤怠異常 | シフトと打刻のズレ検出（早出・残業・遅刻・未打刻） |
-| 補正申請 | スタッフからの打刻補正申請一覧・承認 |
-| 実績出力 | 月次勤怠データの集計・出力 |
+| 勤怠修正 | `punch_corrections`（staff申請の打刻補正）一覧。フィルタ: 審査中/すべて/承認済/却下。承認/却下モーダル（承認時は punch_logs を正しい時刻で上書き＋LINE通知）。承認済みに「再適用」ボタン（タイムスタンプバグ救済用）。SV承認者列（work_exception_requests とクロス参照） |
+| 申請一覧 | `work_exception_requests`（早退・残業申請）一覧。フィルタ: すべて/早退/残業。SV署名・ステータス表示（現状 view-only） |
+| 勤怠実績 | 月ナビ＋名前検索 → スタッフ一覧（月次サマリー）→ クリックで当月全日カレンダー詳細。公休・希望休含む全シフトを表示。打刻修正モーダル・確定ボタン・月計フッター。管理者修正は備考欄に修正者名を表示。出力ボタン（ExportModal）。詳細ビューでも月移動可（URLにstaffId保持） |
+| 遵守率 | WorkRecordsClient（fixedTab="compliance"）既存の遵守率ビュー |
 
 **関連テーブル:**
-`punch_logs`, `shifts`, `corrections`（推定）
+`punch_logs`, `shifts`, `punch_corrections`, `work_exception_requests`, `absence_reports`, `late_reports`, `attendance_confirmations`, `staff_break_overrides`, `shift_patterns`
+
+**重要な注意事項:**
+- `punch_corrections.corrected_in/out` は DB の time 型なので `"HH:MM:SS"` で返る。ISO生成時は `.slice(0,5)` で `"HH:MM"` に正規化してから `:00+09:00` を付ける（二重付加で insert が無音失敗するバグあり、修正済み）
+- `punch_corrections` に staffs FK が未定義のため join 禁止。名前は `memberMap`（project_members 起源）で解決
+- 管理者による直接修正は `punch_logs.note = "管理者修正:staffId"` を記録し、備考欄に修正者名として表示
+
+**廃止:** `/attendance/corrections`（別ページ）は廃止。`/attendance/edit?tab=corrections` に統合済み（2026-06-09）
 
 ---
 
