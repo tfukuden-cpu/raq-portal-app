@@ -332,7 +332,21 @@ export default function AttendanceEditClient({
       const breakMins   = row.breakMinutes;
       let workingMinutes = 0, regularMinutes = 0, overtimeMinutes = 0;
       if (newClockIn && newClockOut) {
-        workingMinutes  = Math.max(0, Math.round((new Date(newClockOut).getTime() - new Date(newClockIn).getTime()) / 60000) - breakMins);
+        const shiftStartISO = row.shiftStart ? `${row.date}T${row.shiftStart.slice(0, 5)}:00+09:00` : null;
+        const shiftEndISO   = row.shiftEnd   ? `${row.date}T${row.shiftEnd.slice(0, 5)}:00+09:00`   : null;
+
+        const outMs = new Date(newClockOut).getTime();
+        const isNewEarlyLeave = shiftEndISO ? outMs < new Date(shiftEndISO).getTime() - 10 * 60000 : false;
+        const isOvertimeApproved = !!row.overtimeApprover;
+
+        const effectiveInMs = (!isLate && shiftStartISO)
+          ? new Date(shiftStartISO).getTime()
+          : new Date(newClockIn).getTime();
+        const effectiveOutMs = ((isOvertimeApproved || isNewEarlyLeave) || !shiftEndISO)
+          ? outMs
+          : new Date(shiftEndISO).getTime();
+
+        workingMinutes  = Math.max(0, Math.round((effectiveOutMs - effectiveInMs) / 60000) - breakMins);
         regularMinutes  = Math.min(workingMinutes, 480);
         overtimeMinutes = Math.max(0, workingMinutes - 480);
       }

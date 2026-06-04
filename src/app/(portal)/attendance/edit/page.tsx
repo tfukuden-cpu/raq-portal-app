@@ -187,23 +187,32 @@ export default async function AttendanceEditPage({
 
     let isEarlyLeave = false;
     if (punch?.clockOut && shiftEnd) {
-      const endDt = new Date(`${shift.shift_date}T${shiftEnd}:00+09:00`);
+      const endDt = new Date(`${shift.shift_date}T${shiftEnd.slice(0, 5)}:00+09:00`);
       const outDt = new Date(punch.clockOut);
       isEarlyLeave = outDt.getTime() < endDt.getTime() - 10 * 60000;
     }
 
+    const confirmedBy = confirmMap.get(key) ?? null;
+    const exception   = exceptionMap.get(key);
+    const isOvertimeApproved = !!exception?.overtime;
+
     const breakMinutes = breakOverrideMap.get(key) ?? (punch?.clockIn ? 60 : 0);
     let workingMinutes = 0, regularMinutes = 0, overtimeMinutes = 0;
     if (punch?.clockIn && punch?.clockOut) {
-      const inMs  = new Date(punch.clockIn).getTime();
-      const outMs = new Date(punch.clockOut).getTime();
-      workingMinutes  = Math.max(0, Math.round((outMs - inMs) / 60000) - breakMinutes);
+      // 遅刻でなければ出勤 = シフト開始時刻、遅刻なら実打刻
+      const effectiveInMs = (!isLate && shiftStart)
+        ? new Date(`${shift.shift_date}T${shiftStart.slice(0, 5)}:00+09:00`).getTime()
+        : new Date(punch.clockIn).getTime();
+
+      // 残業承認あり or 早退 → 実打刻、定時内 → シフト終了時刻
+      const effectiveOutMs = ((isOvertimeApproved || isEarlyLeave) || !shiftEnd)
+        ? new Date(punch.clockOut).getTime()
+        : new Date(`${shift.shift_date}T${shiftEnd.slice(0, 5)}:00+09:00`).getTime();
+
+      workingMinutes  = Math.max(0, Math.round((effectiveOutMs - effectiveInMs) / 60000) - breakMinutes);
       regularMinutes  = Math.min(workingMinutes, 480);
       overtimeMinutes = Math.max(0, workingMinutes - 480);
     }
-
-    const confirmedBy = confirmMap.get(key) ?? null;
-    const exception   = exceptionMap.get(key);
 
     let status: AttendanceRow["status"] = "ok";
     if (isAbsent)            status = "absent";
