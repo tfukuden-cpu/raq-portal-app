@@ -296,7 +296,18 @@ export async function GET(req: NextRequest) {
     // ── absence_followup_remind：欠勤者への17時経過報告リマインド ─────────────
     if (settings.absence_followup_remind.enabled) {
       const cfg = settings.absence_followup_remind;
-      if (isNearTime(cfg.time ?? "17:00")) {
+      const followupAlreadySent = await (async () => {
+        const { data } = await admin
+          .from("notification_logs")
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("notify_type", "absence_followup_remind")
+          .gte("sent_at", `${today}T00:00:00+09:00`)
+          .limit(1)
+          .maybeSingle();
+        return !!data;
+      })();
+      if (isNearTime(cfg.time ?? "17:00") && !followupAlreadySent) {
         // 当日欠勤スタッフを取得
         const { data: absences } = await admin
           .from("absence_reports")
@@ -326,6 +337,7 @@ export async function GET(req: NextRequest) {
 
             const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
 
+            let followupCount = 0;
             for (const staff of staffRows ?? []) {
               if (!staff.line_user_id) continue;
               const name    = staff.display_name ?? staff.name ?? staff.id;
@@ -339,8 +351,12 @@ export async function GET(req: NextRequest) {
                 "経過報告を入力する",
                 `${appUrl}/absence-followup`,
               );
-              if (groupId) await pushLineWithButton(groupId, message, "経過報告を入力する", `${appUrl}/absence-followup`);
               void logNotify({ projectId, notifyType: "absence_followup_remind", recipientType: "staff", recipientId: staff.id, recipientName: name, message });
+              sent++;
+              followupCount++;
+            }
+            if (groupId && followupCount > 0) {
+              await pushLine(groupId, `【経過報告リマインド】本日欠勤かつ翌日（${fmtMD(tmrw)}）出勤予定の${followupCount}名に経過報告リマインドを送信しました。`);
               sent++;
             }
           }

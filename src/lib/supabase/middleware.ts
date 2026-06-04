@@ -46,6 +46,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/api/punch") ||
     pathname.startsWith("/auth/confirm") ||
     pathname.startsWith("/api/line/webhook") ||
+    pathname.startsWith("/api/cron/") ||
     pathname.startsWith("/api/test-push") ||
     pathname === "/manifest.webmanifest" ||
     pathname.startsWith("/icons/") ||
