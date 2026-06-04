@@ -269,10 +269,20 @@ export default function AttendanceEditClient({
     [staffSummaries, selectedStaffId]
   );
 
-  const detailRows = useMemo(
-    () => localRows.filter(r => r.staffId === selectedStaffId),
-    [localRows, selectedStaffId]
-  );
+  // 選択スタッフの当月全日カレンダー（シフト無し日も含む）
+  const detailCalendar = useMemo(() => {
+    if (!selectedStaffId) return [];
+    const [y, mo] = currentMonth.split("-").map(Number);
+    const daysInMonth = new Date(y, mo, 0).getDate();
+    const rowMap = new Map(
+      localRows.filter(r => r.staffId === selectedStaffId).map(r => [r.date, r])
+    );
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const d = String(i + 1).padStart(2, "0");
+      const date = `${currentMonth}-${d}`;
+      return rowMap.get(date) ?? date; // AttendanceRow または "YYYY-MM-DD"
+    });
+  }, [localRows, selectedStaffId, currentMonth]);
 
   function gotoMonth(m: string) {
     setSelectedStaffId(null);
@@ -660,93 +670,105 @@ export default function AttendanceEditClient({
       {/* ── 勤怠実績タブ（スタッフ詳細） ─────────────────────────── */}
       {activeTab === "records" && selectedStaffId && (
         <div className="pt-4">
-          {detailRows.length === 0 ? (
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-12 text-center text-sm text-zinc-400">
-              データがありません
-            </div>
-          ) : (
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
-                      <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap w-[80px]">操作</th>
-                      <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">日付</th>
-                      <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">シフト</th>
-                      <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">出勤</th>
-                      <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">退勤</th>
-                      <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">休憩</th>
-                      <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">稼働</th>
-                      <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">超過</th>
-                      <th className="px-2 py-2 text-center font-semibold text-zinc-500 whitespace-nowrap w-[64px]">確定</th>
-                      <th className="px-2 py-2 text-left font-semibold text-zinc-500 min-w-[120px]">備考</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
-                    {detailRows.map(row => {
-                      const key = `${row.staffId}_${row.date}`;
-                      const isConfirmed = confirmMap.get(key) !== null && confirmMap.get(key) !== undefined;
-                      const notes: string[] = [];
-                      if (row.overtimeApprover)  notes.push(`残業:${row.overtimeApprover}`);
-                      if (row.earlyLeaveApprover) notes.push(`早退:${row.earlyLeaveApprover}`);
-                      if (row.absenceReason)      notes.push(row.absenceReason);
-                      if (row.lateReason)         notes.push(row.lateReason);
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                    <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap w-[80px]">操作</th>
+                    <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">日付</th>
+                    <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">シフト</th>
+                    <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">出勤</th>
+                    <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">退勤</th>
+                    <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">休憩</th>
+                    <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">稼働</th>
+                    <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">超過</th>
+                    <th className="px-2 py-2 text-center font-semibold text-zinc-500 whitespace-nowrap w-[64px]">確定</th>
+                    <th className="px-2 py-2 text-left font-semibold text-zinc-500 min-w-[120px]">備考</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                  {detailCalendar.map(entry => {
+                    // シフト無し日（文字列）
+                    if (typeof entry === "string") {
+                      const date = entry;
+                      const dt = new Date(date + "T00:00:00+09:00");
+                      const dow = dt.getDay();
                       return (
-                        <tr key={key} className={STATUS_STYLE[row.status]}>
-                          <td className="px-2 py-1.5 whitespace-nowrap">
-                            <button type="button" onClick={() => openEdit(row)}
-                              className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[11px] font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-                              修正
-                            </button>
+                        <tr key={date} className="opacity-40">
+                          <td className="px-2 py-1.5 whitespace-nowrap text-zinc-300 dark:text-zinc-700">─</td>
+                          <td className={`px-2 py-1.5 whitespace-nowrap tabular-nums ${dow === 0 ? "text-red-400" : dow === 6 ? "text-blue-400" : "text-zinc-400"}`}>
+                            {fmtDate(date)}
                           </td>
-                          <td className="px-2 py-1.5 whitespace-nowrap tabular-nums text-zinc-600 dark:text-zinc-300">
-                            {fmtDate(row.date)}
-                            {row.status !== "ok" && (
-                              <span className={`ml-1 text-[10px] ${STATUS_TEXT[row.status]}`}>{STATUS_LABEL[row.status]}</span>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-zinc-500">{row.shiftName}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums font-mono whitespace-nowrap text-zinc-700 dark:text-zinc-300">{toHHMM(row.clockIn)}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums font-mono whitespace-nowrap text-zinc-700 dark:text-zinc-300">{toHHMM(row.clockOut)}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap text-zinc-500">{row.breakMinutes > 0 ? fmtHours(row.breakMinutes) : "─"}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums font-semibold whitespace-nowrap text-zinc-700 dark:text-zinc-200">{fmtHours(row.workingMinutes)}</td>
-                          <td className={`px-2 py-1.5 text-right tabular-nums font-semibold whitespace-nowrap ${row.overtimeMinutes > 0 ? "text-orange-600 dark:text-orange-400" : "text-zinc-400"}`}>
-                            {fmtHours(row.overtimeMinutes)}
-                          </td>
-                          <td className="px-2 py-1.5 text-center whitespace-nowrap">
-                            <button type="button" onClick={() => handleConfirm(row)}
-                              className={[
-                                "text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors",
-                                isConfirmed
-                                  ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200"
-                                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700",
-                              ].join(" ")}>
-                              {isConfirmed ? "確定済" : "確定"}
-                            </button>
-                          </td>
-                          <td className="px-2 py-1.5 text-zinc-400 dark:text-zinc-500 max-w-[200px] truncate">
-                            {notes.join(" / ")}
-                          </td>
+                          <td colSpan={8} className="px-2 py-1.5 text-zinc-300 dark:text-zinc-600">─</td>
                         </tr>
                       );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
-                      <td colSpan={6} className="px-2 py-2 text-xs font-semibold text-zinc-500">月計</td>
-                      <td className="px-2 py-2 text-right tabular-nums font-bold text-zinc-800 dark:text-zinc-100">
-                        {fmtHours(detailRows.reduce((s, r) => s + r.workingMinutes, 0))}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums font-bold text-orange-600 dark:text-orange-400">
-                        {fmtHours(detailRows.reduce((s, r) => s + r.overtimeMinutes, 0))}
-                      </td>
-                      <td colSpan={2}></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                    }
+
+                    // シフトあり日（AttendanceRow）
+                    const row = entry;
+                    const key = `${row.staffId}_${row.date}`;
+                    const isConfirmed = confirmMap.get(key) !== null && confirmMap.get(key) !== undefined;
+                    const notes: string[] = [];
+                    if (row.overtimeApprover)  notes.push(`残業:${row.overtimeApprover}`);
+                    if (row.earlyLeaveApprover) notes.push(`早退:${row.earlyLeaveApprover}`);
+                    if (row.absenceReason)      notes.push(row.absenceReason);
+                    if (row.lateReason)         notes.push(row.lateReason);
+                    return (
+                      <tr key={key} className={STATUS_STYLE[row.status]}>
+                        <td className="px-2 py-1.5 whitespace-nowrap">
+                          <button type="button" onClick={() => openEdit(row)}
+                            className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[11px] font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                            修正
+                          </button>
+                        </td>
+                        <td className="px-2 py-1.5 whitespace-nowrap tabular-nums text-zinc-600 dark:text-zinc-300">
+                          {fmtDate(row.date)}
+                          {row.status !== "ok" && (
+                            <span className={`ml-1 text-[10px] ${STATUS_TEXT[row.status]}`}>{STATUS_LABEL[row.status]}</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5 whitespace-nowrap text-zinc-500">{row.shiftName}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-mono whitespace-nowrap text-zinc-700 dark:text-zinc-300">{toHHMM(row.clockIn)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-mono whitespace-nowrap text-zinc-700 dark:text-zinc-300">{toHHMM(row.clockOut)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap text-zinc-500">{row.breakMinutes > 0 ? fmtHours(row.breakMinutes) : "─"}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold whitespace-nowrap text-zinc-700 dark:text-zinc-200">{fmtHours(row.workingMinutes)}</td>
+                        <td className={`px-2 py-1.5 text-right tabular-nums font-semibold whitespace-nowrap ${row.overtimeMinutes > 0 ? "text-orange-600 dark:text-orange-400" : "text-zinc-400"}`}>
+                          {fmtHours(row.overtimeMinutes)}
+                        </td>
+                        <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                          <button type="button" onClick={() => handleConfirm(row)}
+                            className={[
+                              "text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors",
+                              isConfirmed
+                                ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200"
+                                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700",
+                            ].join(" ")}>
+                            {isConfirmed ? "確定済" : "確定"}
+                          </button>
+                        </td>
+                        <td className="px-2 py-1.5 text-zinc-400 dark:text-zinc-500 max-w-[200px] truncate">
+                          {notes.join(" / ")}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+                    <td colSpan={6} className="px-2 py-2 text-xs font-semibold text-zinc-500">月計</td>
+                    <td className="px-2 py-2 text-right tabular-nums font-bold text-zinc-800 dark:text-zinc-100">
+                      {fmtHours(detailCalendar.filter((e): e is AttendanceRow => typeof e !== "string").reduce((s, r) => s + r.workingMinutes, 0))}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums font-bold text-orange-600 dark:text-orange-400">
+                      {fmtHours(detailCalendar.filter((e): e is AttendanceRow => typeof e !== "string").reduce((s, r) => s + r.overtimeMinutes, 0))}
+                    </td>
+                    <td colSpan={2}></td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
-          )}
+          </div>
         </div>
       )}
 
