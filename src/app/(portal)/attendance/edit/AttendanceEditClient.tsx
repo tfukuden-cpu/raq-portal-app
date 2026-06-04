@@ -160,6 +160,8 @@ export default function AttendanceEditClient({
   currentMonth,
   staffs,
   initialTab = "corrections",
+  allShiftMap = {},
+  initialStaffId = null,
 }: {
   projectId: string;
   rows: AttendanceRow[];
@@ -168,6 +170,8 @@ export default function AttendanceEditClient({
   currentMonth: string;
   staffs: StaffEntry[];
   initialTab?: TabKey;
+  allShiftMap?: Record<string, string>;
+  initialStaffId?: string | null;
 }) {
   const router   = useRouter();
   const today    = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -220,7 +224,7 @@ export default function AttendanceEditClient({
   }, [exceptions, excFilter]);
 
   // ── 勤怠実績タブ ─────────────────────────────────────────────────────────
-  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(initialStaffId);
   const [search,          setSearch]          = useState("");
   const [showExport,      setShowExport]      = useState(false);
   const [editState,       setEditState]       = useState<EditState | null>(null);
@@ -269,8 +273,9 @@ export default function AttendanceEditClient({
     [staffSummaries, selectedStaffId]
   );
 
-  // 選択スタッフの当月全日カレンダー（シフト無し日も含む）
-  const detailCalendar = useMemo(() => {
+  // 選択スタッフの当月全日カレンダー（公休・希望休・シフト無し日含む）
+  type CalEntry = { date: string; row: AttendanceRow | null; shiftName: string | null };
+  const detailCalendar = useMemo((): CalEntry[] => {
     if (!selectedStaffId) return [];
     const [y, mo] = currentMonth.split("-").map(Number);
     const daysInMonth = new Date(y, mo, 0).getDate();
@@ -280,13 +285,16 @@ export default function AttendanceEditClient({
     return Array.from({ length: daysInMonth }, (_, i) => {
       const d = String(i + 1).padStart(2, "0");
       const date = `${currentMonth}-${d}`;
-      return rowMap.get(date) ?? date; // AttendanceRow または "YYYY-MM-DD"
+      const row = rowMap.get(date) ?? null;
+      const shiftName = row?.shiftName ?? allShiftMap[`${selectedStaffId}_${date}`] ?? null;
+      return { date, row, shiftName };
     });
-  }, [localRows, selectedStaffId, currentMonth]);
+  }, [localRows, selectedStaffId, currentMonth, allShiftMap]);
 
-  function gotoMonth(m: string) {
-    setSelectedStaffId(null);
-    router.push(`?tab=records&month=${m}`);
+  function gotoMonth(m: string, keepStaff = false) {
+    const staffParam = keepStaff && selectedStaffId ? `&staffId=${selectedStaffId}` : "";
+    if (!keepStaff) setSelectedStaffId(null);
+    router.push(`?tab=records&month=${m}${staffParam}`);
   }
 
   function openEdit(row: AttendanceRow) {
@@ -473,7 +481,12 @@ export default function AttendanceEditClient({
                 )}
                 {selectedStaffInfo?.name}
               </span>
-              <span className="text-xs text-zinc-400 tabular-nums">{currentMonth.replace("-", "年")}月</span>
+              <button type="button" onClick={() => gotoMonth(prevMonth(currentMonth), true)}
+                className="px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-sm">◀</button>
+              <span className="text-sm font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{currentMonth.replace("-", "年")}月</span>
+              <button type="button" onClick={() => gotoMonth(nextMonth(currentMonth), true)}
+                disabled={nextMonth(currentMonth) > todayMonth}
+                className="px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-sm disabled:opacity-30">▶</button>
               <button type="button" onClick={() => setShowExport(true)}
                 className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors">
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -688,25 +701,28 @@ export default function AttendanceEditClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
-                  {detailCalendar.map(entry => {
-                    // シフト無し日（文字列）
-                    if (typeof entry === "string") {
-                      const date = entry;
-                      const dt = new Date(date + "T00:00:00+09:00");
-                      const dow = dt.getDay();
+                  {detailCalendar.map(({ date, row, shiftName }) => {
+                    const dt  = new Date(date + "T00:00:00+09:00");
+                    const dow = dt.getDay();
+
+                    // シフト無し日 or 公休・希望休など
+                    if (!row) {
+                      const isOff = shiftName != null; // シフト名はあるが稼働外
                       return (
-                        <tr key={date} className="opacity-40">
+                        <tr key={date} className={isOff ? "bg-zinc-50/60 dark:bg-zinc-800/20" : "opacity-35"}>
                           <td className="px-2 py-1.5 whitespace-nowrap text-zinc-300 dark:text-zinc-700">─</td>
-                          <td className={`px-2 py-1.5 whitespace-nowrap tabular-nums ${dow === 0 ? "text-red-400" : dow === 6 ? "text-blue-400" : "text-zinc-400"}`}>
+                          <td className={`px-2 py-1.5 whitespace-nowrap tabular-nums ${dow === 0 ? "text-red-400" : dow === 6 ? "text-blue-400" : "text-zinc-500"}`}>
                             {fmtDate(date)}
                           </td>
-                          <td colSpan={8} className="px-2 py-1.5 text-zinc-300 dark:text-zinc-600">─</td>
+                          <td className="px-2 py-1.5 whitespace-nowrap text-zinc-400 dark:text-zinc-500">
+                            {shiftName ?? "─"}
+                          </td>
+                          <td colSpan={7} className="px-2 py-1.5 text-zinc-300 dark:text-zinc-600">─</td>
                         </tr>
                       );
                     }
 
-                    // シフトあり日（AttendanceRow）
-                    const row = entry;
+                    // シフトあり・稼働日（AttendanceRow）
                     const key = `${row.staffId}_${row.date}`;
                     const isConfirmed = confirmMap.get(key) !== null && confirmMap.get(key) !== undefined;
                     const notes: string[] = [];
@@ -758,10 +774,10 @@ export default function AttendanceEditClient({
                   <tr className="border-t-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
                     <td colSpan={6} className="px-2 py-2 text-xs font-semibold text-zinc-500">月計</td>
                     <td className="px-2 py-2 text-right tabular-nums font-bold text-zinc-800 dark:text-zinc-100">
-                      {fmtHours(detailCalendar.filter((e): e is AttendanceRow => typeof e !== "string").reduce((s, r) => s + r.workingMinutes, 0))}
+                      {fmtHours(detailCalendar.filter(e => e.row).reduce((s, e) => s + e.row!.workingMinutes, 0))}
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums font-bold text-orange-600 dark:text-orange-400">
-                      {fmtHours(detailCalendar.filter((e): e is AttendanceRow => typeof e !== "string").reduce((s, r) => s + r.overtimeMinutes, 0))}
+                      {fmtHours(detailCalendar.filter(e => e.row).reduce((s, e) => s + e.row!.overtimeMinutes, 0))}
                     </td>
                     <td colSpan={2}></td>
                   </tr>

@@ -22,7 +22,7 @@ export default async function AttendanceEditPage({
 }: {
   searchParams: Promise<{ tab?: string; month?: string; staffId?: string }>;
 }) {
-  const { tab: initialTab, month } = await searchParams;
+  const { tab: initialTab, month, staffId: initialStaffId } = await searchParams;
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -237,6 +237,12 @@ export default async function AttendanceEditPage({
     });
   }
 
+  // ── 全シフトマップ（公休・希望休含む、詳細カレンダー用） ─────────────────
+  const allShiftMap: Record<string, string> = {};
+  for (const s of shifts ?? []) {
+    allShiftMap[`${s.staff_id}_${s.shift_date}`] = s.shift_name ?? "";
+  }
+
   // ── 修正申請（CorrectionRow[]） ──────────────────────────────────────────
   const corrShiftMap = new Map<string, string>();
   for (const s of shifts ?? []) {
@@ -309,6 +315,8 @@ export default async function AttendanceEditPage({
           currentMonth={currentMonth}
           staffs={staffs}
           initialTab={resolvedTab}
+          allShiftMap={allShiftMap}
+          initialStaffId={initialStaffId ?? null}
         />
       </div>
     </main>
