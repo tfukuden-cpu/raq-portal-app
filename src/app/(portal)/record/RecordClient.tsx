@@ -216,35 +216,29 @@ export default function RecordClient({
           </div>
 
           {/* ── 統計カード行 ── */}
-          <div className="grid grid-cols-2 md:grid-cols-8 gap-3 mb-4">
+          <div className="mb-4 space-y-2">
             {/* 総勤務時間（大カード） */}
-            <div className="col-span-2 bg-[#0d1b35] dark:bg-zinc-800 rounded-2xl p-4 flex flex-col gap-1">
-              <div className="flex items-center gap-1.5 text-white/60 text-[11px] font-semibold">
-                <ClockIcon /> 総勤務時間
+            <div className="bg-[#0d1b35] dark:bg-zinc-800 rounded-2xl px-4 py-3 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-1.5 text-white/60 text-[11px] font-semibold mb-0.5">
+                  <ClockIcon /> 総勤務時間
+                </div>
+                <p className="text-[26px] font-bold text-white tabular-nums leading-tight">{totalStr}</p>
               </div>
-              <p className="text-[28px] font-bold text-white tabular-nums leading-tight">{totalStr}</p>
-              <div className="flex items-center gap-2 text-[11px] text-white/50 tabular-nums">
-                <span>所定 {scheduledDays}日</span>
-                <span>出勤 {workDays}日</span>
+              <div className="text-right text-[11px] text-white/50 tabular-nums space-y-0.5">
+                <p>所定 {scheduledDays}日</p>
+                <p>出勤 {workDays}日</p>
               </div>
             </div>
-            {/* 出勤日数 */}
-            <StatCard label="出勤日数" value={`${workDays}日`} sub={`所定 ${scheduledDays}日`} />
-            {/* 遅刻 */}
-            <StatCard label="遅刻" value={`${lateDays}回`} />
-            {/* 早退 */}
-            <StatCard label="早退" value={`${earlyDays}回`} />
-            {/* 欠勤 */}
-            <StatCard label="欠勤" value={`${absentDays}日`} />
-            {/* 休暇 */}
-            <StatCard label="休暇" value={`${vacationDays}日`} />
-            {/* 修正待ち */}
-            <StatCard
-              label="修正待ち"
-              value={`${pendingCount}件`}
-              sub={pendingCount > 0 ? "要確認" : undefined}
-              accent={pendingCount > 0}
-            />
+            {/* 6統計カード: モバイル3列 */}
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+              <StatCard label="出勤日数" value={`${workDays}日`} sub={`所定${scheduledDays}日`} />
+              <StatCard label="遅刻" value={`${lateDays}回`} />
+              <StatCard label="早退" value={`${earlyDays}回`} />
+              <StatCard label="欠勤" value={`${absentDays}日`} />
+              <StatCard label="休暇" value={`${vacationDays}日`} />
+              <StatCard label="修正待ち" value={`${pendingCount}件`} sub={pendingCount > 0 ? "要確認" : undefined} accent={pendingCount > 0} />
+            </div>
           </div>
 
           {/* ── アラートバナー ── */}
@@ -274,114 +268,111 @@ export default function RecordClient({
           {isFuture ? (
             <p className="text-[13px] text-zinc-500 text-center py-10">未来の月は表示できません</p>
           ) : (
-            <div className="record-table bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm" style={{ overflow: "clip" }}>
-              <table className="w-full min-w-[700px] border-separate border-spacing-0">
-                <thead>
-                  <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                    {["日付","曜日","ステータス","予定時間","開始時間","終了時間","勤務時間","備考","修正申請"].map((h, i) => (
-                      <th key={h} className={`sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-[11px] font-bold text-zinc-500 dark:text-zinc-400 whitespace-nowrap ${i <= 1 ? "text-left" : "text-center"} ${i >= 7 ? "no-print" : ""}`}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/80">
-                  {records.map((r) => {
-                    const isToday = r.date === today;
-                    const isSun   = r.dow === 0;
-                    const isSat   = r.dow === 6;
-                    const corr    = corrMap.get(r.date);
-                    const status  = getRowStatus(r, corr);
-                    const OFF     = ["公休","休","公休日","有休","希望休","特別休暇","代休","振替休日","休暇"];
-                    const isHoliday = OFF.includes(r.shiftName ?? "");
-                    const hasData   = !!(r.clockIn || r.clockOut || r.shiftName);
-                    const canApply  = !isHoliday && hasData && !corr;
-                    const needsAttn = status.type === "missing" || status.type === "pending";
-                    const note      = corr?.status === "pending" ? "申請中"
-                                    : corr?.status === "approved" ? "承認済"
-                                    : isHoliday ? "休日" : "";
+            <div className="record-table bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[480px] border-separate border-spacing-0">
+                  <thead>
+                    <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-left whitespace-nowrap w-10">日</th>
+                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-1 py-2 text-[11px] font-bold text-zinc-500 text-center w-7">曜</th>
+                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap">状態</th>
+                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap">予定</th>
+                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap">出勤</th>
+                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap">退勤</th>
+                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap">勤務</th>
+                      <th className="no-print sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap w-14">申請</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/80">
+                    {records.map((r) => {
+                      const isToday = r.date === today;
+                      const isSun   = r.dow === 0;
+                      const isSat   = r.dow === 6;
+                      const corr    = corrMap.get(r.date);
+                      const status  = getRowStatus(r, corr);
+                      const OFF     = ["公休","休","公休日","有休","希望休","特別休暇","代休","振替休日","休暇"];
+                      const isHoliday = OFF.includes(r.shiftName ?? "");
+                      const hasData   = !!(r.clockIn || r.clockOut || r.shiftName);
+                      const canApply  = !isHoliday && hasData && !corr;
+                      const needsAttn = status.type === "missing" || status.type === "pending";
 
-                    return (
-                      <tr key={r.date}
-                        className={`transition-colors ${
-                          isToday   ? "bg-blue-50/60 dark:bg-blue-950/20"
-                          : isHoliday ? "bg-zinc-50/50 dark:bg-zinc-900/30"
-                          : "hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20"
-                        }`}>
+                      return (
+                        <tr key={r.date}
+                          className={`transition-colors ${
+                            isToday   ? "bg-blue-50/60 dark:bg-blue-950/20"
+                            : isHoliday ? "bg-zinc-50/50 dark:bg-zinc-900/30"
+                            : "hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20"
+                          }`}>
 
-                        {/* 日付 */}
-                        <td className={`px-4 py-3 text-[13px] font-bold tabular-nums whitespace-nowrap ${
-                          isToday ? "text-blue-600 dark:text-blue-400"
-                          : isSun ? "text-red-500 dark:text-red-400"
-                          : "text-zinc-700 dark:text-zinc-300"
-                        }`}>
-                          {Number(r.date.slice(8))}日
-                        </td>
+                          {/* 日付 */}
+                          <td className={`px-2 py-2 text-[13px] font-bold tabular-nums whitespace-nowrap ${
+                            isToday ? "text-blue-600 dark:text-blue-400"
+                            : isSun ? "text-red-500 dark:text-red-400"
+                            : "text-zinc-700 dark:text-zinc-300"
+                          }`}>
+                            {Number(r.date.slice(8))}
+                          </td>
 
-                        {/* 曜日 */}
-                        <td className={`px-3 py-3 text-[12px] font-semibold ${
-                          isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"
-                        }`}>
-                          {WEEKDAY_JP[r.dow]}
-                        </td>
+                          {/* 曜日 */}
+                          <td className={`px-1 py-2 text-[11px] font-semibold text-center ${
+                            isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"
+                          }`}>
+                            {WEEKDAY_JP[r.dow]}
+                          </td>
 
-                        {/* ステータスバッジ */}
-                        <td className="px-3 py-3 text-center">
-                          <StatusBadge label={status.label} type={status.type} />
-                        </td>
+                          {/* ステータスバッジ */}
+                          <td className="px-2 py-2 text-center">
+                            <StatusBadge label={status.label} type={status.type} />
+                          </td>
 
-                        {/* 予定時間 */}
-                        <td className="px-3 py-3 text-center text-[12px] tabular-nums text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-                          {r.shiftStart
-                            ? <>{r.shiftStart.slice(0,5)} - {r.shiftEnd?.slice(0,5) ?? "--:--"}</>
-                            : <span className="text-zinc-300 dark:text-zinc-600">-</span>}
-                        </td>
+                          {/* 予定 */}
+                          <td className="px-2 py-2 text-center text-[11px] tabular-nums text-zinc-400 dark:text-zinc-500 whitespace-nowrap">
+                            {r.shiftStart
+                              ? <>{r.shiftStart.slice(0,5)}<br />{r.shiftEnd?.slice(0,5) ?? "─"}</>
+                              : <span className="text-zinc-300 dark:text-zinc-600">─</span>}
+                          </td>
 
-                        {/* 開始時間 */}
-                        <td className={`px-3 py-3 text-center text-[13px] font-semibold tabular-nums whitespace-nowrap ${
-                          r.clockIn ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-300 dark:text-zinc-600"
-                        }`}>
-                          {r.clockIn ?? "-"}
-                        </td>
+                          {/* 出勤 */}
+                          <td className={`px-2 py-2 text-center text-[12px] font-semibold tabular-nums whitespace-nowrap ${
+                            r.clockIn ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-300 dark:text-zinc-600"
+                          }`}>
+                            {r.clockIn ?? "─"}
+                          </td>
 
-                        {/* 終了時間 */}
-                        <td className={`px-3 py-3 text-center text-[13px] font-semibold tabular-nums whitespace-nowrap ${
-                          r.clockOut ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-300 dark:text-zinc-600"
-                        }`}>
-                          {r.clockOut ?? "-"}
-                        </td>
+                          {/* 退勤 */}
+                          <td className={`px-2 py-2 text-center text-[12px] font-semibold tabular-nums whitespace-nowrap ${
+                            r.clockOut ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-300 dark:text-zinc-600"
+                          }`}>
+                            {r.clockOut ?? "─"}
+                          </td>
 
-                        {/* 勤務時間 */}
-                        <td className="px-3 py-3 text-center text-[13px] font-semibold tabular-nums whitespace-nowrap text-zinc-700 dark:text-zinc-300">
-                          {fmtWorked(r.clockInIso, r.clockOutIso)}
-                        </td>
+                          {/* 勤務時間 */}
+                          <td className="px-2 py-2 text-center text-[12px] font-semibold tabular-nums whitespace-nowrap text-zinc-700 dark:text-zinc-300">
+                            {fmtWorked(r.clockInIso, r.clockOutIso)}
+                          </td>
 
-                        {/* 備考 */}
-                        <td className="px-3 py-3 text-center text-[11px] text-zinc-400 whitespace-nowrap">
-                          {note || "-"}
-                        </td>
-
-                        {/* 修正申請 */}
-                        <td className="no-print px-4 py-3 text-center whitespace-nowrap">
-                          {canApply && (
-                            needsAttn ? (
-                              <button type="button" onClick={() => openModal(r)}
-                                className="px-3 py-1.5 bg-[#0d1b35] text-white text-[11px] font-bold rounded-lg hover:bg-[#162b50] transition-colors">
-                                修正申請
-                              </button>
-                            ) : (
-                              <button type="button" onClick={() => openModal(r)}
-                                className="w-7 h-7 inline-flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-                                <EditIcon />
-                              </button>
-                            )
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          {/* 申請ボタン */}
+                          <td className="no-print px-2 py-2 text-center whitespace-nowrap">
+                            {canApply && (
+                              needsAttn ? (
+                                <button type="button" onClick={() => openModal(r)}
+                                  className="px-2 py-1 bg-[#0d1b35] text-white text-[10px] font-bold rounded-lg hover:bg-[#162b50] transition-colors">
+                                  申請
+                                </button>
+                              ) : (
+                                <button type="button" onClick={() => openModal(r)}
+                                  className="w-6 h-6 inline-flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                                  <EditIcon />
+                                </button>
+                              )
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>{/* /スクロールエリア */}
