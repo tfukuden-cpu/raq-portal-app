@@ -119,6 +119,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // ?test_staff_id=S001 を指定するとそのスタッフのみに送信・時刻チェックをスキップ
+  const testStaffId = req.nextUrl.searchParams.get("test_staff_id")?.toUpperCase() ?? null;
+
   const admin  = createAdminClient();
   const today  = todayJST();
   const tmrw   = tomorrowJST();
@@ -157,13 +160,15 @@ export async function GET(req: NextRequest) {
           .maybeSingle();
         return !!data;
       })();
-      if (isNearTime(cfg.time ?? "19:00", 5) && !alreadySent) {
-        const { data: tShifts } = await admin
+      if ((testStaffId || isNearTime(cfg.time ?? "19:00", 5)) && !alreadySent) {
+        const shiftsQuery = admin
           .from("shifts")
           .select("staff_id, shift_start, shift_end, shift_name")
           .eq("project_id", projectId)
           .eq("shift_date", tmrw)
-          .or("shift_start.not.is.null,shift_name.ilike.%研修%") as { data: ShiftRow[] | null };
+          .or("shift_start.not.is.null,shift_name.ilike.%研修%");
+        if (testStaffId) shiftsQuery.eq("staff_id", testStaffId);
+        const { data: tShifts } = await shiftsQuery as { data: ShiftRow[] | null };
 
         if ((tShifts ?? []).length > 0) {
           const staffIds = [...new Set(tShifts!.map(s => s.staff_id))];
@@ -243,8 +248,8 @@ export async function GET(req: NextRequest) {
             results.push({ staffId: shift.staff_id, name, accountNumber: acct, section, star, success, failReason });
           }
 
-          // グループへまとめレポート1通
-          if (groupId && results.length > 0) {
+          // グループへまとめレポート1通（テスト時はスキップ）
+          if (!testStaffId && groupId && results.length > 0) {
             const bySection = new Map<string, SendResult[]>();
             for (const r of results) {
               if (!bySection.has(r.section)) bySection.set(r.section, []);
@@ -307,13 +312,15 @@ export async function GET(req: NextRequest) {
           .maybeSingle();
         return !!data;
       })();
-      if (isNearTime(cfg.time ?? "17:00") && !followupAlreadySent) {
+      if ((testStaffId || isNearTime(cfg.time ?? "17:00")) && !followupAlreadySent) {
         // 当日欠勤スタッフを取得
-        const { data: absences } = await admin
+        const absencesQuery = admin
           .from("absence_reports")
           .select("staff_id")
           .eq("project_id", projectId)
           .eq("absence_date", today);
+        if (testStaffId) absencesQuery.eq("staff_id", testStaffId);
+        const { data: absences } = await absencesQuery;
 
         const absentIds = [...new Set((absences ?? []).map(a => a.staff_id as string))];
 
@@ -355,7 +362,7 @@ export async function GET(req: NextRequest) {
               sent++;
               followupCount++;
             }
-            if (groupId && followupCount > 0) {
+            if (!testStaffId && groupId && followupCount > 0) {
               await pushLine(groupId, `【経過報告リマインド】本日欠勤かつ翌日（${fmtMD(tmrw)}）出勤予定の${followupCount}名に経過報告リマインドを送信しました。`);
               sent++;
             }
