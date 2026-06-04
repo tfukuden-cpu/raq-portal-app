@@ -119,10 +119,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  // ?test_staff_id=S001 を指定するとそのスタッフのみに送信・時刻チェックをスキップ
+  // ?test_staff_id=S001 を指定すると全条件スキップ・そのスタッフにpingを1通送って即返す
   const testStaffId = req.nextUrl.searchParams.get("test_staff_id")?.toUpperCase() ?? null;
 
   const admin  = createAdminClient();
+
+  if (testStaffId) {
+    const { data: staff } = await admin
+      .from("staffs")
+      .select("line_user_id, display_name, name")
+      .eq("id", testStaffId)
+      .maybeSingle();
+    if (!staff?.line_user_id) {
+      return NextResponse.json({ ok: false, error: "LINE未登録またはスタッフ不在" });
+    }
+    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const hhmm = `${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
+    await pushLine(staff.line_user_id, `[cronテスト] ${hhmm} JST に正常発火しました`);
+    return NextResponse.json({ ok: true, sent: 1, test: true, to: testStaffId });
+  }
   const today  = todayJST();
   const tmrw   = tomorrowJST();
   const nowMin = nowMinuteJST();
