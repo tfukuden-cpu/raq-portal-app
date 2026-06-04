@@ -337,6 +337,7 @@ export default async function AttendanceEditPage({
           corrections={corrections}
           exceptions={exceptions}
           currentMonth={currentMonth}
+          todayMonth={today.slice(0, 7)}
           staffs={staffs}
           initialTab={resolvedTab}
           allShiftMap={allShiftMap}

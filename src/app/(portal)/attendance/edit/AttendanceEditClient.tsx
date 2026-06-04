@@ -73,6 +73,8 @@ export type ExceptionRow = {
 
 type TabKey = "corrections" | "requests" | "records" | "compliance";
 
+type CalEntry = { date: string; row: AttendanceRow | null; shiftName: string | null };
+
 type EditState = {
   row: AttendanceRow;
   clockIn: string;
@@ -166,6 +168,7 @@ export default function AttendanceEditClient({
   corrections: initialCorrections,
   exceptions,
   currentMonth,
+  todayMonth,
   staffs,
   initialTab = "corrections",
   allShiftMap = {},
@@ -176,14 +179,13 @@ export default function AttendanceEditClient({
   corrections: CorrectionRow[];
   exceptions: ExceptionRow[];
   currentMonth: string;
+  todayMonth: string;
   staffs: StaffEntry[];
   initialTab?: TabKey;
   allShiftMap?: Record<string, string>;
   initialStaffId?: string | null;
 }) {
-  const router   = useRouter();
-  const today    = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
-  const todayMonth = today.slice(0, 7);
+  const router = useRouter();
 
   // ── タブ & 共通状態 ───────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
@@ -282,7 +284,6 @@ export default function AttendanceEditClient({
   );
 
   // 選択スタッフの当月全日カレンダー（公休・希望休・シフト無し日含む）
-  type CalEntry = { date: string; row: AttendanceRow | null; shiftName: string | null };
   const detailCalendar = useMemo((): CalEntry[] => {
     if (!selectedStaffId) return [];
     const [y, mo] = currentMonth.split("-").map(Number);
