@@ -116,11 +116,12 @@ export async function reviewCorrectionAction(
       .lte("recorded_at", endISO);
 
     const inserts: { project_id: string; staff_id: string; punch_type: string; recorded_at: string; note: string }[] = [];
+    // "HH:MM:SS" or "HH:MM" → slice to HH:MM before appending :00
     if (corrected_in) {
       inserts.push({
         project_id, staff_id,
         punch_type: "clock_in",
-        recorded_at: `${dateStr}T${corrected_in}:00+09:00`,
+        recorded_at: `${dateStr}T${(corrected_in as string).slice(0, 5)}:00+09:00`,
         note: "勤怠補正申請による修正",
       });
     }
@@ -128,7 +129,7 @@ export async function reviewCorrectionAction(
       inserts.push({
         project_id, staff_id,
         punch_type: "clock_out",
-        recorded_at: `${dateStr}T${corrected_out}:00+09:00`,
+        recorded_at: `${dateStr}T${(corrected_out as string).slice(0, 5)}:00+09:00`,
         note: "勤怠補正申請による修正",
       });
     }

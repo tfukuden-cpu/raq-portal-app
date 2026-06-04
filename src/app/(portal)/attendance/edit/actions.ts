@@ -121,6 +121,33 @@ export async function unconfirmAttendanceAction(
 
 export type ReviewResult = { success: boolean; message?: string };
 
+// "HH:MM:SS" or "HH:MM" → "HH:MM:00" の正規化（:00 が二重になるバグを防ぐ）
+function toTimeISO(t: string, date: string): string {
+  return `${date}T${t.slice(0, 5)}:00+09:00`;
+}
+
+async function applyPunchCorrection(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string, staffId: string, date: string,
+  correctedIn: string | null, correctedOut: string | null,
+) {
+  const startISO = `${date}T00:00:00+09:00`;
+  const endISO   = `${date}T23:59:59+09:00`;
+  await admin.from("punch_logs")
+    .delete()
+    .eq("project_id", projectId).eq("staff_id", staffId)
+    .in("punch_type", ["clock_in", "clock_out"])
+    .gte("recorded_at", startISO).lte("recorded_at", endISO);
+
+  const inserts: { project_id: string; staff_id: string; punch_type: string; recorded_at: string; note: string }[] = [];
+  if (correctedIn)  inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "clock_in",  recorded_at: toTimeISO(correctedIn,  date), note: "勤怠補正申請による修正" });
+  if (correctedOut) inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "clock_out", recorded_at: toTimeISO(correctedOut, date), note: "勤怠補正申請による修正" });
+  if (inserts.length > 0) {
+    const { error } = await admin.from("punch_logs").insert(inserts);
+    if (error) throw new Error(error.message);
+  }
+}
+
 /** 打刻修正申請 承認・却下（承認時は punch_logs を上書き） */
 export async function reviewCorrectionAction(
   formData: FormData,
@@ -157,20 +184,10 @@ export async function reviewCorrectionAction(
 
   if (status === "approved") {
     const { project_id, staff_id, target_date, corrected_in, corrected_out } = correction;
-    const dateStr  = target_date as string;
-    const startISO = `${dateStr}T00:00:00+09:00`;
-    const endISO   = `${dateStr}T23:59:59+09:00`;
-
-    await admin.from("punch_logs")
-      .delete()
-      .eq("project_id", project_id).eq("staff_id", staff_id)
-      .in("punch_type", ["clock_in", "clock_out"])
-      .gte("recorded_at", startISO).lte("recorded_at", endISO);
-
-    const inserts: { project_id: string; staff_id: string; punch_type: string; recorded_at: string; note: string }[] = [];
-    if (corrected_in)  inserts.push({ project_id, staff_id, punch_type: "clock_in",  recorded_at: `${dateStr}T${corrected_in}:00+09:00`,  note: "勤怠補正申請による修正" });
-    if (corrected_out) inserts.push({ project_id, staff_id, punch_type: "clock_out", recorded_at: `${dateStr}T${corrected_out}:00+09:00`, note: "勤怠補正申請による修正" });
-    if (inserts.length > 0) await admin.from("punch_logs").insert(inserts);
+    await applyPunchCorrection(
+      admin, project_id as string, staff_id as string, target_date as string,
+      corrected_in as string | null, corrected_out as string | null,
+    );
   }
 
   const { data: staffRow } = await admin.from("staffs").select("display_name, name").eq("id", correction.staff_id).maybeSingle();
@@ -184,6 +201,37 @@ export async function reviewCorrectionAction(
     { 名前: staffName, 日付: correction.target_date as string, 結果: status === "approved" ? "承認" : "却下" },
     correction.staff_id as string,
   );
+
+  revalidatePath("/attendance/edit");
+  return { success: true };
+}
+
+/** 承認済み修正申請を punch_logs に再適用（時刻フォーマットバグで未反映だったものを修正） */
+export async function reapplyCorrectionAction(id: string): Promise<ReviewResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const projectId = id; // 実際は correction から取得
+  const admin = createAdminClient();
+
+  const { data: correction } = await admin
+    .from("punch_corrections")
+    .select("project_id, staff_id, target_date, corrected_in, corrected_out, status")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!correction) return { success: false, message: "申請が見つかりません" };
+  if (correction.status !== "approved") return { success: false, message: "承認済みではありません" };
+
+  try {
+    await applyPunchCorrection(
+      admin, correction.project_id as string, correction.staff_id as string, correction.target_date as string,
+      correction.corrected_in as string | null, correction.corrected_out as string | null,
+    );
+  } catch (e) {
+    return { success: false, message: String(e) };
+  }
 
   revalidatePath("/attendance/edit");
   return { success: true };

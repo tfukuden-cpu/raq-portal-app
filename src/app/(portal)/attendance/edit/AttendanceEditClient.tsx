@@ -7,6 +7,7 @@ import {
   confirmAttendanceAction,
   unconfirmAttendanceAction,
   reviewCorrectionAction,
+  reapplyCorrectionAction,
 } from "./actions";
 import WorkRecordsClient from "@/app/(portal)/admin/work-records/WorkRecordsClient";
 import type { StaffEntry } from "@/app/(portal)/admin/work-records/WorkRecordsClient";
@@ -545,6 +546,17 @@ export default function AttendanceEditClient({
                                 onClick={() => { setCorrNote(""); setCorrErrMsg(null); setCorrModal({ row, action: "reject" }); }}
                                 className="px-2 py-0.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold">却下</button>
                             </div>
+                          ) : row.status === "approved" ? (
+                            <button type="button"
+                              onClick={() => {
+                                startTransition(async () => {
+                                  const r = await reapplyCorrectionAction(row.id);
+                                  showToast(r.success ? "打刻を再適用しました" : `エラー: ${r.message}`);
+                                });
+                              }}
+                              className="px-2 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 text-[11px] font-semibold hover:bg-zinc-300 dark:hover:bg-zinc-600">
+                              再適用
+                            </button>
                           ) : (
                             <span className="text-zinc-300 dark:text-zinc-600">─</span>
                           )}
