@@ -10,7 +10,7 @@ import { regenerateShiftDraftAction, upsertSingleShiftAction } from "./actions";
 import PublishButton from "./PublishButton";
 import ShiftLineNotifyButton from "./ShiftLineNotifyButton";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
-import { resolveShiftSection, formatSectionShift } from "@/lib/seatColors";
+import { resolveShiftSection, formatSectionShift, SEAT_SECTION_COLORS } from "@/lib/seatColors";
 
 type Shift = {
   id: string;
@@ -272,19 +272,29 @@ export default function ShiftManageClient({
 
     // ── セルの表示値を求めるヘルパー ─────────────────────────
     // ・公休・有休・希望休・特別休暇 → 空白（休日扱い）
-    // ・未アポコール・研修などセクション外の勤務シフト → シフト名をそのまま出力
-    // ・セクションフィルタが有効な場合、選択セクション外のシフトも空白（未セクションは除く）
+    // ・SEAT_SECTION_COLORS 定義済みセクション（販売・査定等）→ セクション（早番/遅番）形式
+    // ・未アポ・H MOTA・インフォ等の非カラーセクション → シフト名をそのまま出力
     const OFF_PATTERNS = ["公休", "希望休", "有休", "特別休暇"];
+    const KNOWN_SECTIONS = new Set(Object.keys(SEAT_SECTION_COLORS));
+    // 選択セクションを既知・未知に分類
+    const knownSel = exportSectionsSel.filter(s => KNOWN_SECTIONS.has(s));
+    const unknownSel = exportSectionsSel.filter(s => !KNOWN_SECTIONS.has(s));
+
     function cellValue(staffId: string, date: string): string {
       const shiftName = effectiveMap.get(staffId)?.get(date) ?? null;
       if (!shiftName) return "";
-      const sec = resolveShiftSection(shiftName, null); // fallback なし
+      const sec = resolveShiftSection(shiftName, null);
       if (!sec) {
-        // 休日パターンは空白、それ以外（未アポコール・研修等）はシフト名を出力
+        // 休日パターンは空白
         if (OFF_PATTERNS.some(p => shiftName.includes(p))) return "";
+        // 未アポ・インフォ等：フィルタがある場合は選択セクションに一致するもののみ出力
+        if (exportSectionsSel.length > 0) {
+          const matches = unknownSel.some(s => shiftName.startsWith(s));
+          if (!matches) return "";
+        }
         return shiftName;
       }
-      if (exportSectionsSel.length > 0 && !exportSectionsSel.includes(sec)) return ""; // フィルタ外セクション → 空白
+      if (exportSectionsSel.length > 0 && !exportSectionsSel.includes(sec)) return "";
       return formatSectionShift(sec, shiftName);
     }
 
@@ -308,8 +318,10 @@ export default function ShiftManageClient({
     const maxAcc = Math.max(160, ...[...accMap.keys()]);
 
     // ── セクションフィルタ対象メンバーIDセット（空=全員）
-    const sectionIds = exportSectionsSel.length > 0
-      ? new Set(activeMembers.filter(m => m.section !== null && exportSectionsSel.includes(m.section)).map(m => m.id))
+    // 既知セクション（販売・査定等）のみメンバーのsectionで絞り込む。
+    // 未アポ・インフォ等の非カラーセクションはメンバー属性ではなくシフト割当で判断するため全員表示。
+    const sectionIds = knownSel.length > 0
+      ? new Set(activeMembers.filter(m => m.section !== null && knownSel.includes(m.section)).map(m => m.id))
       : null;
 
     // ── データ行①：ASS 01〜maxAcc を昇順で必ず出力
