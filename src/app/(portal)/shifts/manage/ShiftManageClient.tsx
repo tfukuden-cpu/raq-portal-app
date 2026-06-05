@@ -271,13 +271,19 @@ export default function ShiftManageClient({
     }
 
     // ── セルの表示値を求めるヘルパー ─────────────────────────
-    // ・公休・有休・研修・希望休・未アポコールなど、セクション名で解決できないシフトは空白
-    // ・セクションフィルタが有効な場合、選択セクション以外のシフトも空白
+    // ・公休・有休・希望休・特別休暇 → 空白（休日扱い）
+    // ・未アポコール・研修などセクション外の勤務シフト → シフト名をそのまま出力
+    // ・セクションフィルタが有効な場合、選択セクション外のシフトも空白（未セクションは除く）
+    const OFF_PATTERNS = ["公休", "希望休", "有休", "特別休暇"];
     function cellValue(staffId: string, date: string): string {
       const shiftName = effectiveMap.get(staffId)?.get(date) ?? null;
       if (!shiftName) return "";
       const sec = resolveShiftSection(shiftName, null); // fallback なし
-      if (!sec) return ""; // 公休・研修・希望休・未アポコールなど → 空白
+      if (!sec) {
+        // 休日パターンは空白、それ以外（未アポコール・研修等）はシフト名を出力
+        if (OFF_PATTERNS.some(p => shiftName.includes(p))) return "";
+        return shiftName;
+      }
       if (exportSectionsSel.length > 0 && !exportSectionsSel.includes(sec)) return ""; // フィルタ外セクション → 空白
       return formatSectionShift(sec, shiftName);
     }
