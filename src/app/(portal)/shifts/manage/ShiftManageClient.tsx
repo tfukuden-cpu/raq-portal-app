@@ -387,7 +387,7 @@ export default function ShiftManageClient({
   }
 
   return (
-    <div className="w-full pb-24 pt-3 overflow-y-auto flex-1 min-h-0">
+    <div className="w-full pb-24 pt-3">
       {/* Excel出力 セクション選択モーダル */}
       {showExportModal && (
         <div
