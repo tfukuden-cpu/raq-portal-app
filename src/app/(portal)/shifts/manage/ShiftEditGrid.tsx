@@ -917,8 +917,42 @@ export default function ShiftEditGrid({
     setPublishingId(null);
   }
 
-  // 日付でスタッフをソートするオーバーライド（null = デフォルト順）
-  const [sortByDate, setSortByDate] = useState<string | null>(null);
+  // 日付ソート・フィルター（null = 無効）
+  type ActiveDateFilter = {
+    date: string;
+    sortBy: "section" | "shift";
+    filterSections: string[];
+    filterShifts: string[];
+  };
+  const [activeDateFilter, setActiveDateFilter] = useState<ActiveDateFilter | null>(null);
+  const [dateFilterPopoverDate, setDateFilterPopoverDate] = useState<string | null>(null);
+  const [dateFilterPopoverRect, setDateFilterPopoverRect] = useState<DOMRect | null>(null);
+
+  function openDateFilterPopover(date: string, rect: DOMRect) {
+    if (dateFilterPopoverDate === date) {
+      setDateFilterPopoverDate(null);
+      return;
+    }
+    setDateFilterPopoverDate(date);
+    setDateFilterPopoverRect(rect);
+    if (!activeDateFilter || activeDateFilter.date !== date) {
+      setActiveDateFilter({ date, sortBy: "section", filterSections: [], filterShifts: [] });
+    }
+  }
+
+  const shiftsOnDate = useMemo(() => {
+    if (!dateFilterPopoverDate) return [];
+    const names = new Set<string>();
+    for (const m of activeMembers) {
+      const key = `${m.id}__${dateFilterPopoverDate}`;
+      const sn = drafts.has(key)
+        ? (drafts.get(key)?.shiftName ?? null)
+        : (shifts.find(s => s.staff_id === m.id && s.shift_date === dateFilterPopoverDate)?.shift_name ?? null);
+      if (sn) names.add(sn);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "ja"));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFilterPopoverDate, drafts, shifts, activeMembers]);
   // インラインパターンピッカー
   type PopoverTarget = { staffId: string; date: string; rect: DOMRect };
   const [popover, setPopover] = useState<PopoverTarget | null>(null);
@@ -1525,25 +1559,43 @@ export default function ShiftEditGrid({
         })
       : sortedMembersBySection;
 
-    // 日付指定ソート：選択日のシフト開始時刻順（未割当は末尾）
-    if (sortByDate) {
-      const patternStartMap = new Map(shiftPatterns.map(p => [p.name, p.start_time ?? "ZZ"]));
-      members = [...members].sort((a, b) => {
-        // draftsを直接参照（resolveCellを避けてdeps問題を回避）
-        const ka = `${a.id}__${sortByDate}`;
-        const kb = `${b.id}__${sortByDate}`;
-        const da = drafts.get(ka);
-        const db = drafts.get(kb);
-        const sna = drafts.has(ka) ? (da?.shiftName ?? null) : (shifts.find(s => s.staff_id === a.id && s.shift_date === sortByDate)?.shift_name ?? null);
-        const snb = drafts.has(kb) ? (db?.shiftName ?? null) : (shifts.find(s => s.staff_id === b.id && s.shift_date === sortByDate)?.shift_name ?? null);
-        const sa = sna ? (patternStartMap.get(sna) ?? "ZZ") : "ZZ";
-        const sb = snb ? (patternStartMap.get(snb) ?? "ZZ") : "ZZ";
-        return sa.localeCompare(sb);
-      });
+    if (activeDateFilter) {
+      const { date, sortBy, filterSections, filterShifts } = activeDateFilter;
+
+      // セクションフィルター
+      if (filterSections.length > 0) {
+        members = members.filter(m => {
+          const secs = m.sections?.length ? m.sections : (m.section ? [m.section] : []);
+          return secs.some(s => filterSections.includes(s));
+        });
+      }
+
+      // シフトフィルター（対象日のシフト名で絞り込み）
+      if (filterShifts.length > 0) {
+        members = members.filter(m => {
+          const key = `${m.id}__${date}`;
+          const sn = drafts.has(key)
+            ? (drafts.get(key)?.shiftName ?? null)
+            : (shifts.find(s => s.staff_id === m.id && s.shift_date === date)?.shift_name ?? null);
+          return sn !== null && filterShifts.includes(sn);
+        });
+      }
+
+      // シフト順ソート
+      if (sortBy === "shift") {
+        const patternStartMap = new Map(shiftPatterns.map(p => [p.name, p.start_time ?? "ZZ"]));
+        members = [...members].sort((a, b) => {
+          const ka = `${a.id}__${date}`;
+          const kb = `${b.id}__${date}`;
+          const sna = drafts.has(ka) ? (drafts.get(ka)?.shiftName ?? null) : (shifts.find(s => s.staff_id === a.id && s.shift_date === date)?.shift_name ?? null);
+          const snb = drafts.has(kb) ? (drafts.get(kb)?.shiftName ?? null) : (shifts.find(s => s.staff_id === b.id && s.shift_date === date)?.shift_name ?? null);
+          return (sna ? patternStartMap.get(sna) ?? "ZZ" : "ZZ").localeCompare(snb ? patternStartMap.get(snb) ?? "ZZ" : "ZZ");
+        });
+      }
     }
     return members;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedMembersBySection, filterSection, sortByDate, shiftPatterns, drafts, shifts]);
+  }, [sortedMembersBySection, filterSection, activeDateFilter, shiftPatterns, drafts, shifts]);
 
   // フィルタ用セクション一覧（実際にスタッフがいるセクションのみ）
   const availableSections = useMemo(() => {
@@ -2154,17 +2206,18 @@ export default function ShiftEditGrid({
                   {allDates.map((date) => {
                     const day = parseInt(date.slice(8)); const dw = dowLabel(date);
                     const dn = dowNum(date); const isSun = dn === 0, isSat = dn === 6, isToday = date === todayJST;
-                    const isSortTarget = sortByDate === date;
+                    const isActive = activeDateFilter?.date === date;
+                    const isOpen = dateFilterPopoverDate === date;
                     return (
                       <th key={`hs-${date}`}
-                        title={isSortTarget ? "ソート解除" : "この日のシフト順にソート"}
-                        onClick={() => setSortByDate(prev => prev === date ? null : date)}
+                        title="ソート・フィルター設定"
+                        onClick={(e) => openDateFilterPopover(date, e.currentTarget.getBoundingClientRect())}
                         className={["sticky top-0 z-20 h-11 border-b border-r border-zinc-200 dark:border-zinc-700 cursor-pointer select-none",
-                          isSortTarget ? "bg-amber-100 dark:bg-amber-900/40" : isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950"].join(" ")}>
+                          isOpen ? "bg-blue-100 dark:bg-blue-900/40" : isActive ? "bg-amber-100 dark:bg-amber-900/40" : isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950"].join(" ")}>
                         <div className="flex flex-col items-center justify-center h-full gap-0.5">
-                          <span className={`text-[11px] font-bold tabular-nums leading-none ${isSortTarget ? "text-amber-700 dark:text-amber-300" : isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"}`}>{day}</span>
-                          <span className={`text-[9px] leading-none ${isSortTarget ? "text-amber-500" : isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"}`}>{dw}</span>
-                          {isSortTarget && <span className="text-[8px] leading-none text-amber-500 font-bold">↕</span>}
+                          <span className={`text-[11px] font-bold tabular-nums leading-none ${isOpen ? "text-blue-700 dark:text-blue-300" : isActive ? "text-amber-700 dark:text-amber-300" : isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"}`}>{day}</span>
+                          <span className={`text-[9px] leading-none ${isOpen ? "text-blue-500" : isActive ? "text-amber-500" : isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"}`}>{dw}</span>
+                          {isActive && <span className="text-[8px] leading-none font-bold text-amber-500">▼</span>}
                         </div>
                       </th>
                     );
@@ -2477,16 +2530,17 @@ export default function ShiftEditGrid({
                   {allDates.map((date) => {
                     const day = parseInt(date.slice(8)); const dw = dowLabel(date);
                     const dn = dowNum(date); const isSun = dn === 0, isSat = dn === 6, isToday = date === todayJST;
-                    const isSortTarget = sortByDate === date;
+                    const isActive = activeDateFilter?.date === date;
+                    const isOpen = dateFilterPopoverDate === date;
                     return (
                       <th key={date} className={["sticky top-0 z-20 h-11 border-b border-r border-zinc-200 dark:border-zinc-700 cursor-pointer select-none",
-                        isSortTarget ? "bg-amber-100 dark:bg-amber-900/40" : isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950"].join(" ")}
-                        title={isSortTarget ? "ソート解除" : "この日のシフト順にソート"}
-                        onClick={() => setSortByDate(prev => prev === date ? null : date)}>
+                        isOpen ? "bg-blue-100 dark:bg-blue-900/40" : isActive ? "bg-amber-100 dark:bg-amber-900/40" : isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950"].join(" ")}
+                        title="ソート・フィルター設定"
+                        onClick={(e) => openDateFilterPopover(date, e.currentTarget.getBoundingClientRect())}>
                         <div className="flex flex-col items-center justify-center h-full gap-0.5">
-                          <span className={`text-[11px] font-bold tabular-nums leading-none ${isSortTarget ? "text-amber-700 dark:text-amber-300" : isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"}`}>{day}</span>
-                          <span className={`text-[9px] leading-none ${isSortTarget ? "text-amber-500" : isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"}`}>{dw}</span>
-                          {isSortTarget && <span className="text-[8px] leading-none text-amber-500">↕</span>}
+                          <span className={`text-[11px] font-bold tabular-nums leading-none ${isOpen ? "text-blue-700 dark:text-blue-300" : isActive ? "text-amber-700 dark:text-amber-300" : isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"}`}>{day}</span>
+                          <span className={`text-[9px] leading-none ${isOpen ? "text-blue-500" : isActive ? "text-amber-500" : isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"}`}>{dw}</span>
+                          {isActive && <span className="text-[8px] leading-none font-bold text-amber-500">▼</span>}
                         </div>
                       </th>
                     );
@@ -3055,6 +3109,90 @@ export default function ShiftEditGrid({
           draftChanges={draftChanges}
           onClose={() => setShowSummary(false)}
         />
+      )}
+
+      {/* 日付ソート・フィルターポップオーバー */}
+      {dateFilterPopoverDate && dateFilterPopoverRect && activeDateFilter && (
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          <div className="absolute inset-0 pointer-events-auto" onClick={() => setDateFilterPopoverDate(null)} />
+          <div
+            className="absolute bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-700 w-64 pointer-events-auto overflow-hidden"
+            style={{ top: Math.min(dateFilterPopoverRect.bottom + 4, window.innerHeight - 400), left: Math.min(dateFilterPopoverRect.left - 16, window.innerWidth - 272) }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-700">
+              <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
+                {parseInt(dateFilterPopoverDate.slice(8))}日 ソート・フィルター
+              </span>
+              <button onClick={() => setDateFilterPopoverDate(null)} className="text-zinc-400 hover:text-zinc-600 text-sm leading-none">✕</button>
+            </div>
+            {/* ソート */}
+            <div className="px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-800">
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">ソート</p>
+              {(["section", "shift"] as const).map(opt => (
+                <label key={opt} className="flex items-center gap-2 py-0.5 cursor-pointer">
+                  <input type="radio" checked={activeDateFilter.sortBy === opt}
+                    onChange={() => setActiveDateFilter(f => f ? { ...f, sortBy: opt } : f)}
+                    className="accent-blue-600" />
+                  <span className="text-xs text-zinc-700 dark:text-zinc-200">
+                    {opt === "section" ? "セクション順" : "シフト順（開始時刻）"}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {/* セクションフィルター */}
+            <div className="px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-800">
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">フィルター：セクション（複数可）</p>
+              <div className="max-h-28 overflow-y-auto space-y-0.5">
+                {availableSections.map(sec => (
+                  <label key={sec} className="flex items-center gap-2 py-0.5 cursor-pointer">
+                    <input type="checkbox" checked={activeDateFilter.filterSections.includes(sec)}
+                      onChange={(e) => setActiveDateFilter(f => {
+                        if (!f) return f;
+                        return { ...f, filterSections: e.target.checked ? [...f.filterSections, sec] : f.filterSections.filter(s => s !== sec) };
+                      })}
+                      className="accent-blue-600" />
+                    <span className="text-xs text-zinc-700 dark:text-zinc-200">{sec}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {/* シフトフィルター */}
+            <div className="px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-800">
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mb-1.5">フィルター：シフト（複数可）</p>
+              {shiftsOnDate.length === 0
+                ? <p className="text-[10px] text-zinc-400">この日のシフトデータなし</p>
+                : (
+                  <div className="max-h-28 overflow-y-auto space-y-0.5">
+                    {shiftsOnDate.map(shiftName => (
+                      <label key={shiftName} className="flex items-center gap-2 py-0.5 cursor-pointer">
+                        <input type="checkbox" checked={activeDateFilter.filterShifts.includes(shiftName)}
+                          onChange={(e) => setActiveDateFilter(f => {
+                            if (!f) return f;
+                            return { ...f, filterShifts: e.target.checked ? [...f.filterShifts, shiftName] : f.filterShifts.filter(s => s !== shiftName) };
+                          })}
+                          className="accent-blue-600" />
+                        <span className="text-xs text-zinc-700 dark:text-zinc-200">{shiftName}</span>
+                      </label>
+                    ))}
+                  </div>
+                )
+              }
+            </div>
+            {/* フッター */}
+            <div className="px-3 py-2 flex justify-between items-center">
+              <button
+                onClick={() => { setActiveDateFilter(null); setDateFilterPopoverDate(null); }}
+                className="text-xs text-red-500 hover:text-red-700 transition-colors"
+              >クリア</button>
+              <button
+                onClick={() => setDateFilterPopoverDate(null)}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+              >閉じる</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Inline Pattern Picker */}
