@@ -462,7 +462,7 @@ export default function ShiftDayList({
       </div>
 
       {/* ━━ コンテンツ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div>
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
         {/* ── 出勤タブ: 月次一覧テーブル ── */}
         {tabKey === "shukkin" && (
@@ -661,8 +661,7 @@ export default function ShiftDayList({
               /* ── スタッフ行ビュー（番号順）：分割ペイン ── */
               <div
                 ref={splitContainerRef}
-                className="flex flex-col"
-                style={{ height: "calc(100dvh - var(--page-header-h, 0px) - 200px)", minHeight: "400px" }}
+                className="flex flex-col flex-1 min-h-0"
               >
               {/* ── 充足テーブルペイン ── */}
               <div
