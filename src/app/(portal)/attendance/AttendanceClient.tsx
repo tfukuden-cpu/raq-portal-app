@@ -634,8 +634,8 @@ export default function AttendanceClient({
 
       {/* ── スクロール可能なタブ（出勤簿・確定後変更・打刻記録） ── */}
       {activeTab !== "seating" && (
-        <div className={`flex-1 min-h-0 ${activeTab === "today" ? "overflow-hidden" : "overflow-y-auto"}`}>
-          <div className={`max-w-6xl mx-auto px-4 pt-4 h-full ${activeTab !== "today" ? "pb-32" : "overflow-hidden"}`}>
+        <div className={`flex-1 min-h-0 ${activeTab === "today" ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}>
+          <div className={`max-w-6xl mx-auto px-4 pt-4 ${activeTab !== "today" ? "pb-32" : "flex flex-col flex-1 min-h-0 overflow-hidden"}`}>
 
         {/* ── 確定後変更タブ ── */}
         {activeTab === "changes" && (
@@ -666,7 +666,7 @@ export default function AttendanceClient({
 
         {/* ── 休憩スロット凡例 ── */}
         {activeTab === "today" && breakSlots.length > 0 && Object.keys(breakAssignmentMap).length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-1 shrink-0">
             {breakSlots.map(slot => (
               <div key={slot.slot_number} className="flex items-center gap-1.5">
                 <span className={`w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold ${BREAK_BADGE_CLASS[slot.slot_number] ?? ""}`}>
@@ -682,7 +682,7 @@ export default function AttendanceClient({
 
         {/* ── 離脱リスク候補アラート ── */}
         {activeTab === "today" && (churnRiskAlerts?.length ?? 0) > 0 && (
-          <div className="mb-3 px-4 py-3 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+          <div className="mb-3 px-4 py-3 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 shrink-0">
             <p className="text-xs font-bold text-red-700 dark:text-red-300 mb-1.5">⚠ 離脱リスク候補</p>
             <div className="space-y-1">
               {churnRiskAlerts!.map(a => (
@@ -700,8 +700,8 @@ export default function AttendanceClient({
         {activeTab === "today" && grouped.length === 0 ? (
           <p className="text-sm text-zinc-400 text-center py-10">本日の出勤予定者はいません</p>
         ) : activeTab === "today" && (
-          <div className="overflow-x-auto -mx-4 px-4">
-            <div className="flex gap-3 pb-4 items-start" style={{ minWidth: "max-content" }}>
+          <div className="overflow-x-auto -mx-4 px-4 flex-1 min-h-0">
+            <div className="flex gap-3 pb-4 items-stretch h-full" style={{ minWidth: "max-content" }}>
               {boardSections.map(({ section, groups }) => {
                 const allMembers = groups.flatMap(g => g.members);
                 const isDragTarget = dragOverSection === section;
@@ -715,7 +715,7 @@ export default function AttendanceClient({
                       key={section}
                       className={[
                         "flex flex-col rounded-2xl border-2 shrink-0 transition-all",
-                        "h-[calc(100dvh-280px)] w-80",
+                        "h-full w-80",
                         isHMotaDragTarget
                           ? "border-purple-400 bg-purple-50/50 dark:bg-purple-950/30 shadow-lg"
                           : "border-purple-200 dark:border-purple-800 bg-white dark:bg-zinc-900",
@@ -749,7 +749,7 @@ export default function AttendanceClient({
                     key={section}
                     className={[
                       "flex flex-col rounded-2xl border-2 transition-all w-72 shrink-0",
-                      "h-[calc(100dvh-280px)]",
+                      "h-full",
                       isDragTarget
                         ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20 shadow-lg"
                         : `${secCol.border} bg-white dark:bg-zinc-900`,
@@ -1025,7 +1025,7 @@ export default function AttendanceClient({
 
               {/* ── お休みスタッフ（打診パネル） ── */}
               {offMembers.length > 0 && (
-                <div className="flex flex-col rounded-2xl border-2 transition-all w-64 shrink-0 border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 h-[calc(100dvh-280px)]">
+                <div className="flex flex-col rounded-2xl border-2 transition-all w-64 shrink-0 border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 h-full">
                   <div className="px-3 pt-2.5 pb-2 border-b border-b-zinc-200 dark:border-b-zinc-700 shrink-0 rounded-t-2xl bg-zinc-50 dark:bg-zinc-800/50">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-bold text-zinc-600 dark:text-zinc-300">お休み</span>
