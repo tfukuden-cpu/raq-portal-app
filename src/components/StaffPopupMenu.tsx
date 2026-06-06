@@ -109,10 +109,10 @@ export default function StaffPopupMenu({ staffId, staffName, projectId, onClose,
                       {staffDetails.sections.length > 0 && (
                         <DetailRow label="セクション" value={staffDetails.sections.join("・")} />
                       )}
-                      {(staffDetails.work_days_type || staffDetails.work_days_count != null) && (
+                      {staffDetails.work_days_type && (
                         <DetailRow
                           label="稼働日数"
-                          value={`${staffDetails.work_days_type === "weekly" ? "週" : "月"}${staffDetails.work_days_count ?? "?"}日`}
+                          value={staffDetails.work_days_type === "spot" ? "スポット" : `${staffDetails.work_days_type === "weekly" ? "週" : "月"}${staffDetails.work_days_count ?? "?"}日`}
                         />
                       )}
                       {staffDetails.preferred_shift && (

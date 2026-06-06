@@ -13,9 +13,30 @@
 
 ---
 
-## 現在の開発状態（2026-06-09）
+## 現在の開発状態（2026-06-09更新）
 
-### 直近の作業（勤怠管理メニュー全面改修）
+### 直近の作業（出勤簿・シフト管理の多機能改修）
+
+#### 出勤簿（`/attendance`）
+- **人数カウント変更**: `totalAssigned`（配置数）→ `totalClockedIn`（出勤中）をメインカウントに変更。充足も出勤中ベースで計算
+- **退勤済スタッフ非表示**: `clocked_out` ステータスのカードをボードから非表示
+- **スクロール修正**: 内部スクロールコンテナに `touch-action: pan-y` 追加
+- **お休みスタッフパネル追加**: 公休・有休スタッフを横スクロール末尾に表示。「打診」ボタン（LINE送信）と「不可」トグルボタン付き
+- **打診不可マーク**: `work_request_declines` テーブル新設。管理者が手動で不可マーク → 赤バッジ表示
+
+#### シフト管理（`/shifts/manage`）
+- **非編集モードスクロール修正**: `overflow-y-auto flex-1 min-h-0` 追加でデスクトップでもスクロール可能に
+- **個別スタッフシフト公開/非公開**: 各スタッフ行に「公開/非公」トグルボタン追加。`project_members.shift_published` カラム（DBマイグレーション済）で管理。`publishShiftsAction` が `shift_published=false` のスタッフを除外
+- **シフト編集モードの日付ソート**: 日付列ヘッダーをクリック → その日のシフト開始時刻順にスタッフ行をソート（再クリックで解除・アンバーハイライト）
+
+#### メンバー管理
+- **稼働日数「スポット」追加**: `StaffInfoPanel`・`SettingsClient` に「未設定/月/週/スポット」の選択肢追加。スポットは仮組み対象外（`draft-actions.ts` で除外）
+
+#### 新規DBテーブル・カラム（Supabase実行済み）
+- `work_request_declines(project_id, staff_id, date, marked_by, marked_at)` - 打診不可マーク
+- `project_members.shift_published boolean default true` - 個別シフト公開フラグ
+
+### 前の作業（勤怠管理メニュー全面改修）
 
 #### `/attendance/edit` を「勤怠管理」に4タブ改修
 - **ナビラベル変更**: 「勤怠実績」→「勤怠管理」
@@ -245,6 +266,10 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | LINE連携 mode=link のエラーは `/link-line` に戻す | `/login?error=line_failed` に戻すと「LINEログイン失敗」と表示されてユーザーが混乱する。mode=link のエラーは `/link-line?error=...` にリダイレクト |
 | `getRedirectUri()` のフォールバックは本番URL | `http://localhost:3000` がフォールバックだとVercelで `NEXT_PUBLIC_BASE_URL` 未設定時にLINEトークン交換失敗。`https://raq-portal-app.vercel.app` に修正済み |
 | LINE Login チャネルが Developing だと一般スタッフはOAuth不可 | チャネルメンバー以外は認証できない。LINE Login を全スタッフに使わせるには Publish 必要 |
+| 出勤簿カウントは `totalClockedIn`（出勤中のみ）| `totalAssigned`（配置数）から変更済み。充足表示も `出勤中 - 規定数` で計算 |
+| `work_request_declines` テーブルで打診不可管理 | RLS: `is_project_admin` のみ操作可。UNIQUE(project_id, staff_id, date) |
+| `project_members.shift_published` フラグ | デフォルト true。false のスタッフは `publishShiftsAction` で LINE 送信をスキップ |
+| `work_days_type = "spot"` は仮組み対象外 | `draft-actions.ts` で `wdType === "spot"` の場合 `return false` で候補から除外 |
 
 ---
 

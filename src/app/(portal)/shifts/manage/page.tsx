@@ -357,7 +357,7 @@ export default async function ManageShiftsPage(props: {
     { data: projectSettingsRow },
   ] = await Promise.all([
     admin.from("project_members")
-      .select("staff_id, role, section, sections, end_date, start_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, churn_risk, churn_risk_since, staffs(id, name, display_name, account_number, company_name)")
+      .select("staff_id, role, section, sections, end_date, start_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, churn_risk, churn_risk_since, shift_published, staffs(id, name, display_name, account_number, company_name)")
       .eq("project_id", selectedProjectId),
     admin.from("shift_patterns")
       .select("name, required_count, required_weekday, required_weekend, section, start_time, end_time")
@@ -462,6 +462,7 @@ export default async function ManageShiftsPage(props: {
         shift_note:           (m as { shift_note?: string | null }).shift_note ?? null,
         churn_risk:           (m as { churn_risk?: boolean | null }).churn_risk ?? false,
         churn_risk_since:     (m as { churn_risk_since?: string | null }).churn_risk_since ?? null,
+        shift_published:      (m as { shift_published?: boolean | null }).shift_published ?? true,
         accountNumber:        s?.account_number ?? null,
         company_name:         s?.company_name ?? null,
         start_date:           (m as { start_date?: string | null }).start_date ?? null,

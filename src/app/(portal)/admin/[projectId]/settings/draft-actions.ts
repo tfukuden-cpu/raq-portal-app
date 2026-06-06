@@ -630,8 +630,10 @@ export async function generateShiftDraftAction(
           // ロール一致
           if (pattern.target_role === "admin" && m.role !== "project_admin") return false;
           if (pattern.target_role === "staff" && m.role !== "staff") return false;
-          // 月稼働日数上限
+          // スポットスタッフは仮組み対象外
           const wdType  = (m as { work_days_type?: string | null }).work_days_type  || "monthly";
+          if (wdType === "spot") return false;
+          // 月稼働日数上限
           const wdCountRaw = (m as { work_days_count?: number | null }).work_days_count;
           const wdCount = (wdCountRaw != null && wdCountRaw > 0) ? wdCountRaw : 21;
           if (wdType === "monthly") {

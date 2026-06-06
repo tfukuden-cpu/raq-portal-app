@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
-import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, sendBulkFollowupReminderAction, changeAttendanceStatusAction, toggleChurnRiskAction, moveSectionAction } from "./actions";
+import { sendBulkDepartureReminderAction, sendBulkWorkRequestAction, sendBulkFollowupReminderAction, changeAttendanceStatusAction, toggleChurnRiskAction, moveSectionAction, toggleWorkRequestDeclineAction } from "./actions";
 import type { SendResult } from "./actions";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/app/(portal)/seating/SeatingClient";
 import HMotaPanel, { type MotaRow, type HMotaPanelRef } from "./HMotaPanel";
@@ -202,6 +202,7 @@ interface Props {
   breakShortSettings?: BreakShortSetting[];
   breakRecords?: BreakRecord[];
   punchTimelines?: StaffTimeline[];
+  initialDeclinedIds?: string[];
 }
 
 type SelectionMode = "reminder" | "request" | "followup";
@@ -219,6 +220,7 @@ export default function AttendanceClient({
   breakSlots = [], breakAssignments = [],
   breakShortSettings = [], breakRecords = [],
   punchTimelines = [],
+  initialDeclinedIds = [],
 }: Props) {
   const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating" | "break">("today");
 
@@ -235,6 +237,23 @@ export default function AttendanceClient({
   // 催促・依頼の選択（トグル式）
   const [selectedMode, setSelectedMode] = useState<SelectionMode | null>(null);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
+
+  // 打診不可マーク（staffId）
+  const [declinedIds, setDeclinedIds] = useState<Set<string>>(new Set(initialDeclinedIds));
+  const [decliningId, setDecliningId] = useState<string | null>(null);
+
+  async function handleToggleDecline(staffId: string) {
+    setDecliningId(staffId);
+    const res = await toggleWorkRequestDeclineAction(projectId, staffId, today);
+    if (res.ok) {
+      setDeclinedIds(prev => {
+        const next = new Set(prev);
+        if (res.isDeclined) next.add(staffId); else next.delete(staffId);
+        return next;
+      });
+    }
+    setDecliningId(null);
+  }
 
   // 離脱リスクフラグのローカルオーバーライド（楽観的更新）
   const [churnRiskOverrides, setChurnRiskOverrides] = useState<Map<string, boolean>>(new Map());
@@ -746,9 +765,9 @@ export default function AttendanceClient({
                     {(() => {
                       const totalRequired    = groups.reduce((s, g) => s + (shiftRequired[g.shiftName] ?? 0), 0);
                       const totalAssigned    = allMembers.length;
-                      const totalSufficiency = totalRequired > 0 ? totalAssigned - totalRequired : null;
                       const getSt = (m: { staffId: string; status: StatusKey }) => localStatuses.get(m.staffId) ?? m.status;
                       const totalClockedIn   = allMembers.filter(m => { const s = getSt(m); return s === "working" || s === "clocked_out"; }).length;
+                      const totalSufficiency = totalRequired > 0 ? totalClockedIn - totalRequired : null;
                       const totalLate        = allMembers.filter(m => getSt(m) === "late").length;
                       const totalAbsent      = allMembers.filter(m => getSt(m) === "absent").length;
                       const totalNotPresent  = totalAssigned - totalClockedIn - totalLate - totalAbsent;
@@ -757,17 +776,16 @@ export default function AttendanceClient({
                       return (
                       <div className={`px-3 pt-2.5 pb-2 border-b shrink-0 rounded-t-2xl ${secCol.headerBg} ${secCol.border.replace("border-", "border-b-")}`}>
 
-                        {/* セクション名行：配置/規定（充足）出勤 遅刻 欠勤 未出勤 */}
+                        {/* セクション名行：出勤数/規定（充足）遅刻 欠勤 未出勤 */}
                         <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 tabular-nums">
                           <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100 shrink-0">{section}</span>
-                          <span className="text-xs text-zinc-600 dark:text-zinc-300">{totalAssigned}</span>
+                          <span className={`text-xs font-bold ${totalClockedIn > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>{totalClockedIn}</span>
                           {totalRequired > 0 && (
                             <>
                               <span className="text-xs text-zinc-400">/{totalRequired}</span>
                               <span className={`text-xs font-bold ${sufColor(totalSufficiency)}`}>（{suffixFmt(totalSufficiency)}）</span>
                             </>
                           )}
-                          <span className={`text-[11px] font-bold ${totalClockedIn > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>出{totalClockedIn}</span>
                           {totalLate > 0 && <span className="text-[11px] font-bold text-amber-500 dark:text-amber-400">遅{totalLate}</span>}
                           {totalAbsent > 0 && <span className="text-[11px] font-bold text-red-500 dark:text-red-400">欠{totalAbsent}</span>}
                           {totalNotPresent > 0 && <span className="text-[11px] text-zinc-400 dark:text-zinc-500">未{totalNotPresent}</span>}
@@ -780,8 +798,8 @@ export default function AttendanceClient({
                               {groups.map(({ shiftName, members: grpMembers }) => {
                                 const grpAssigned   = grpMembers.length;
                                 const grpRequired   = shiftRequired[shiftName] ?? 0;
-                                const grpSuf        = grpRequired > 0 ? grpAssigned - grpRequired : null;
                                 const grpClockedIn  = grpMembers.filter(m => { const s = getSt(m); return s === "working" || s === "clocked_out"; }).length;
+                                const grpSuf        = grpRequired > 0 ? grpClockedIn - grpRequired : null;
                                 const grpLate       = grpMembers.filter(m => getSt(m) === "late").length;
                                 const grpAbsent     = grpMembers.filter(m => getSt(m) === "absent").length;
                                 const grpNotPresent = grpAssigned - grpClockedIn - grpLate - grpAbsent;
@@ -789,14 +807,13 @@ export default function AttendanceClient({
                                 return (
                                   <div key={shiftName} className="flex items-center flex-wrap gap-x-1 gap-y-0 tabular-nums">
                                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400 w-7 shrink-0">{label}</span>
-                                    <span className="text-[10px] text-zinc-600 dark:text-zinc-300">{grpAssigned}</span>
+                                    <span className={`text-[10px] font-bold ${grpClockedIn > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>{grpClockedIn}</span>
                                     {grpRequired > 0 && (
                                       <>
                                         <span className="text-[10px] text-zinc-400">/{grpRequired}</span>
                                         <span className={`text-[10px] font-bold ${sufColor(grpSuf)}`}>（{suffixFmt(grpSuf)}）</span>
                                       </>
                                     )}
-                                    <span className={`text-[10px] font-bold ${grpClockedIn > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>出{grpClockedIn}</span>
                                     {grpLate > 0   && <span className="text-[10px] font-bold text-amber-500">遅{grpLate}</span>}
                                     {grpAbsent > 0 && <span className="text-[10px] font-bold text-red-500">欠{grpAbsent}</span>}
                                     {grpNotPresent > 0 && <span className="text-[10px] text-zinc-400 dark:text-zinc-500">未{grpNotPresent}</span>}
@@ -813,7 +830,7 @@ export default function AttendanceClient({
                     {/* メンバーカード一覧（独立スクロール・スクロールバー非表示） */}
                     <div
                       className="flex flex-col gap-1.5 p-2 overflow-y-auto flex-1 min-h-0 [&::-webkit-scrollbar]:hidden"
-                      style={{ scrollbarWidth: "none" }}
+                      style={{ scrollbarWidth: "none", touchAction: "pan-y" }}
                     >
                       {groups.map(({ shiftName, members }, gi) => {
                         return (
@@ -827,7 +844,7 @@ export default function AttendanceClient({
                               <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
                             </div>
                           )}
-                      {members.map(m => {
+                      {members.filter(m => (localStatuses.get(m.staffId) ?? m.status) !== "clocked_out").map(m => {
                         const currentStatus = localStatuses.get(m.staffId) ?? m.status;
                         const isMenuOpen = statusMenuId === m.staffId;
                         const effectiveChurnRisk = getEffectiveChurnRisk(m.staffId, m.churnRisk);
@@ -1005,6 +1022,71 @@ export default function AttendanceClient({
                   </div>
                 );
               })}
+
+              {/* ── お休みスタッフ（打診パネル） ── */}
+              {offMembers.length > 0 && (
+                <div className="flex flex-col rounded-2xl border-2 transition-all w-64 shrink-0 border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 h-[calc(100dvh-280px)]">
+                  <div className="px-3 pt-2.5 pb-2 border-b border-b-zinc-200 dark:border-b-zinc-700 shrink-0 rounded-t-2xl bg-zinc-50 dark:bg-zinc-800/50">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold text-zinc-600 dark:text-zinc-300">お休み</span>
+                      <span className="text-xs text-zinc-400">{offMembers.length}名</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">打診して不可の場合はマーク</p>
+                    <div style={{ minHeight: "38px" }} />
+                  </div>
+                  <div
+                    className="flex flex-col gap-1.5 p-2 overflow-y-auto flex-1 min-h-0 [&::-webkit-scrollbar]:hidden"
+                    style={{ scrollbarWidth: "none", touchAction: "pan-y" }}
+                  >
+                    {offMembers.map(m => {
+                      const isDeclined = declinedIds.has(m.staffId);
+                      const isSending = decliningId === m.staffId;
+                      return (
+                        <div
+                          key={m.staffId}
+                          className={[
+                            "rounded-lg border px-2 py-1.5 transition-all",
+                            isDeclined
+                              ? "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30"
+                              : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40",
+                          ].join(" ")}
+                        >
+                          <div className="flex items-center gap-1.5 mb-1">
+                            {m.accountNumber && (
+                              <span className="text-[10px] font-mono text-zinc-400 shrink-0">{m.accountNumber}</span>
+                            )}
+                            <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200 truncate">{m.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400">{m.shiftName}</span>
+                            <button
+                              type="button"
+                              onClick={() => openConfirm([m.staffId], "request")}
+                              className="text-[10px] px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-semibold"
+                            >
+                              打診
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSending}
+                              onClick={() => handleToggleDecline(m.staffId)}
+                              className={[
+                                "text-[10px] px-1.5 py-0.5 rounded border font-semibold transition-colors",
+                                isDeclined
+                                  ? "border-red-400 bg-red-500 text-white"
+                                  : "border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400",
+                                isSending ? "opacity-50" : "",
+                              ].join(" ")}
+                            >
+                              {isDeclined ? "不可✓" : "不可"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

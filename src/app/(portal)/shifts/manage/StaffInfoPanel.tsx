@@ -118,8 +118,8 @@ export default function StaffInfoPanel({
   // ── シフト設定編集状態 ────────────────────────────────────
   const [editOpen,           setEditOpen]           = useState(false);
   const [editSections,       setEditSections]       = useState<string[]>(member.sections.length > 0 ? member.sections : member.section ? [member.section] : []);
-  const [editWorkDaysType,   setEditWorkDaysType]   = useState<"monthly" | "weekly">(
-    (member.work_days_type as "monthly" | "weekly" | null) ?? "monthly"
+  const [editWorkDaysType,   setEditWorkDaysType]   = useState<"monthly" | "weekly" | "spot" | "">(
+    (member.work_days_type as "monthly" | "weekly" | "spot" | null) ?? ""
   );
   const [editWorkDaysCount,  setEditWorkDaysCount]  = useState(String(member.work_days_count ?? ""));
   const [editPreferredShift, setEditPreferredShift] = useState(member.preferred_shift ?? "");
@@ -232,7 +232,7 @@ export default function StaffInfoPanel({
       const r = await updateShiftSettingsAction(projectId, member.id, {
         sections:         editSections,
         workDaysType:     editWorkDaysType,
-        workDaysCount:    editWorkDaysCount !== "" ? parseInt(editWorkDaysCount) : null,
+        workDaysCount:    (editWorkDaysType === "monthly" || editWorkDaysType === "weekly") && editWorkDaysCount !== "" ? parseInt(editWorkDaysCount) : null,
         preferredShift:   editPreferredShift || null,
         preferredSection: editPreferredSec   || null,
         maxConsecDays:    editMaxConsec !== "" ? parseInt(editMaxConsec) : null,
@@ -323,7 +323,11 @@ export default function StaffInfoPanel({
                 </Row>
                 <Row label="稼働設定">
                   <span className="text-xs text-zinc-700 dark:text-zinc-200">
-                    {member.work_days_type === "weekly"
+                    {member.work_days_type === "spot"
+                      ? "スポット"
+                      : !member.work_days_type
+                      ? "未設定"
+                      : member.work_days_type === "weekly"
                       ? `週${member.work_days_count ?? "?"}日`
                       : `月${member.work_days_count ?? "?"}日`}
                   </span>
@@ -391,16 +395,25 @@ export default function StaffInfoPanel({
                 <div>
                   <label className="text-[10px] text-zinc-500 font-semibold block mb-1">稼働日数</label>
                   <div className="flex items-center gap-2">
-                    <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly")}
+                    <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly" | "spot" | "")}
                       className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300">
+                      <option value="">未設定</option>
                       <option value="monthly">月</option>
                       <option value="weekly">週</option>
+                      <option value="spot">スポット</option>
                     </select>
-                    <input type="number" value={editWorkDaysCount}
-                      onChange={e => setEditWorkDaysCount(e.target.value)}
-                      placeholder="21" min={1} max={31}
-                      className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                    <span className="text-xs text-zinc-500">日/{editWorkDaysType === "weekly" ? "週" : "月"}</span>
+                    {(editWorkDaysType === "monthly" || editWorkDaysType === "weekly") && (
+                      <>
+                        <input type="number" value={editWorkDaysCount}
+                          onChange={e => setEditWorkDaysCount(e.target.value)}
+                          placeholder="21" min={1} max={31}
+                          className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                        <span className="text-xs text-zinc-500">日/{editWorkDaysType === "weekly" ? "週" : "月"}</span>
+                      </>
+                    )}
+                    {editWorkDaysType === "spot" && (
+                      <span className="text-xs text-zinc-400">仮組みの対象外</span>
+                    )}
                   </div>
                 </div>
 

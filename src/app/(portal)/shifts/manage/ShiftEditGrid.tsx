@@ -24,7 +24,7 @@ import {
   type BulkDeleteItem,
   type GridDraftEntry,
 } from "../actions";
-import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction, acquireEditLockAction, heartbeatEditLockAction, releaseEditLockAction } from "./actions";
+import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction, acquireEditLockAction, heartbeatEditLockAction, releaseEditLockAction, toggleShiftPublishedAction } from "./actions";
 import StaffInfoPanel, { type StaffInfoMember } from "./StaffInfoPanel";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -44,6 +44,7 @@ type Member = {
   max_consecutive_days?: number | null; shift_note?: string | null;
   accountNumber?: string | null; churn_risk?: boolean; churn_risk_since?: string | null;
   company_name?: string | null; role?: string | null; start_date?: string | null;
+  shift_published?: boolean | null;
 };
 type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
@@ -894,6 +895,30 @@ export default function ShiftEditGrid({
   }, [rowOrderOverride, rowOrderKey]);
   // セクションフィルタ（"" = 全員表示）
   const [filterSection, setFilterSection] = useState<string>("");
+  // 個別シフト公開フラグ（staffId → published）- 楽観的更新
+  const [publishedOverrides, setPublishedOverrides] = useState<Map<string, boolean>>(() => {
+    const m = new Map<string, boolean>();
+    for (const member of activeMembers) {
+      if (member.shift_published === false) m.set(member.id, false);
+    }
+    return m;
+  });
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+
+  async function handleToggleShiftPublished(staffId: string) {
+    const current = publishedOverrides.get(staffId) ?? true;
+    const next = !current;
+    setPublishedOverrides(prev => new Map(prev).set(staffId, next));
+    setPublishingId(staffId);
+    const res = await toggleShiftPublishedAction(projectId, staffId, next);
+    if (!res.success) {
+      setPublishedOverrides(prev => new Map(prev).set(staffId, current));
+    }
+    setPublishingId(null);
+  }
+
+  // 日付でスタッフをソートするオーバーライド（null = デフォルト順）
+  const [sortByDate, setSortByDate] = useState<string | null>(null);
   // インラインパターンピッカー
   type PopoverTarget = { staffId: string; date: string; rect: DOMRect };
   const [popover, setPopover] = useState<PopoverTarget | null>(null);
@@ -1492,14 +1517,33 @@ export default function ShiftEditGrid({
   }, [activeMembers, sortByAccountLocal, rowOrderOverride]);
 
   // セクションフィルタ適用済みリスト
-  const displayMembers = useMemo(() =>
-    filterSection
+  const displayMembers = useMemo(() => {
+    let members = filterSection
       ? sortedMembersBySection.filter(m => {
           const secs = m.sections?.length ? m.sections : (m.section ? [m.section] : []);
           return secs.includes(filterSection);
         })
-      : sortedMembersBySection,
-  [sortedMembersBySection, filterSection]);
+      : sortedMembersBySection;
+
+    // 日付指定ソート：選択日のシフト開始時刻順（未割当は末尾）
+    if (sortByDate) {
+      const patternStartMap = new Map(shiftPatterns.map(p => [p.name, p.start_time ?? "ZZ"]));
+      members = [...members].sort((a, b) => {
+        // draftsを直接参照（resolveCellを避けてdeps問題を回避）
+        const ka = `${a.id}__${sortByDate}`;
+        const kb = `${b.id}__${sortByDate}`;
+        const da = drafts.get(ka);
+        const db = drafts.get(kb);
+        const sna = drafts.has(ka) ? (da?.shiftName ?? null) : (shifts.find(s => s.staff_id === a.id && s.shift_date === sortByDate)?.shift_name ?? null);
+        const snb = drafts.has(kb) ? (db?.shiftName ?? null) : (shifts.find(s => s.staff_id === b.id && s.shift_date === sortByDate)?.shift_name ?? null);
+        const sa = sna ? (patternStartMap.get(sna) ?? "ZZ") : "ZZ";
+        const sb = snb ? (patternStartMap.get(snb) ?? "ZZ") : "ZZ";
+        return sa.localeCompare(sb);
+      });
+    }
+    return members;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedMembersBySection, filterSection, sortByDate, shiftPatterns, drafts, shifts]);
 
   // フィルタ用セクション一覧（実際にスタッフがいるセクションのみ）
   const availableSections = useMemo(() => {
@@ -2428,12 +2472,16 @@ export default function ShiftEditGrid({
                   {allDates.map((date) => {
                     const day = parseInt(date.slice(8)); const dw = dowLabel(date);
                     const dn = dowNum(date); const isSun = dn === 0, isSat = dn === 6, isToday = date === todayJST;
+                    const isSortTarget = sortByDate === date;
                     return (
-                      <th key={date} className={["sticky top-0 z-20 h-11 border-b border-r border-zinc-200 dark:border-zinc-700",
-                        isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950"].join(" ")}>
+                      <th key={date} className={["sticky top-0 z-20 h-11 border-b border-r border-zinc-200 dark:border-zinc-700 cursor-pointer select-none",
+                        isSortTarget ? "bg-amber-100 dark:bg-amber-900/40" : isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950"].join(" ")}
+                        title={isSortTarget ? "ソート解除" : "この日のシフト順にソート"}
+                        onClick={() => setSortByDate(prev => prev === date ? null : date)}>
                         <div className="flex flex-col items-center justify-center h-full gap-0.5">
-                          <span className={`text-[11px] font-bold tabular-nums leading-none ${isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"}`}>{day}</span>
-                          <span className={`text-[9px] leading-none ${isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"}`}>{dw}</span>
+                          <span className={`text-[11px] font-bold tabular-nums leading-none ${isSortTarget ? "text-amber-700 dark:text-amber-300" : isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"}`}>{day}</span>
+                          <span className={`text-[9px] leading-none ${isSortTarget ? "text-amber-500" : isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"}`}>{dw}</span>
+                          {isSortTarget && <span className="text-[8px] leading-none text-amber-500">↕</span>}
                         </div>
                       </th>
                     );
@@ -2558,6 +2606,21 @@ export default function ShiftEditGrid({
                                     </div>
                                   )}
                                 </div>
+                                {/* 個別シフト公開/非公開トグル */}
+                                {(() => {
+                                  const isPublished = publishedOverrides.get(member.id) ?? (member.shift_published !== false);
+                                  return (
+                                    <button
+                                      type="button"
+                                      title={isPublished ? "展開対象（クリックで除外）" : "展開対象外（クリックで対象に戻す）"}
+                                      disabled={publishingId === member.id}
+                                      onClick={(e) => { e.stopPropagation(); handleToggleShiftPublished(member.id); }}
+                                      className={["shrink-0 text-[8px] px-1 py-0.5 rounded leading-none font-bold transition-colors", isPublished ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400" : "bg-zinc-200 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500"].join(" ")}
+                                    >
+                                      {isPublished ? "公開" : "非公"}
+                                    </button>
+                                  );
+                                })()}
                               </div>
                             </td>
                           </>

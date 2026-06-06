@@ -367,7 +367,19 @@ export async function publishShiftsAction(
   }
 
   // LINE IDを含むスタッフ情報を取得
-  const staffIds = [...shiftsByStaff.keys()];
+  const allStaffIds = [...shiftsByStaff.keys()];
+
+  // shift_published = false のスタッフを除外
+  const { data: memberRows } = await admin
+    .from("project_members")
+    .select("staff_id, shift_published")
+    .eq("project_id", projectId)
+    .in("staff_id", allStaffIds);
+  const unpublishedSet = new Set(
+    (memberRows ?? []).filter(m => m.shift_published === false).map(m => m.staff_id as string)
+  );
+  const staffIds = allStaffIds.filter(id => !unpublishedSet.has(id));
+
   const { data: staffRows } = await admin
     .from("staffs")
     .select("id, display_name, name, line_user_id")
@@ -843,4 +855,20 @@ export async function regenerateShiftDraftAction(
     ...result,
     draftEntries: (result.draftEntries ?? []) as import("../actions").GridDraftEntry[],
   };
+}
+
+/** スタッフ個別シフト公開フラグを切り替える */
+export async function toggleShiftPublishedAction(
+  projectId: string,
+  staffId: string,
+  published: boolean,
+): Promise<{ success: boolean; message?: string }> {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("project_members")
+    .update({ shift_published: published })
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId);
+  if (error) return { success: false, message: error.message };
+  return { success: true };
 }

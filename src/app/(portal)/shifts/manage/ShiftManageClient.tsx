@@ -28,6 +28,7 @@ type Member = {
   max_consecutive_days: number | null; shift_note: string | null;
   accountNumber?: string | null;
   churn_risk?: boolean; churn_risk_since?: string | null;
+  shift_published?: boolean | null;
 };
 type Pattern = {
   name: string;
@@ -386,7 +387,7 @@ export default function ShiftManageClient({
   }
 
   return (
-    <div className="w-full pb-24 pt-3">
+    <div className="w-full pb-24 pt-3 overflow-y-auto flex-1 min-h-0">
       {/* Excel出力 セクション選択モーダル */}
       {showExportModal && (
         <div

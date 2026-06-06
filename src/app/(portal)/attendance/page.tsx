@@ -677,6 +677,14 @@ export default async function AttendancePage({
   const absent     = allInternal.filter(m => m.status === "absent").length;
   const notClocked = total - clockedIn - absent;
 
+  // 打診不可マーク取得
+  const { data: declineRows } = await supabase
+    .from("work_request_declines")
+    .select("staff_id")
+    .eq("project_id", projectId)
+    .eq("date", today);
+  const initialDeclinedIds = (declineRows ?? []).map(r => r.staff_id as string);
+
   // 日付ラベル
   const [, monthStr, dayStr] = today.split("-");
   const noonJST = new Date(`${today}T12:00:00+09:00`);
@@ -712,6 +720,7 @@ export default async function AttendancePage({
       breakShortSettings={breakShortSettings}
       breakRecords={breakRecords}
       punchTimelines={punchTimelines}
+      initialDeclinedIds={initialDeclinedIds}
     />
   );
 }

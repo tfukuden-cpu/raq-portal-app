@@ -720,9 +720,10 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   const role          = String(fd.get("role")           ?? "staff");
   const accountNumber = String(fd.get("account_number") ?? "").trim() || null;
   const workDaysTypeRaw = String(fd.get("work_days_type") ?? "").trim();
-  const workDaysType  = (workDaysTypeRaw === "monthly" || workDaysTypeRaw === "weekly") ? workDaysTypeRaw : null;
+  const workDaysType  = (workDaysTypeRaw === "monthly" || workDaysTypeRaw === "weekly" || workDaysTypeRaw === "spot") ? workDaysTypeRaw : null;
   const workDaysCountRaw = String(fd.get("work_days_count") ?? "").trim();
-  const workDaysCount = workDaysCountRaw && workDaysType ? (parseInt(workDaysCountRaw, 10) || null) : null;
+  const needsCount = workDaysType === "monthly" || workDaysType === "weekly";
+  const workDaysCount = workDaysCountRaw && needsCount ? (parseInt(workDaysCountRaw, 10) || null) : null;
   const sectionsRaw   = String(fd.get("sections") ?? "");
   const sections      = sectionsRaw ? sectionsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
   const preferredShift   = String(fd.get("preferred_shift")   ?? "").trim() || null;

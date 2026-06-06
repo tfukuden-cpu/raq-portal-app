@@ -596,7 +596,7 @@ export function MemberList({
   const [editSectionInput, setEditSectionInput] = useState("");
   const [editRole, setEditRole]               = useState("staff");
   const [editAccountNumber, setEditAccountNumber] = useState("");
-  const [editWorkDaysType, setEditWorkDaysType] = useState<"monthly" | "weekly" | "">("");
+  const [editWorkDaysType, setEditWorkDaysType] = useState<"monthly" | "weekly" | "spot" | "">("");
   const [editWorkDaysCount, setEditWorkDaysCount] = useState("");
   const [editPreferredShift, setEditPreferredShift] = useState("");
   const [editPreferredSection, setEditPreferredSection] = useState("");
@@ -635,7 +635,7 @@ export function MemberList({
     setEditSectionInput("");
     setEditRole(m.role);
     setEditAccountNumber(m.account_number ?? "");
-    setEditWorkDaysType((m.work_days_type as "monthly" | "weekly" | "") || "monthly");
+    setEditWorkDaysType((m.work_days_type as "monthly" | "weekly" | "spot" | "") || "");
     setEditWorkDaysCount(m.work_days_count != null ? String(m.work_days_count) : "21");
     setEditPreferredShift(m.preferred_shift ?? "");
     setEditPreferredSection(m.preferred_section ?? "");
@@ -664,7 +664,7 @@ export function MemberList({
     fd.set("role",            editRole);
     fd.set("account_number",      editAccountNumber.trim());
     fd.set("work_days_type",       editWorkDaysType);
-    fd.set("work_days_count",      editWorkDaysCount);
+    fd.set("work_days_count",      (editWorkDaysType === "monthly" || editWorkDaysType === "weekly") ? editWorkDaysCount : "");
     fd.set("preferred_shift",      editPreferredShift);
     fd.set("preferred_section",    editPreferredSection);
     fd.set("max_consecutive_days", editMaxConsecDays);
@@ -1397,17 +1397,26 @@ export function MemberList({
                       <div>
                         <label className="text-[10px] text-zinc-500 font-semibold">稼働日数</label>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly" | "")}
+                          <select value={editWorkDaysType} onChange={e => setEditWorkDaysType(e.target.value as "monthly" | "weekly" | "spot" | "")}
                             className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300">
+                            <option value="">未設定</option>
                             <option value="monthly">月</option>
                             <option value="weekly">週</option>
+                            <option value="spot">スポット</option>
                           </select>
-                          <input type="number" value={editWorkDaysCount} onChange={e => setEditWorkDaysCount(e.target.value)}
-                            placeholder="21" min={1} max={31}
-                            className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                          <span className="text-xs text-zinc-500">
-                            日/{editWorkDaysType === "weekly" ? "週" : "月"}
-                          </span>
+                          {(editWorkDaysType === "monthly" || editWorkDaysType === "weekly") && (
+                            <>
+                              <input type="number" value={editWorkDaysCount} onChange={e => setEditWorkDaysCount(e.target.value)}
+                                placeholder="21" min={1} max={31}
+                                className="w-16 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+                              <span className="text-xs text-zinc-500">
+                                日/{editWorkDaysType === "weekly" ? "週" : "月"}
+                              </span>
+                            </>
+                          )}
+                          {editWorkDaysType === "spot" && (
+                            <span className="text-xs text-zinc-400">仮組みの対象外</span>
+                          )}
                         </div>
                       </div>
                       {/* 優先セクション（複数セクション設定時のみ） */}
