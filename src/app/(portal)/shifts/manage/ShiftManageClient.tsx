@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ShiftDayList from "./ShiftDayList";
 import ShiftRequestsAdmin from "./ShiftRequestsAdmin";
@@ -163,6 +163,19 @@ export default function ShiftManageClient({
   isPublished, lockedSections, slotLockedSections, initialEditLock, offRequests, prevMonthShifts,
   monthNavBase, prevMonth, nextMonth, publishMessageTemplate,
 }: Props) {
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  // ツールバーの高さを --toolbar-h として登録し ShiftDayList の sticky 位置に使う
+  useEffect(() => {
+    const el = toolbarRef.current;
+    if (!el) return;
+    const update = () =>
+      document.documentElement.style.setProperty("--toolbar-h", `${el.offsetHeight}px`);
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(el);
+    return () => { obs.disconnect(); document.documentElement.style.removeProperty("--toolbar-h"); };
+  }, []);
+
   const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [showDraftModal, setShowDraftModal] = useState(false);
@@ -544,8 +557,8 @@ export default function ShiftManageClient({
         </div>
       )}
 
-      {/* ツールバー */}
-      <div className="px-4 mb-2 flex flex-wrap items-center gap-3">
+      {/* ツールバー（sticky） */}
+      <div ref={toolbarRef} className="sticky z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-2 flex flex-wrap items-center gap-3" style={{ top: "var(--page-header-h, 0px)" }}>
         {/* 月ナビゲーション（大きめ） */}
         <div className="flex items-center gap-0.5">
           <a

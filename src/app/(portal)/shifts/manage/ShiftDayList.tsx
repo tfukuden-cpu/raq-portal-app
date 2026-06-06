@@ -334,7 +334,7 @@ export default function ShiftDayList({
       {/* ━━ 固定ヘッダー（タブ行 + 日付ストリップ + 検索ボックスを一体化） ━━ */}
       <div
         className="sticky z-30 bg-white dark:bg-zinc-950"
-        style={{ top: "var(--page-header-h, 0px)" }}
+        style={{ top: "calc(var(--page-header-h, 0px) + var(--toolbar-h, 0px))" }}
       >
         {/* ① タブ行（出勤 / 公休 / 希望休） */}
         <div className="border-b border-zinc-100 dark:border-zinc-800">
@@ -662,7 +662,7 @@ export default function ShiftDayList({
               <div
                 ref={splitContainerRef}
                 className="flex flex-col"
-                style={{ height: "calc(100dvh - var(--page-header-h, 0px) - 200px)", minHeight: "400px" }}
+                style={{ height: "calc(100dvh - var(--page-header-h, 0px) - var(--toolbar-h, 0px) - 200px)", minHeight: "400px" }}
               >
               {/* ── 充足テーブルペイン ── */}
               <div
