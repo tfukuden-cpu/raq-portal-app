@@ -579,7 +579,7 @@ export default async function ManageShiftsPage(props: {
     : `/shifts/manage?tab=shift&year=`;
 
   return (
-    <main className="bg-white dark:bg-zinc-950">
+    <main className="bg-white dark:bg-zinc-950 flex-1 min-h-0 overflow-y-auto">
 
       <HeaderHeightSetter id="shift-manage-header" className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
         <div className="max-w-6xl mx-auto px-4 pt-5 space-y-2">
