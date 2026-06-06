@@ -387,7 +387,7 @@ export default function ShiftManageClient({
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <div className="w-full pb-24 pt-3">
       {/* Excel出力 セクション選択モーダル */}
       {showExportModal && (
         <div
@@ -545,7 +545,7 @@ export default function ShiftManageClient({
       )}
 
       {/* ツールバー */}
-      <div className="px-4 pt-3 mb-2 flex flex-wrap items-center gap-3 shrink-0">
+      <div className="px-4 mb-2 flex flex-wrap items-center gap-3">
         {/* 月ナビゲーション（大きめ） */}
         <div className="flex items-center gap-0.5">
           <a
@@ -611,11 +611,10 @@ export default function ShiftManageClient({
         </div>
       </div>
 
-      <div className="px-4 shrink-0">
+      <div className="px-4">
         <ShiftRequestsAdmin requests={shiftRequests} />
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       <ShiftDayList
         allDates={allDates}
         shifts={shifts}
@@ -635,7 +634,6 @@ export default function ShiftManageClient({
         sortByAccount={sortByAccount}
         onSetKyukyu={sortByAccount ? handleSetKyukyu : undefined}
       />
-      </div>
     </div>
   );
 }

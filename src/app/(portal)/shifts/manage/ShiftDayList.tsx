@@ -333,7 +333,8 @@ export default function ShiftDayList({
     <>
       {/* ━━ 固定ヘッダー（タブ行 + 日付ストリップ + 検索ボックスを一体化） ━━ */}
       <div
-        className="shrink-0 z-30 bg-white dark:bg-zinc-950"
+        className="sticky z-30 bg-white dark:bg-zinc-950"
+        style={{ top: "var(--page-header-h, 0px)" }}
       >
         {/* ① タブ行（出勤 / 公休 / 希望休） */}
         <div className="border-b border-zinc-100 dark:border-zinc-800">
@@ -461,7 +462,7 @@ export default function ShiftDayList({
       </div>
 
       {/* ━━ コンテンツ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div>
 
         {/* ── 出勤タブ: 月次一覧テーブル ── */}
         {tabKey === "shukkin" && (
@@ -660,7 +661,8 @@ export default function ShiftDayList({
               /* ── スタッフ行ビュー（番号順）：分割ペイン ── */
               <div
                 ref={splitContainerRef}
-                className="flex flex-col flex-1 min-h-0"
+                className="flex flex-col"
+                style={{ height: "calc(100dvh - var(--page-header-h, 0px) - 200px)", minHeight: "400px" }}
               >
               {/* ── 充足テーブルペイン ── */}
               <div
