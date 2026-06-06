@@ -581,7 +581,7 @@ export default async function ManageShiftsPage(props: {
   return (
     <main className="bg-white dark:bg-zinc-950">
 
-      <HeaderHeightSetter id="shift-manage-header" className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+      <HeaderHeightSetter id="shift-manage-header" className="sticky top-0 z-50 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
         <div className="max-w-6xl mx-auto px-4 pt-5 space-y-2">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">

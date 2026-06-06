@@ -333,7 +333,7 @@ export default function ShiftDayList({
     <>
       {/* ━━ 固定ヘッダー（タブ行 + 日付ストリップ + 検索ボックスを一体化） ━━ */}
       <div
-        className="sticky z-30 bg-white dark:bg-zinc-950"
+        className="sticky z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800"
         style={{ top: "calc(var(--page-header-h, 0px) + var(--toolbar-h, 0px))" }}
       >
         {/* ① タブ行（出勤 / 公休 / 希望休） */}

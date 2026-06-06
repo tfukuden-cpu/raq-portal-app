@@ -558,7 +558,7 @@ export default function ShiftManageClient({
       )}
 
       {/* ツールバー（sticky） */}
-      <div ref={toolbarRef} className="sticky z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-2 flex flex-wrap items-center gap-3" style={{ top: "var(--page-header-h, 0px)" }}>
+      <div ref={toolbarRef} className="sticky z-40 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-2 flex flex-wrap items-center gap-3" style={{ top: "var(--page-header-h, 0px)" }}>
         {/* 月ナビゲーション（大きめ） */}
         <div className="flex items-center gap-0.5">
           <a
