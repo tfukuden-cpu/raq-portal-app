@@ -771,14 +771,18 @@ export default function AttendanceEditClient({
                     // シフトあり・稼働日（AttendanceRow）
                     const key = `${row.staffId}_${row.date}`;
                     const isConfirmed = confirmMap.get(key) !== null && confirmMap.get(key) !== undefined;
+                    const extractTime = (note: string | null) =>
+                      note?.match(/実打刻[:：]\s*(\d{1,2}:\d{2})/)?.[1] ?? null;
                     const notes: string[] = [];
-                    if (row.clockInNote)        notes.push(row.clockInNote);
-                    if (row.clockOutNote)       notes.push(row.clockOutNote);
-                    if (row.overtimeApprover)   notes.push(`残業承認:${row.overtimeApprover}`);
-                    if (row.earlyLeaveApprover) notes.push(`早退承認:${row.earlyLeaveApprover}`);
-                    if (row.absenceReason)      notes.push(row.absenceReason);
-                    if (row.lateReason)         notes.push(row.lateReason);
-                    if (row.modifiedBy)         notes.push(`修正者:${row.modifiedBy}`);
+                    const inTime  = extractTime(row.clockInNote);
+                    const outTime = extractTime(row.clockOutNote);
+                    const approver = row.overtimeApprover ?? row.earlyLeaveApprover ?? null;
+                    if (inTime)   notes.push(`出勤打刻：${inTime}`);
+                    if (outTime)  notes.push(`退勤打刻：${outTime}`);
+                    if (approver) notes.push(`残業/早退承認者：${approver}`);
+                    if (row.absenceReason) notes.push(row.absenceReason);
+                    if (row.lateReason)    notes.push(row.lateReason);
+                    if (row.modifiedBy)    notes.push(`修正者:${row.modifiedBy}`);
                     return (
                       <tr key={key} className={STATUS_STYLE[row.status]}>
                         <td className="px-2 py-1.5 whitespace-nowrap">
@@ -813,7 +817,7 @@ export default function AttendanceEditClient({
                           </button>
                         </td>
                         <td className="px-2 py-1.5 text-zinc-400 dark:text-zinc-500 max-w-[200px] truncate">
-                          {notes.join(" / ")}
+                          {notes.join("　")}
                         </td>
                       </tr>
                     );
