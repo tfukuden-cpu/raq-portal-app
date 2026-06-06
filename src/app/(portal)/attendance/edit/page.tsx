@@ -135,15 +135,21 @@ export default async function AttendanceEditPage({
       .map(p => [p.name as string, { start: p.start_time as string, end: p.end_time as string }])
   );
 
-  const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null; modifiedBy: string | null }>();
+  const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null; modifiedBy: string | null; clockInNote: string | null; clockOutNote: string | null }>();
   for (const p of punches ?? []) {
     const key = `${p.staff_id}_${p.recorded_at.slice(0, 10)}`;
-    if (!punchMap.has(key)) punchMap.set(key, { clockIn: null, clockOut: null, modifiedBy: null });
+    if (!punchMap.has(key)) punchMap.set(key, { clockIn: null, clockOut: null, modifiedBy: null, clockInNote: null, clockOutNote: null });
     const e = punchMap.get(key)!;
-    if (p.punch_type === "clock_in"  && !e.clockIn)  e.clockIn  = p.recorded_at;
-    if (p.punch_type === "clock_out")                  e.clockOut = p.recorded_at;
-    // 管理者修正ノートを記録（"管理者修正:S001" 形式）
     const note = (p as { note?: string | null }).note ?? null;
+    if (p.punch_type === "clock_in" && !e.clockIn) {
+      e.clockIn = p.recorded_at;
+      if (note && !note.startsWith("管理者修正:")) e.clockInNote = note;
+    }
+    if (p.punch_type === "clock_out") {
+      e.clockOut = p.recorded_at;
+      if (note && !note.startsWith("管理者修正:")) e.clockOutNote = note;
+    }
+    // 管理者修正ノートを記録（"管理者修正:S001" 形式）
     if (note?.startsWith("管理者修正:")) e.modifiedBy = note.replace("管理者修正:", "");
   }
 
@@ -251,6 +257,8 @@ export default async function AttendanceEditPage({
       modifiedBy:        punch?.modifiedBy
         ? (memberMap.get(punch.modifiedBy)?.name ?? punch.modifiedBy)
         : null,
+      clockInNote:       punch?.clockInNote  ?? null,
+      clockOutNote:      punch?.clockOutNote ?? null,
       status,
     });
   }

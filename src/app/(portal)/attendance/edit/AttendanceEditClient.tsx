@@ -40,6 +40,8 @@ export type AttendanceRow = {
   isConfirmed: boolean;
   confirmedBy: string | null;
   modifiedBy: string | null;
+  clockInNote: string | null;
+  clockOutNote: string | null;
   status: "ok" | "no_clockin" | "no_clockout" | "absent" | "late" | "early";
 };
 
@@ -770,8 +772,10 @@ export default function AttendanceEditClient({
                     const key = `${row.staffId}_${row.date}`;
                     const isConfirmed = confirmMap.get(key) !== null && confirmMap.get(key) !== undefined;
                     const notes: string[] = [];
-                    if (row.overtimeApprover)  notes.push(`残業:${row.overtimeApprover}`);
-                    if (row.earlyLeaveApprover) notes.push(`早退:${row.earlyLeaveApprover}`);
+                    if (row.clockInNote)        notes.push(row.clockInNote);
+                    if (row.clockOutNote)       notes.push(row.clockOutNote);
+                    if (row.overtimeApprover)   notes.push(`残業承認:${row.overtimeApprover}`);
+                    if (row.earlyLeaveApprover) notes.push(`早退承認:${row.earlyLeaveApprover}`);
                     if (row.absenceReason)      notes.push(row.absenceReason);
                     if (row.lateReason)         notes.push(row.lateReason);
                     if (row.modifiedBy)         notes.push(`修正者:${row.modifiedBy}`);
