@@ -404,20 +404,9 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     }
   }
 
-  // ── 退勤アクション開始（シフト時刻で自動判定）──────────────
+  // ── 退勤アクション開始（常に早退/定時/残業を選択）──────────
   function handleClockOut(member: TerminalMember) {
-    if (!member.shiftEnd) {
-      // 時刻なし → 定時退勤で即打刻
-      handleConfirm(member, "clock_out", "normal", undefined);
-      return;
-    }
-    if (!isShiftEndPassed(member.shiftEnd)) {
-      // 終了前 → 早退 → SV承認者入力
-      setStep({ kind: "approver", member, punchType: "clock_out", punchKind: "early" });
-    } else {
-      // 終了後 → 定時 or 残業 選択
-      setStep({ kind: "clock_kind", member, punchType: "clock_out" });
-    }
+    setStep({ kind: "clock_kind", member, punchType: "clock_out" });
   }
 
   // ── 離席開始 ─────────────────────────────────────────────────
@@ -1101,12 +1090,21 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             <p className="text-zinc-400 text-sm mb-1">{member.name}</p>
             <p className="text-white text-2xl font-bold">退勤の種別を選択</p>
             <p className="text-zinc-500 text-xs mt-1">
-              シフト終了時刻 {member.shiftEnd ? member.shiftEnd.slice(0, 5) : "未設定"} を過ぎています
+              シフト終了時刻 {member.shiftEnd ? member.shiftEnd.slice(0, 5) : "未設定"}
             </p>
           </div>
 
           <div className="space-y-3">
-            {/* 退勤のみ：定時 or 残業 */}
+            {/* 早退 */}
+            <button
+              onClick={() => handleKindSelect(member, punchType, "early")}
+              disabled={isPending}
+              className="w-full py-5 rounded-2xl bg-amber-700 hover:bg-amber-600 text-white text-xl font-bold transition-all active:scale-95 disabled:opacity-50"
+            >
+              早退
+              <span className="block text-xs font-normal text-amber-200 mt-0.5">打刻時刻を15分切り下げ・SV承認必要</span>
+            </button>
+            {/* 定時 */}
             <button
               onClick={() => handleKindSelect(member, punchType, "normal")}
               disabled={isPending}
@@ -1117,13 +1115,14 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                 {member.shiftEnd ? `→ ${member.shiftEnd.slice(0, 5)} で記録` : "シフト終了時刻で記録"}
               </span>
             </button>
+            {/* 残業 */}
             <button
               onClick={() => handleKindSelect(member, punchType, "overtime")}
               disabled={isPending}
               className="w-full py-5 rounded-2xl bg-blue-800 hover:bg-blue-700 text-white text-xl font-bold transition-all active:scale-95 disabled:opacity-50"
             >
-              残業退勤
-              <span className="block text-xs font-normal text-blue-200 mt-0.5">実打刻時刻を15分切り下げ　SV承認必要</span>
+              残業
+              <span className="block text-xs font-normal text-blue-200 mt-0.5">実打刻時刻をそのまま記録・SV承認必要</span>
             </button>
           </div>
 

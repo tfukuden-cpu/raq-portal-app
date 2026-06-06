@@ -9,25 +9,15 @@ import {
   setBreakSlotAction,
   clockInAction,
   clockOutAction,
-  earlyLeaveAction,
   seatLeaveAction,
   seatReturnAction,
   breakStartAction,
   breakEndAction,
   breakResetAction,
   type StaffPunchSummary,
-  type ClockOutJudgment,
 } from "./punch-actions";
 import type { BreakSlotSetting } from "./break-actions";
 
-function judgeClockOut(nowISO: string, shiftEndHHMM: string, today: string): ClockOutJudgment {
-  const [hh, mm] = shiftEndHHMM.split(":").map(Number);
-  const shiftEnd = new Date(`${today}T${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}:00+09:00`);
-  const diffMin = (shiftEnd.getTime() - new Date(nowISO).getTime()) / 60000;
-  if (diffMin > 10) return "early_leave";
-  if (diffMin >= 0) return "on_time";
-  return "overtime_choice";
-}
 
 function fmtElapsed(sec: number) {
   const m = Math.floor(sec / 60), s = sec % 60;
@@ -74,7 +64,7 @@ interface PunchModalProps {
   onStatusChange: (staffId: string, status: string) => void;
 }
 
-type Step = "loading" | "main" | "clock_out_confirm" | "early_leave_sv" | "overtime_choice" | "overtime_sv" | "done";
+type Step = "loading" | "main" | "clock_out_confirm" | "early_leave_sv" | "overtime_sv" | "done";
 
 export default function PunchModal({
   projectId, staffId, staffName, accountNumber, section, shiftName,
@@ -85,7 +75,6 @@ export default function PunchModal({
 }: PunchModalProps) {
   const [step, setStep]         = useState<Step>("loading");
   const [summary, setSummary]   = useState<StaffPunchSummary | null>(null);
-  const [judgment, setJudgment] = useState<ClockOutJudgment | null>(null);
   const [svName, setSvName]     = useState("");
   const [reason, setReason]     = useState("");
   const [elapsedSec, setElapsed] = useState(0);
@@ -160,29 +149,22 @@ export default function PunchModal({
     });
   }
   function handleClockOutInit() {
-    const j = shiftEnd ? judgeClockOut(new Date().toISOString(), shiftEnd, today) : "overtime_choice";
-    setJudgment(j);
-    if (j === "on_time") {
-      startTransition(async () => {
-        const res = await clockOutAction(projectId, staffId, shiftEnd, "on_time");
-        if (!res.ok) { showToast(`⚠️ ${res.error}`); return; }
-        onStatusChange(staffId, "clocked_out"); showToast("退勤しました（定時）"); setStep("done");
-      });
-    } else setStep("clock_out_confirm");
+    // 常に早退/定時/残業の選択画面へ
+    setStep("clock_out_confirm");
   }
-  function handleEarlyLeaveSubmit() {
-    if (!svName.trim()) { showToast("SV名を入力してください"); return; }
-    startTransition(async () => {
-      const res = await earlyLeaveAction(projectId, staffId, shiftEnd ?? "00:00", svName.trim(), reason || undefined);
-      if (!res.ok) { showToast(`⚠️ ${res.error}`); return; }
-      onStatusChange(staffId, "clocked_out"); showToast("早退申請を送信しました"); setStep("done");
-    });
-  }
-  function handleOvertimeOnTime() {
+  function handleClockOutOnTime() {
     startTransition(async () => {
       const res = await clockOutAction(projectId, staffId, shiftEnd, "on_time");
       if (!res.ok) { showToast(`⚠️ ${res.error}`); return; }
       onStatusChange(staffId, "clocked_out"); showToast("退勤しました（定時）"); setStep("done");
+    });
+  }
+  function handleEarlyLeaveSubmit() {
+    if (!svName.trim()) { showToast("SV名を入力してください"); return; }
+    startTransition(async () => {
+      const res = await clockOutAction(projectId, staffId, shiftEnd, "early_leave", svName.trim(), reason || undefined);
+      if (!res.ok) { showToast(`⚠️ ${res.error}`); return; }
+      onStatusChange(staffId, "clocked_out"); showToast("早退で退勤しました"); setStep("done");
     });
   }
   function handleOvertimeSubmit() {
@@ -190,7 +172,7 @@ export default function PunchModal({
     startTransition(async () => {
       const res = await clockOutAction(projectId, staffId, shiftEnd, "overtime", svName.trim(), reason || undefined);
       if (!res.ok) { showToast(`⚠️ ${res.error}`); return; }
-      onStatusChange(staffId, "clocked_out"); showToast("残業申請を送信しました"); setStep("done");
+      onStatusChange(staffId, "clocked_out"); showToast("残業で退勤しました"); setStep("done");
     });
   }
   function handleSeatLeave() {
@@ -345,37 +327,34 @@ export default function PunchModal({
             </>
           )}
 
-          {/* ── 退勤確認 ── */}
+          {/* ── 退勤区分選択（常に3択） ── */}
           {step === "clock_out_confirm" && (
             <div className="space-y-2">
-              {judgment === "early_leave" && (
-                <>
-                  <p className="text-sm text-red-600 dark:text-red-400 font-semibold">早退扱いになります</p>
-                  <p className="text-xs text-zinc-400">終了時刻の11分以上前のためSV承認が必要です。</p>
-                  <Btn label="早退申請へ" color="red" onClick={() => setStep("early_leave_sv")} />
-                </>
-              )}
-              {judgment === "overtime_choice" && (
-                <>
-                  <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">退勤区分を選択</p>
-                  <Btn label="定時（終了時刻に補正）" color="green" onClick={handleOvertimeOnTime} disabled={isPending} />
-                  <Btn label="残業申請" color="amber" onClick={() => setStep("overtime_sv")} />
-                </>
-              )}
+              <p className="text-xs font-bold text-zinc-500 text-center">退勤区分を選択</p>
+              <Btn label={`早退（打刻時刻を15分切り下げ）`} color="red" onClick={() => { setSvName(""); setReason(""); setStep("early_leave_sv"); }} />
+              <Btn label={`定時退勤${shiftEnd ? `（${shiftEnd.slice(0,5)} で記録）` : ""}`} color="green" onClick={handleClockOutOnTime} disabled={isPending} />
+              <Btn label="残業（実打刻時刻で記録）" color="amber" onClick={() => { setSvName(""); setReason(""); setStep("overtime_sv"); }} />
               <button onClick={() => setStep("main")} className="w-full text-xs text-zinc-400 hover:text-zinc-600 py-1">戻る</button>
             </div>
           )}
 
-          {/* ── 早退SV署名 ── */}
+          {/* ── 早退／残業 SV署名 ── */}
           {(step === "early_leave_sv" || step === "overtime_sv") && (
             <div className="space-y-2">
-              <p className="text-xs text-zinc-500">SV名を記入してください</p>
-              <input type="text" placeholder="SV名" value={svName} onChange={e => setSvName(e.target.value)}
+              <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                {step === "early_leave_sv" ? "早退" : "残業"}：承認SV名を入力
+              </p>
+              <p className="text-xs text-zinc-400">
+                {step === "early_leave_sv"
+                  ? "打刻時刻を15分切り下げて終了時刻に記録します"
+                  : "実打刻時刻をそのまま終了時刻に記録します"}
+              </p>
+              <input type="text" placeholder="承認SV名（必須）" value={svName} onChange={e => setSvName(e.target.value)}
                 className="w-full text-sm bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-400 dark:text-zinc-100" />
               <input type="text" placeholder="理由（任意）" value={reason} onChange={e => setReason(e.target.value)}
                 className="w-full text-sm bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:text-zinc-100" />
               <Btn
-                label={step === "early_leave_sv" ? "早退申請を送信" : "残業申請を送信"}
+                label={step === "early_leave_sv" ? "早退で退勤する" : "残業で退勤する"}
                 color={step === "early_leave_sv" ? "red" : "amber"}
                 onClick={step === "early_leave_sv" ? handleEarlyLeaveSubmit : handleOvertimeSubmit}
                 disabled={isPending || !svName.trim()}

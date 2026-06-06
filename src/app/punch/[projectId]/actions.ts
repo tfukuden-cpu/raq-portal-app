@@ -56,11 +56,11 @@ function resolveRecordedAt(
   if (punchKind === "normal") {
     if (punchType === "clock_in"  && shiftStart) return shiftTimeToISO(shiftStart);
     if (punchType === "clock_out" && shiftEnd)   return shiftTimeToISO(shiftEnd);
-    // シフト時刻が未設定の場合は現在時刻
     return new Date().toISOString();
   }
-  if (punchKind === "late")                       return ceil15minISO();
-  if (punchKind === "early" || punchKind === "overtime") return floor15minISO();
+  if (punchKind === "late")     return ceil15minISO();
+  if (punchKind === "early")    return floor15minISO();
+  if (punchKind === "overtime") return new Date().toISOString(); // 残業は実打刻時刻
   return new Date().toISOString();
 }
 
@@ -91,10 +91,12 @@ export async function terminalPunchAction(
     early:    "早退",
     overtime: "残業",
   };
+  const actualTimeJST = new Date().toLocaleTimeString("ja-JP", {
+    timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit",
+  });
   const baseNote = NOTE_LABEL[punchKind];
-  const note = baseNote && approverName
-    ? `${baseNote} [承認: ${approverName}]`
-    : baseNote;
+  const approverPart = baseNote && approverName ? `${baseNote} [承認: ${approverName}]` : baseNote;
+  const note = [approverPart, `実打刻: ${actualTimeJST}`].filter(Boolean).join(" ");
 
   const { error } = await admin.from("punch_logs").insert({
     project_id:  projectId,

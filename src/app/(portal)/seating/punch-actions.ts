@@ -142,9 +142,34 @@ export async function deletePunchLogAction(
   return { ok: true };
 }
 
+// 15分切り上げ
+function ceil15min(now: Date, today: string): string {
+  const hhmm = now.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false });
+  const [h, m] = hhmm.split(":").map(Number);
+  const rounded = Math.ceil((h * 60 + m) / 15) * 15;
+  const rh = Math.floor(rounded / 60) % 24;
+  const rm = rounded % 60;
+  return `${today}T${String(rh).padStart(2, "0")}:${String(rm).padStart(2, "0")}:00+09:00`;
+}
+
+// 15分切り下げ
+function floor15min(now: Date, today: string): string {
+  const hhmm = now.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false });
+  const [h, m] = hhmm.split(":").map(Number);
+  const rounded = Math.floor((h * 60 + m) / 15) * 15;
+  const rh = Math.floor(rounded / 60) % 24;
+  const rm = rounded % 60;
+  return `${today}T${String(rh).padStart(2, "0")}:${String(rm).padStart(2, "0")}:00+09:00`;
+}
+
+// 実打刻時刻の HH:MM 文字列
+function actualTimeHHMM(now: Date): string {
+  return now.toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
+}
+
 // ── 出勤打刻 ──────────────────────────────────────────────
-// 開始時刻より前 → 開始時刻に補正
-// 開始時刻より後 → 実打刻時刻
+// 開始時刻より前 → 開始時刻に補正（実打刻をnoteに記録）
+// 開始時刻より後 → 遅刻として15分切り上げ（実打刻をnoteに記録）
 export async function clockInAction(
   projectId: string,
   staffId: string,
@@ -164,17 +189,26 @@ export async function clockInAction(
   if (existing) return { ok: false, error: "既に出勤打刻済みです" };
 
   const now = new Date();
+  const actualTime = actualTimeHHMM(now);
   let recordedAt = now.toISOString();
+  let note: string | null = `実打刻: ${actualTime}`;
 
   if (shiftStartHHMM) {
     const [hh, mm] = shiftStartHHMM.split(":").map(Number);
     const shiftStart = new Date(`${today}T${pad(hh)}:${pad(mm)}:00+09:00`);
-    if (now < shiftStart) recordedAt = shiftStart.toISOString();
+    if (now < shiftStart) {
+      // 早め打刻 → シフト開始時刻に補正
+      recordedAt = shiftStart.toISOString();
+    } else {
+      // 遅刻 → 15分切り上げ
+      recordedAt = ceil15min(now, today);
+      note = `遅刻 実打刻: ${actualTime}`;
+    }
   }
 
   const { error } = await admin.from("punch_logs").insert({
     project_id: projectId, staff_id: staffId,
-    punch_type: "clock_in", recorded_at: recordedAt,
+    punch_type: "clock_in", recorded_at: recordedAt, note,
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/seating");
@@ -183,14 +217,15 @@ export async function clockInAction(
 
 export type ClockOutJudgment = "early_leave" | "on_time" | "overtime_choice";
 
-// ── 退勤打刻（定時・残業） ────────────────────────────────
-// mode="on_time"   → 終了時刻に補正
-// mode="overtime"  → 実打刻時刻 + 残業申請
+// ── 退勤打刻（早退/定時/残業の選択式）────────────────────
+// mode="early_leave" → 15分切り下げ・承認者名必須
+// mode="on_time"     → シフト終了時刻
+// mode="overtime"    → 実打刻時刻・承認者名必須
 export async function clockOutAction(
   projectId: string,
   staffId: string,
   shiftEndHHMM: string | null,
-  mode: "on_time" | "overtime",
+  mode: "early_leave" | "on_time" | "overtime",
   signerName?: string,
   reason?: string,
 ): Promise<PunchResult> {
@@ -198,11 +233,23 @@ export async function clockOutAction(
   const today = tokyoToday();
   const { start, end } = dayRange(today);
   const now = new Date();
+  const actualTime = actualTimeHHMM(now);
 
   let recordedAt = now.toISOString();
-  if (mode === "on_time" && shiftEndHHMM) {
+  let note: string;
+
+  if (mode === "early_leave") {
+    recordedAt = floor15min(now, today);
+    note = `早退${signerName ? ` [承認: ${signerName}]` : ""} 実打刻: ${actualTime}`;
+  } else if (mode === "on_time" && shiftEndHHMM) {
     const [hh, mm] = shiftEndHHMM.split(":").map(Number);
     recordedAt = new Date(`${today}T${pad(hh)}:${pad(mm)}:00+09:00`).toISOString();
+    note = `定時退勤 実打刻: ${actualTime}`;
+  } else if (mode === "overtime") {
+    recordedAt = now.toISOString();
+    note = `残業${signerName ? ` [承認: ${signerName}]` : ""} 実打刻: ${actualTime}`;
+  } else {
+    note = `実打刻: ${actualTime}`;
   }
 
   // 進行中の break/seat_leave を自動終了
@@ -215,15 +262,15 @@ export async function clockOutAction(
   if (latestPunch === "seat_leave") {
     inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "seat_return", recorded_at: recordedAt });
   }
-  inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "clock_out", recorded_at: recordedAt });
+  inserts.push({ project_id: projectId, staff_id: staffId, punch_type: "clock_out", recorded_at: recordedAt, note });
 
   const { error } = await admin.from("punch_logs").insert(inserts);
   if (error) return { ok: false, error: error.message };
 
-  if (mode === "overtime" && shiftEndHHMM && signerName) {
+  if ((mode === "overtime" || mode === "early_leave") && shiftEndHHMM && signerName) {
     await admin.from("work_exception_requests").insert({
       project_id: projectId, staff_id: staffId,
-      request_type: "overtime",
+      request_type: mode === "overtime" ? "overtime" : "early_leave",
       shift_date: today,
       shift_end_time: shiftEndHHMM + ":00",
       actual_punch_time: now.toISOString(),
