@@ -662,12 +662,11 @@ export default function ShiftDayList({
               <div
                 ref={splitContainerRef}
                 className="flex flex-col"
-                style={{ height: "calc(100dvh - var(--page-header-h, 0px) - var(--toolbar-h, 0px) - 200px)", minHeight: "400px" }}
               >
               {/* ── 充足テーブルペイン ── */}
               <div
                 className="flex flex-col"
-                style={showSufficiency ? { flex: `0 0 ${splitRatio * 100}%`, overflow: "hidden" } : { flex: "0 0 auto" }}
+                style={showSufficiency ? { maxHeight: "280px", overflow: "hidden" } : {}}
               >
                 {/* トグルヘッダー */}
                 <button
@@ -689,7 +688,7 @@ export default function ShiftDayList({
                 {showSufficiency && (
                 <div
                   ref={sufficiencyRef}
-                  className="flex-1 min-h-0 overflow-auto"
+                  className="overflow-x-auto"
                   style={{ scrollbarWidth: "none" }}
                   onScroll={(e) => handleSufficiencyScroll(e.currentTarget.scrollLeft)}
                 >
@@ -954,7 +953,7 @@ export default function ShiftDayList({
               {/* ── データテーブルペイン ── */}
               <div
                 ref={stripRef}
-                className="flex-1 min-h-0 overflow-auto"
+                className="overflow-x-auto"
                 style={{ scrollbarWidth: "none" }}
                 onScroll={(e) => handleDataScroll(e.currentTarget.scrollLeft)}
               >
