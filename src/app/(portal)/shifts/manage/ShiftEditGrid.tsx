@@ -2154,12 +2154,17 @@ export default function ShiftEditGrid({
                   {allDates.map((date) => {
                     const day = parseInt(date.slice(8)); const dw = dowLabel(date);
                     const dn = dowNum(date); const isSun = dn === 0, isSat = dn === 6, isToday = date === todayJST;
+                    const isSortTarget = sortByDate === date;
                     return (
-                      <th key={`hs-${date}`} className={["sticky top-0 z-20 h-11 border-b border-r border-zinc-200 dark:border-zinc-700",
-                        isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950"].join(" ")}>
+                      <th key={`hs-${date}`}
+                        title={isSortTarget ? "ソート解除" : "この日のシフト順にソート"}
+                        onClick={() => setSortByDate(prev => prev === date ? null : date)}
+                        className={["sticky top-0 z-20 h-11 border-b border-r border-zinc-200 dark:border-zinc-700 cursor-pointer select-none",
+                          isSortTarget ? "bg-amber-100 dark:bg-amber-900/40" : isToday ? "bg-blue-600" : "bg-white dark:bg-zinc-950"].join(" ")}>
                         <div className="flex flex-col items-center justify-center h-full gap-0.5">
-                          <span className={`text-[11px] font-bold tabular-nums leading-none ${isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"}`}>{day}</span>
-                          <span className={`text-[9px] leading-none ${isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"}`}>{dw}</span>
+                          <span className={`text-[11px] font-bold tabular-nums leading-none ${isSortTarget ? "text-amber-700 dark:text-amber-300" : isToday ? "text-white" : isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"}`}>{day}</span>
+                          <span className={`text-[9px] leading-none ${isSortTarget ? "text-amber-500" : isToday ? "text-blue-100" : isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"}`}>{dw}</span>
+                          {isSortTarget && <span className="text-[8px] leading-none text-amber-500 font-bold">↕</span>}
                         </div>
                       </th>
                     );
