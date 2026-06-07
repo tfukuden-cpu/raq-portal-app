@@ -53,6 +53,89 @@ function PaperclipIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-zinc-400"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
 }
 
+function InquiryHistory({
+  inquiries, latestReply, expanded, setExpanded,
+}: {
+  inquiries: Inquiry[];
+  latestReply: Inquiry | undefined;
+  expanded: string | null;
+  setExpanded: (id: string | null) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {/* 問い合わせ履歴 */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+        <div className="px-4 py-3.5 border-b border-zinc-100 dark:border-zinc-800">
+          <h3 className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200">問い合わせ履歴 / 返信状況</h3>
+        </div>
+        {inquiries.length === 0 ? (
+          <p className="px-4 py-6 text-[12px] text-zinc-400 text-center">問い合わせ履歴はありません</p>
+        ) : (
+          <div className="divide-y divide-zinc-50 dark:divide-zinc-800">
+            {inquiries.slice(0, 5).map(inq => {
+              const { category: cat, title } = parseTitle(inq.title);
+              const isOpen = expanded === inq.id;
+              return (
+                <div key={inq.id}>
+                  <button type="button" className="w-full text-left px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                    onClick={() => setExpanded(isOpen ? null : inq.id)}>
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 leading-snug flex-1">{title}</p>
+                      <StatusBadge status={inq.status} hasReply={!!inq.reply} />
+                    </div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {cat && (
+                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300 font-semibold border border-blue-100">
+                          {cat}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-zinc-400 tabular-nums">🕐 {fmtDate(inq.created_at)}</span>
+                    </div>
+                    {inq.reply && (
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1">返信：{inq.reply}</p>
+                    )}
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 pb-3.5 pt-1 bg-zinc-50 dark:bg-zinc-800/30 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+                      <p className="text-[12px] text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">
+                        {inq.body.replace(/^【緊急度：[^】]*】[\r\n]*/m, "")}
+                      </p>
+                      {inq.reply && (
+                        <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
+                          <p className="text-[10px] font-semibold text-zinc-400 mb-1">管理者からの返信</p>
+                          <p className="text-[12px] text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">{inq.reply}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 直近の返信 */}
+      {latestReply && (
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm p-4">
+          <h3 className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200 mb-3">直近の返信</h3>
+          <div className="space-y-2">
+            <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{parseTitle(latestReply.title).title}</p>
+            {latestReply.replied_at && (
+              <p className="text-[11px] text-zinc-400 tabular-nums">返信日時 {fmtDate(latestReply.replied_at)}</p>
+            )}
+            <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-3">
+              <p className="text-[12px] text-zinc-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                {latestReply.reply}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function InquiryClient({ inquiries }: { inquiries: Inquiry[] }) {
   const router = useRouter();
   const [category,  setCategory]  = useState("");
@@ -187,90 +270,18 @@ export function InquiryClient({ inquiries }: { inquiries: Inquiry[] }) {
             </div>
           </div>
 
-          {/* ── RIGHT: 履歴 ── */}
+          {/* ── RIGHT: 履歴（PC） ── */}
           <div className="hidden lg:flex flex-col gap-4 w-80 flex-shrink-0">
-
-            {/* 問い合わせ履歴 */}
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3.5 border-b border-zinc-100 dark:border-zinc-800">
-                <h3 className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200">問い合わせ履歴 / 返信状況</h3>
-                <span className="text-[11px] text-blue-500 font-medium cursor-pointer flex items-center gap-0.5">
-                  すべての履歴を見る <ChevronRightIcon />
-                </span>
-              </div>
-
-              {inquiries.length === 0 ? (
-                <p className="px-4 py-6 text-[12px] text-zinc-400 text-center">問い合わせ履歴はありません</p>
-              ) : (
-                <div className="divide-y divide-zinc-50 dark:divide-zinc-800">
-                  {inquiries.slice(0, 5).map(inq => {
-                    const { category: cat, title } = parseTitle(inq.title);
-                    const isOpen = expanded === inq.id;
-                    return (
-                      <div key={inq.id}>
-                        <button type="button" className="w-full text-left px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
-                          onClick={() => setExpanded(isOpen ? null : inq.id)}>
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
-                            <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 leading-snug flex-1">{title}</p>
-                            <StatusBadge status={inq.status} hasReply={!!inq.reply} />
-                          </div>
-                          <div className="flex items-center gap-2 mb-1.5">
-                            {cat && (
-                              <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300 font-semibold border border-blue-100">
-                                {cat}
-                              </span>
-                            )}
-                            <span className="text-[10px] text-zinc-400 tabular-nums">🕐 {fmtDate(inq.created_at)}</span>
-                          </div>
-                          {inq.reply && (
-                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1">返信：{inq.reply}</p>
-                          )}
-                        </button>
-                        {isOpen && (
-                          <div className="px-4 pb-3.5 pt-1 bg-zinc-50 dark:bg-zinc-800/30 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
-                            <p className="text-[12px] text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">
-                              {inq.body.replace(/^【緊急度：[^】]*】[\r\n]*/m, "")}
-                            </p>
-                            {inq.reply && (
-                              <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
-                                <p className="text-[10px] font-semibold text-zinc-400 mb-1">管理者からの返信</p>
-                                <p className="text-[12px] text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">{inq.reply}</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* 直近の返信 */}
-            {latestReply && (
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200">直近の返信</h3>
-                  <span className="text-[11px] text-blue-500 font-medium cursor-pointer flex items-center gap-0.5">
-                    すべての返信を見る <ChevronRightIcon />
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{parseTitle(latestReply.title).title}</p>
-                  {latestReply.replied_at && (
-                    <p className="text-[11px] text-zinc-400 tabular-nums">返信日時 {fmtDate(latestReply.replied_at)}</p>
-                  )}
-                  <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-3">
-                    <p className="text-[12px] text-zinc-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap line-clamp-4">
-                      {latestReply.reply}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
+            <InquiryHistory inquiries={inquiries} latestReply={latestReply} expanded={expanded} setExpanded={setExpanded} />
           </div>
+
         </div>
+
+        {/* ── 履歴（モバイル・タブレット：フォームの下） ── */}
+        <div className="lg:hidden mt-4">
+          <InquiryHistory inquiries={inquiries} latestReply={latestReply} expanded={expanded} setExpanded={setExpanded} />
+        </div>
+
       </div>
     </main>
   );
