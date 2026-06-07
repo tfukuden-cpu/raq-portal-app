@@ -80,7 +80,7 @@ export async function replyInquiryAction(fd: FormData): Promise<InquiryResult> {
   await sendEventNotify(inquiry.project_id, "inquiry_reply", {
     名前: staffName,
     件名: inquiry.title,
-    返信: reply.length > 80 ? reply.slice(0, 80) + "…" : reply,
+    返信: reply,
   }, inquiry.staff_id);
 
   return { success: true, message: "返信しました" };
