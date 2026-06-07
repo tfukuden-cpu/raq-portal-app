@@ -191,7 +191,7 @@ export async function clockInAction(
   const now = new Date();
   const actualTime = actualTimeHHMM(now);
   let recordedAt = now.toISOString();
-  let note: string | null = `実打刻: ${actualTime}`;
+  const note = `出勤打刻: ${actualTime}`;
 
   if (shiftStartHHMM) {
     const [hh, mm] = shiftStartHHMM.split(":").map(Number);
@@ -202,7 +202,6 @@ export async function clockInAction(
     } else {
       // 遅刻 → 15分切り上げ
       recordedAt = ceil15min(now, today);
-      note = `遅刻 実打刻: ${actualTime}`;
     }
   }
 
@@ -236,20 +235,23 @@ export async function clockOutAction(
   const actualTime = actualTimeHHMM(now);
 
   let recordedAt = now.toISOString();
+  const parts: string[] = [`退勤打刻: ${actualTime}`];
   let note: string;
 
   if (mode === "early_leave") {
     recordedAt = floor15min(now, today);
-    note = `早退${signerName ? ` [承認: ${signerName}]` : ""} 実打刻: ${actualTime}`;
+    if (signerName) parts.push(`早退承認者: ${signerName}`);
+    note = parts.join("  ");
   } else if (mode === "on_time" && shiftEndHHMM) {
     const [hh, mm] = shiftEndHHMM.split(":").map(Number);
     recordedAt = new Date(`${today}T${pad(hh)}:${pad(mm)}:00+09:00`).toISOString();
-    note = `定時退勤 実打刻: ${actualTime}`;
+    note = parts.join("  ");
   } else if (mode === "overtime") {
     recordedAt = now.toISOString();
-    note = `残業${signerName ? ` [承認: ${signerName}]` : ""} 実打刻: ${actualTime}`;
+    if (signerName) parts.push(`残業承認者: ${signerName}`);
+    note = parts.join("  ");
   } else {
-    note = `実打刻: ${actualTime}`;
+    note = parts.join("  ");
   }
 
   // 進行中の break/seat_leave を自動終了

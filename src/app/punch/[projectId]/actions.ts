@@ -85,18 +85,16 @@ export async function terminalPunchAction(
   // 打刻時刻を決定
   const recordedAt = resolveRecordedAt(punchType, punchKind, shiftStart, shiftEnd);
 
-  const NOTE_LABEL: Record<PunchKind, string | null> = {
-    normal:   null,
-    late:     "遅刻",
-    early:    "早退",
-    overtime: "残業",
-  };
   const actualTimeJST = new Date().toLocaleTimeString("ja-JP", {
     timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit",
   });
-  const baseNote = NOTE_LABEL[punchKind];
-  const approverPart = baseNote && approverName ? `${baseNote} [承認: ${approverName}]` : baseNote;
-  const note = [approverPart, `実打刻: ${actualTimeJST}`].filter(Boolean).join(" ");
+  const punchLabel = punchType === "clock_in" ? "出勤打刻" : "退勤打刻";
+  const parts: string[] = [`${punchLabel}: ${actualTimeJST}`];
+  if (punchType === "clock_out") {
+    if (punchKind === "early" && approverName) parts.push(`早退承認者: ${approverName}`);
+    if (punchKind === "overtime" && approverName) parts.push(`残業承認者: ${approverName}`);
+  }
+  const note = parts.length > 1 ? parts.join("  ") : parts[0];
 
   const { error } = await admin.from("punch_logs").insert({
     project_id:  projectId,
