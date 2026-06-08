@@ -107,6 +107,7 @@ interface Props {
   initialEditLock?: { lockedByName: string; lockedAt: string } | null;
   prevMonthShifts?: { staff_id: string; shift_date: string; shift_name: string | null }[];
   sortByAccount?: boolean;
+  initialDeclinedIds?: string[];
   onSaved: () => void;
   onCancel: () => void;
 }
@@ -816,8 +817,28 @@ export default function ShiftEditGrid({
   offRequests, isPublished, initialLockedSections, initialSlotLockedSections,
   initialEditLock,
   prevMonthShifts, sortByAccount,
+  initialDeclinedIds = [],
   onSaved, onCancel,
 }: Props) {
+  // 打診不可フラグ
+  const [declinedIds, setDeclinedIds] = useState<Set<string>>(() => new Set(initialDeclinedIds));
+  const [decliningKey, setDecliningKey] = useState<string | null>(null);
+
+  async function handleToggleDeclineEdit(staffId: string, date: string) {
+    const key = `${staffId}__${date}`;
+    setDecliningKey(key);
+    const { toggleWorkRequestDeclineShiftAction } = await import("./actions");
+    const res = await toggleWorkRequestDeclineShiftAction(projectId, staffId, date);
+    if (res.ok) {
+      setDeclinedIds(prev => {
+        const next = new Set(prev);
+        if (res.isDeclined) next.add(key); else next.delete(key);
+        return next;
+      });
+    }
+    setDecliningKey(null);
+  }
+
   // offRequests マップ: staffId__date → priority
   const offRequestMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -2745,6 +2766,11 @@ export default function ShiftEditGrid({
                             </td>
                           );
                         }
+                        // 打診不可（公休・希望休・有休のみ）
+                        const isOffShift = shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇";
+                        const decKey = `${member.id}__${date}`;
+                        const isDeclined = declinedIds.has(decKey);
+                        const isDeclining = decliningKey === decKey;
                         return (
                           <td key={date}
                             onClick={(e) => {
@@ -2752,7 +2778,7 @@ export default function ShiftEditGrid({
                             }}
                             className={[
                               "border-b border-r border-zinc-100 dark:border-zinc-800",
-                              "h-8 align-middle p-0 overflow-hidden transition-colors relative cursor-pointer",
+                              "h-8 align-middle p-0 overflow-hidden transition-colors relative cursor-pointer group",
                               // 離脱リスク → 赤枠
                               isChurnRiskCell ? "ring-inset ring-1 ring-red-400 dark:ring-red-500" : "",
                               // フォーカス行 + 候補 → 青強調
@@ -2781,6 +2807,22 @@ export default function ShiftEditGrid({
                                 : "",
                             ].filter(Boolean).join(" ")}
                           >
+                            {/* 打診不可ボタン（公休/希望休/有休のみ） */}
+                            {isOffShift && (
+                              <button
+                                type="button"
+                                title={isDeclined ? "打診不可を解除" : "打診不可にする"}
+                                disabled={isDeclining}
+                                onClick={(e) => { e.stopPropagation(); handleToggleDeclineEdit(member.id, date); }}
+                                className={[
+                                  "absolute top-0.5 right-0.5 z-20 w-4 h-4 rounded-sm flex items-center justify-center text-[9px] font-bold transition-opacity",
+                                  isDeclined
+                                    ? "bg-red-500 text-white opacity-100"
+                                    : "bg-zinc-300/70 text-zinc-500 opacity-0 group-hover:opacity-100 dark:bg-zinc-600/50 dark:text-zinc-400",
+                                  isDeclining ? "opacity-50" : "",
+                                ].join(" ")}
+                              >✕</button>
+                            )}
                             {/* 希望休ラベル（シフト未配置の場合）→ 黒背景に白文字 */}
                             {offPriority && !shiftName && (
                               <div className="h-full flex items-center justify-center px-0.5">

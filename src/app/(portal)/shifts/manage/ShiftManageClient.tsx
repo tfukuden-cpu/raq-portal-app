@@ -82,7 +82,7 @@ function ShiftEditGridOverlay({
   projectId, targetMonthStr, allDates, shifts, activeMembers, shiftPatterns,
   slotRequirements, changeLogs, activeDraft, draftSavedBy, draftSavedAt,
   offRequests, isPublished, lockedSections, slotLockedSections, initialEditLock,
-  prevMonthShifts, sortByAccount,
+  prevMonthShifts, sortByAccount, initialDeclinedIds,
   onSaved, onCancel,
 }: {
   projectId: string; targetMonthStr: string; allDates: string[];
@@ -94,6 +94,7 @@ function ShiftEditGridOverlay({
   lockedSections: string[]; slotLockedSections: string[];
   initialEditLock?: Props["initialEditLock"]; sortByAccount?: boolean;
   prevMonthShifts?: Props["prevMonthShifts"];
+  initialDeclinedIds?: string[];
   onSaved: () => void; onCancel: () => void;
 }) {
   useEffect(() => {
@@ -134,6 +135,7 @@ function ShiftEditGridOverlay({
         initialEditLock={initialEditLock}
         prevMonthShifts={prevMonthShifts}
         sortByAccount={sortByAccount}
+        initialDeclinedIds={initialDeclinedIds}
         onSaved={onSaved}
         onCancel={onCancel}
       />
@@ -395,6 +397,7 @@ export default function ShiftManageClient({
       initialEditLock={initialEditLock}
       prevMonthShifts={prevMonthShifts}
       sortByAccount={sortByAccount}
+      initialDeclinedIds={initialDeclinedIds}
       onSaved={handleSaved}
       onCancel={() => setMode("list")}
     />;
