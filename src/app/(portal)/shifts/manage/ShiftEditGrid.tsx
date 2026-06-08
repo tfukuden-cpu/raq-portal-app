@@ -2811,7 +2811,7 @@ export default function ShiftEditGrid({
                             {isOffShift && (
                               <button
                                 type="button"
-                                title={isDeclined ? "追加不可を解除" : "追加不可にする"}
+                                title={isDeclined ? "出勤不可を解除" : "出勤不可にする"}
                                 disabled={isDeclining}
                                 onClick={(e) => { e.stopPropagation(); handleToggleDeclineEdit(member.id, date); }}
                                 className={[

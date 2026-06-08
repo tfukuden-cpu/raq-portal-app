@@ -1031,7 +1031,7 @@ export default function AttendanceClient({
                       <span className="text-sm font-bold text-zinc-600 dark:text-zinc-300">お休み</span>
                       <span className="text-xs text-zinc-400">{offMembers.length}名</span>
                     </div>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">打診して不可の場合はマーク</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">出勤不可の場合はマーク</p>
                     <div style={{ minHeight: "38px" }} />
                   </div>
                   <div
@@ -1078,7 +1078,7 @@ export default function AttendanceClient({
                                 isSending ? "opacity-50" : "",
                               ].join(" ")}
                             >
-                              {isDeclined ? "不可✓" : "不可"}
+                              {isDeclined ? "出勤不可✓" : "出勤不可"}
                             </button>
                           </div>
                         </div>
