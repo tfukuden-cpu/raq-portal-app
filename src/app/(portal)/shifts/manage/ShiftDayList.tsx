@@ -147,7 +147,7 @@ export default function ShiftDayList({
   const offRequestMap = new Map(
     (offRequests ?? []).map(r => [`${r.staff_id}__${r.request_date}`, r.priority])
   );
-  // 打診不可フラグ（"staffId__YYYY-MM-DD" のSet）
+  // 追加不可フラグ（"staffId__YYYY-MM-DD" のSet）
   const [declinedIds, setDeclinedIds] = useState<Set<string>>(() => new Set(initialDeclinedIds));
   const [decliningKey, setDecliningKey] = useState<string | null>(null);
 
@@ -1063,7 +1063,7 @@ export default function ShiftDayList({
                               : sName === "公休" ? "bg-zinc-500 dark:bg-zinc-600"
                               : "";
                             const cellBg  = absent ? "bg-red-50 dark:bg-red-950/30" : offBg || patBg;
-                            // 打診不可フラグ（公休・希望休・有休のみ表示）
+                            // 追加不可フラグ（公休・希望休・有休のみ表示）
                             const isOffDay = sName === "公休" || sName === "希望休" || sName === "有休" || sName === "特別休暇";
                             const decKey = `${m.id}__${d}`;
                             const isDeclined = declinedIds.has(decKey);
@@ -1078,11 +1078,11 @@ export default function ShiftDayList({
                                   churnCell ? "ring-inset ring-1 ring-red-400 dark:ring-red-500" : "",
                                 )}
                               >
-                                {/* 打診不可ボタン（公休/希望休/有休のみ） */}
+                                {/* 追加不可ボタン（公休/希望休/有休のみ） */}
                                 {isOffDay && (
                                   <button
                                     type="button"
-                                    title={isDeclined ? "打診不可を解除" : "打診不可にする"}
+                                    title={isDeclined ? "追加不可を解除" : "追加不可にする"}
                                     disabled={isDeclining}
                                     onClick={() => handleToggleDecline(m.id, d)}
                                     className={cx(

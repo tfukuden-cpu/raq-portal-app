@@ -820,7 +820,7 @@ export default function ShiftEditGrid({
   initialDeclinedIds = [],
   onSaved, onCancel,
 }: Props) {
-  // 打診不可フラグ
+  // 追加不可フラグ
   const [declinedIds, setDeclinedIds] = useState<Set<string>>(() => new Set(initialDeclinedIds));
   const [decliningKey, setDecliningKey] = useState<string | null>(null);
 
@@ -2766,7 +2766,7 @@ export default function ShiftEditGrid({
                             </td>
                           );
                         }
-                        // 打診不可（公休・希望休・有休のみ）
+                        // 追加不可（公休・希望休・有休のみ）
                         const isOffShift = shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇";
                         const decKey = `${member.id}__${date}`;
                         const isDeclined = declinedIds.has(decKey);
@@ -2807,11 +2807,11 @@ export default function ShiftEditGrid({
                                 : "",
                             ].filter(Boolean).join(" ")}
                           >
-                            {/* 打診不可ボタン（公休/希望休/有休のみ） */}
+                            {/* 追加不可ボタン（公休/希望休/有休のみ） */}
                             {isOffShift && (
                               <button
                                 type="button"
-                                title={isDeclined ? "打診不可を解除" : "打診不可にする"}
+                                title={isDeclined ? "追加不可を解除" : "追加不可にする"}
                                 disabled={isDeclining}
                                 onClick={(e) => { e.stopPropagation(); handleToggleDeclineEdit(member.id, date); }}
                                 className={[
