@@ -355,6 +355,7 @@ export default async function ManageShiftsPage(props: {
     shiftBatch3,
     shiftBatch4,
     { data: projectSettingsRow },
+    { data: declinesRaw },
   ] = await Promise.all([
     admin.from("project_members")
       .select("staff_id, role, section, sections, end_date, start_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, churn_risk, churn_risk_since, shift_published, staffs(id, name, display_name, account_number, company_name)")
@@ -419,6 +420,11 @@ export default async function ManageShiftsPage(props: {
       .select("notification_settings")
       .eq("project_id", selectedProjectId)
       .maybeSingle(),
+    admin.from("work_request_declines")
+      .select("staff_id, date")
+      .eq("project_id", selectedProjectId)
+      .gte("date", startDate)
+      .lte("date", endDate),
   ]);
 
   const shiftsRaw = [
@@ -629,6 +635,7 @@ export default async function ManageShiftsPage(props: {
           prevMonth={prevMonth}
           nextMonth={nextMonth}
           publishMessageTemplate={publishMessageTemplate}
+          initialDeclinedIds={(declinesRaw ?? []).map(d => `${d.staff_id}__${d.date}`)}
       />
     </main>
   );

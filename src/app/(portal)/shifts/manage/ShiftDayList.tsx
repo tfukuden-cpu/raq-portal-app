@@ -122,7 +122,7 @@ export default function ShiftDayList({
   allDates, shifts, activeMembers, shiftPatterns, slotRequirements,
   changeLogs, absenceSet, selectedDate, onDateChange, projectId, offRequests,
   availableSections, shiftPatternNames, sortByAccount, onSetKyukyu,
-  targetYear, targetMonth,
+  targetYear, targetMonth, initialDeclinedIds = [],
 }: {
   allDates: string[];
   shifts: Shift[];
@@ -141,11 +141,31 @@ export default function ShiftDayList({
   shiftPatternNames?: string[];
   sortByAccount?: boolean;
   onSetKyukyu?: (staffId: string, date: string) => void;
+  initialDeclinedIds?: string[];
 }) {
   // staff_id__date → priority のマップ
   const offRequestMap = new Map(
     (offRequests ?? []).map(r => [`${r.staff_id}__${r.request_date}`, r.priority])
   );
+  // 打診不可フラグ（"staffId__YYYY-MM-DD" のSet）
+  const [declinedIds, setDeclinedIds] = useState<Set<string>>(() => new Set(initialDeclinedIds));
+  const [decliningKey, setDecliningKey] = useState<string | null>(null);
+
+  async function handleToggleDecline(staffId: string, date: string) {
+    const key = `${staffId}__${date}`;
+    setDecliningKey(key);
+    const { toggleWorkRequestDeclineShiftAction } = await import("./actions");
+    const res = await toggleWorkRequestDeclineShiftAction(projectId, staffId, date);
+    if (res.ok) {
+      setDeclinedIds(prev => {
+        const next = new Set(prev);
+        if (res.isDeclined) next.add(key); else next.delete(key);
+        return next;
+      });
+    }
+    setDecliningKey(null);
+  }
+
   const [tabKey, setTabKey]   = useState<TabKey>("shukkin");
   const [nameFilter, setNameFilter] = useState("");
   const [showSufficiency, setShowSufficiency] = useState(true);
@@ -1043,16 +1063,37 @@ export default function ShiftDayList({
                               : sName === "公休" ? "bg-zinc-500 dark:bg-zinc-600"
                               : "";
                             const cellBg  = absent ? "bg-red-50 dark:bg-red-950/30" : offBg || patBg;
+                            // 打診不可フラグ（公休・希望休・有休のみ表示）
+                            const isOffDay = sName === "公休" || sName === "希望休" || sName === "有休" || sName === "特別休暇";
+                            const decKey = `${m.id}__${d}`;
+                            const isDeclined = declinedIds.has(decKey);
+                            const isDeclining = decliningKey === decKey;
                             return (
                               <div
                                 key={m.id}
                                 className={cx(
-                                  "h-9 flex flex-col items-center justify-center w-full relative",
+                                  "h-9 flex flex-col items-center justify-center w-full relative group",
                                   i < filtered.length - 1 ? "border-b border-zinc-50 dark:border-zinc-800/50" : "",
                                   cellBg,
                                   churnCell ? "ring-inset ring-1 ring-red-400 dark:ring-red-500" : "",
                                 )}
                               >
+                                {/* 打診不可ボタン（公休/希望休/有休のみ） */}
+                                {isOffDay && (
+                                  <button
+                                    type="button"
+                                    title={isDeclined ? "打診不可を解除" : "打診不可にする"}
+                                    disabled={isDeclining}
+                                    onClick={() => handleToggleDecline(m.id, d)}
+                                    className={cx(
+                                      "absolute top-0.5 right-0.5 z-10 w-4 h-4 rounded-sm flex items-center justify-center text-[9px] font-bold transition-opacity",
+                                      isDeclined
+                                        ? "bg-red-500 text-white opacity-100"
+                                        : "bg-zinc-200/70 text-zinc-400 opacity-0 group-hover:opacity-100 dark:bg-zinc-600/50 dark:text-zinc-400",
+                                      isDeclining ? "opacity-50" : "",
+                                    )}
+                                  >✕</button>
+                                )}
                                 {sName ? (
                                   <>
                                     <span className={cx(

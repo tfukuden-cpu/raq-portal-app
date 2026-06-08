@@ -858,6 +858,41 @@ export async function regenerateShiftDraftAction(
 }
 
 /** スタッフ個別シフト公開フラグを切り替える */
+// ── 打診不可トグル ────────────────────────────────────────
+export async function toggleWorkRequestDeclineShiftAction(
+  projectId: string,
+  staffId: string,
+  date: string, // YYYY-MM-DD
+): Promise<{ ok: boolean; isDeclined: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, isDeclined: false, error: "未認証" };
+  const markedBy = user.email?.split("@")[0]?.toUpperCase() ?? "";
+
+  const { data: existing } = await supabase
+    .from("work_request_declines")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .eq("date", date)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("work_request_declines")
+      .delete()
+      .eq("id", existing.id);
+    if (error) return { ok: false, isDeclined: true, error: error.message };
+    return { ok: true, isDeclined: false };
+  } else {
+    const { error } = await supabase
+      .from("work_request_declines")
+      .insert({ project_id: projectId, staff_id: staffId, date, marked_by: markedBy });
+    if (error) return { ok: false, isDeclined: false, error: error.message };
+    return { ok: true, isDeclined: true };
+  }
+}
+
 export async function toggleShiftPublishedAction(
   projectId: string,
   staffId: string,

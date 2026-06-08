@@ -73,6 +73,7 @@ type Props = {
   prevMonth: { year: number; month: number };
   nextMonth: { year: number; month: number };
   publishMessageTemplate?: string;
+  initialDeclinedIds?: string[]; // "staffId__YYYY-MM-DD"
 };
 
 // ── ShiftEditGridOverlay ────────────────────────────────────────
@@ -161,7 +162,7 @@ export default function ShiftManageClient({
   shifts, activeMembers: activeMembersRaw, shiftPatterns, shiftRequests, slotRequirements,
   changeLogs, absenceSet, initialDraft, draftSavedBy, draftSavedAt,
   isPublished, lockedSections, slotLockedSections, initialEditLock, offRequests, prevMonthShifts,
-  monthNavBase, prevMonth, nextMonth, publishMessageTemplate,
+  monthNavBase, prevMonth, nextMonth, publishMessageTemplate, initialDeclinedIds = [],
 }: Props) {
   const toolbarRef = useRef<HTMLDivElement>(null);
   // ツールバーの高さを --toolbar-h として登録し ShiftDayList の sticky 位置に使う
@@ -646,6 +647,7 @@ export default function ShiftManageClient({
         shiftPatternNames={shiftPatterns.map(p => p.name).filter(Boolean)}
         sortByAccount={sortByAccount}
         onSetKyukyu={sortByAccount ? handleSetKyukyu : undefined}
+        initialDeclinedIds={initialDeclinedIds}
       />
     </div>
   );
