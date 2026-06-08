@@ -85,6 +85,28 @@ Cookie名: `rqp_project_id`、30日有効
 
 型: `DailyRecord`, `StaffMonthlySummary`（勤怠計算ロジック）
 
+## src/app/(portal)/seating/punch-actions.ts — 打刻サーバーアクション
+
+| 関数 | シグネチャ | 用途 |
+|------|-----------|------|
+| `clockInAction` | `(projectId, staffId, shiftStartHHMM)` | 出勤打刻。シフト前→開始時刻補正、後→遅刻+15分切り上げ。note に `出勤打刻: HH:MM` 記録 |
+| `clockOutAction` | `(projectId, staffId, shiftEndHHMM, mode, signerName?, reason?)` | 退勤打刻。mode: `"early_leave"` (15分切り下げ+承認者必須) / `"on_time"` (シフト終了時刻) / `"overtime"` (実打刻+承認者必須)。note に `退勤打刻: HH:MM  早退/残業承認者: XX` 記録 |
+| `seatLeaveAction` | `(projectId, staffId)` | 離席打刻 |
+| `seatReturnAction` | `(projectId, staffId)` | 着席打刻 |
+| `breakStartAction` | `(projectId, staffId, slotNumber?, breakType?)` | 休憩開始 |
+| `breakEndAction` | `(projectId, staffId)` | 休憩終了 |
+| `breakResetAction` | `(projectId, staffId)` | 休憩リセット |
+| `getStaffPunchSummaryAction` | `(projectId, staffId)` | 当日の打刻サマリー取得 |
+
+**注意:** `earlyLeaveAction` は廃止済み。`clockOutAction(mode="early_leave")` を使う
+
+## src/app/punch/[projectId]/actions.ts — 打刻端末サーバーアクション
+
+| 関数 | 用途 |
+|------|------|
+| `terminalPunchAction(projectId, staffId, punchType, punchKind, approverName?, shiftStart?, shiftEnd?)` | 端末からの打刻。punchKind: `normal/late/early/overtime`。note に実打刻時刻・承認者を記録 |
+| `terminalBreakAction(projectId, staffId, breakNote?)` | 端末からの休憩トグル |
+
 ## src/app/(portal)/attendance/edit/actions.ts — 勤怠管理サーバーアクション
 
 | 関数 | 用途 |

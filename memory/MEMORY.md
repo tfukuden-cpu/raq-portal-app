@@ -15,7 +15,38 @@
 
 ## 現在の開発状態（2026-06-09更新）
 
-### 直近の作業（出勤簿・シフト管理の多機能改修）
+### 直近の作業（打刻ルール・シフト管理スクロール・UI改修）
+
+#### 打刻ルール全面実装（端末・座席打刻 両対応）
+- **出勤**: シフト開始前→シフト開始時刻に補正 / シフト開始後→遅刻＋15分切り上げ
+- **退勤**: 常に「早退 / 定時 / 残業」の3択選択式（自動判定廃止）
+  - 早退: 打刻時刻を15分切り下げ、承認SV名必須
+  - 定時: シフト終了時刻
+  - 残業: 実打刻時刻そのまま、承認SV名必須
+- **note記録**: 全打刻で `punch_logs.note` に `出勤打刻: HH:MM` / `退勤打刻: HH:MM  早退承認者: XX` 形式で記録
+- **勤怠実績備考列**: `AttendanceEditClient` が `clockInNote`/`clockOutNote` を表示するよう対応
+- **`earlyLeaveAction` 廃止**: `clockOutAction(mode="early_leave")` に統合
+- **残業記録時刻修正**: 残業は実打刻時刻（以前は15分切り下げで誤り）
+
+#### シフト管理ページのスクロール改修
+- **AppNav**: `isNoScrollPage` のコンテンツdivを `overflow-hidden` → `overflow-y-auto` に変更してページスクロールを有効化
+- **ツールバー sticky化**: ShiftManageClient のツールバーを `sticky z-40` に変更し月ナビ・ボタンが常時表示
+- **z-index階層**: データ左固定列z-20 < ShiftDayList内ヘッダーz-30 < ツールバーz-40 < ページヘッダーz-50
+- **ShiftDayList split container**: `height: calc(100dvh-...)` 固定値を廃止し縦は全件表示 (`overflow-x-auto` のみに変更)
+- **CSS変数 `--toolbar-h`**: ツールバー高さをShiftDayList内ヘッダーの `top` 位置計算に使用
+
+#### シフト編集の日付ソート・フィルターポップオーバー（新機能）
+- 日付ヘッダーをクリック → ポップオーバー表示
+- **ソート**: セクション順 / シフト順（開始時刻）
+- **フィルター（複数選択）**: セクション × シフト名
+- アンバーハイライト（▼）でフィルター有効を表示
+- 充足テーブルのヘッダーからも操作可能
+
+#### 問い合わせページ改修
+- **履歴モバイル表示**: `hidden lg:flex` だった履歴パネルをモバイルではフォームの下に追加表示
+- **LINE返信全文表示**: `inquiry_reply` 通知の80文字制限を撤廃し全文送信
+
+### 前の作業（出勤簿・シフト管理の多機能改修）
 
 #### 出勤簿（`/attendance`）
 - **人数カウント変更**: `totalAssigned`（配置数）→ `totalClockedIn`（出勤中）をメインカウントに変更。充足も出勤中ベースで計算
@@ -270,6 +301,11 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | `work_request_declines` テーブルで打診不可管理 | RLS: `is_project_admin` のみ操作可。UNIQUE(project_id, staff_id, date) |
 | `project_members.shift_published` フラグ | デフォルト true。false のスタッフは `publishShiftsAction` で LINE 送信をスキップ |
 | `work_days_type = "spot"` は仮組み対象外 | `draft-actions.ts` で `wdType === "spot"` の場合 `return false` で候補から除外 |
+| `earlyLeaveAction` は廃止済み | `clockOutAction(mode="early_leave")` に統合。`PunchModal.tsx` も更新済み。インポートしないこと |
+| シフト管理ページスクロールは AppNav の `overflow-y-auto` で実現 | AppNav content div の `md:overflow-hidden` → `md:overflow-y-auto` に変更済み。他のnoScrollPageにも影響するが内容がはみ出さなければスクロールバー非表示で問題なし |
+| ShiftManageClient sticky ツールバーの top は `var(--page-header-h)` | `--page-header-h` = ページタイトル+タブの高さ。ShiftDayList内ヘッダーの top は `calc(--page-header-h + --toolbar-h)` を使う |
+| `punch_logs.note` に実打刻時刻が記録される | 形式: `出勤打刻: HH:MM` / `退勤打刻: HH:MM  早退承認者: XX`。`"管理者修正:staffId"` とは別管理。備考列表示には `clockInNote`/`clockOutNote` フィールドを使う |
+| 問い合わせLINE返信は全文送信 | `inquiry_reply` 通知の80文字制限を撤廃済み。再度制限を入れないこと |
 
 ---
 
