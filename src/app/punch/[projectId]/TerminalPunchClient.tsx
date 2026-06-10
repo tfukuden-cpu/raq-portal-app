@@ -287,8 +287,10 @@ function LiveClock() {
   }, []);
   return (
     <div className="text-center select-none">
-      <p className="text-zinc-400 text-sm">{date}</p>
-      <p className="text-5xl font-bold tabular-nums text-white mt-1 tracking-tight">{time}</p>
+      <span className="inline-block text-zinc-400 text-xs font-semibold bg-zinc-900/80 border border-zinc-800 rounded-full px-3.5 py-1">
+        {date}
+      </span>
+      <p className="text-6xl font-bold tabular-nums text-white mt-2.5 tracking-tight">{time}</p>
     </div>
   );
 }
@@ -548,69 +550,58 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   // ── メイン画面（座席表 + 名前選択）────────────────────────
   // ══════════════════════════════════════════════════════════
   if (step.kind === "list") {
-    const withShift    = localMembers.filter(m => m.hasShiftToday);
-    const arrivedCount = withShift.filter(m => m.clockedIn || m.isAbsent).length;
-    void arrivedCount;
+    const tabBtnBase = "flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.97]";
+    const tabBtnOn   = "bg-blue-600 text-white shadow-lg shadow-blue-950/60";
+    const tabBtnOff  = "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60";
 
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col">
         {/* ヘッダー */}
-        <div className="px-6 pt-6 pb-4 space-y-3">
-          <p className="text-zinc-500 text-sm font-semibold tracking-widest uppercase text-center">
+        <div className="relative px-6 pt-8 pb-5 overflow-hidden">
+          {/* 背景グロー */}
+          <div className="absolute inset-x-0 -top-24 h-48 bg-blue-600/10 blur-3xl pointer-events-none" />
+          <p className="relative text-zinc-500 text-xs font-semibold tracking-[0.35em] uppercase text-center">
             {projectName}
           </p>
-          <LiveClock />
-          <div className="flex justify-center gap-6 text-sm tabular-nums">
-            {(["working", "on_break", "not_arrived", "clocked_out", "absent"] as StaffStatus[]).map(s => {
-              const cnt = withShift.filter(m => memberStatus(m) === s).length;
-              if (cnt === 0) return null;
-              return (
-                <div key={s} className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full border ${STATUS_BG[s]}`} />
-                  <span className={`${STATUS_COLOR[s]} font-semibold`}>{cnt}</span>
-                  <span className="text-zinc-600 text-xs">{STATUS_LABEL[s]}</span>
-                </div>
-              );
-            })}
+          <div className="relative mt-1.5">
+            <LiveClock />
           </div>
         </div>
 
-        {/* タブ */}
-        <div className="flex border-b border-zinc-800 px-6">
-          {hasSeatData && (
+        {/* タブ（セグメントコントロール） */}
+        <div className="px-4 pb-4">
+          <div className={`max-w-lg mx-auto grid ${hasSeatData ? "grid-cols-3" : "grid-cols-2"} gap-1 bg-zinc-900/80 border border-zinc-800 rounded-2xl p-1.5 shadow-xl shadow-black/30`}>
+            {hasSeatData && (
+              <button
+                onClick={() => setActiveTab("seat")}
+                className={`${tabBtnBase} ${activeTab === "seat" ? tabBtnOn : tabBtnOff}`}
+              >
+                座席表
+              </button>
+            )}
             <button
-              onClick={() => setActiveTab("seat")}
-              className={["flex-1 py-2.5 text-sm font-semibold transition-colors",
-                activeTab === "seat" ? "text-white border-b-2 border-blue-500" : "text-zinc-500 hover:text-zinc-300",
-              ].join(" ")}
+              onClick={() => setActiveTab("name")}
+              className={`${tabBtnBase} ${activeTab === "name" ? tabBtnOn : tabBtnOff}`}
             >
-              座席表で打刻
+              打刻
             </button>
-          )}
-          <button
-            onClick={() => setActiveTab("name")}
-            className={["flex-1 py-2.5 text-sm font-semibold transition-colors",
-              activeTab === "name" ? "text-white border-b-2 border-blue-500" : "text-zinc-500 hover:text-zinc-300",
-            ].join(" ")}
-          >
-            名前で打刻
-          </button>
-          <button
-            onClick={() => setActiveTab("break_room")}
-            className={["flex-1 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5",
-              activeTab === "break_room" ? "text-white border-b-2 border-amber-500" : "text-zinc-500 hover:text-zinc-300",
-            ].join(" ")}
-          >
-            休憩室
-            <span className={[
-              "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-full",
-              roomUses.length >= roomCapacity
-                ? "bg-red-900/80 text-red-300"
-                : "bg-zinc-800 text-amber-400",
-            ].join(" ")}>
-              {roomUses.length}/{roomCapacity}
-            </span>
-          </button>
+            <button
+              onClick={() => setActiveTab("break_room")}
+              className={`${tabBtnBase} ${activeTab === "break_room" ? tabBtnOn : tabBtnOff}`}
+            >
+              休憩室
+              <span className={[
+                "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-full",
+                roomUses.length >= roomCapacity
+                  ? "bg-red-500/90 text-white"
+                  : activeTab === "break_room"
+                    ? "bg-white/20 text-white"
+                    : "bg-zinc-800 text-amber-400",
+              ].join(" ")}>
+                {roomUses.length}/{roomCapacity}
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 px-4 pt-4 pb-10 space-y-5 overflow-y-auto">
