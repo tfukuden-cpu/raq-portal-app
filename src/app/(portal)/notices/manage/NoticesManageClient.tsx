@@ -91,9 +91,16 @@ function NoticeModal({
 
   const selectedMember = members.find(m => m.id === targetStaffId);
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
     if (!file) return;
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`ファイルサイズが大きすぎます（最大 10MB）。現在: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+      e.target.value = "";
+      return;
+    }
     setAttachFile(file);
     if (isImageFile(file.name)) {
       setAttachPreview(URL.createObjectURL(file));
