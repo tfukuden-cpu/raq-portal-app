@@ -111,24 +111,6 @@ function rpgClassFor(staffId: string): RpgClass {
   return RPG_CLASSES[h % RPG_CLASSES.length];
 }
 
-// ── 焚き火（キャンプの中心） ────────────────────────────────────
-function Campfire() {
-  return (
-    <svg width="64" height="52" viewBox="0 0 16 13" shapeRendering="crispEdges" aria-hidden>
-      {/* 薪 */}
-      <rect x="3" y="11" width="10" height="1" fill="#7c4a1e" />
-      <rect x="4" y="10" width="8" height="1" fill="#92400e" />
-      {/* 炎 */}
-      <g className="animate-pulse">
-        <rect x="7" y="2" width="2" height="2" fill="#fbbf24" />
-        <rect x="6" y="4" width="4" height="2" fill="#f97316" />
-        <rect x="5" y="6" width="6" height="4" fill="#ef4444" />
-        <rect x="7" y="6" width="2" height="3" fill="#fde047" />
-      </g>
-    </svg>
-  );
-}
-
 
 // ── ステータス表示定義 ──────────────────────────────────────────
 const STATUS_BG: Record<StaffStatus, string> = {
@@ -1022,14 +1004,6 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       </p>
                     </div>
                   </RpgWindow>
-
-                  {/* 焚き火 */}
-                  <div className="flex justify-center mb-2">
-                    <div className="relative">
-                      <div className="absolute -inset-5 rounded-full bg-orange-500/20 blur-xl animate-pulse pointer-events-none" />
-                      <Campfire />
-                    </div>
-                  </div>
 
                   {/* パーティーメンバー */}
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
