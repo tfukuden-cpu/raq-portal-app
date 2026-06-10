@@ -122,6 +122,7 @@ export default async function DashboardPage() {
     { data: projectSettings },
     { data: yesterdayAbsence },
     { data: tomorrowShift },
+    { data: breakRoomUseRow },
     rawTasksResult,
     rawGroupsResult,
     membersResult,
@@ -217,6 +218,14 @@ export default async function DashboardPage() {
       .eq("shift_date", tomorrowStr)
       .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休")')
       .maybeSingle(),
+    // 休憩室の入室状態（本人・当日）
+    adminClient
+      .from("break_room_uses")
+      .select("box_number, entered_at")
+      .eq("project_id", currentProjectId!)
+      .eq("staff_id", staffId)
+      .eq("use_date", today)
+      .maybeSingle(),
     // タスク関連（管理者のみ使用）
     isAdmin
       ? supabase.from("group_tasks")
@@ -308,6 +317,12 @@ export default async function DashboardPage() {
       start: s.shift_start as string | null,
       end:   s.shift_end   as string | null,
     })),
+    breakRoomUse: breakRoomUseRow
+      ? {
+          boxNumber: (breakRoomUseRow as { box_number: number }).box_number,
+          enteredAt: fmtTime((breakRoomUseRow as { entered_at: string }).entered_at),
+        }
+      : null,
   };
 
   // ── 管理者・運用者はタスクタブ付きラッパーを返す ──

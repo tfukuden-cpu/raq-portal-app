@@ -6,6 +6,7 @@ import {
   submitAbsenceAction,
   submitLateAction,
 } from "./actions";
+import { leaveMyBreakRoomAction } from "../seating/break-room-actions";
 import { ChevronRightIcon } from "@/components/icons";
 import { DepartureModal } from "./DepartureModal";
 import { AbsenceModal } from "./AbsenceModal";
@@ -37,6 +38,7 @@ export interface HomeClientProps {
   hasPrevAbsence?: boolean;
   nextDayHasShift?: boolean;
   tasksWidget?: React.ReactNode;
+  breakRoomUse?: { boxNumber: number; enteredAt: string } | null;
 }
 
 const NAVY    = "#0d1b35";
@@ -197,12 +199,14 @@ export default function HomeClient({
   hasPrevAbsence   = false,
   nextDayHasShift  = false,
   tasksWidget,
+  breakRoomUse     = null,
 }: HomeClientProps) {
 
   const [modal,        setModal]        = useState<ModalType>("none");
   const [isPending,    startTransition] = useTransition();
   const [feedback,     setFeedback]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [optDeparture, setOptDeparture] = useState(departureTime);
+  const [optBreakRoom, setOptBreakRoom] = useState(breakRoomUse);
   const [liveTime,  setLiveTime]  = useState(nowHHMM);
   const [greetMsg,  setGreetMsg]  = useState(getGreetingMessage);
 
@@ -243,6 +247,19 @@ export default function HomeClient({
       if (data.recoveryStatus) fd.set("recoveryStatus", data.recoveryStatus);
       const r = await submitAbsenceAction(fd);
       setFeedback({ ok: r.success, msg: r.message ?? "欠勤報告しました" });
+    });
+  };
+
+  const handleLeaveBreakRoom = () => {
+    if (!window.confirm("休憩室から退室しますか？")) return;
+    startTransition(async () => {
+      const r = await leaveMyBreakRoomAction();
+      if (r.ok) {
+        setOptBreakRoom(null);
+        setFeedback({ ok: true, msg: "休憩室から退室しました" });
+      } else {
+        setFeedback({ ok: false, msg: r.error ?? "退室に失敗しました" });
+      }
     });
   };
 
@@ -295,6 +312,27 @@ export default function HomeClient({
               ))}
             </div>
           </div>
+
+          {/* ── 休憩室 入室中カード ── */}
+          {optBreakRoom && (
+            <div className="bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-800 px-6 py-4 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-amber-700 dark:text-amber-300">
+                  休憩室に入室中
+                </p>
+                <p className="text-[12px] text-amber-600/80 dark:text-amber-400/80 mt-0.5 tabular-nums">
+                  No.{optBreakRoom.boxNumber}・{optBreakRoom.enteredAt}〜　休憩戻り打刻でも自動退室されます
+                </p>
+              </div>
+              <button
+                onClick={handleLeaveBreakRoom}
+                disabled={isPending}
+                className="shrink-0 text-[13px] font-bold text-white bg-amber-600 hover:bg-amber-500 px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50"
+              >
+                退室する
+              </button>
+            </div>
+          )}
 
           {/* ── 上段 3カラム ── */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

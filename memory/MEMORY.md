@@ -29,7 +29,8 @@
 - **タブバッジ**: 「休憩室 3/6」で使用数/定員表示（満室=赤）。占有箱に経過時間タイマー
 - **ポーリング**: `/api/punch/[projectId]/statuses` のレスポンスを `{ statuses: [...], breakRoom: { capacity, uses } }` に変更（休憩室同梱）
 - **管理者ビュー**: `/seating` ツールバー「休憩室」ボタン → パネルで占有状況・強制解放・定員変更（SeatingClient、isAdminのみ）
-- サーバーアクション: `seating/break-room-actions.ts`（get/enter/leave/forceRelease/setCapacity）
+- **本人スマホ退室**: `/dashboard` に入室中のみカード表示＋「退室する」ボタン（`leaveMyBreakRoomAction`＝セッションからstaffId導出）
+- サーバーアクション: `seating/break-room-actions.ts`（get/enter/leave/leaveMy/forceRelease/setCapacity）
 
 #### 新規DBテーブル（Supabaseマイグレーション実行済み: create_break_room_tables）
 - `break_room_settings(project_id PK, capacity default 6)` — 定員（管理者が可変）

@@ -692,6 +692,7 @@ sendEventNotify(
 - **タブバッジ**: 「休憩室 3/6」形式で使用数/定員を常時表示（満室時は赤）。箱には入室からの経過時間タイマー表示
 - **同期**: `/api/punch/[projectId]/statuses` のポーリング（30秒）に占有状況を同梱。レスポンス形式は `{ statuses: [...], breakRoom: { capacity, uses } }`
 - **管理者ビュー**: 座席表 `/seating` ツールバーの「休憩室」ボタン → パネルで占有状況閲覧・**強制解放**・**定員変更**（1〜50・`break_room_settings.capacity`）。定員を減らすとはみ出した箱は自動解放
+- **本人のスマホから退室**: ダッシュボード（`/dashboard`）に入室中のみアンバーのカードを表示。「退室する」ボタンで自分の枠を解放（`leaveMyBreakRoomAction`・staffId はセッションから導出するため他人の枠は外せない）
 - サーバーアクション: `src/app/(portal)/seating/break-room-actions.ts`
 
 ### 6-6. Google スプレッドシート連携

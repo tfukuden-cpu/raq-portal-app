@@ -7,6 +7,8 @@
  * - 退室・休憩終了・退勤で自動解放（lib/break-room.ts の releaseBreakRoomBox）
  */
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentProjectId } from "@/lib/project-context";
 import { releaseBreakRoomBox } from "@/lib/break-room";
 
 function tokyoToday(): string {
@@ -117,6 +119,23 @@ export async function leaveBreakRoomAction(
   staffId: string,
 ): Promise<BreakRoomResult> {
   if (!projectId || !staffId) return { ok: false, error: "パラメータが不正です" };
+  const admin = createAdminClient();
+  await releaseBreakRoomBox(admin, projectId, staffId, tokyoToday());
+  return { ok: true };
+}
+
+// ── 本人退室（ログインユーザー自身・スマホのmyページ用） ──
+// staffId はセッションから導出するため、他人の枠は外せない
+export async function leaveMyBreakRoomAction(): Promise<BreakRoomResult> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "ログインしてください" };
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+  if (!staffId) return { ok: false, error: "スタッフIDを特定できません" };
+
+  const projectId = await getCurrentProjectId();
+  if (!projectId) return { ok: false, error: "案件が選択されていません" };
+
   const admin = createAdminClient();
   await releaseBreakRoomBox(admin, projectId, staffId, tokyoToday());
   return { ok: true };
