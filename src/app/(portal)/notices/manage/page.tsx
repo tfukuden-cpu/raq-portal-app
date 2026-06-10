@@ -40,7 +40,7 @@ export default async function ManageNoticesPage() {
   ] = await Promise.all([
     supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("notices")
-      .select("id, title, body, is_pinned, created_at, posted_by, target_staff_id, staffs!notices_posted_by_fkey(display_name, name)")
+      .select("id, title, body, is_pinned, created_at, posted_by, target_staff_id, attachment_url, attachment_name, staffs!notices_posted_by_fkey(display_name, name)")
       .eq("project_id", projectId)
       .order("is_pinned", { ascending: false })
       .order("created_at", { ascending: false }),
@@ -77,6 +77,8 @@ export default async function ManageNoticesPage() {
         ?? n.posted_by,
       target_staff_id: targetId,
       target_name: targetId ? (targetStaffMap.get(targetId) ?? targetId) : null,
+      attachment_url:  (n.attachment_url  ?? null) as string | null,
+      attachment_name: (n.attachment_name ?? null) as string | null,
     };
   });
 

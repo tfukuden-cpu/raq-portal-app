@@ -1,4 +1,4 @@
-﻿/**
+/**
  * お知らせ一覧
  */
 import { createClient } from "@/lib/supabase/server";
@@ -7,7 +7,13 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import NoticesClient from "./NoticesClient";
 
-export default async function NoticesPage() {
+export default async function NoticesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ open?: string }>;
+}) {
+  const { open } = await searchParams;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -35,7 +41,7 @@ export default async function NoticesPage() {
   // お知らせ一覧（ピン留め優先・新しい順）
   const { data: rawNotices } = await supabase
     .from("notices")
-    .select("id, title, body, is_pinned, created_at, posted_by")
+    .select("id, title, body, is_pinned, created_at, posted_by, attachment_url, attachment_name")
     .eq("project_id", projectId)
     .order("is_pinned", { ascending: false })
     .order("created_at", { ascending: false });
@@ -55,15 +61,23 @@ export default async function NoticesPage() {
   const notices = (rawNotices ?? []).map((n) => {
     const poster = posterMap.get(n.posted_by ?? "");
     return {
-      id:         n.id,
-      title:      n.title,
-      body:       n.body,
-      is_pinned:  n.is_pinned,
-      created_at: n.created_at,
-      posterName: poster?.display_name ?? poster?.name ?? n.posted_by ?? "",
+      id:              n.id,
+      title:           n.title,
+      body:            n.body,
+      is_pinned:       n.is_pinned,
+      created_at:      n.created_at,
+      posterName:      poster?.display_name ?? poster?.name ?? n.posted_by ?? "",
+      attachment_url:  (n.attachment_url  ?? null) as string | null,
+      attachment_name: (n.attachment_name ?? null) as string | null,
     };
   });
 
-  return <NoticesClient notices={notices} readIds={readIds} isAdmin={isAdmin} />;
+  return (
+    <NoticesClient
+      notices={notices}
+      readIds={readIds}
+      isAdmin={isAdmin}
+      initialOpenId={open ?? null}
+    />
+  );
 }
-

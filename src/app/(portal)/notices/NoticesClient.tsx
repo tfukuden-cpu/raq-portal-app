@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { markNoticeReadAction, createNoticeAction, deleteNoticeAction } from "./actions";
 
@@ -11,12 +11,15 @@ type Notice = {
   is_pinned: boolean;
   created_at: string;
   posterName: string;
+  attachment_url: string | null;
+  attachment_name: string | null;
 };
 
 type Props = {
   notices: Notice[];
   readIds: string[];
   isAdmin: boolean;
+  initialOpenId?: string | null;
 };
 
 type TabKey = "all" | "notice";
@@ -53,16 +56,26 @@ function SearchIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 }
 
-function PinIcon() {
-  return <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>;
+const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif"]);
+function isImageFile(name: string | null): boolean {
+  if (!name) return false;
+  return IMAGE_EXTS.has(name.split(".").pop()?.toLowerCase() ?? "");
 }
 
-export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
+export default function NoticesClient({ notices, readIds, isAdmin, initialOpenId }: Props) {
   const router = useRouter();
-  const [confirmed, setConfirmed] = useState<Set<string>>(() => new Set(readIds));
-  const [activeTab, setActiveTab] = useState<TabKey>("all");
-  const [search, setSearch]       = useState("");
-  const [expanded, setExpanded]   = useState<string | null>(null);
+  const [confirmed, setConfirmed]   = useState<Set<string>>(() => new Set(readIds));
+  const [activeTab, setActiveTab]   = useState<TabKey>("all");
+  const [search, setSearch]         = useState("");
+  const [expanded, setExpanded]     = useState<string | null>(initialOpenId ?? null);
+
+  // initialOpenId のカードに自動スクロール
+  const articleRefs = useRef<Record<string, HTMLElement | null>>({});
+  useEffect(() => {
+    if (!initialOpenId) return;
+    const el = articleRefs.current[initialOpenId];
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [initialOpenId]);
 
   const [, startReadTrans] = useTransition();
   const handleConfirm = (id: string) => {
@@ -71,12 +84,12 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
   };
 
   // 追加モーダル
-  const [showAdd, setShowAdd]   = useState(false);
-  const [addTitle, setAddTitle] = useState("");
-  const [addBody, setAddBody]   = useState("");
-  const [addPinned, setAddPinned] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
-  const [isAdding, startAddTrans] = useTransition();
+  const [showAdd, setShowAdd]       = useState(false);
+  const [addTitle, setAddTitle]     = useState("");
+  const [addBody, setAddBody]       = useState("");
+  const [addPinned, setAddPinned]   = useState(false);
+  const [addError, setAddError]     = useState<string | null>(null);
+  const [isAdding, startAddTrans]   = useTransition();
 
   const openAdd = () => { setAddTitle(""); setAddBody(""); setAddPinned(false); setAddError(null); setShowAdd(true); };
 
@@ -93,7 +106,7 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
   };
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [, startDeleteTrans] = useTransition();
+  const [, startDeleteTrans]        = useTransition();
   const handleDelete = (id: string) => {
     if (!confirm("このお知らせを削除しますか？")) return;
     setDeletingId(id);
@@ -107,9 +120,9 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
     return matchSearch;
   });
 
-  const unreadCount   = notices.filter(n => !confirmed.has(n.id)).length;
-  const pinnedCount   = notices.filter(n => n.is_pinned).length;
-  const popularTop3   = [...notices].slice(0, 3);
+  const unreadCount = notices.filter(n => !confirmed.has(n.id)).length;
+  const pinnedCount = notices.filter(n => n.is_pinned).length;
+  const popularTop3 = [...notices].slice(0, 3);
 
   return (
     <>
@@ -167,7 +180,9 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
                 const isOpen = expanded === n.id;
 
                 return (
-                  <article key={n.id}
+                  <article
+                    key={n.id}
+                    ref={el => { articleRefs.current[n.id] = el; }}
                     className={`bg-white dark:bg-zinc-900 rounded-2xl border shadow-sm transition-all ${
                       n.is_pinned ? "border-blue-200 dark:border-blue-800" : "border-zinc-100 dark:border-zinc-800"
                     }`}>
@@ -185,6 +200,15 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
                             }`}>
                               {n.is_pinned ? "📌 重要" : "全体へのお知らせ"}
                             </span>
+                            {n.attachment_url && (
+                              <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
+                                  strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                                </svg>
+                                添付あり
+                              </span>
+                            )}
                             <span className="text-[11px] text-zinc-400 tabular-nums">{fmtDateTime(n.created_at)}</span>
                           </div>
                           {/* タイトル */}
@@ -210,6 +234,31 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
                     {isOpen && (
                       <div className="px-5 pb-5 border-t border-zinc-50 dark:border-zinc-800">
                         <p className="text-[13px] text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed pt-4">{n.body}</p>
+
+                        {/* 添付ファイル */}
+                        {n.attachment_url && (
+                          <div className="mt-4">
+                            {isImageFile(n.attachment_name) ? (
+                              <a href={n.attachment_url} target="_blank" rel="noopener noreferrer">
+                                <img src={n.attachment_url} alt={n.attachment_name ?? "添付画像"}
+                                  className="max-h-72 rounded-xl border border-zinc-100 dark:border-zinc-800 object-cover cursor-pointer hover:opacity-95 transition-opacity" />
+                              </a>
+                            ) : (
+                              <a href={n.attachment_url} target="_blank" rel="noopener noreferrer"
+                                download={n.attachment_name ?? undefined}
+                                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
+                                  strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 flex-shrink-0">
+                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                  <polyline points="7 10 12 15 17 10"/>
+                                  <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                {n.attachment_name ?? "添付ファイルをダウンロード"}
+                              </a>
+                            )}
+                          </div>
+                        )}
+
                         {isAdmin && (
                           <div className="flex justify-end mt-4">
                             <button type="button" onClick={() => handleDelete(n.id)} disabled={deletingId === n.id}
@@ -273,7 +322,7 @@ export default function NoticesClient({ notices, readIds, isAdmin }: Props) {
         </div>
       </main>
 
-      {/* 追加モーダル */}
+      {/* 追加モーダル（管理者簡易版） */}
       {showAdd && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setShowAdd(false)}>
           <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>

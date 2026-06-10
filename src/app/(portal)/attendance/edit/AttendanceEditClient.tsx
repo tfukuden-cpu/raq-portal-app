@@ -773,13 +773,16 @@ export default function AttendanceEditClient({
                     const isConfirmed = confirmMap.get(key) !== null && confirmMap.get(key) !== undefined;
                     const extractTime = (note: string | null) =>
                       note?.match(/実打刻[:：]\s*(\d{1,2}:\d{2})/)?.[1] ?? null;
+                    const extractApprover = (note: string | null) =>
+                      note?.match(/承認[:：]\s*([^\]　]+)/)?.[1]?.trim() ?? null;
                     const notes: string[] = [];
                     const inTime  = extractTime(row.clockInNote);
                     const outTime = extractTime(row.clockOutNote);
-                    const approver = row.overtimeApprover ?? row.earlyLeaveApprover ?? null;
+                    const approver = row.overtimeApprover ?? row.earlyLeaveApprover
+                      ?? extractApprover(row.clockOutNote) ?? null;
                     if (inTime)   notes.push(`出勤打刻：${inTime}`);
                     if (outTime)  notes.push(`退勤打刻：${outTime}`);
-                    if (approver) notes.push(`残業/早退承認者：${approver}`);
+                    if (approver) notes.push(`残業もしくは早退承認者：${approver}`);
                     if (row.absenceReason) notes.push(row.absenceReason);
                     if (row.lateReason)    notes.push(row.lateReason);
                     if (row.modifiedBy)    notes.push(`修正者:${row.modifiedBy}`);
