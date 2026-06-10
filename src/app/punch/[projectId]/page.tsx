@@ -4,6 +4,10 @@
  */
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
+import { DotGothic16 } from "next/font/google";
+
+// 休憩室（RPG風）用ドットフォント
+const dotGothic = DotGothic16({ weight: "400", subsets: ["latin"], preload: false });
 import TerminalPunchClient, {
   type TerminalMember,
   type TerminalSeat,
@@ -287,6 +291,7 @@ export default async function PunchPage({
       motaSlotInfoMap={motaSlotInfoMap}
       breakRoomCapacity={breakRoomCapacity}
       breakRoomUses={breakRoomUses}
+      rpgFontClass={dotGothic.className}
     />
   );
 }

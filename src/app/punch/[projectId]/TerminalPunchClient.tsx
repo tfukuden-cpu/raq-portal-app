@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useTransition } from "react";
+import { useState, useEffect, useMemo, useRef, useTransition, type ReactNode } from "react";
 import { terminalPunchAction, terminalBreakAction, saveConsentAction, type PunchKind } from "./actions";
 import { enterBreakRoomAction, leaveBreakRoomAction } from "@/app/(portal)/seating/break-room-actions";
 import { getSeatBgClass, resolveShiftSection, formatSectionShift } from "@/lib/seatColors";
@@ -78,6 +78,18 @@ interface Props {
   motaSlotInfoMap?: Record<string, MotaSlotInfo[]>;
   breakRoomCapacity?: number;
   breakRoomUses?: BreakRoomUseItem[];
+  rpgFontClass?: string;
+}
+
+// ── RPG風ウィンドウ（休憩室＝宿屋テーマ） ──────────────────────
+function RpgWindow({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-lg border-2 border-white bg-[#000846] p-[3px] ${className}`}>
+      <div className="rounded-md border border-white/80 bg-[#000846] w-full h-full">
+        {children}
+      </div>
+    </div>
+  );
 }
 
 // ── ステータス表示定義 ──────────────────────────────────────────
@@ -296,7 +308,7 @@ function LiveClock() {
 }
 
 // ── メインコンポーネント ──────────────────────────────────────
-export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [], motaSlotInfoMap = {}, breakRoomCapacity = 6, breakRoomUses = [] }: Props) {
+export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [], motaSlotInfoMap = {}, breakRoomCapacity = 6, breakRoomUses = [], rpgFontClass = "" }: Props) {
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [localMembers, setLocalMembers] = useState(members);
   const [isPending, startTransition] = useTransition();
@@ -923,19 +935,31 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             </div>
           )}
 
-          {/* ── 休憩室タブ ─────────────────────────────────── */}
+          {/* ── 休憩室タブ（RPG宿屋風） ─────────────────────── */}
           {activeTab === "break_room" && (
-            <div className="max-w-2xl mx-auto w-full">
-              <div className="text-center mb-4">
-                <p className="text-zinc-300 text-sm font-semibold">
-                  空き <span className="text-amber-400 text-lg tabular-nums font-bold">{Math.max(0, roomCapacity - roomUses.length)}</span>
-                  <span className="text-zinc-600"> / {roomCapacity}</span>
-                </p>
-                <p className="text-zinc-600 text-xs mt-1">
-                  休憩中のスタッフのみ入室できます・休憩戻りで自動的に退室します
-                </p>
-              </div>
+            <div className={`max-w-2xl mx-auto w-full ${rpgFontClass}`}>
+              {/* 宿屋のメッセージウィンドウ */}
+              <RpgWindow className="mb-4">
+                <div className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-white text-sm leading-relaxed">
+                      ＊「ようこそ きゅうけいしつへ。<br />
+                      　 ゆっくり やすんでいってね。
+                    </p>
+                    <div className="text-right shrink-0">
+                      <p className="text-cyan-300 text-[10px]">あきべや</p>
+                      <p className="text-white text-xl font-bold tabular-nums">
+                        {Math.max(0, roomCapacity - roomUses.length)}<span className="text-cyan-300 text-xs">／{roomCapacity}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-cyan-300/80 text-[10px] mt-2 leading-relaxed">
+                    ※きゅうけいちゅうの ひとだけ とまれます。きゅうけいもどりで じどうチェックアウト。
+                  </p>
+                </div>
+              </RpgWindow>
 
+              {/* 部屋一覧 */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {Array.from({ length: roomCapacity }, (_, i) => i + 1).map(boxNumber => {
                   const use = roomUses.find(u => u.boxNumber === boxNumber);
@@ -946,16 +970,23 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                         key={boxNumber}
                         onClick={() => setRoomLeaveBox(boxNumber)}
                         disabled={isPending}
-                        className="rounded-2xl border-2 border-amber-500 bg-amber-500 p-3 text-left active:scale-95 transition-transform disabled:opacity-60"
+                        className="text-left active:scale-95 transition-transform disabled:opacity-60"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-amber-900 tabular-nums">No.{boxNumber}</span>
-                          <BreakTimer startedAt={use.enteredAt} breakNote={null} size="compact" />
-                        </div>
-                        <p className="text-zinc-900 font-bold text-base mt-1 truncate">
-                          {occupant?.name ?? use.staffId}
-                        </p>
-                        <p className="text-[10px] text-amber-900 mt-0.5">タップで退室</p>
+                        <RpgWindow>
+                          <div className="px-3 py-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-cyan-300 tabular-nums">へや {boxNumber}</span>
+                              <BreakTimer startedAt={use.enteredAt} breakNote={null} size="compact" />
+                            </div>
+                            <p className="text-white font-bold text-base mt-1 truncate">
+                              {occupant?.name ?? use.staffId}
+                            </p>
+                            <p className="text-[11px] text-cyan-200 mt-1">
+                              やすんでいる<span className="animate-pulse">…</span>
+                              <span className="text-amber-300 ml-1 animate-pulse">Zzz</span>
+                            </p>
+                          </div>
+                        </RpgWindow>
                       </button>
                     );
                   }
@@ -964,11 +995,17 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       key={boxNumber}
                       onClick={() => { setRoomError(null); setRoomPickBox(boxNumber); }}
                       disabled={isPending}
-                      className="rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-900/60 p-3 text-left active:scale-95 transition-transform hover:border-zinc-500 disabled:opacity-60"
+                      className="text-left active:scale-95 transition-transform disabled:opacity-60 group"
                     >
-                      <span className="text-[10px] font-bold text-zinc-600 tabular-nums">No.{boxNumber}</span>
-                      <p className="text-zinc-500 font-semibold text-base mt-1">空き</p>
-                      <p className="text-[10px] text-zinc-600 mt-0.5">タップで入室</p>
+                      <div className="rounded-lg border-2 border-dashed border-[#3a4a9c] bg-[#000846]/50 p-[3px] group-hover:border-white/70 transition-colors">
+                        <div className="rounded-md px-3 py-2.5">
+                          <span className="text-[10px] text-[#5a6abc] tabular-nums">へや {boxNumber}</span>
+                          <p className="text-[#5a6abc] text-sm mt-1">― あきべや ―</p>
+                          <p className="text-[11px] text-white/70 mt-1">
+                            <span className="text-amber-300 animate-pulse mr-1">▶</span>とまる
+                          </p>
+                        </div>
+                      </div>
                     </button>
                   );
                 })}
@@ -977,83 +1014,98 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
           )}
         </div>
 
-        {/* ── 休憩室: 入室する名前の選択モーダル ───────────── */}
+        {/* ── 休憩室: 入室する名前の選択モーダル（RPG風） ──── */}
         {roomPickBox !== null && (
-          <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center px-6" onClick={() => setRoomPickBox(null)}>
-            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="px-5 py-3 border-b border-zinc-800">
-                <p className="text-white font-bold">No.{roomPickBox} に入室</p>
-                <p className="text-zinc-500 text-xs mt-0.5">自分の名前を選択してください（本人のみ）</p>
-              </div>
-              {roomError && (
-                <p className="px-5 py-2 text-xs text-red-400 bg-red-950/40">⚠️ {roomError}</p>
-              )}
-              <ul className="max-h-72 overflow-y-auto overscroll-contain divide-y divide-zinc-800">
-                {(() => {
-                  const candidates = localMembers.filter(m =>
-                    memberStatus(m) === "on_break" && !roomUses.some(u => u.staffId === m.staffId)
-                  );
-                  if (candidates.length === 0) {
-                    return <li className="px-5 py-6 text-center text-zinc-500 text-sm">休憩中のスタッフがいません</li>;
-                  }
-                  return candidates.map(m => (
-                    <li key={m.staffId}>
-                      <button
-                        onClick={() => handleRoomEnter(m.staffId, roomPickBox)}
-                        disabled={isPending}
-                        className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-zinc-800 transition-colors disabled:opacity-50"
-                      >
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold bg-amber-800 flex-shrink-0">
-                          {m.name.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white font-bold text-sm truncate">{m.name}</p>
-                          {m.breakNote && <p className="text-amber-400 text-[10px] mt-0.5">{m.breakNote}</p>}
-                        </div>
-                        {m.breakStartedAt && (
-                          <BreakTimer startedAt={m.breakStartedAt} breakNote={m.breakNote} size="compact" />
-                        )}
-                      </button>
-                    </li>
-                  ));
-                })()}
-              </ul>
-              <div className="px-5 py-3 border-t border-zinc-800">
-                <button onClick={() => setRoomPickBox(null)} className="w-full py-2.5 text-sm text-zinc-400 hover:text-zinc-200 rounded-xl border border-zinc-700">
-                  キャンセル
-                </button>
-              </div>
+          <div className={`fixed inset-0 z-[300] bg-black/80 flex items-center justify-center px-6 ${rpgFontClass}`} onClick={() => setRoomPickBox(null)}>
+            <div className="w-full max-w-sm" onClick={e => e.stopPropagation()}>
+              <RpgWindow>
+                <div className="px-4 py-3 border-b border-white/30">
+                  <p className="text-white text-sm leading-relaxed">
+                    ＊「へや {roomPickBox} だね。<br />
+                    　 どなたが おとまりかい？
+                  </p>
+                  <p className="text-cyan-300/80 text-[10px] mt-1.5">じぶんの なまえを えらんでください（ほんにんのみ）</p>
+                </div>
+                {roomError && (
+                  <p className="px-4 py-2 text-xs text-red-300 bg-red-950/60 border-b border-white/30">＊「{roomError}」</p>
+                )}
+                <ul className="max-h-72 overflow-y-auto overscroll-contain">
+                  {(() => {
+                    const candidates = localMembers.filter(m =>
+                      memberStatus(m) === "on_break" && !roomUses.some(u => u.staffId === m.staffId)
+                    );
+                    if (candidates.length === 0) {
+                      return (
+                        <li className="px-4 py-6 text-center text-cyan-300/70 text-sm">
+                          ＊「きゅうけいちゅうの ひとは いないようだ…」
+                        </li>
+                      );
+                    }
+                    return candidates.map(m => (
+                      <li key={m.staffId}>
+                        <button
+                          onClick={() => handleRoomEnter(m.staffId, roomPickBox)}
+                          disabled={isPending}
+                          className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-white/10 transition-colors disabled:opacity-50 group"
+                        >
+                          <span className="text-amber-300 opacity-0 group-hover:opacity-100 group-hover:animate-pulse shrink-0">▶</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-bold text-sm truncate">{m.name}</p>
+                            {m.breakNote && <p className="text-cyan-300/80 text-[10px] mt-0.5">{m.breakNote}</p>}
+                          </div>
+                          {m.breakStartedAt && (
+                            <BreakTimer startedAt={m.breakStartedAt} breakNote={m.breakNote} size="compact" />
+                          )}
+                        </button>
+                      </li>
+                    ));
+                  })()}
+                </ul>
+                <div className="px-4 py-3 border-t border-white/30">
+                  <button
+                    onClick={() => setRoomPickBox(null)}
+                    className="w-full py-2 text-sm text-white hover:bg-white/10 rounded-md transition-colors"
+                  >
+                    やめる
+                  </button>
+                </div>
+              </RpgWindow>
             </div>
           </div>
         )}
 
-        {/* ── 休憩室: 退室確認モーダル ─────────────────────── */}
+        {/* ── 休憩室: 退室確認モーダル（RPG風） ────────────── */}
         {roomLeaveBox !== null && (() => {
           const use = roomUses.find(u => u.boxNumber === roomLeaveBox);
           if (!use) return null;
           const occupant = memberMap.get(use.staffId);
           return (
-            <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center px-6" onClick={() => setRoomLeaveBox(null)}>
-              <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
-                <p className="text-white font-bold text-lg text-center">
-                  {occupant?.name ?? use.staffId} さんを退室させますか？
-                </p>
-                <p className="text-zinc-500 text-xs text-center mt-1.5">本人のみ操作してください</p>
-                <div className="flex gap-3 mt-5">
-                  <button
-                    onClick={() => setRoomLeaveBox(null)}
-                    className="flex-1 py-3 text-sm text-zinc-400 hover:text-zinc-200 rounded-xl border border-zinc-700"
-                  >
-                    キャンセル
-                  </button>
-                  <button
-                    onClick={() => handleRoomLeave(use.staffId)}
-                    disabled={isPending}
-                    className="flex-1 py-3 text-sm font-bold text-white bg-amber-600 hover:bg-amber-500 rounded-xl disabled:opacity-50"
-                  >
-                    退室する
-                  </button>
-                </div>
+            <div className={`fixed inset-0 z-[300] bg-black/80 flex items-center justify-center px-6 ${rpgFontClass}`} onClick={() => setRoomLeaveBox(null)}>
+              <div className="w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <RpgWindow>
+                  <div className="px-5 py-4">
+                    <p className="text-white text-sm leading-relaxed">
+                      ＊「{occupant?.name ?? use.staffId}は ぐっすり ねむっている…<span className="text-amber-300 ml-1 animate-pulse">Zzz</span><br />
+                      　 おこしますか？
+                    </p>
+                    <p className="text-cyan-300/80 text-[10px] mt-1.5">ほんにんのみ そうさしてください</p>
+                    <div className="flex flex-col gap-1 mt-4">
+                      <button
+                        onClick={() => handleRoomLeave(use.staffId)}
+                        disabled={isPending}
+                        className="w-full py-2.5 text-sm font-bold text-white text-left px-4 hover:bg-white/10 rounded-md transition-colors disabled:opacity-50 group"
+                      >
+                        <span className="text-amber-300 mr-2 group-hover:animate-pulse">▶</span>はい（おきる）
+                      </button>
+                      <button
+                        onClick={() => setRoomLeaveBox(null)}
+                        className="w-full py-2.5 text-sm text-white/80 text-left px-4 hover:bg-white/10 rounded-md transition-colors group"
+                      >
+                        <span className="text-amber-300 mr-2 opacity-0 group-hover:opacity-100">▶</span>いいえ
+                      </button>
+                    </div>
+                  </div>
+                </RpgWindow>
               </div>
             </div>
           );
