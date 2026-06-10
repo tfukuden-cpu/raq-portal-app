@@ -90,7 +90,7 @@ export async function createNoticeAction(
     }
   }
 
-  const { data: newNotice, error } = await supabase
+  const { error } = await supabase
     .from("notices")
     .insert({
       project_id:      projectId,
@@ -102,20 +102,30 @@ export async function createNoticeAction(
       created_at:      createdAt,
       attachment_url:  attachmentUrl,
       attachment_name: attachmentName,
-    })
-    .select("id")
-    .single();
+    });
 
   if (error) return { success: false, message: "投稿失敗：" + error.message };
+
+  // LINE URL 用に挿入した行の ID を取得（RLS で SELECT 不可の場合は /notices にフォールバック）
+  const { data: latestRows } = await supabase
+    .from("notices")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("posted_by", staffId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const newNoticeId = latestRows?.[0]?.id as string | undefined;
 
   revalidatePath("/notices");
   revalidatePath("/notices/manage");
   revalidatePath("/dashboard");
 
   // LINE通知（sendLine=trueの場合のみ）
-  if (sendLine && newNotice?.id) {
+  if (sendLine) {
     const appUrl    = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
-    const noticeUrl = `${appUrl}/notices?open=${newNotice.id}`;
+    const noticeUrl = newNoticeId
+      ? `${appUrl}/notices?open=${newNoticeId}`
+      : `${appUrl}/notices`;
 
     const { data: senderData } = await supabase
       .from("staffs").select("display_name, name").eq("id", staffId).maybeSingle();
