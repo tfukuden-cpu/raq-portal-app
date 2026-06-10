@@ -56,6 +56,7 @@
 | `work_exception_requests` | 早退・残業申請（request_type: early_leave/overtime, signer_name, status: pending/approved/rejected） |
 | `break_slot_assignments` | 休憩スロット割り当て（UNIQUE: project_id, assignment_date, staff_id） |
 | `break_room_settings` | 休憩室の定員（project_id PK, capacity 1〜50 デフォルト6） |
+| `notices.attachment_url/attachment_name` | 周知の添付ファイル（1周知1ファイル）。Storage バケット `notice-attachments`（public）に実体 |
 | `break_room_uses` | 休憩室の占有（入室中のみ行が存在・退室で削除。UNIQUE: project_id, use_date, box_number / UNIQUE: project_id, use_date, staff_id） |
 
 ## タスク・LINE連携

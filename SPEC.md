@@ -409,9 +409,14 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 宛先指定（全体 / 特定スタッフ個人）
 - 送信履歴アコーディオン表示（送信済みは編集・削除不可）
 - 投稿と同時に LINE 通知送信
+- **ファイル添付（2026-06-10追加）**: 画像・PDF等を1周知につき1ファイル添付可能
+  - Supabase Storage バケット `notice-attachments`（public）にアップロードし、`notices.attachment_url` / `attachment_name` に保存
+  - クライアント側で最大 **10MB** を検証（Server Actions の `bodySizeLimit: "10mb"`＝next.config.ts と整合）
+  - スタッフ側 `/notices` では画像はインライン表示、その他ファイルはダウンロードリンク表示
+  - 周知削除時にストレージの添付ファイルも削除
 
 **関連テーブル:**
-`notices`, `project_members`, `staffs`
+`notices`, `project_members`, `staffs`、Storage: `notice-attachments`
 
 ---
 
@@ -467,8 +472,12 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 本文（全文・文字切れなし）
 ─────────────────
-[周知事項を見る]  ← ボタン（同一メッセージ内）
+[内容を見る]  ← ボタン（同一メッセージ内）
 ```
+
+**深リンク（2026-06-10追加）:**
+- ボタンURLは `/notices?open={noticeId}`。開くと該当周知を自動展開し、その位置までスクロール
+- 投稿時のID取得は **insert と select を分離**（`.single()` はRLSのSELECTポリシーで失敗するため使用禁止）。IDが取れない場合は `/notices` にフォールバック
 
 **管理グループメッセージ（追加プレフィックス）:**
 ```
@@ -724,7 +733,7 @@ sendEventNotify(
 | `departure_reports` | 出発報告（reported_at, eta_minutes） |
 | `absence_reports` | 欠勤報告（absence_date, reason, status, followup_* カラム） |
 | `late_reports` | 遅刻報告（late_date, reason, status） |
-| `notices` | 周知事項（title, body, is_pinned, target_staff_id） |
+| `notices` | 周知事項（title, body, is_pinned, target_staff_id, attachment_url, attachment_name） |
 | `notice_reads` | お知らせ既読（staff_id, notice_id） |
 | `inquiries` | 問い合わせ |
 | `group_tasks` | LINEグループ抽出タスク（title, assignee_staff_id, status, group_id） |

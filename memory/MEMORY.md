@@ -15,7 +15,18 @@
 
 ## 現在の開発状態（2026-06-10更新）
 
-### 直近の作業（休憩室：定員制チェックイン機能）
+### 直近の作業（周知のファイル添付・LINE深リンク）
+
+#### 周知管理 `/notices/manage` にファイル添付機能
+- 1周知につき1ファイル（画像・PDF等）。Storage バケット `notice-attachments`（public）にアップロード
+- `notices.attachment_url` / `attachment_name` カラムに保存。削除時はストレージからも除去
+- **サイズ制限**: クライアント検証 10MB ＋ next.config.ts `serverActions.bodySizeLimit: "10mb"`（Vercelデフォルト1MBだと大きいPDFで「通信エラー」になる）
+- スタッフ側 `/notices`: 画像はインライン表示・他ファイルはDLリンク
+- **LINE通知ボタン**: 「周知事項を見る」→「内容を見る」に変更。URL `/notices?open={noticeId}` で該当周知を自動展開＋スクロール
+- **投稿のID取得**: insert と select を分離（`.single()` はRLSで失敗）。ID取得失敗時は `/notices` にフォールバック
+- 投稿アクション全体を try/catch で保護（未補足例外でクライアントが「This page couldn't load」になるのを防止）
+
+### 前の作業（休憩室：定員制チェックイン機能）
 
 #### 打刻端末 `/punch/[projectId]` に「休憩室」タブ追加
 - **箱方式**: 定員数分の番号付き箱。空き箱タップ→休憩中スタッフから自分の名前を選択して入室。使用中の箱タップ→退室確認→退室
@@ -331,6 +342,10 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | break_end を挿入する処理は休憩室の箱も解放すること | `releaseBreakRoomBox()`（lib/break-room.ts）を呼ばないと幽霊が箱に残る。新しい break_end / clock_out 経路を作るときは必ず追加 |
 | `/api/punch/[projectId]/statuses` のレスポンスはオブジェクト形式 | `{ statuses: [...], breakRoom: {...} }`。以前は配列だった。端末クライアントの型と一致させること |
 | 休憩室の定員超過はDBのUNIQUE制約で防止 | カウント方式は同時タップで競合する。箱番号UNIQUE(project_id,use_date,box_number)方式を維持。error.code 23505 を「箱が使用中」と表示 |
+| insert直後のID取得に `.single()` 禁止 | RLSのSELECTポリシーが通らないとエラー。insertとselectを分離し、取れない場合のフォールバックを用意（周知投稿で発生済み） |
+| Server Actions のアップロードは bodySizeLimit に注意 | Vercelデフォルト1MB。next.config.ts で `serverActions.bodySizeLimit: "10mb"` 設定済み。クライアント側でも10MB検証を入れる |
+| Server Action は全体 try/catch で保護 | 未補足例外がクライアントで「This page couldn't load」クラッシュになる。catchしてエラーメッセージを返し console.error でVercelログに残す |
+| 周知の添付は1周知1ファイル | `notices.attachment_url/attachment_name`＋`notice-attachments`バケット（public）。周知削除時にストレージも削除すること |
 
 ---
 
