@@ -48,6 +48,8 @@ export default async function PunchPage({
     { data: absenceRows },
     { data: breakAssignmentRows },
     { data: motaAssignmentRows },
+    { data: breakRoomSetting },
+    { data: breakRoomUseRows },
   ] = await Promise.all([
     admin
       .from("project_members")
@@ -99,6 +101,17 @@ export default async function PunchPage({
       .select("assigned_account, slot, account_number")
       .eq("project_id", projectId)
       .eq("assignment_date", today),
+    admin
+      .from("break_room_settings")
+      .select("capacity")
+      .eq("project_id", projectId)
+      .maybeSingle(),
+    admin
+      .from("break_room_uses")
+      .select("box_number, staff_id, entered_at")
+      .eq("project_id", projectId)
+      .eq("use_date", today)
+      .order("box_number"),
   ]);
 
   // 当月同意済みスタッフセット
@@ -254,6 +267,13 @@ export default async function PunchPage({
     });
   }
 
+  const breakRoomCapacity = (breakRoomSetting as { capacity?: number } | null)?.capacity ?? 6;
+  const breakRoomUses = (breakRoomUseRows ?? []).map(u => ({
+    boxNumber: u.box_number as number,
+    staffId:   u.staff_id as string,
+    enteredAt: u.entered_at as string,
+  }));
+
   return (
     <TerminalPunchClient
       projectId={projectId}
@@ -265,6 +285,8 @@ export default async function PunchPage({
       breakSlots={breakSlots}
       motaAccountNumbers={motaAccountNumbers}
       motaSlotInfoMap={motaSlotInfoMap}
+      breakRoomCapacity={breakRoomCapacity}
+      breakRoomUses={breakRoomUses}
     />
   );
 }

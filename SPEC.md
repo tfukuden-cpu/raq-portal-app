@@ -682,6 +682,18 @@ sendEventNotify(
 - `/punch` — QRコード読み取り or 端末タップで出勤・退勤打刻
 - `punch_logs` テーブルに `punch_type: "clock_in" | "clock_out"` で記録
 
+### 6-5-2. 休憩室（定員制チェックイン）
+打刻端末 `/punch/[projectId]` に「休憩室」タブ（座席表で打刻・名前で打刻に続く3つ目）。
+
+- **箱方式**: 定員数分の番号付き箱（No.1〜N）。空き箱をタップ → 休憩中スタッフの一覧から自分の名前を選択して入室。使用中の箱をタップ → 退室確認 → 退室（本人のみ操作する運用）
+- **入室条件**: ステータスが休憩中（`break_start` 進行中・未退勤）のスタッフのみ。事前予約は不可
+- **自動退室**: 休憩戻り（break_end）・退勤（clock_out）・休憩リセットの**全経路**で `releaseBreakRoomBox()`（`src/lib/break-room.ts`）により箱を自動解放
+- **競合防止**: `break_room_uses` の UNIQUE(project_id, use_date, box_number) で同じ箱の二重取りをDBレベルで防止。UNIQUE(project_id, use_date, staff_id) で1人1箱
+- **タブバッジ**: 「休憩室 3/6」形式で使用数/定員を常時表示（満室時は赤）。箱には入室からの経過時間タイマー表示
+- **同期**: `/api/punch/[projectId]/statuses` のポーリング（30秒）に占有状況を同梱。レスポンス形式は `{ statuses: [...], breakRoom: { capacity, uses } }`
+- **管理者ビュー**: 座席表 `/seating` ツールバーの「休憩室」ボタン → パネルで占有状況閲覧・**強制解放**・**定員変更**（1〜50・`break_room_settings.capacity`）。定員を減らすとはみ出した箱は自動解放
+- サーバーアクション: `src/app/(portal)/seating/break-room-actions.ts`
+
 ### 6-6. Google スプレッドシート連携
 - `src/lib/gsheets.ts` のヘルパー関数
 - OAuth認証（`/admin/gsheet-oauth`）
@@ -722,6 +734,8 @@ sendEventNotify(
 | `break_slot_settings` | 休憩スロット設定（slot_number, label, start_time, end_time, target_shift: early/late/both, ratio, sort_order） |
 | `break_slot_assignments` | 休憩スロット割り当て（project_id, assignment_date, staff_id, slot_number, UNIQUE(project_id,assignment_date,staff_id)） |
 | `rankings` | 番付データ（project_id, staff_name, account_number=ASS査定/ASS販売, rank, period） |
+| `break_room_settings` | 休憩室の定員（project_id PK, capacity 1〜50 デフォルト6） |
+| `break_room_uses` | 休憩室の占有状況（入室中のみ行が存在。UNIQUE(project_id,use_date,box_number) / UNIQUE(project_id,use_date,staff_id)） |
 
 ---
 

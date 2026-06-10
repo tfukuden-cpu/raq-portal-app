@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { releaseBreakRoomBox } from "@/lib/break-room";
 import { revalidatePath } from "next/cache";
 import { assignBreakSlotsAction } from "./break-actions";
 
@@ -45,6 +46,12 @@ export async function toggleBreakAction(
   });
 
   if (error) return { success: false, message: error.message };
+
+  // 休憩終了時は休憩室の箱を自動解放
+  if (isOnBreak) {
+    await releaseBreakRoomBox(admin, projectId, staffId, today);
+  }
+
   revalidatePath("/seating");
   return { success: true, newStatus: isOnBreak ? "working" : "on_break" };
 }

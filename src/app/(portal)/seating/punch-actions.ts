@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { releaseBreakRoomBox } from "@/lib/break-room";
 import { revalidatePath } from "next/cache";
 
 function tokyoToday() {
@@ -269,6 +270,9 @@ export async function clockOutAction(
   const { error } = await admin.from("punch_logs").insert(inserts);
   if (error) return { ok: false, error: error.message };
 
+  // 休憩室の箱を自動解放（休憩中のまま退勤した場合の取り残し防止）
+  await releaseBreakRoomBox(admin, projectId, staffId, today);
+
   if ((mode === "overtime" || mode === "early_leave") && shiftEndHHMM && signerName) {
     await admin.from("work_exception_requests").insert({
       project_id: projectId, staff_id: staffId,
@@ -313,6 +317,9 @@ export async function earlyLeaveAction(
 
   const { error } = await admin.from("punch_logs").insert(inserts);
   if (error) return { ok: false, error: error.message };
+
+  // 休憩室の箱を自動解放
+  await releaseBreakRoomBox(admin, projectId, staffId, today);
 
   await admin.from("work_exception_requests").insert({
     project_id: projectId, staff_id: staffId,
@@ -390,6 +397,8 @@ export async function breakEndAction(projectId: string, staffId: string): Promis
     punch_type: "break_end", recorded_at: new Date().toISOString(),
   });
   if (error) return { ok: false, error: error.message };
+  // 休憩室の箱を自動解放
+  await releaseBreakRoomBox(admin, projectId, staffId, tokyoToday());
   revalidatePath("/seating");
   return { ok: true };
 }
@@ -414,6 +423,8 @@ export async function breakResetAction(projectId: string, staffId: string): Prom
 
   const { error } = await admin.from("punch_logs").delete().eq("id", latest[0].id);
   if (error) return { ok: false, error: error.message };
+  // 休憩リセット時も休憩室の箱を解放
+  await releaseBreakRoomBox(admin, projectId, staffId, today);
   revalidatePath("/seating");
   return { ok: true };
 }

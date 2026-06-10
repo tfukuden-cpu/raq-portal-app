@@ -4,6 +4,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { releaseBreakRoomBox } from "@/lib/break-room";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
 import { sendEventNotify } from "@/lib/notify";
@@ -59,6 +61,12 @@ export async function recordPunchAction(
   if (error) {
     console.error("punch error:", error);
     return { success: false, message: "打刻に失敗しました：" + error.message };
+  }
+
+  // 休憩終了・退勤時は休憩室の箱を自動解放（RLSをバイパスするため admin 経由）
+  if (punchType === "break_end" || punchType === "clock_out") {
+    const todayJST = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+    await releaseBreakRoomBox(createAdminClient(), projectId, staffId, todayJST);
   }
 
   revalidatePath("/punch");

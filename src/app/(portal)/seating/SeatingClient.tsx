@@ -10,6 +10,11 @@ import {
 } from "./actions";
 import { assignBreakSlotsAction } from "./break-actions";
 import type { BreakSlotSetting } from "./break-actions";
+import {
+  getBreakRoomStateAction, forceReleaseBreakRoomAction, setBreakRoomCapacityAction,
+  type BreakRoomState,
+} from "./break-room-actions";
+import { formatTimeJP } from "@/lib/datetime";
 import { resolveShiftSection } from "@/lib/seatColors";
 import { createClient } from "@/lib/supabase/client";
 import PunchModal from "./PunchModal";
@@ -172,6 +177,56 @@ export default function SeatingClient({
   const [draftMap, setDraftMap] = useState<Map<string, string | null>>(new Map());
   const [pickSeatId, setPickSeatId] = useState<string | null>(null);
   const [showBreakPanel, setShowBreakPanel] = useState(false);
+
+  // ── 休憩室パネル（管理者） ────────────────────────────────
+  const [showRoomPanel, setShowRoomPanel] = useState(false);
+  const [roomState, setRoomState] = useState<BreakRoomState | null>(null);
+  const [roomCapInput, setRoomCapInput] = useState("6");
+
+  async function refreshRoomState() {
+    const s = await getBreakRoomStateAction(projectId);
+    setRoomState(s);
+    setRoomCapInput(String(s.capacity));
+  }
+
+  function toggleRoomPanel() {
+    setShowRoomPanel(v => {
+      const next = !v;
+      if (next) void refreshRoomState();
+      return next;
+    });
+  }
+
+  function handleForceRelease(boxNumber: number) {
+    if (!window.confirm(`No.${boxNumber} を強制解放しますか？`)) return;
+    startTransition(async () => {
+      const res = await forceReleaseBreakRoomAction(projectId, boxNumber);
+      if (!res.ok) {
+        setToast(`⚠️ ${res.error ?? "解放に失敗しました"}`);
+        setTimeout(() => setToast(null), 2500);
+      }
+      await refreshRoomState();
+    });
+  }
+
+  function handleSaveRoomCapacity() {
+    const cap = parseInt(roomCapInput, 10);
+    if (!Number.isInteger(cap) || cap < 1 || cap > 50) {
+      setToast("⚠️ 定員は1〜50で指定してください");
+      setTimeout(() => setToast(null), 2500);
+      return;
+    }
+    startTransition(async () => {
+      const res = await setBreakRoomCapacityAction(projectId, cap);
+      if (!res.ok) {
+        setToast(`⚠️ ${res.error ?? "定員の保存に失敗しました"}`);
+      } else {
+        setToast(`休憩室の定員を${cap}名に変更しました`);
+      }
+      setTimeout(() => setToast(null), 2500);
+      await refreshRoomState();
+    });
+  }
   const [staffSearch, setStaffSearch] = useState("");
   // ドラッグ＆スワップ
   const [dragSeatId, setDragSeatId] = useState<string | null>(null);
@@ -585,6 +640,12 @@ export default function SeatingClient({
                     休憩一覧
                   </button>
                 )}
+                <button
+                  onClick={toggleRoomPanel}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${showRoomPanel ? "bg-amber-600 text-white border-amber-600" : "text-amber-600 dark:text-amber-400 bg-white dark:bg-zinc-900 border-amber-200 dark:border-amber-800 hover:bg-amber-50"}`}
+                >
+                  休憩室
+                </button>
               </>
             )}
             {editMode ? (
@@ -671,6 +732,14 @@ export default function SeatingClient({
               className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${showBreakPanel ? "bg-violet-600 text-white border-violet-600" : "text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 border-violet-200 dark:border-violet-800 hover:bg-violet-50"}`}
             >
               休憩一覧
+            </button>
+          )}
+          {!editMode && (
+            <button
+              onClick={toggleRoomPanel}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${showRoomPanel ? "bg-amber-600 text-white border-amber-600" : "text-amber-600 dark:text-amber-400 bg-white dark:bg-zinc-900 border-amber-200 dark:border-amber-800 hover:bg-amber-50"}`}
+            >
+              休憩室
             </button>
           )}
         </div>
@@ -763,6 +832,81 @@ export default function SeatingClient({
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* 休憩室パネル（管理者・占有状況/強制解放/定員変更） */}
+      {showRoomPanel && isAdmin && (
+        <div className="mx-3 mb-2 rounded-2xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-950 overflow-hidden">
+          <div className="px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-xs font-bold text-amber-700 dark:text-amber-300 tabular-nums">
+              休憩室{roomState ? `（使用中 ${roomState.uses.length} / 定員 ${roomState.capacity}）` : ""}
+            </p>
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] text-zinc-500 dark:text-zinc-400">定員</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={roomCapInput}
+                onChange={e => setRoomCapInput(e.target.value)}
+                className="w-14 text-xs tabular-nums px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200"
+              />
+              <button
+                onClick={handleSaveRoomCapacity}
+                disabled={isPending}
+                className="text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-500 px-2.5 py-1 rounded-lg disabled:opacity-50"
+              >
+                保存
+              </button>
+              <button
+                onClick={() => void refreshRoomState()}
+                className="text-[11px] text-amber-500 hover:text-amber-700 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800"
+              >
+                更新
+              </button>
+              <button onClick={() => setShowRoomPanel(false)} className="text-[11px] text-amber-400 hover:text-amber-600">✕</button>
+            </div>
+          </div>
+          <div className="p-3">
+            {!roomState ? (
+              <p className="text-xs text-zinc-400 text-center py-2">読み込み中…</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                {Array.from({ length: roomState.capacity }, (_, i) => i + 1).map(boxNumber => {
+                  const use = roomState.uses.find(u => u.boxNumber === boxNumber);
+                  if (!use) {
+                    return (
+                      <div key={boxNumber} className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700 p-2">
+                        <p className="text-[10px] font-bold text-zinc-400 tabular-nums">No.{boxNumber}</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">空き</p>
+                      </div>
+                    );
+                  }
+                  const name = staffNameMap.get(use.staffId)?.name ?? use.staffId;
+                  const elapsedMin = Math.max(0, Math.floor((nowMs - new Date(use.enteredAt).getTime()) / 60000));
+                  return (
+                    <div key={boxNumber} className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tabular-nums">No.{boxNumber}</p>
+                        <button
+                          onClick={() => handleForceRelease(boxNumber)}
+                          disabled={isPending}
+                          className="text-[10px] font-semibold text-red-500 hover:text-red-700 disabled:opacity-50"
+                        >
+                          解放
+                        </button>
+                      </div>
+                      <p className="text-xs font-bold text-zinc-700 dark:text-zinc-200 truncate mt-0.5">{name}</p>
+                      <p className="text-[10px] text-zinc-500 tabular-nums mt-0.5">
+                        {formatTimeJP(use.enteredAt)}〜（{elapsedMin}分）
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

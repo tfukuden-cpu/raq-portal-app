@@ -13,9 +13,30 @@
 
 ---
 
-## 現在の開発状態（2026-06-09更新）
+## 現在の開発状態（2026-06-10更新）
 
-### 直近の作業（打刻ルール・シフト管理スクロール・UI改修）
+### 直近の作業（休憩室：定員制チェックイン機能）
+
+#### 打刻端末 `/punch/[projectId]` に「休憩室」タブ追加
+- **箱方式**: 定員数分の番号付き箱。空き箱タップ→休憩中スタッフから自分の名前を選択して入室。使用中の箱タップ→退室確認→退室
+- **入室条件**: ステータスが休憩中（break_start進行中・未退勤）のみ。`enterBreakRoomAction` がサーバー側でも検証
+- **自動退室（全break_end経路に実装済み）**:
+  - `seating/punch-actions.ts`: breakEndAction / clockOutAction / earlyLeaveAction / breakResetAction
+  - `seating/actions.ts`: toggleBreakAction
+  - `punch/[projectId]/actions.ts`: terminalBreakAction（終了時）/ terminalPunchAction（clock_out時）
+  - `(portal)/punch/actions.ts`: recordPunchAction（break_end / clock_out時）
+  - 共通ヘルパー: `src/lib/break-room.ts` の `releaseBreakRoomBox(admin, projectId, staffId, date)`
+- **タブバッジ**: 「休憩室 3/6」で使用数/定員表示（満室=赤）。占有箱に経過時間タイマー
+- **ポーリング**: `/api/punch/[projectId]/statuses` のレスポンスを `{ statuses: [...], breakRoom: { capacity, uses } }` に変更（休憩室同梱）
+- **管理者ビュー**: `/seating` ツールバー「休憩室」ボタン → パネルで占有状況・強制解放・定員変更（SeatingClient、isAdminのみ）
+- サーバーアクション: `seating/break-room-actions.ts`（get/enter/leave/forceRelease/setCapacity）
+
+#### 新規DBテーブル（Supabaseマイグレーション実行済み: create_break_room_tables）
+- `break_room_settings(project_id PK, capacity default 6)` — 定員（管理者が可変）
+- `break_room_uses(project_id, staff_id, use_date, box_number, entered_at)` — 入室中のみ行が存在
+  - UNIQUE(project_id, use_date, box_number)・UNIQUE(project_id, use_date, staff_id)
+
+### 前の作業（打刻ルール・シフト管理スクロール・UI改修）
 
 #### 打刻ルール全面実装（端末・座席打刻 両対応）
 - **出勤**: シフト開始前→シフト開始時刻に補正 / シフト開始後→遅刻＋15分切り上げ
@@ -306,6 +327,9 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | ShiftManageClient sticky ツールバーの top は `var(--page-header-h)` | `--page-header-h` = ページタイトル+タブの高さ。ShiftDayList内ヘッダーの top は `calc(--page-header-h + --toolbar-h)` を使う |
 | `punch_logs.note` に実打刻時刻が記録される | 形式: `出勤打刻: HH:MM` / `退勤打刻: HH:MM  早退承認者: XX`。`"管理者修正:staffId"` とは別管理。備考列表示には `clockInNote`/`clockOutNote` フィールドを使う |
 | 問い合わせLINE返信は全文送信 | `inquiry_reply` 通知の80文字制限を撤廃済み。再度制限を入れないこと |
+| break_end を挿入する処理は休憩室の箱も解放すること | `releaseBreakRoomBox()`（lib/break-room.ts）を呼ばないと幽霊が箱に残る。新しい break_end / clock_out 経路を作るときは必ず追加 |
+| `/api/punch/[projectId]/statuses` のレスポンスはオブジェクト形式 | `{ statuses: [...], breakRoom: {...} }`。以前は配列だった。端末クライアントの型と一致させること |
+| 休憩室の定員超過はDBのUNIQUE制約で防止 | カウント方式は同時タップで競合する。箱番号UNIQUE(project_id,use_date,box_number)方式を維持。error.code 23505 を「箱が使用中」と表示 |
 
 ---
 

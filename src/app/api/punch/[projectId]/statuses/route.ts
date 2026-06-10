@@ -20,7 +20,7 @@ export async function GET(
   const todayStart = `${today}T00:00:00+09:00`;
   const todayEnd   = `${today}T23:59:59+09:00`;
 
-  const [{ data: punchLogs }, { data: absenceRows }] = await Promise.all([
+  const [{ data: punchLogs }, { data: absenceRows }, { data: breakRoomSetting }, { data: breakRoomUses }] = await Promise.all([
     admin
       .from("punch_logs")
       .select("staff_id, punch_type, note, recorded_at")
@@ -33,6 +33,17 @@ export async function GET(
       .select("staff_id")
       .eq("project_id", projectId)
       .eq("absence_date", today),
+    admin
+      .from("break_room_settings")
+      .select("capacity")
+      .eq("project_id", projectId)
+      .maybeSingle(),
+    admin
+      .from("break_room_uses")
+      .select("box_number, staff_id, entered_at")
+      .eq("project_id", projectId)
+      .eq("use_date", today)
+      .order("box_number"),
   ]);
 
   const absenceIds = new Set((absenceRows ?? []).map(a => a.staff_id));
@@ -87,5 +98,14 @@ export async function GET(
     }
   }
 
-  return NextResponse.json(result);
+  const breakRoom = {
+    capacity: (breakRoomSetting as { capacity?: number } | null)?.capacity ?? 6,
+    uses: (breakRoomUses ?? []).map(u => ({
+      boxNumber: u.box_number as number,
+      staffId:   u.staff_id as string,
+      enteredAt: u.entered_at as string,
+    })),
+  };
+
+  return NextResponse.json({ statuses: result, breakRoom });
 }

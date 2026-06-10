@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useTransition } from "react";
 import { terminalPunchAction, terminalBreakAction, saveConsentAction, type PunchKind } from "./actions";
+import { enterBreakRoomAction, leaveBreakRoomAction } from "@/app/(portal)/seating/break-room-actions";
 import { getSeatBgClass, resolveShiftSection, formatSectionShift } from "@/lib/seatColors";
 
 // ── 型 ───────────────────────────────────────────────────────
@@ -59,6 +60,12 @@ export type BreakSlotInfo = {
 
 type MotaSlotInfo = { slot: string; positionAccount: string };
 
+export type BreakRoomUseItem = {
+  boxNumber: number;
+  staffId: string;
+  enteredAt: string; // ISO
+};
+
 interface Props {
   projectId: string;
   projectName: string;
@@ -69,6 +76,8 @@ interface Props {
   breakSlots?: BreakSlotInfo[];
   motaAccountNumbers?: string[];
   motaSlotInfoMap?: Record<string, MotaSlotInfo[]>;
+  breakRoomCapacity?: number;
+  breakRoomUses?: BreakRoomUseItem[];
 }
 
 // ── ステータス表示定義 ──────────────────────────────────────────
@@ -285,10 +294,17 @@ function LiveClock() {
 }
 
 // ── メインコンポーネント ──────────────────────────────────────
-export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [], motaSlotInfoMap = {} }: Props) {
+export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [], motaSlotInfoMap = {}, breakRoomCapacity = 6, breakRoomUses = [] }: Props) {
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [localMembers, setLocalMembers] = useState(members);
   const [isPending, startTransition] = useTransition();
+
+  // 休憩室
+  const [roomCapacity, setRoomCapacity] = useState(breakRoomCapacity);
+  const [roomUses, setRoomUses] = useState<BreakRoomUseItem[]>(breakRoomUses);
+  const [roomPickBox, setRoomPickBox] = useState<number | null>(null);   // 入室する箱番号（名前選択モーダル表示中）
+  const [roomLeaveBox, setRoomLeaveBox] = useState<number | null>(null); // 退室確認中の箱番号
+  const [roomError, setRoomError] = useState<string | null>(null);
 
   // プルダウン
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -306,7 +322,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
 
   // 座席表の「名前で探す」タブ
   const hasSeatData = seats.length > 0;
-  const [activeTab, setActiveTab] = useState<"seat" | "name">(hasSeatData ? "seat" : "name");
+  const [activeTab, setActiveTab] = useState<"seat" | "name" | "break_room">(hasSeatData ? "seat" : "name");
 
   // ホバーツールチップ
   const [hoveredSeatId, setHoveredSeatId] = useState<string | null>(null);
@@ -319,15 +335,22 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
         const res = await fetch(`/api/punch/${projectId}/statuses`);
         if (!res.ok) return;
         const data: {
-          staffId: string; clockedIn: boolean; clockedOut: boolean;
-          onBreak: boolean; isAbsent: boolean; hadBreak60: boolean;
-          breakStartedAt: string | null; breakNote: string | null;
-        }[] = await res.json();
+          statuses: {
+            staffId: string; clockedIn: boolean; clockedOut: boolean;
+            onBreak: boolean; isAbsent: boolean; hadBreak60: boolean;
+            breakStartedAt: string | null; breakNote: string | null;
+          }[];
+          breakRoom: { capacity: number; uses: BreakRoomUseItem[] };
+        } = await res.json();
         setLocalMembers(prev => prev.map(m => {
-          const s = data.find(d => d.staffId === m.staffId);
+          const s = data.statuses.find(d => d.staffId === m.staffId);
           if (!s) return m;
           return { ...m, clockedIn: s.clockedIn, clockedOut: s.clockedOut, onBreak: s.onBreak, isAbsent: s.isAbsent, hadBreak60: s.hadBreak60, breakStartedAt: s.breakStartedAt, breakNote: s.breakNote };
         }));
+        if (data.breakRoom) {
+          setRoomCapacity(data.breakRoom.capacity);
+          setRoomUses(data.breakRoom.uses);
+        }
       } catch { /* ignore */ }
     };
     const id = setInterval(poll, 30_000);
@@ -444,6 +467,34 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     });
   }
 
+  // ── 休憩室 入室（箱に名前を入れる） ─────────────────────────
+  function handleRoomEnter(staffId: string, boxNumber: number) {
+    setRoomError(null);
+    startTransition(async () => {
+      const res = await enterBreakRoomAction(projectId, staffId, boxNumber);
+      if (res.ok) {
+        setRoomUses(prev => [
+          ...prev.filter(u => u.staffId !== staffId),
+          { boxNumber, staffId, enteredAt: new Date().toISOString() },
+        ]);
+        setRoomPickBox(null);
+      } else {
+        setRoomError(res.error ?? "入室に失敗しました");
+      }
+    });
+  }
+
+  // ── 休憩室 退室（箱から名前を外す） ─────────────────────────
+  function handleRoomLeave(staffId: string) {
+    startTransition(async () => {
+      const res = await leaveBreakRoomAction(projectId, staffId);
+      if (res.ok) {
+        setRoomUses(prev => prev.filter(u => u.staffId !== staffId));
+      }
+      setRoomLeaveBox(null);
+    });
+  }
+
   // ── 同意書確認 ──────────────────────────────────────────────
   function handleConsentConfirm(member: TerminalMember) {
     if (!consentName.trim()) return;
@@ -525,8 +576,8 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
         </div>
 
         {/* タブ */}
-        {hasSeatData && (
-          <div className="flex border-b border-zinc-800 px-6">
+        <div className="flex border-b border-zinc-800 px-6">
+          {hasSeatData && (
             <button
               onClick={() => setActiveTab("seat")}
               className={["flex-1 py-2.5 text-sm font-semibold transition-colors",
@@ -535,16 +586,32 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             >
               座席表で打刻
             </button>
-            <button
-              onClick={() => setActiveTab("name")}
-              className={["flex-1 py-2.5 text-sm font-semibold transition-colors",
-                activeTab === "name" ? "text-white border-b-2 border-blue-500" : "text-zinc-500 hover:text-zinc-300",
-              ].join(" ")}
-            >
-              名前で打刻
-            </button>
-          </div>
-        )}
+          )}
+          <button
+            onClick={() => setActiveTab("name")}
+            className={["flex-1 py-2.5 text-sm font-semibold transition-colors",
+              activeTab === "name" ? "text-white border-b-2 border-blue-500" : "text-zinc-500 hover:text-zinc-300",
+            ].join(" ")}
+          >
+            名前で打刻
+          </button>
+          <button
+            onClick={() => setActiveTab("break_room")}
+            className={["flex-1 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5",
+              activeTab === "break_room" ? "text-white border-b-2 border-amber-500" : "text-zinc-500 hover:text-zinc-300",
+            ].join(" ")}
+          >
+            休憩室
+            <span className={[
+              "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-full",
+              roomUses.length >= roomCapacity
+                ? "bg-red-900/80 text-red-300"
+                : "bg-zinc-800 text-amber-400",
+            ].join(" ")}>
+              {roomUses.length}/{roomCapacity}
+            </span>
+          </button>
+        </div>
 
         <div className="flex-1 px-4 pt-4 pb-10 space-y-5 overflow-y-auto">
           {/* ── 座席表タブ ─────────────────────────────────── */}
@@ -780,7 +847,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
           )}
 
           {/* ── 名前選択タブ ────────────────────────────────── */}
-          {(activeTab === "name" || !hasSeatData) && (
+          {activeTab === "name" && (
             <div className="max-w-md mx-auto w-full">
               <div ref={dropdownRef} className="relative">
                 <button
@@ -864,7 +931,142 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               </p>
             </div>
           )}
+
+          {/* ── 休憩室タブ ─────────────────────────────────── */}
+          {activeTab === "break_room" && (
+            <div className="max-w-2xl mx-auto w-full">
+              <div className="text-center mb-4">
+                <p className="text-zinc-300 text-sm font-semibold">
+                  空き <span className="text-amber-400 text-lg tabular-nums font-bold">{Math.max(0, roomCapacity - roomUses.length)}</span>
+                  <span className="text-zinc-600"> / {roomCapacity}</span>
+                </p>
+                <p className="text-zinc-600 text-xs mt-1">
+                  休憩中のスタッフのみ入室できます・休憩戻りで自動的に退室します
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {Array.from({ length: roomCapacity }, (_, i) => i + 1).map(boxNumber => {
+                  const use = roomUses.find(u => u.boxNumber === boxNumber);
+                  const occupant = use ? memberMap.get(use.staffId) : null;
+                  if (use) {
+                    return (
+                      <button
+                        key={boxNumber}
+                        onClick={() => setRoomLeaveBox(boxNumber)}
+                        disabled={isPending}
+                        className="rounded-2xl border-2 border-amber-500 bg-amber-500 p-3 text-left active:scale-95 transition-transform disabled:opacity-60"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-amber-900 tabular-nums">No.{boxNumber}</span>
+                          <BreakTimer startedAt={use.enteredAt} breakNote={null} size="compact" />
+                        </div>
+                        <p className="text-zinc-900 font-bold text-base mt-1 truncate">
+                          {occupant?.name ?? use.staffId}
+                        </p>
+                        <p className="text-[10px] text-amber-900 mt-0.5">タップで退室</p>
+                      </button>
+                    );
+                  }
+                  return (
+                    <button
+                      key={boxNumber}
+                      onClick={() => { setRoomError(null); setRoomPickBox(boxNumber); }}
+                      disabled={isPending}
+                      className="rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-900/60 p-3 text-left active:scale-95 transition-transform hover:border-zinc-500 disabled:opacity-60"
+                    >
+                      <span className="text-[10px] font-bold text-zinc-600 tabular-nums">No.{boxNumber}</span>
+                      <p className="text-zinc-500 font-semibold text-base mt-1">空き</p>
+                      <p className="text-[10px] text-zinc-600 mt-0.5">タップで入室</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* ── 休憩室: 入室する名前の選択モーダル ───────────── */}
+        {roomPickBox !== null && (
+          <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center px-6" onClick={() => setRoomPickBox(null)}>
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-3 border-b border-zinc-800">
+                <p className="text-white font-bold">No.{roomPickBox} に入室</p>
+                <p className="text-zinc-500 text-xs mt-0.5">自分の名前を選択してください（本人のみ）</p>
+              </div>
+              {roomError && (
+                <p className="px-5 py-2 text-xs text-red-400 bg-red-950/40">⚠️ {roomError}</p>
+              )}
+              <ul className="max-h-72 overflow-y-auto overscroll-contain divide-y divide-zinc-800">
+                {(() => {
+                  const candidates = localMembers.filter(m =>
+                    memberStatus(m) === "on_break" && !roomUses.some(u => u.staffId === m.staffId)
+                  );
+                  if (candidates.length === 0) {
+                    return <li className="px-5 py-6 text-center text-zinc-500 text-sm">休憩中のスタッフがいません</li>;
+                  }
+                  return candidates.map(m => (
+                    <li key={m.staffId}>
+                      <button
+                        onClick={() => handleRoomEnter(m.staffId, roomPickBox)}
+                        disabled={isPending}
+                        className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                      >
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold bg-amber-800 flex-shrink-0">
+                          {m.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-bold text-sm truncate">{m.name}</p>
+                          {m.breakNote && <p className="text-amber-400 text-[10px] mt-0.5">{m.breakNote}</p>}
+                        </div>
+                        {m.breakStartedAt && (
+                          <BreakTimer startedAt={m.breakStartedAt} breakNote={m.breakNote} size="compact" />
+                        )}
+                      </button>
+                    </li>
+                  ));
+                })()}
+              </ul>
+              <div className="px-5 py-3 border-t border-zinc-800">
+                <button onClick={() => setRoomPickBox(null)} className="w-full py-2.5 text-sm text-zinc-400 hover:text-zinc-200 rounded-xl border border-zinc-700">
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 休憩室: 退室確認モーダル ─────────────────────── */}
+        {roomLeaveBox !== null && (() => {
+          const use = roomUses.find(u => u.boxNumber === roomLeaveBox);
+          if (!use) return null;
+          const occupant = memberMap.get(use.staffId);
+          return (
+            <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center px-6" onClick={() => setRoomLeaveBox(null)}>
+              <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+                <p className="text-white font-bold text-lg text-center">
+                  {occupant?.name ?? use.staffId} さんを退室させますか？
+                </p>
+                <p className="text-zinc-500 text-xs text-center mt-1.5">本人のみ操作してください</p>
+                <div className="flex gap-3 mt-5">
+                  <button
+                    onClick={() => setRoomLeaveBox(null)}
+                    className="flex-1 py-3 text-sm text-zinc-400 hover:text-zinc-200 rounded-xl border border-zinc-700"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={() => handleRoomLeave(use.staffId)}
+                    disabled={isPending}
+                    className="flex-1 py-3 text-sm font-bold text-white bg-amber-600 hover:bg-amber-500 rounded-xl disabled:opacity-50"
+                  >
+                    退室する
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     );
   }

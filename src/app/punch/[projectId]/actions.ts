@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { releaseBreakRoomBox } from "@/lib/break-room";
 import { sendEventNotify } from "@/lib/notify";
 import { revalidatePath } from "next/cache";
 
@@ -108,6 +109,12 @@ export async function terminalPunchAction(
     return { ok: false, message: "打刻に失敗しました: " + error.message };
   }
 
+  // 退勤時は休憩室の箱を自動解放
+  if (punchType === "clock_out") {
+    const todayJST = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+    await releaseBreakRoomBox(admin, projectId, staffId, todayJST);
+  }
+
   revalidatePath(`/attendance`);
 
   const LABEL = { clock_in: "出勤", clock_out: "退勤" } as const;
@@ -168,6 +175,12 @@ export async function terminalBreakAction(
   });
 
   if (error) return { ok: false, message: error.message };
+
+  // 離席終了（break_end）時は休憩室の箱を自動解放
+  if (isOnBreak) {
+    await releaseBreakRoomBox(admin, projectId, staffId, today);
+  }
+
   revalidatePath(`/punch/${projectId}`);
   return {
     ok: true,
