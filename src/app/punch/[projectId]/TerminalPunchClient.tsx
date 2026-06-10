@@ -81,7 +81,7 @@ interface Props {
   rpgFontClass?: string;
 }
 
-// ── RPG風ウィンドウ（休憩室＝宿屋テーマ） ──────────────────────
+// ── RPG風ウィンドウ（休憩室＝キャンプテーマ） ──────────────────
 function RpgWindow({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div className={`rounded-lg border-2 border-white bg-[#000846] p-[3px] ${className}`}>
@@ -91,6 +91,114 @@ function RpgWindow({ children, className = "" }: { children: ReactNode; classNam
     </div>
   );
 }
+
+// ── ドット絵キャラクター（休憩室パーティー用） ──────────────────
+// 文字 → 色: H=髪/帽子 S=肌 E=目 B=胴体 L=脚 O=靴
+const SPRITE_BASIC = [
+  "....HHHH....",
+  "...HHHHHH...",
+  "...HSSSSH...",
+  "...SESSES...",
+  "...SSSSSS...",
+  "....SSSS....",
+  "..BBBBBBBB..",
+  ".BBBBBBBBBB.",
+  ".SBBBBBBBBS.",
+  "...BBBBBB...",
+  "...BB..BB...",
+  "...LL..LL...",
+  "...LL..LL...",
+  "..OO....OO..",
+];
+const SPRITE_HAT = [
+  ".....HH.....",
+  "....HHHH....",
+  "..HHHHHHHH..",
+  "HHHHHHHHHHHH",
+  "...SSSSSS...",
+  "...SESSES...",
+  "....SSSS....",
+  "..BBBBBBBB..",
+  ".BBBBBBBBBB.",
+  ".SBBBBBBBBS.",
+  "...BBBBBB...",
+  "...BB..BB...",
+  "...LL..LL...",
+  "..OO....OO..",
+];
+
+type RpgClass = { label: string; grid: string[]; palette: Record<string, string> };
+const SKIN = "#fcd9b8";
+const EYE  = "#1f2937";
+const RPG_CLASSES: RpgClass[] = [
+  { label: "ゆうしゃ",     grid: SPRITE_BASIC, palette: { H: "#f59e0b", S: SKIN, E: EYE, B: "#3b82f6", L: "#1e40af", O: "#78350f" } },
+  { label: "せんし",       grid: SPRITE_BASIC, palette: { H: "#dc2626", S: SKIN, E: EYE, B: "#9ca3af", L: "#4b5563", O: "#374151" } },
+  { label: "まほうつかい", grid: SPRITE_HAT,   palette: { H: "#7c3aed", S: SKIN, E: EYE, B: "#8b5cf6", L: "#4c1d95", O: "#312e81" } },
+  { label: "そうりょ",     grid: SPRITE_HAT,   palette: { H: "#e5e7eb", S: SKIN, E: EYE, B: "#f9fafb", L: "#93c5fd", O: "#6b7280" } },
+  { label: "ぶとうか",     grid: SPRITE_BASIC, palette: { H: "#92400e", S: SKIN, E: EYE, B: "#ea580c", L: "#7c2d12", O: "#451a03" } },
+  { label: "あそびにん",   grid: SPRITE_BASIC, palette: { H: "#22c55e", S: SKIN, E: EYE, B: "#ec4899", L: "#15803d", O: "#831843" } },
+];
+// シルエット（空き枠用）
+const SILHOUETTE_PALETTE: Record<string, string> = { H: "#1d2a6b", S: "#1d2a6b", E: "#1d2a6b", B: "#1d2a6b", L: "#1d2a6b", O: "#1d2a6b" };
+
+/** staffId から職業を決定（同じ人は常に同じキャラ） */
+function rpgClassFor(staffId: string): RpgClass {
+  let h = 0;
+  for (const ch of staffId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return RPG_CLASSES[h % RPG_CLASSES.length];
+}
+
+function PixelSprite({ grid, palette, scale = 4, className = "" }: {
+  grid: string[]; palette: Record<string, string>; scale?: number; className?: string;
+}) {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  return (
+    <svg
+      width={cols * scale} height={rows * scale}
+      viewBox={`0 0 ${cols} ${rows}`}
+      shapeRendering="crispEdges"
+      className={className}
+      aria-hidden
+    >
+      {grid.flatMap((row, y) =>
+        [...row].map((c, x) => {
+          if (c === ".") return null;
+          const fill = palette[c];
+          if (!fill) return null;
+          return <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={fill} />;
+        })
+      )}
+    </svg>
+  );
+}
+
+// ── 焚き火（キャンプの中心） ────────────────────────────────────
+function Campfire() {
+  return (
+    <svg width="64" height="52" viewBox="0 0 16 13" shapeRendering="crispEdges" aria-hidden>
+      {/* 薪 */}
+      <rect x="3" y="11" width="10" height="1" fill="#7c4a1e" />
+      <rect x="4" y="10" width="8" height="1" fill="#92400e" />
+      {/* 炎 */}
+      <g className="animate-pulse">
+        <rect x="7" y="2" width="2" height="2" fill="#fbbf24" />
+        <rect x="6" y="4" width="4" height="2" fill="#f97316" />
+        <rect x="5" y="6" width="6" height="4" fill="#ef4444" />
+        <rect x="7" y="6" width="2" height="3" fill="#fde047" />
+      </g>
+    </svg>
+  );
+}
+
+// 夜空の星（決め打ち配置・%）
+const CAMP_STARS: { l: number; t: number; d: number }[] = [
+  { l: 6, t: 8, d: 0 }, { l: 14, t: 22, d: 0.7 }, { l: 22, t: 6, d: 1.4 },
+  { l: 31, t: 16, d: 0.3 }, { l: 40, t: 7, d: 1.1 }, { l: 48, t: 19, d: 0.5 },
+  { l: 57, t: 9, d: 1.6 }, { l: 65, t: 24, d: 0.2 }, { l: 72, t: 5, d: 0.9 },
+  { l: 81, t: 14, d: 1.3 }, { l: 90, t: 21, d: 0.6 }, { l: 95, t: 8, d: 1.8 },
+  { l: 36, t: 27, d: 1.9 }, { l: 10, t: 30, d: 1.0 },
+];
 
 // ── ステータス表示定義 ──────────────────────────────────────────
 const STATUS_BG: Record<StaffStatus, string> = {
@@ -319,6 +427,14 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   const [roomPickBox, setRoomPickBox] = useState<number | null>(null);   // 入室する箱番号（名前選択モーダル表示中）
   const [roomLeaveBox, setRoomLeaveBox] = useState<number | null>(null); // 退室確認中の箱番号
   const [roomError, setRoomError] = useState<string | null>(null);
+  const [roomToast, setRoomToast] = useState<string | null>(null);       // 「なかまに くわわった！」演出
+  const roomToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showRoomToast(message: string) {
+    if (roomToastTimer.current) clearTimeout(roomToastTimer.current);
+    setRoomToast(message);
+    roomToastTimer.current = setTimeout(() => setRoomToast(null), 3500);
+  }
 
   // プルダウン
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -481,7 +597,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     });
   }
 
-  // ── 休憩室 入室（箱に名前を入れる） ─────────────────────────
+  // ── 休憩室 入室（パーティーに加わる） ───────────────────────
   function handleRoomEnter(staffId: string, boxNumber: number) {
     setRoomError(null);
     startTransition(async () => {
@@ -492,18 +608,22 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
           { boxNumber, staffId, enteredAt: new Date().toISOString() },
         ]);
         setRoomPickBox(null);
+        const name = memberMap.get(staffId)?.name ?? staffId;
+        showRoomToast(`${name}が なかまに くわわった！`);
       } else {
         setRoomError(res.error ?? "入室に失敗しました");
       }
     });
   }
 
-  // ── 休憩室 退室（箱から名前を外す） ─────────────────────────
+  // ── 休憩室 退室（パーティーから外れる） ─────────────────────
   function handleRoomLeave(staffId: string) {
     startTransition(async () => {
       const res = await leaveBreakRoomAction(projectId, staffId);
       if (res.ok) {
         setRoomUses(prev => prev.filter(u => u.staffId !== staffId));
+        const name = memberMap.get(staffId)?.name ?? staffId;
+        showRoomToast(`${name}は めをさました！`);
       }
       setRoomLeaveBox(null);
     });
@@ -935,80 +1055,104 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             </div>
           )}
 
-          {/* ── 休憩室タブ（RPG宿屋風） ─────────────────────── */}
+          {/* ── 休憩室タブ（RPGキャンプ風） ──────────────────── */}
           {activeTab === "break_room" && (
             <div className={`max-w-2xl mx-auto w-full ${rpgFontClass}`}>
-              {/* 宿屋のメッセージウィンドウ */}
-              <RpgWindow className="mb-4">
-                <div className="px-4 py-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-white text-sm leading-relaxed">
-                      ＊「ようこそ きゅうけいしつへ。<br />
-                      　 ゆっくり やすんでいってね。
-                    </p>
-                    <div className="text-right shrink-0">
-                      <p className="text-cyan-300 text-[10px]">あきべや</p>
-                      <p className="text-white text-xl font-bold tabular-nums">
-                        {Math.max(0, roomCapacity - roomUses.length)}<span className="text-cyan-300 text-xs">／{roomCapacity}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-cyan-300/80 text-[10px] mt-2 leading-relaxed">
-                    ※きゅうけいちゅうの ひとだけ とまれます。きゅうけいもどりで じどうチェックアウト。
-                  </p>
-                </div>
-              </RpgWindow>
+              <div
+                className="relative rounded-2xl overflow-hidden border-2 border-[#2a3a8c] pb-6"
+                style={{ background: "linear-gradient(180deg, #050a24 0%, #0a1340 55%, #14275c 100%)" }}
+              >
+                {/* 星空 */}
+                {CAMP_STARS.map((s, i) => (
+                  <span
+                    key={i}
+                    className="absolute w-[3px] h-[3px] bg-white rounded-[1px] animate-pulse pointer-events-none"
+                    style={{ left: `${s.l}%`, top: `${s.t}%`, animationDelay: `${s.d}s` }}
+                  />
+                ))}
+                {/* 月 */}
+                <div className="absolute right-7 top-6 w-8 h-8 rounded-full bg-amber-100 shadow-[0_0_22px_rgba(253,230,138,0.45)] pointer-events-none" />
+                {/* 地面 */}
+                <div className="absolute bottom-0 inset-x-0 h-24 bg-[#15351f] pointer-events-none" />
+                <div className="absolute bottom-0 inset-x-0 h-10 bg-[#0f2716] pointer-events-none" />
 
-              {/* 部屋一覧 */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {Array.from({ length: roomCapacity }, (_, i) => i + 1).map(boxNumber => {
-                  const use = roomUses.find(u => u.boxNumber === boxNumber);
-                  const occupant = use ? memberMap.get(use.staffId) : null;
-                  if (use) {
-                    return (
-                      <button
-                        key={boxNumber}
-                        onClick={() => setRoomLeaveBox(boxNumber)}
-                        disabled={isPending}
-                        className="text-left active:scale-95 transition-transform disabled:opacity-60"
-                      >
-                        <RpgWindow>
-                          <div className="px-3 py-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-cyan-300 tabular-nums">へや {boxNumber}</span>
-                              <BreakTimer startedAt={use.enteredAt} breakNote={null} size="compact" />
-                            </div>
-                            <p className="text-white font-bold text-base mt-1 truncate">
-                              {occupant?.name ?? use.staffId}
-                            </p>
-                            <p className="text-[11px] text-cyan-200 mt-1">
-                              やすんでいる<span className="animate-pulse">…</span>
-                              <span className="text-amber-300 ml-1 animate-pulse">Zzz</span>
-                            </p>
-                          </div>
-                        </RpgWindow>
-                      </button>
-                    );
-                  }
-                  return (
-                    <button
-                      key={boxNumber}
-                      onClick={() => { setRoomError(null); setRoomPickBox(boxNumber); }}
-                      disabled={isPending}
-                      className="text-left active:scale-95 transition-transform disabled:opacity-60 group"
-                    >
-                      <div className="rounded-lg border-2 border-dashed border-[#3a4a9c] bg-[#000846]/50 p-[3px] group-hover:border-white/70 transition-colors">
-                        <div className="rounded-md px-3 py-2.5">
-                          <span className="text-[10px] text-[#5a6abc] tabular-nums">へや {boxNumber}</span>
-                          <p className="text-[#5a6abc] text-sm mt-1">― あきべや ―</p>
-                          <p className="text-[11px] text-white/70 mt-1">
-                            <span className="text-amber-300 animate-pulse mr-1">▶</span>とまる
+                <div className="relative px-4 pt-4">
+                  {/* メッセージウィンドウ */}
+                  <RpgWindow className="mb-3 shadow-xl shadow-black/50">
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-white text-sm leading-relaxed">
+                          {roomToast ? (
+                            <>＊「{roomToast}」</>
+                          ) : (
+                            <>＊「ここは きゅうけいキャンプ。<br />
+                            　 なかまと ひとやすみ していこう。</>
+                          )}
+                        </p>
+                        <div className="text-right shrink-0">
+                          <p className="text-cyan-300 text-[10px]">なかま</p>
+                          <p className="text-white text-xl font-bold tabular-nums">
+                            {roomUses.length}<span className="text-cyan-300 text-xs">／{roomCapacity}にん</span>
                           </p>
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
+                      <p className="text-cyan-300/80 text-[10px] mt-2 leading-relaxed">
+                        ※きゅうけいちゅうの ひとだけ くわわれます。きゅうけいもどりで じどうで パーティーから ぬけます。
+                      </p>
+                    </div>
+                  </RpgWindow>
+
+                  {/* 焚き火 */}
+                  <div className="flex justify-center mb-2">
+                    <div className="relative">
+                      <div className="absolute -inset-5 rounded-full bg-orange-500/20 blur-xl animate-pulse pointer-events-none" />
+                      <Campfire />
+                    </div>
+                  </div>
+
+                  {/* パーティーメンバー */}
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {Array.from({ length: roomCapacity }, (_, i) => i + 1).map(boxNumber => {
+                      const use = roomUses.find(u => u.boxNumber === boxNumber);
+                      const occupant = use ? memberMap.get(use.staffId) : null;
+                      if (use) {
+                        const cls = rpgClassFor(use.staffId);
+                        return (
+                          <button
+                            key={boxNumber}
+                            onClick={() => setRoomLeaveBox(boxNumber)}
+                            disabled={isPending}
+                            className="flex flex-col items-center pt-2 pb-1.5 px-1 rounded-xl bg-[#000846]/40 border border-white/15 hover:border-white/50 active:scale-95 transition-all disabled:opacity-60"
+                          >
+                            <div className="relative">
+                              <PixelSprite grid={cls.grid} palette={cls.palette} scale={3} />
+                              <span className="absolute -top-1.5 -right-4 text-amber-300 text-[11px] animate-pulse">Zzz</span>
+                            </div>
+                            <p className="text-cyan-300 text-[9px] mt-1">{cls.label}</p>
+                            <p className="text-white text-[11px] font-bold w-full truncate text-center leading-tight">
+                              {occupant?.name ?? use.staffId}
+                            </p>
+                            <BreakTimer startedAt={use.enteredAt} breakNote={null} size="compact" />
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          key={boxNumber}
+                          onClick={() => { setRoomError(null); setRoomPickBox(boxNumber); }}
+                          disabled={isPending}
+                          className="flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c] hover:border-white/60 active:scale-95 transition-all disabled:opacity-60 group"
+                        >
+                          <PixelSprite grid={SPRITE_BASIC} palette={SILHOUETTE_PALETTE} scale={3} className="opacity-70" />
+                          <p className="text-[#5a6abc] text-[9px] mt-1">ぼしゅうちゅう</p>
+                          <p className="text-white/80 text-[10px] leading-tight">
+                            <span className="text-amber-300 animate-pulse mr-0.5">▶</span>くわわる
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1021,8 +1165,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               <RpgWindow>
                 <div className="px-4 py-3 border-b border-white/30">
                   <p className="text-white text-sm leading-relaxed">
-                    ＊「へや {roomPickBox} だね。<br />
-                    　 どなたが おとまりかい？
+                    ＊「だれが パーティーに くわわる？
                   </p>
                   <p className="text-cyan-300/80 text-[10px] mt-1.5">じぶんの なまえを えらんでください（ほんにんのみ）</p>
                 </div>
@@ -1041,24 +1184,30 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                         </li>
                       );
                     }
-                    return candidates.map(m => (
-                      <li key={m.staffId}>
-                        <button
-                          onClick={() => handleRoomEnter(m.staffId, roomPickBox)}
-                          disabled={isPending}
-                          className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-white/10 transition-colors disabled:opacity-50 group"
-                        >
-                          <span className="text-amber-300 opacity-0 group-hover:opacity-100 group-hover:animate-pulse shrink-0">▶</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white font-bold text-sm truncate">{m.name}</p>
-                            {m.breakNote && <p className="text-cyan-300/80 text-[10px] mt-0.5">{m.breakNote}</p>}
-                          </div>
-                          {m.breakStartedAt && (
-                            <BreakTimer startedAt={m.breakStartedAt} breakNote={m.breakNote} size="compact" />
-                          )}
-                        </button>
-                      </li>
-                    ));
+                    return candidates.map(m => {
+                      const cls = rpgClassFor(m.staffId);
+                      return (
+                        <li key={m.staffId}>
+                          <button
+                            onClick={() => handleRoomEnter(m.staffId, roomPickBox)}
+                            disabled={isPending}
+                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-white/10 transition-colors disabled:opacity-50 group"
+                          >
+                            <span className="text-amber-300 opacity-0 group-hover:opacity-100 group-hover:animate-pulse shrink-0">▶</span>
+                            <PixelSprite grid={cls.grid} palette={cls.palette} scale={2} className="shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-bold text-sm truncate">{m.name}</p>
+                              <p className="text-cyan-300/80 text-[10px] mt-0.5">
+                                {cls.label}{m.breakNote ? `・${m.breakNote}` : ""}
+                              </p>
+                            </div>
+                            {m.breakStartedAt && (
+                              <BreakTimer startedAt={m.breakStartedAt} breakNote={m.breakNote} size="compact" />
+                            )}
+                          </button>
+                        </li>
+                      );
+                    });
                   })()}
                 </ul>
                 <div className="px-4 py-3 border-t border-white/30">
@@ -1084,10 +1233,13 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               <div className="w-full max-w-sm" onClick={e => e.stopPropagation()}>
                 <RpgWindow>
                   <div className="px-5 py-4">
-                    <p className="text-white text-sm leading-relaxed">
-                      ＊「{occupant?.name ?? use.staffId}は ぐっすり ねむっている…<span className="text-amber-300 ml-1 animate-pulse">Zzz</span><br />
-                      　 おこしますか？
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <PixelSprite grid={rpgClassFor(use.staffId).grid} palette={rpgClassFor(use.staffId).palette} scale={3} className="shrink-0" />
+                      <p className="text-white text-sm leading-relaxed">
+                        ＊「{occupant?.name ?? use.staffId}は ぐっすり ねむっている…<span className="text-amber-300 ml-1 animate-pulse">Zzz</span><br />
+                        　 おこしますか？
+                      </p>
+                    </div>
                     <p className="text-cyan-300/80 text-[10px] mt-1.5">ほんにんのみ そうさしてください</p>
                     <div className="flex flex-col gap-1 mt-4">
                       <button
