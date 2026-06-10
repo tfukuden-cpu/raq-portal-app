@@ -124,9 +124,14 @@ function NoticeModal({
     if (attachFile) formData.set("attachment", attachFile);
 
     startTransition(async () => {
-      const r = await createNoticeAction(formData);
-      if (!r.success) setError(r.message ?? "失敗しました");
-      else { clearAttachment(); onClose(); }
+      try {
+        const r = await createNoticeAction(formData);
+        if (!r.success) setError(r.message ?? "失敗しました");
+        else { clearAttachment(); onClose(); }
+      } catch (e) {
+        setError("通信エラーが発生しました。再度お試しください。");
+        console.error("[NoticeModal] createNoticeAction error:", e);
+      }
     });
   };
 

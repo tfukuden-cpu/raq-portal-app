@@ -40,6 +40,17 @@ async function ensureNoticeBucket() {
 export async function createNoticeAction(
   formData: FormData
 ): Promise<NoticeResult> {
+  try {
+    return await _createNoticeAction(formData);
+  } catch (e) {
+    console.error("[createNoticeAction] unhandled error:", e);
+    return { success: false, message: "サーバーエラーが発生しました: " + String(e) };
+  }
+}
+
+async function _createNoticeAction(
+  formData: FormData
+): Promise<NoticeResult> {
   const title          = String(formData.get("title")         ?? "").trim();
   const body           = String(formData.get("body")          ?? "").trim();
   const isPinned       = formData.get("isPinned")             === "true";
@@ -155,7 +166,7 @@ export async function createNoticeAction(
   }
 
   return { success: true };
-}
+} // end _createNoticeAction
 
 export async function updateNoticeAction(
   formData: FormData
