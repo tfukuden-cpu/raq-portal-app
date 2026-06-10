@@ -973,7 +973,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
               <div
                 className="relative rounded-2xl overflow-hidden border-2 border-[#2a3a8c] pb-6"
                 style={{
-                  background: "url(/rpg/camp-bg.png) center / cover no-repeat, linear-gradient(180deg, #050a24 0%, #0a1340 55%, #14275c 100%)",
+                  background: "url(/rpg/camp-bg-v2.png) center / cover no-repeat, linear-gradient(180deg, #050a24 0%, #0a1340 55%, #14275c 100%)",
                 }}
               >
                 {/* 可読性のための暗めオーバーレイ */}
