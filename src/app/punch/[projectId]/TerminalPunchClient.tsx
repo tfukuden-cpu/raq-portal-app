@@ -101,6 +101,85 @@ function RpgWindow({ children, className = "" }: { children: ReactNode; classNam
 // キャラ定義は src/lib/rpg-chars.ts に集約（myページのキャラ選択と共用）
 // 本人が選んだキャラ（staffs.rpg_character）優先、未選択は staffId ハッシュで自動割当
 
+// ── ワールドマップ（休憩室への道のり・RPG風） ──────────────────
+function WorldMap() {
+  const label = { fontSize: 10, fill: "#1a2a10", fontWeight: 700, paintOrder: "stroke" as const, stroke: "#ffffff", strokeWidth: 3 };
+  const win   = { fontSize: 10, fill: "#ffffff" };
+  return (
+    <svg viewBox="0 0 340 330" className="w-full block" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="340" height="330" fill="#79c850" />
+      <g opacity="0.5">
+        <rect x="10" y="40" width="40" height="40" fill="#5cab3c" rx="4" />
+        <rect x="270" y="20" width="56" height="44" fill="#5cab3c" rx="4" />
+        <rect x="16" y="170" width="50" height="60" fill="#5cab3c" rx="4" />
+        <rect x="270" y="280" width="56" height="40" fill="#5cab3c" rx="4" />
+      </g>
+      <rect x="232" y="150" width="86" height="80" fill="#4e9e3f" stroke="#3a7a2e" strokeWidth="2" rx="4" />
+      <g>
+        <circle cx="252" cy="172" r="9" fill="#2f7a25" /><rect x="250" y="178" width="4" height="7" fill="#7a4a1e" />
+        <circle cx="284" cy="192" r="9" fill="#2f7a25" /><rect x="282" y="198" width="4" height="7" fill="#7a4a1e" />
+        <circle cx="258" cy="210" r="9" fill="#2f7a25" /><rect x="256" y="216" width="4" height="7" fill="#7a4a1e" />
+      </g>
+      <text x="275" y="226" textAnchor="middle" style={label}>こうえん</text>
+      <g>
+        <circle cx="30" cy="120" r="10" fill="#2f7a25" /><rect x="28" y="127" width="4" height="8" fill="#7a4a1e" />
+        <circle cx="60" cy="300" r="10" fill="#2f7a25" /><rect x="58" y="307" width="4" height="8" fill="#7a4a1e" />
+        <circle cx="310" cy="110" r="10" fill="#2f7a25" /><rect x="308" y="117" width="4" height="8" fill="#7a4a1e" />
+      </g>
+      <rect x="142" y="0" width="32" height="330" fill="#e9dcae" stroke="#b89b62" strokeWidth="2" />
+      <rect x="0" y="118" width="340" height="24" fill="#e9dcae" stroke="#b89b62" strokeWidth="2" />
+      <rect x="36" y="52" width="124" height="18" fill="#e9dcae" stroke="#b89b62" strokeWidth="2" />
+      <g>
+        <line x1="252" y1="0" x2="118" y2="330" stroke="#5a5a5a" strokeWidth="12" />
+        <line x1="252" y1="0" x2="118" y2="330" stroke="#ffffff" strokeWidth="6" strokeDasharray="3 9" />
+      </g>
+      <g>
+        <rect x="178" y="106" width="44" height="30" fill="#9aa4b8" stroke="#3a4456" strokeWidth="2" rx="2" />
+        <rect x="184" y="98" width="10" height="10" fill="#7b8499" stroke="#3a4456" strokeWidth="1.5" />
+        <rect x="206" y="98" width="10" height="10" fill="#7b8499" stroke="#3a4456" strokeWidth="1.5" />
+        <rect x="194" y="118" width="12" height="18" fill="#3b3f4a" />
+        <rect x="183" y="112" width="8" height="7" fill="#ffe9a8" />
+        <rect x="209" y="112" width="8" height="7" fill="#ffe9a8" />
+      </g>
+      <text x="200" y="92" textAnchor="middle" style={label}>はっちょうぼり えき</text>
+      <rect x="186" y="172" width="17" height="13" fill="#f5b822" stroke="#7a5a00" strokeWidth="1.5" rx="2" />
+      <text x="194" y="182" fontSize="9" fontWeight="bold" fill="#4a3700" textAnchor="middle">A1</text>
+      <rect x="190" y="212" width="17" height="13" fill="#f5b822" stroke="#7a5a00" strokeWidth="1.5" rx="2" />
+      <text x="198" y="222" fontSize="9" fontWeight="bold" fill="#4a3700" textAnchor="middle">A2</text>
+      <text x="158" y="280" transform="rotate(-90 158 280)" style={label}>しんおおはしどおり</text>
+      <polyline points="208,296 198,262 196,238 194,210 191,182 186,152 182,128 178,100 172,76 140,72 112,74 92,82"
+        fill="none" stroke="#7a4a00" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" opacity="0.35" />
+      <polyline points="208,296 198,262 196,238 194,210 191,182 186,152 182,128 178,100 172,76 140,72 112,74 92,82"
+        fill="none" stroke="#ffb627" strokeWidth="4" strokeDasharray="1 9" strokeLinecap="round" strokeLinejoin="round" />
+      <g>
+        <rect x="62" y="84" width="9" height="3" fill="#7c4a1e" transform="rotate(-8 66 85)" />
+        <polygon points="66,70 60,84 73,84" fill="#f97316" />
+        <polygon points="66,75 63,84 70,84" fill="#fde047" />
+        <polygon points="36,86 50,62 64,86" fill="#c2410c" stroke="#7a2e08" strokeWidth="1.5" />
+        <polygon points="46,86 50,74 55,86" fill="#5a1f05" />
+      </g>
+      <image href={rpgCharImg(1)} x="196" y="268" height="34" width="28" />
+      <g>
+        <rect x="160" y="300" width="120" height="22" fill="#000846" stroke="#ffffff" strokeWidth="2" rx="4" />
+        <text x="220" y="315" textAnchor="middle" style={win}>スタート：げんば</text>
+      </g>
+      <g>
+        <rect x="22" y="94" width="132" height="22" fill="#000846" stroke="#ffffff" strokeWidth="2" rx="4" />
+        <text x="88" y="109" textAnchor="middle" style={win}>ゴール：きゅうけいキャンプ</text>
+      </g>
+      <g>
+        <rect x="216" y="142" width="92" height="20" fill="#ffffff" stroke="#b89b62" strokeWidth="1.5" rx="4" opacity="0.92" />
+        <text x="262" y="156" fontSize="10" fill="#5a4a20" textAnchor="middle">とほ 5ふん（350m）</text>
+      </g>
+      <g>
+        <circle cx="318" cy="26" r="14" fill="#ffffff" opacity="0.85" stroke="#7a5a20" strokeWidth="1.5" />
+        <polygon points="318,15 314,28 318,25 322,28" fill="#c2410c" />
+        <text x="318" y="38" fontSize="8" fill="#5a4a20" textAnchor="middle">N</text>
+      </g>
+    </svg>
+  );
+}
+
 // ── ページ全体のRPGテーマ（夜空・アニメーション） ────────────────
 const PAGE_BG = "linear-gradient(180deg, #02040f 0%, #050a24 45%, #0a1340 100%)";
 // ヘッダー上空の星（%配置・点滅ディレイ）
@@ -362,6 +441,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   const [roomLeaveBox, setRoomLeaveBox] = useState<number | null>(null); // 退室確認中の箱番号
   const [roomError, setRoomError] = useState<string | null>(null);
   const [roomToast, setRoomToast] = useState<string | null>(null);       // 「なかまに くわわった！」演出
+  const [mapOpen, setMapOpen] = useState(false);                         // ワールドマップ表示
   const roomToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showRoomToast(message: string) {
@@ -1060,9 +1140,17 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                           </p>
                         </div>
                       </div>
-                      <p className="text-cyan-300/80 text-[10px] mt-2 leading-relaxed">
-                        ※きゅうけいちゅうの ひとだけ くわわれます。きゅうけいもどりで じどうで パーティーから ぬけます。
-                      </p>
+                      <div className="flex items-end justify-between gap-2 mt-2">
+                        <p className="text-cyan-300/80 text-[10px] leading-relaxed">
+                          ※きゅうけいちゅうの ひとだけ くわわれます。きゅうけいもどりで じどうで パーティーから ぬけます。
+                        </p>
+                        <button
+                          onClick={() => setMapOpen(true)}
+                          className="shrink-0 text-[11px] text-white border border-white/50 rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition-all"
+                        >
+                          <span className="text-amber-300 mr-1">▶</span>ちずをみる
+                        </button>
+                      </div>
                     </div>
                   </RpgWindow>
 
@@ -1143,6 +1231,36 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             </div>
           )}
         </div>
+
+        {/* ── 休憩室: ワールドマップモーダル ───────────────── */}
+        {mapOpen && (
+          <div className={`fixed inset-0 z-[300] bg-black/80 flex items-center justify-center px-4 ${rpgFontClass}`} onClick={() => setMapOpen(false)}>
+            <div className="w-full max-w-md" onClick={e => e.stopPropagation()}>
+              <RpgWindow>
+                <div className="px-4 py-2.5 border-b border-white/30 flex items-center justify-between">
+                  <p className="text-white text-sm">
+                    ワールドマップ
+                    <span className="text-cyan-300/80 text-[10px] ml-2">きゅうけいキャンプへの みち（とほ5ふん・350m）</span>
+                  </p>
+                  <button onClick={() => setMapOpen(false)} className="text-white/70 hover:text-white px-1.5">✕</button>
+                </div>
+                <div className="p-2">
+                  <div className="rounded-md overflow-hidden border border-white/40">
+                    <WorldMap />
+                  </div>
+                </div>
+                <div className="px-4 pb-3">
+                  <button
+                    onClick={() => setMapOpen(false)}
+                    className="w-full py-2 text-sm text-white hover:bg-white/10 rounded-md transition-colors"
+                  >
+                    とじる
+                  </button>
+                </div>
+              </RpgWindow>
+            </div>
+          </div>
+        )}
 
         {/* ── 休憩室: 入室する名前の選択モーダル（RPG風） ──── */}
         {roomPickBox !== null && (
