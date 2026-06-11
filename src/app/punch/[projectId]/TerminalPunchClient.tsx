@@ -92,17 +92,123 @@ function RpgWindow({ children, className = "" }: { children: ReactNode; classNam
   );
 }
 
-// ── ドット絵キャラクター（休憩室パーティー用・AI生成画像） ──────
-// public/rpg/char-1..6.png（透過PNG・ChatGPT生成をスクリプトで分割）
-type RpgClass = { label: string; img: string };
-const RPG_CLASSES: RpgClass[] = [
-  { label: "ゆうしゃ",     img: "/rpg/char-1.png" },
-  { label: "せんし",       img: "/rpg/char-2.png" },
-  { label: "まほうつかい", img: "/rpg/char-3.png" },
-  { label: "そうりょ",     img: "/rpg/char-4.png" },
-  { label: "ぶとうか",     img: "/rpg/char-5.png" },
-  { label: "あそびにん",   img: "/rpg/char-6.png" },
+// ── ドット絵キャラクター（コード描画・2コマ歩行アニメ） ────────
+// 文字 → 色: H=髪/帽子 S=肌 E=目 B=胴体 L=脚 O=靴
+// フレームA=脚をひらく / フレームB=脚をとじる を交互表示で歩行
+const SPRITE_A = [
+  "....HHHH....",
+  "...HHHHHH...",
+  "...HSSSSH...",
+  "...SESSES...",
+  "...SSSSSS...",
+  "....SSSS....",
+  "..BBBBBBBB..",
+  ".BBBBBBBBBB.",
+  ".SBBBBBBBBS.",
+  "...BBBBBB...",
+  "..BB....BB..",
+  "..LL....LL..",
+  "..LL....LL..",
+  ".OO......OO.",
 ];
+const SPRITE_B = [
+  "....HHHH....",
+  "...HHHHHH...",
+  "...HSSSSH...",
+  "...SESSES...",
+  "...SSSSSS...",
+  "....SSSS....",
+  "..BBBBBBBB..",
+  ".BBBBBBBBBB.",
+  ".SBBBBBBBBS.",
+  "...BBBBBB...",
+  "....BBBB....",
+  "....LLLL....",
+  "....LLLL....",
+  "...OO..OO...",
+];
+const SPRITE_HAT_A = [
+  ".....HH.....",
+  "....HHHH....",
+  "..HHHHHHHH..",
+  "HHHHHHHHHHHH",
+  "...SSSSSS...",
+  "...SESSES...",
+  "....SSSS....",
+  "..BBBBBBBB..",
+  ".BBBBBBBBBB.",
+  ".SBBBBBBBBS.",
+  "...BBBBBB...",
+  "..BB....BB..",
+  "..LL....LL..",
+  ".OO......OO.",
+];
+const SPRITE_HAT_B = [
+  ".....HH.....",
+  "....HHHH....",
+  "..HHHHHHHH..",
+  "HHHHHHHHHHHH",
+  "...SSSSSS...",
+  "...SESSES...",
+  "....SSSS....",
+  "..BBBBBBBB..",
+  ".BBBBBBBBBB.",
+  ".SBBBBBBBBS.",
+  "...BBBBBB...",
+  "....BBBB....",
+  "....LLLL....",
+  "...OO..OO...",
+];
+
+const SKIN = "#fcd9b8";
+const EYE  = "#1f2937";
+type RpgClass = { label: string; hat: boolean; palette: Record<string, string> };
+const RPG_CLASSES: RpgClass[] = [
+  { label: "ゆうしゃ",     hat: false, palette: { H: "#f59e0b", S: SKIN, E: EYE, B: "#3b82f6", L: "#1e40af", O: "#78350f" } },
+  { label: "せんし",       hat: false, palette: { H: "#dc2626", S: SKIN, E: EYE, B: "#9ca3af", L: "#4b5563", O: "#374151" } },
+  { label: "まほうつかい", hat: true,  palette: { H: "#7c3aed", S: SKIN, E: EYE, B: "#8b5cf6", L: "#4c1d95", O: "#312e81" } },
+  { label: "そうりょ",     hat: true,  palette: { H: "#e5e7eb", S: SKIN, E: EYE, B: "#f1f5f9", L: "#93c5fd", O: "#6b7280" } },
+  { label: "ぶとうか",     hat: false, palette: { H: "#92400e", S: SKIN, E: EYE, B: "#ea580c", L: "#7c2d12", O: "#451a03" } },
+  { label: "あそびにん",   hat: false, palette: { H: "#22c55e", S: SKIN, E: EYE, B: "#ec4899", L: "#15803d", O: "#831843" } },
+];
+// 空き枠用シルエット
+const SILHOUETTE_PALETTE: Record<string, string> = { H: "#141e52", S: "#141e52", E: "#141e52", B: "#141e52", L: "#141e52", O: "#141e52" };
+
+function PixelGrid({ grid, palette }: { grid: string[]; palette: Record<string, string> }) {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  return (
+    <svg viewBox={`0 0 ${cols} ${rows}`} shapeRendering="crispEdges" className="w-full h-full" aria-hidden>
+      {grid.flatMap((row, y) =>
+        [...row].map((c, x) => {
+          if (c === ".") return null;
+          const fill = palette[c];
+          if (!fill) return null;
+          return <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={fill} />;
+        })
+      )}
+    </svg>
+  );
+}
+
+/** 2コマ歩行アニメ付きドット絵キャラ（CSSで交互表示・JSタイマー不使用） */
+function AnimatedSprite({ cls, h = 64, silhouette = false, delaySec = 0 }: {
+  cls: RpgClass; h?: number; silhouette?: boolean; delaySec?: number;
+}) {
+  const palette = silhouette ? SILHOUETTE_PALETTE : cls.palette;
+  const frameA = cls.hat ? SPRITE_HAT_A : SPRITE_A;
+  const frameB = cls.hat ? SPRITE_HAT_B : SPRITE_B;
+  return (
+    <div className="relative select-none" style={{ height: h, width: Math.round(h * 12 / 14) }}>
+      <div className="absolute inset-0" style={{ animation: `rpgFrameA 0.9s steps(1) ${delaySec}s infinite` }}>
+        <PixelGrid grid={frameA} palette={palette} />
+      </div>
+      <div className="absolute inset-0 opacity-0" style={{ animation: `rpgFrameB 0.9s steps(1) ${delaySec}s infinite` }}>
+        <PixelGrid grid={frameB} palette={palette} />
+      </div>
+    </div>
+  );
+}
 
 /** staffId から職業を決定（同じ人は常に同じキャラ） */
 function rpgClassFor(staffId: string): RpgClass {
@@ -140,6 +246,8 @@ const RPG_KEYFRAMES = `
   15%  { opacity: 1; }
   100% { opacity: 0; transform: translate(var(--sx, 0px), -38px); }
 }
+@keyframes rpgFrameA { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes rpgFrameB { 0%, 49.9% { opacity: 0; } 50%, 100% { opacity: 1; } }
 `;
 
 
@@ -1089,10 +1197,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                             className="flex flex-col items-center pt-2 pb-1.5 px-1 rounded-xl bg-[#000846]/40 border border-white/15 hover:border-white/50 active:scale-95 transition-all disabled:opacity-60"
                           >
                             <div className="relative">
-                              <div style={{ animation: `rpgBob ${1.2 + (boxNumber % 3) * 0.15}s steps(2) ${(boxNumber % 6) * 0.2}s infinite` }}>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={cls.img} alt="" draggable={false} className="h-16 w-auto select-none" />
-                              </div>
+                              <AnimatedSprite cls={cls} h={64} delaySec={(boxNumber % 6) * 0.15} />
                               <span
                                 className="absolute -top-1.5 -right-4 text-amber-300 text-[11px]"
                                 style={{ animation: `rpgZzz 2.4s ease-out ${(boxNumber % 4) * 0.5}s infinite` }}
@@ -1115,12 +1220,9 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                           disabled={isPending}
                           className="flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c] hover:border-white/60 active:scale-95 transition-all disabled:opacity-60 group"
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src="/rpg/char-1.png" alt="" draggable={false}
-                            className="h-16 w-auto select-none opacity-50"
-                            style={{ filter: "brightness(0) saturate(0)" }}
-                          />
+                          <div className="opacity-60">
+                            <AnimatedSprite cls={RPG_CLASSES[boxNumber % RPG_CLASSES.length]} h={64} silhouette delaySec={(boxNumber % 5) * 0.18} />
+                          </div>
                           <p className="text-[#5a6abc] text-[9px] mt-1">ぼしゅうちゅう</p>
                           <p className="text-white/80 text-[10px] leading-tight">
                             <span className="text-amber-300 animate-pulse mr-0.5">▶</span>くわわる
@@ -1171,8 +1273,9 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                             className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-white/10 transition-colors disabled:opacity-50 group"
                           >
                             <span className="text-amber-300 opacity-0 group-hover:opacity-100 group-hover:animate-pulse shrink-0">▶</span>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={cls.img} alt="" draggable={false} className="h-10 w-auto shrink-0 select-none" />
+                            <div className="shrink-0">
+                              <AnimatedSprite cls={cls} h={40} />
+                            </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-white font-bold text-sm truncate">{m.name}</p>
                               <p className="text-cyan-300/80 text-[10px] mt-0.5">
@@ -1212,8 +1315,9 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                 <RpgWindow>
                   <div className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={rpgClassFor(use.staffId).img} alt="" draggable={false} className="h-14 w-auto shrink-0 select-none" />
+                      <div className="shrink-0">
+                        <AnimatedSprite cls={rpgClassFor(use.staffId)} h={56} />
+                      </div>
                       <p className="text-white text-sm leading-relaxed">
                         ＊「{occupant?.name ?? use.staffId}は ぐっすり ねむっている…<span className="text-amber-300 ml-1 animate-pulse">Zzz</span><br />
                         　 おこしますか？
