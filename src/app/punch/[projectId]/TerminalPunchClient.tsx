@@ -101,20 +101,10 @@ function RpgWindow({ children, className = "" }: { children: ReactNode; classNam
 // キャラ定義は src/lib/rpg-chars.ts に集約（myページのキャラ選択と共用）
 // 本人が選んだキャラ（staffs.rpg_character）優先、未選択は staffId ハッシュで自動割当
 
-// ── ワールドマップ（休憩室への道のり・AI生成ドット絵＋ラベル） ──
-function WorldMap() {
-  const winCls = "absolute bg-[#000846] border-2 border-white rounded-md px-2 py-1 text-white text-[10px] leading-none whitespace-nowrap";
-  return (
-    <div className="relative">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/rpg/world-map.png" alt="" draggable={false} className="w-full block select-none" />
-      <div className={winCls} style={{ left: "3%", top: "8.5%" }}>ゴール：きゅうけいキャンプ</div>
-      <div className={winCls} style={{ left: "57%", top: "42%" }}>はっちょうぼり えき</div>
-      <div className={winCls} style={{ left: "8%", top: "62%" }}>とほ 5ふん（350m）</div>
-      <div className={winCls} style={{ left: "32%", bottom: "2.5%" }}>スタート：げんば（いりふね1ちょうめ）</div>
-    </div>
-  );
-}
+// ── 休憩室への道のり（Googleマップ経路・徒歩5分/350m） ──────
+// 現場（入船1丁目 サンパーク東京銀座）⇔ 休憩室（八丁堀3丁目 S-Gate Fit 八丁堀）
+const BREAK_ROOM_MAP_URL =
+  "https://www.google.com/maps/dir/%E3%80%92104-0032+%E6%9D%B1%E4%BA%AC%E9%83%BD%E4%B8%AD%E5%A4%AE%E5%8C%BA%E5%85%AB%E4%B8%81%E5%A0%80%EF%BC%93%E4%B8%81%E7%9B%AE%EF%BC%91%EF%BC%98+S-Gate+Fit+%E5%85%AB%E4%B8%81%E5%A0%80/%E3%80%92104-0042+%E6%9D%B1%E4%BA%AC%E9%83%BD%E4%B8%AD%E5%A4%AE%E5%8C%BA%E5%85%A5%E8%88%B9%EF%BC%91%E4%B8%81%E7%9B%AE%EF%BC%92%E2%88%92%EF%BC%98+%E3%82%B5%E3%83%B3%E3%83%91%E3%83%BC%E3%82%AF%E6%9D%B1%E4%BA%AC%E9%8A%80%E5%BA%A7/@35.6740994,139.776656,18z/data=!3m1!4b1!4m14!4m13!1m5!1m1!1s0x6018895ee9685503:0xfa40e80b84c5ce70!2m2!1d139.7763241!2d35.6749559!1m5!1m1!1s0x6018895e6ab009f9:0x84bc70012d6052cb!2m2!1d139.7767403!2d35.6730537!3e2?entry=ttu&g_ep=EgoyMDI2MDYwMy4xIKXMDSoASAFQAw%3D%3D";
 
 // ── 旧SVG版（未使用） ────────────────────────────────────────
 function WorldMapSvgLegacy() {
@@ -456,7 +446,6 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   const [roomLeaveBox, setRoomLeaveBox] = useState<number | null>(null); // 退室確認中の箱番号
   const [roomError, setRoomError] = useState<string | null>(null);
   const [roomToast, setRoomToast] = useState<string | null>(null);       // 「なかまに くわわった！」演出
-  const [mapOpen, setMapOpen] = useState(false);                         // ワールドマップ表示
   const roomToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showRoomToast(message: string) {
@@ -1159,12 +1148,14 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                         <p className="text-cyan-300/80 text-[10px] leading-relaxed">
                           ※きゅうけいちゅうの ひとだけ くわわれます。きゅうけいもどりで じどうで パーティーから ぬけます。
                         </p>
-                        <button
-                          onClick={() => setMapOpen(true)}
+                        <a
+                          href={BREAK_ROOM_MAP_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="shrink-0 text-[11px] text-white border border-white/50 rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition-all"
                         >
                           <span className="text-amber-300 mr-1">▶</span>ちずをみる
-                        </button>
+                        </a>
                       </div>
                     </div>
                   </RpgWindow>
@@ -1246,36 +1237,6 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             </div>
           )}
         </div>
-
-        {/* ── 休憩室: ワールドマップモーダル ───────────────── */}
-        {mapOpen && (
-          <div className={`fixed inset-0 z-[300] bg-black/80 flex items-center justify-center px-4 ${rpgFontClass}`} onClick={() => setMapOpen(false)}>
-            <div className="w-full max-w-md" onClick={e => e.stopPropagation()}>
-              <RpgWindow>
-                <div className="px-4 py-2.5 border-b border-white/30 flex items-center justify-between">
-                  <p className="text-white text-sm">
-                    ワールドマップ
-                    <span className="text-cyan-300/80 text-[10px] ml-2">きゅうけいキャンプへの みち（とほ5ふん・350m）</span>
-                  </p>
-                  <button onClick={() => setMapOpen(false)} className="text-white/70 hover:text-white px-1.5">✕</button>
-                </div>
-                <div className="p-2">
-                  <div className="rounded-md overflow-hidden border border-white/40">
-                    <WorldMap />
-                  </div>
-                </div>
-                <div className="px-4 pb-3">
-                  <button
-                    onClick={() => setMapOpen(false)}
-                    className="w-full py-2 text-sm text-white hover:bg-white/10 rounded-md transition-colors"
-                  >
-                    とじる
-                  </button>
-                </div>
-              </RpgWindow>
-            </div>
-          </div>
-        )}
 
         {/* ── 休憩室: 入室する名前の選択モーダル（RPG風） ──── */}
         {roomPickBox !== null && (

@@ -44,7 +44,7 @@
 - **設備情報**: `break_room_settings.amenities`（jsonb `[{label, ok}]`・最大12件）。端末休憩室タブに○×表示、管理者は/seatingパネルで編集。statuses APIの breakRoom にも同梱
 - **キャラクター108体**: 定義は `src/lib/rpg-chars.ts`（id=char-{id}.png と一致）。職業・モンスター・魔人など。`staffs.rpg_character` で本人選択（null=ハッシュ自動割当）。myページ（/dashboard）の「マイキャラクター」カードから変更可（`setMyRpgCharacterAction`）。新キャラ追加手順: ChatGPTで4列×3行シート生成 → `scripts/split-rpg-sheet.ps1`（$env:SHEET/STARTIDX/COLS/ROWS）で分割 → rpg-chars.ts にラベル追記
 - サーバーアクション: `seating/break-room-actions.ts`（get/enter/leave/leaveMy/forceRelease/setCapacity/setAmenities）
-- **ワールドマップ**: 端末休憩室タブ「▶ちずをみる」→ モーダルで休憩室への道のり表示。画像は `public/rpg/world-map.png`（ChatGPT生成のドラクエ風・1086×1448）にRPGウィンドウのラベルを%指定でオーバーレイ（`WorldMap` in TerminalPunchClient.tsx。旧SVG版は `WorldMapSvgLegacy` として未使用で残置）
+- **地図リンク**: 端末休憩室タブ「▶ちずをみる」→ Googleマップの徒歩経路ページ（現場⇔休憩室）を新規タブで開く外部リンク（`BREAK_ROOM_MAP_URL` in TerminalPunchClient.tsx）。当初のRPG風マップモーダルは「分かりにくい」とのことで廃止（AI生成画像 `public/rpg/world-map.png` はPDFマニュアル用に残置。旧SVG版 `WorldMapSvgLegacy` も未使用で残置）
 - **操作マニュアルPDF**: `docs/休憩室操作マニュアル.pdf`（A4・1枚・スタッフ向け）。生成元は `docs/manual-build/manual.html` → Edge headless `--headless=new --print-to-pdf` で再生成可。マップ画像・キャラ画像は同フォルダにコピー済み
 
 #### 新規DBテーブル（Supabaseマイグレーション実行済み: create_break_room_tables）
