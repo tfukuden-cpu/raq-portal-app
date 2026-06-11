@@ -101,8 +101,23 @@ function RpgWindow({ children, className = "" }: { children: ReactNode; classNam
 // キャラ定義は src/lib/rpg-chars.ts に集約（myページのキャラ選択と共用）
 // 本人が選んだキャラ（staffs.rpg_character）優先、未選択は staffId ハッシュで自動割当
 
-// ── ワールドマップ（休憩室への道のり・RPG風） ──────────────────
+// ── ワールドマップ（休憩室への道のり・AI生成ドット絵＋ラベル） ──
 function WorldMap() {
+  const winCls = "absolute bg-[#000846] border-2 border-white rounded-md px-2 py-1 text-white text-[10px] leading-none whitespace-nowrap";
+  return (
+    <div className="relative">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/rpg/world-map.png" alt="" draggable={false} className="w-full block select-none" />
+      <div className={winCls} style={{ left: "3%", top: "8.5%" }}>ゴール：きゅうけいキャンプ</div>
+      <div className={winCls} style={{ left: "57%", top: "42%" }}>はっちょうぼり えき</div>
+      <div className={winCls} style={{ left: "8%", top: "62%" }}>とほ 5ふん（350m）</div>
+      <div className={winCls} style={{ left: "32%", bottom: "2.5%" }}>スタート：げんば（いりふね1ちょうめ）</div>
+    </div>
+  );
+}
+
+// ── 旧SVG版（未使用） ────────────────────────────────────────
+function WorldMapSvgLegacy() {
   const label = { fontSize: 10, fill: "#1a2a10", fontWeight: 700, paintOrder: "stroke" as const, stroke: "#ffffff", strokeWidth: 3 };
   const win   = { fontSize: 10, fill: "#ffffff" };
   return (

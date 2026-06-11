@@ -1,0 +1,205 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 210mm; height: 297mm; }
+  body {
+    font-family: "Meiryo", "Yu Gothic", sans-serif;
+    color: #1a1a2e;
+    padding: 9mm 10mm;
+    background: #ffffff;
+  }
+  .dot { font-family: "DotGothic16", "Meiryo", sans-serif; }
+  .header {
+    background: #0d1b35; color: #fff; border-radius: 12px;
+    padding: 12px 18px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .header h1 { font-size: 21px; }
+  .header .sub { font-size: 11px; color: #9db4dd; margin-top: 3px; }
+  .badge { background: #f59e0b; color: #fff; font-size: 11px; font-weight: bold; padding: 5px 12px; border-radius: 999px; }
+  .lead { font-size: 11.5px; color: #444; margin: 8px 2px 10px; line-height: 1.6; }
+  .step { display: flex; gap: 10px; margin-bottom: 8px; }
+  .stepnum {
+    flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+    background: #2563eb; color: #fff; font-weight: bold; font-size: 15px;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .stepbody { flex: 1; }
+  .stepbody h2 { font-size: 14px; margin-bottom: 3px; }
+  .stepbody p { font-size: 11px; color: #444; line-height: 1.55; }
+  .visual {
+    margin-top: 6px; border-radius: 10px; overflow: hidden; border: 2px solid #1a2a5c;
+  }
+  .camp {
+    background: url("camp-bg-v2.png") center / cover no-repeat;
+    padding: 10px 12px; display: flex; gap: 8px; align-items: flex-end;
+  }
+  .slot {
+    background: rgba(0,8,70,0.55); border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 8px; padding: 6px 8px 5px; text-align: center; width: 78px;
+  }
+  .slot img { height: 40px; image-rendering: pixelated; }
+  .slot .cls { font-size: 8px; color: #7dd3fc; margin-top: 2px; }
+  .slot .nm { font-size: 10px; color: #fff; font-weight: bold; }
+  .slot .zzz { font-size: 9px; color: #fcd34d; }
+  .slot.empty { border-style: dashed; background: rgba(0,8,70,0.3); padding-top: 14px; padding-bottom: 13px; }
+  .slot.empty .open { font-size: 8px; color: #93a5e8; white-space: nowrap; letter-spacing: -0.5px; }
+  .slot.empty .join { font-size: 10px; color: #fff; margin-top: 3px; }
+  .slot.empty .cursor { color: #fcd34d; }
+  .msgwin {
+    background: #000846; border: 2.5px solid #fff; outline: 2px solid #000846;
+    border-radius: 8px; padding: 7px 12px; margin: 8px 10px 0;
+    color: #fff; font-size: 11px; line-height: 1.5;
+  }
+  .msgwin .note { color: #7dd3fc; font-size: 9px; margin-top: 2px; }
+  .campwrap { background: #060c28; padding-bottom: 10px; }
+  .twocol { display: flex; gap: 10px; margin-top: 2px; }
+  .col { flex: 1; }
+  .phonecard {
+    background: #FAEEDA; border: 2px solid #EF9F27; border-radius: 10px;
+    padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px;
+  }
+  .phonecard .t1 { font-size: 11px; font-weight: bold; color: #633806; }
+  .phonecard .t2 { font-size: 9px; color: #854F0B; margin-top: 2px; }
+  .phonecard .btn {
+    background: #BA7517; color: #fff; font-size: 10px; font-weight: bold;
+    padding: 7px 12px; border-radius: 8px; white-space: nowrap;
+  }
+  .mlabel { font-family: "DotGothic16", "Meiryo", sans-serif; font-size: 10px; fill: #1a2a10; paint-order: stroke; stroke: #ffffff; stroke-width: 3px; font-weight: bold; }
+  .mwin   { font-family: "DotGothic16", "Meiryo", sans-serif; font-size: 10px; fill: #ffffff; }
+  .dotf   { font-family: "DotGothic16", "Meiryo", sans-serif; }
+  .bottomrow { display: flex; gap: 10px; margin-top: 10px; align-items: stretch; }
+  .mapcol { width: 37%; flex-shrink: 0; }
+  .mapwin { position: absolute; background: #000846; border: 2px solid #fff; border-radius: 5px; padding: 3px 6px; color: #fff; font-size: 9px; line-height: 1; white-space: nowrap; font-family: "DotGothic16", "Meiryo", sans-serif; }
+  .mapframe {
+    border: 2.5px solid #1a2a5c; border-radius: 10px; overflow: hidden; background: #79c850;
+  }
+  .maptitle {
+    background: #000846; color: #fff; font-size: 11px; padding: 5px 10px;
+    border-bottom: 2px solid #fff;
+  }
+  .maptitle .sub { color: #7dd3fc; font-size: 9px; margin-left: 6px; }
+  .rightcol { flex: 1; min-width: 0; }
+  .rulebox {
+    border: 2px solid #2563eb; border-radius: 10px; padding: 9px 12px; margin-top: 10px;
+    background: #eff6ff;
+  }
+  .rulebox h3 { font-size: 12px; color: #1e40af; margin-bottom: 4px; }
+  .rulebox ul { list-style: none; }
+  .rulebox li { font-size: 10.5px; color: #333; line-height: 1.65; padding-left: 14px; position: relative; }
+  .rulebox li::before { content: "●"; color: #2563eb; font-size: 7px; position: absolute; left: 0; top: 5px; }
+  .adminbox {
+    border: 1.5px solid #d4d4d8; border-radius: 10px; padding: 8px 12px; margin-top: 8px; background: #fafafa;
+  }
+  .adminbox h3 { font-size: 11px; color: #52525b; margin-bottom: 3px; }
+  .adminbox p { font-size: 10px; color: #555; line-height: 1.6; }
+  .footer { text-align: right; font-size: 9px; color: #999; margin-top: 4px; }
+  .tabmock {
+    display: inline-flex; background: #18181b; border-radius: 10px; padding: 4px; gap: 3px; margin-top: 5px;
+  }
+  .tabmock span { font-size: 10px; color: #a1a1aa; padding: 5px 14px; border-radius: 7px; }
+  .tabmock .on { background: #2563eb; color: #fff; font-weight: bold; }
+  .tabmock .cnt { background: rgba(255,255,255,0.25); border-radius: 999px; font-size: 8px; padding: 1px 5px; margin-left: 4px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>休憩室のつかいかた 〜きゅうけいキャンプ〜</h1>
+    <p class="sub">現場打刻端末「休憩室」タブ｜定員制チェックイン</p>
+  </div>
+  <span class="badge">スタッフ向け</span>
+</div>
+
+<p class="lead">休憩室には定員があります。休憩に入るときは打刻端末の「休憩室」タブで空き枠に自分の名前を入れてから利用してください。だれが入っているか・空きがいくつかが全員に見えるようになります。</p>
+
+<div class="step">
+  <div class="stepnum">1</div>
+  <div class="stepbody">
+    <h2>いつも通り「休憩」の打刻をする</h2>
+    <p>現場端末で休憩開始の打刻をします（ここは今までと同じ）。<b>休憩中のステータスの人だけ</b>が休憩室に入れます。</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="stepnum">2</div>
+  <div class="stepbody">
+    <h2>「休憩室」タブを開いて、空き枠に入る</h2>
+    <p>画面上部のタブで「休憩室」を選択（数字は 使用中/定員）。空いている枠「<b>▶くわわる</b>」をタップ → 一覧から<b>自分の名前</b>を選ぶと入室完了。キャンプにキャラクターが登場します。</p>
+    <div class="tabmock"><span>座席表</span><span>打刻</span><span class="on">休憩室<span class="cnt">3/6</span></span></div>
+    <div class="visual">
+      <div class="campwrap">
+        <div class="msgwin dot">＊「ここは きゅうけいキャンプ。なかまと ひとやすみ していこう。<div class="note">※きゅうけいちゅうの ひとだけ くわわれます。きゅうけいもどりで じどうで ぬけます。</div></div>
+        <div class="camp">
+          <div class="slot"><img src="char-1.png" alt=""><div class="cls dot">ゆうしゃ</div><div class="nm">田中</div><div class="zzz dot">Zzz 12:34</div></div>
+          <div class="slot"><img src="char-3.png" alt=""><div class="cls dot">まほうつかい</div><div class="nm">佐藤</div><div class="zzz dot">Zzz 05:10</div></div>
+          <div class="slot"><img src="char-5.png" alt=""><div class="cls dot">ぶとうか</div><div class="nm">鈴木</div><div class="zzz dot">Zzz 01:22</div></div>
+          <div class="slot empty"><div class="open dot">ぼしゅうちゅう</div><div class="join dot"><span class="cursor">▶</span>くわわる</div></div>
+          <div class="slot empty"><div class="open dot">ぼしゅうちゅう</div><div class="join dot"><span class="cursor">▶</span>くわわる</div></div>
+          <div class="slot empty"><div class="open dot">ぼしゅうちゅう</div><div class="join dot"><span class="cursor">▶</span>くわわる</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="stepnum">3</div>
+  <div class="stepbody">
+    <h2>もどるときは、休憩戻りの打刻だけでOK（自動退室）</h2>
+    <p>休憩戻り・退勤の打刻をすると<b>自動的に休憩室からも退室</b>します。特別な操作は不要です。手動で抜けたいときは次の2つの方法もあります。</p>
+    <div class="twocol">
+      <div class="col">
+        <p style="font-size:10.5px; font-weight:bold; margin-top:4px;">📍 端末から：自分のキャラをタップ</p>
+        <div class="msgwin dot" style="margin:5px 0 0;">＊「田中は ぐっすり ねむっている… Zzz<br>　 おこしますか？　<span style="color:#fcd34d;">▶はい（おきる）</span>／いいえ</div>
+      </div>
+      <div class="col">
+        <p style="font-size:10.5px; font-weight:bold; margin-top:4px;">📱 自分のスマホから：ホーム画面のカード</p>
+        <div class="phonecard">
+          <div><div class="t1">休憩室に入室中</div><div class="t2">No.3・12:34〜　休憩戻り打刻でも自動退室されます</div></div>
+          <div class="btn">退室する</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bottomrow">
+  <div class="mapcol">
+    <div class="mapframe">
+      <div class="maptitle dot">ワールドマップ<span class="sub">きゅうけいキャンプへの みち</span></div>
+      <div style="position: relative;">
+        <img src="world-map.png" style="width: 100%; display: block;" alt="">
+        <div class="mapwin" style="left: 3%; top: 8.5%;">ゴール：きゅうけいキャンプ</div>
+        <div class="mapwin" style="left: 57%; top: 42%;">はっちょうぼり えき</div>
+        <div class="mapwin" style="left: 8%; top: 62%;">とほ 5ふん（350m）</div>
+        <div class="mapwin" style="left: 18%; bottom: 2.5%;">スタート：げんば（いりふね1ちょうめ）</div>
+      </div>
+    </div>
+  </div>
+  <div class="rightcol">
+    <div class="rulebox" style="margin-top:0;">
+      <h3>ルール・補足</h3>
+      <ul>
+        <li>入室できるのは<b>休憩中の人だけ</b>です（事前の場所取りはできません）</li>
+        <li><b>1人1枠</b>まで。満室のときは空きが出るまで待ってください（タブの数字で空き状況がわかります）</li>
+        <li>同じ枠を同時にタップした場合は先に取った人が優先されます（「使用中です」と表示されたら別の枠へ）</li>
+        <li>キャラクターはmyページ「マイキャラクター」から自分で選べます（全108体）</li>
+      </ul>
+    </div>
+    <div class="adminbox">
+      <h3>管理者の方へ</h3>
+      <p>ポータル「座席表」→ ツールバーの「休憩室」ボタンから、占有状況の確認・抜け忘れ枠の<b>強制解放</b>・<b>定員の変更</b>・<b>設備情報の編集</b>ができます。</p>
+    </div>
+  </div>
+</div>
+
+<p class="footer">Raq Works 社内ポータル｜休憩室機能 操作説明（2026.06）</p>
+
+</body>
+</html>
