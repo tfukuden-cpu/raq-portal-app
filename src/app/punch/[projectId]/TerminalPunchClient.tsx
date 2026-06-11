@@ -111,6 +111,37 @@ function rpgClassFor(staffId: string): RpgClass {
   return RPG_CLASSES[h % RPG_CLASSES.length];
 }
 
+// ── ページ全体のRPGテーマ（夜空・アニメーション） ────────────────
+const PAGE_BG = "linear-gradient(180deg, #02040f 0%, #050a24 45%, #0a1340 100%)";
+// ヘッダー上空の星（%配置・点滅ディレイ）
+const PAGE_STARS: { l: number; t: number; d: number; s: number }[] = [
+  { l: 5, t: 14, d: 0,   s: 2 }, { l: 12, t: 42, d: 1.3, s: 3 }, { l: 19, t: 22, d: 0.6, s: 2 },
+  { l: 27, t: 55, d: 2.0, s: 2 }, { l: 34, t: 18, d: 0.9, s: 3 }, { l: 42, t: 38, d: 1.6, s: 2 },
+  { l: 58, t: 35, d: 0.4, s: 2 }, { l: 66, t: 16, d: 1.9, s: 3 }, { l: 73, t: 48, d: 1.1, s: 2 },
+  { l: 81, t: 24, d: 0.2, s: 2 }, { l: 88, t: 52, d: 1.5, s: 3 }, { l: 95, t: 18, d: 0.8, s: 2 },
+];
+
+const RPG_KEYFRAMES = `
+@keyframes rpgTwinkle { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
+@keyframes rpgBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes rpgZzz {
+  0%   { opacity: 0; transform: translate(0, 3px) scale(.8); }
+  25%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(9px, -16px) scale(1.2); }
+}
+@keyframes rpgFlicker {
+  0%,100% { opacity: .45; transform: scale(1); }
+  30%     { opacity: .85; transform: scale(1.15); }
+  60%     { opacity: .55; transform: scale(.92); }
+  80%     { opacity: .75; transform: scale(1.08); }
+}
+@keyframes rpgSpark {
+  0%   { opacity: 0; transform: translate(0, 0); }
+  15%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--sx, 0px), -38px); }
+}
+`;
+
 
 // ── ステータス表示定義 ──────────────────────────────────────────
 const STATUS_BG: Record<StaffStatus, string> = {
@@ -596,15 +627,25 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   if (step.kind === "list") {
     const tabBtnBase = "flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.97]";
     const tabBtnOn   = "bg-blue-600 text-white shadow-lg shadow-blue-950/60";
-    const tabBtnOff  = "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60";
+    const tabBtnOff  = "text-[#8a9ad8] hover:text-white hover:bg-[#16205c]/70";
 
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col">
-        {/* ヘッダー */}
+      <div className={`min-h-screen flex flex-col ${rpgFontClass}`} style={{ background: PAGE_BG }}>
+        <style>{RPG_KEYFRAMES}</style>
+        {/* ヘッダー（夜空） */}
         <div className="relative px-6 pt-8 pb-5 overflow-hidden">
-          {/* 背景グロー */}
-          <div className="absolute inset-x-0 -top-24 h-48 bg-blue-600/10 blur-3xl pointer-events-none" />
-          <p className="relative text-zinc-500 text-xs font-semibold tracking-[0.35em] uppercase text-center">
+          {/* 星空 */}
+          {PAGE_STARS.map((s, i) => (
+            <span
+              key={i}
+              className="absolute bg-white rounded-[1px] pointer-events-none"
+              style={{
+                left: `${s.l}%`, top: `${s.t}%`, width: s.s, height: s.s,
+                animation: `rpgTwinkle ${2 + (i % 3)}s ease-in-out ${s.d}s infinite`,
+              }}
+            />
+          ))}
+          <p className="relative text-[#8a9ad8] text-xs font-semibold tracking-[0.35em] uppercase text-center">
             {projectName}
           </p>
           <div className="relative mt-1.5">
@@ -614,7 +655,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
 
         {/* タブ（セグメントコントロール） */}
         <div className="px-4 pb-4">
-          <div className={`max-w-lg mx-auto grid ${hasSeatData ? "grid-cols-3" : "grid-cols-2"} gap-1 bg-zinc-900/80 border border-zinc-800 rounded-2xl p-1.5 shadow-xl shadow-black/30`}>
+          <div className={`max-w-lg mx-auto grid ${hasSeatData ? "grid-cols-3" : "grid-cols-2"} gap-1 bg-[#000846]/70 border-2 border-[#2a3a8c] rounded-2xl p-1.5 shadow-xl shadow-black/40`}>
             {hasSeatData && (
               <button
                 onClick={() => setActiveTab("seat")}
@@ -979,6 +1020,34 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                 {/* 可読性のための暗めオーバーレイ */}
                 <div className="absolute inset-0 bg-[#020617]/35 pointer-events-none" />
 
+                {/* 焚き火のゆらめき（背景画像の炎の位置に重ねる） */}
+                <div className="absolute left-1/2 top-[64%] -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                  <div
+                    className="w-28 h-20 rounded-full bg-orange-500/30 blur-xl"
+                    style={{ animation: "rpgFlicker 1.7s ease-in-out infinite" }}
+                  />
+                  <div
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-9 rounded-full bg-amber-300/35 blur-md"
+                    style={{ animation: "rpgFlicker 1.1s ease-in-out .3s infinite" }}
+                  />
+                  {/* 火の粉 */}
+                  {[
+                    { sx: "-8px", d: 0 },
+                    { sx: "5px",  d: 0.6 },
+                    { sx: "12px", d: 1.2 },
+                    { sx: "-3px", d: 1.7 },
+                  ].map((sp, i) => (
+                    <span
+                      key={i}
+                      className="absolute left-1/2 top-1/2 w-[3px] h-[3px] bg-amber-300 rounded-full"
+                      style={{
+                        "--sx": sp.sx,
+                        animation: `rpgSpark 2.1s ease-out ${sp.d}s infinite`,
+                      } as React.CSSProperties}
+                    />
+                  ))}
+                </div>
+
                 <div className="relative px-4 pt-4">
                   {/* メッセージウィンドウ */}
                   <RpgWindow className="mb-3 shadow-xl shadow-black/50">
@@ -1020,9 +1089,16 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                             className="flex flex-col items-center pt-2 pb-1.5 px-1 rounded-xl bg-[#000846]/40 border border-white/15 hover:border-white/50 active:scale-95 transition-all disabled:opacity-60"
                           >
                             <div className="relative">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={cls.img} alt="" draggable={false} className="h-16 w-auto select-none" />
-                              <span className="absolute -top-1.5 -right-4 text-amber-300 text-[11px] animate-pulse">Zzz</span>
+                              <div style={{ animation: `rpgBob ${1.2 + (boxNumber % 3) * 0.15}s steps(2) ${(boxNumber % 6) * 0.2}s infinite` }}>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={cls.img} alt="" draggable={false} className="h-16 w-auto select-none" />
+                              </div>
+                              <span
+                                className="absolute -top-1.5 -right-4 text-amber-300 text-[11px]"
+                                style={{ animation: `rpgZzz 2.4s ease-out ${(boxNumber % 4) * 0.5}s infinite` }}
+                              >
+                                Zzz
+                              </span>
                             </div>
                             <p className="text-cyan-300 text-[9px] mt-1">{cls.label}</p>
                             <p className="text-white text-[11px] font-bold w-full truncate text-center leading-tight">
@@ -1179,7 +1255,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     const status = memberStatus(latestMember);
 
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
+      <div className={`min-h-screen flex flex-col items-center justify-center px-6 ${rpgFontClass}`} style={{ background: PAGE_BG }}>
         <div className="w-full max-w-sm space-y-8">
 
           {/* スタッフ情報 */}
@@ -1294,7 +1370,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     const breakOptions = latestMember.hadBreak60 ? BREAK_OPTIONS_AFTER : BREAK_OPTIONS_BEFORE;
 
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
+      <div className={`min-h-screen flex flex-col items-center justify-center px-6 ${rpgFontClass}`} style={{ background: PAGE_BG }}>
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center">
             <p className="text-zinc-400 text-sm mb-1">{latestMember.name}</p>
@@ -1334,7 +1410,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   if (step.kind === "consent") {
     const { member } = step;
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col px-6 py-10 overflow-y-auto">
+      <div className="min-h-screen flex flex-col px-6 py-10 overflow-y-auto" style={{ background: PAGE_BG }}>
         <div className="w-full max-w-lg mx-auto space-y-6">
           <div className="text-center">
             <p className="text-zinc-400 text-sm mb-1">{member.name}</p>
@@ -1384,7 +1460,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     const isClockIn = punchType === "clock_in";
 
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
+      <div className={`min-h-screen flex flex-col items-center justify-center px-6 ${rpgFontClass}`} style={{ background: PAGE_BG }}>
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center">
             <p className="text-zinc-400 text-sm mb-1">{member.name}</p>
@@ -1445,7 +1521,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     const kindLabel = punchKind === "late" ? "遅刻出勤" : punchKind === "early" ? "早退退勤" : "残業退勤";
 
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
+      <div className={`min-h-screen flex flex-col items-center justify-center px-6 ${rpgFontClass}`} style={{ background: PAGE_BG }}>
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center">
             <p className="text-zinc-400 text-sm mb-1">{member.name}　{kindLabel}</p>
@@ -1497,7 +1573,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   if (step.kind === "done") {
     const isError = step.message.startsWith("⚠️");
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
+      <div className={`min-h-screen flex flex-col items-center justify-center px-6 ${rpgFontClass}`} style={{ background: PAGE_BG }}>
         <div className="text-center space-y-4">
           <div className={`w-24 h-24 rounded-full flex items-center justify-center text-5xl mx-auto ${isError ? "bg-red-900/30" : "bg-emerald-900/30"}`}>
             {isError ? "⚠️" : "✓"}
