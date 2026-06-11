@@ -12,7 +12,8 @@ import { assignBreakSlotsAction } from "./break-actions";
 import type { BreakSlotSetting } from "./break-actions";
 import {
   getBreakRoomStateAction, forceReleaseBreakRoomAction, setBreakRoomCapacityAction,
-  type BreakRoomState,
+  setBreakRoomAmenitiesAction,
+  type BreakRoomState, type BreakRoomAmenity,
 } from "./break-room-actions";
 import { formatTimeJP } from "@/lib/datetime";
 import { resolveShiftSection } from "@/lib/seatColors";
@@ -182,11 +183,13 @@ export default function SeatingClient({
   const [showRoomPanel, setShowRoomPanel] = useState(false);
   const [roomState, setRoomState] = useState<BreakRoomState | null>(null);
   const [roomCapInput, setRoomCapInput] = useState("6");
+  const [amenitiesDraft, setAmenitiesDraft] = useState<BreakRoomAmenity[]>([]);
 
   async function refreshRoomState() {
     const s = await getBreakRoomStateAction(projectId);
     setRoomState(s);
     setRoomCapInput(String(s.capacity));
+    setAmenitiesDraft(s.amenities);
   }
 
   function toggleRoomPanel() {
@@ -223,6 +226,16 @@ export default function SeatingClient({
       } else {
         setToast(`休憩室の定員を${cap}名に変更しました`);
       }
+      setTimeout(() => setToast(null), 2500);
+      await refreshRoomState();
+    });
+  }
+
+  function handleSaveAmenities() {
+    const clean = amenitiesDraft.filter(a => a.label.trim().length > 0);
+    startTransition(async () => {
+      const res = await setBreakRoomAmenitiesAction(projectId, clean);
+      setToast(res.ok ? "設備情報を保存しました" : `⚠️ ${res.error ?? "保存に失敗しました"}`);
       setTimeout(() => setToast(null), 2500);
       await refreshRoomState();
     });
@@ -905,6 +918,61 @@ export default function SeatingClient({
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* 設備情報の編集 */}
+            {roomState && (
+              <div className="mt-3 pt-3 border-t border-amber-100 dark:border-amber-900/50">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300">設備情報（端末の休憩室タブに表示）</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setAmenitiesDraft(prev => [...prev, { label: "", ok: true }])}
+                      disabled={amenitiesDraft.length >= 12}
+                      className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:opacity-50"
+                    >
+                      ＋追加
+                    </button>
+                    <button
+                      onClick={handleSaveAmenities}
+                      disabled={isPending}
+                      className="text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-500 px-2.5 py-1 rounded-lg disabled:opacity-50"
+                    >
+                      設備を保存
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {amenitiesDraft.map((a, i) => (
+                    <div key={i} className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 pl-1 pr-1.5 py-1">
+                      <button
+                        onClick={() => setAmenitiesDraft(prev => prev.map((x, j) => j === i ? { ...x, ok: !x.ok } : x))}
+                        className={`text-[11px] font-bold w-9 py-0.5 rounded-md ${a.ok ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300" : "bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300"}`}
+                      >
+                        {a.ok ? "あり" : "なし"}
+                      </button>
+                      <input
+                        type="text"
+                        value={a.label}
+                        maxLength={20}
+                        placeholder="設備名"
+                        onChange={e => setAmenitiesDraft(prev => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+                        className="w-24 text-xs px-1.5 py-0.5 bg-transparent text-zinc-700 dark:text-zinc-200 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => setAmenitiesDraft(prev => prev.filter((_, j) => j !== i))}
+                        className="text-[11px] text-zinc-400 hover:text-red-500 px-0.5"
+                        aria-label="削除"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  {amenitiesDraft.length === 0 && (
+                    <p className="text-[11px] text-zinc-400">設備が未設定です。「＋追加」で登録してください。</p>
+                  )}
+                </div>
               </div>
             )}
           </div>

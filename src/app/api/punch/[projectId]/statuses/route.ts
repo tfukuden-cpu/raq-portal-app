@@ -35,7 +35,7 @@ export async function GET(
       .eq("absence_date", today),
     admin
       .from("break_room_settings")
-      .select("capacity")
+      .select("capacity, amenities")
       .eq("project_id", projectId)
       .maybeSingle(),
     admin
@@ -98,6 +98,13 @@ export async function GET(
     }
   }
 
+  const DEFAULT_AMENITIES = [
+    { label: "トイレ", ok: true },
+    { label: "Wi-Fi", ok: true },
+    { label: "冷蔵庫", ok: false },
+    { label: "電子レンジ", ok: false },
+  ];
+  const rawAmenities = (breakRoomSetting as { amenities?: unknown } | null)?.amenities;
   const breakRoom = {
     capacity: (breakRoomSetting as { capacity?: number } | null)?.capacity ?? 6,
     uses: (breakRoomUses ?? []).map(u => ({
@@ -105,6 +112,7 @@ export async function GET(
       staffId:   u.staff_id as string,
       enteredAt: u.entered_at as string,
     })),
+    amenities: Array.isArray(rawAmenities) ? rawAmenities : DEFAULT_AMENITIES,
   };
 
   return NextResponse.json({ statuses: result, breakRoom });

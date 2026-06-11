@@ -66,6 +66,8 @@ export type BreakRoomUseItem = {
   enteredAt: string; // ISO
 };
 
+export type BreakRoomAmenityItem = { label: string; ok: boolean };
+
 interface Props {
   projectId: string;
   projectName: string;
@@ -78,6 +80,7 @@ interface Props {
   motaSlotInfoMap?: Record<string, MotaSlotInfo[]>;
   breakRoomCapacity?: number;
   breakRoomUses?: BreakRoomUseItem[];
+  breakRoomAmenities?: BreakRoomAmenityItem[];
   rpgFontClass?: string;
 }
 
@@ -365,7 +368,7 @@ function LiveClock() {
 }
 
 // ── メインコンポーネント ──────────────────────────────────────
-export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [], motaSlotInfoMap = {}, breakRoomCapacity = 6, breakRoomUses = [], rpgFontClass = "" }: Props) {
+export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [], motaSlotInfoMap = {}, breakRoomCapacity = 6, breakRoomUses = [], breakRoomAmenities = [], rpgFontClass = "" }: Props) {
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [localMembers, setLocalMembers] = useState(members);
   const [isPending, startTransition] = useTransition();
@@ -373,6 +376,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   // 休憩室
   const [roomCapacity, setRoomCapacity] = useState(breakRoomCapacity);
   const [roomUses, setRoomUses] = useState<BreakRoomUseItem[]>(breakRoomUses);
+  const [roomAmenities, setRoomAmenities] = useState<BreakRoomAmenityItem[]>(breakRoomAmenities);
   const [roomPickBox, setRoomPickBox] = useState<number | null>(null);   // 入室する箱番号（名前選択モーダル表示中）
   const [roomLeaveBox, setRoomLeaveBox] = useState<number | null>(null); // 退室確認中の箱番号
   const [roomError, setRoomError] = useState<string | null>(null);
@@ -419,7 +423,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             onBreak: boolean; isAbsent: boolean; hadBreak60: boolean;
             breakStartedAt: string | null; breakNote: string | null;
           }[];
-          breakRoom: { capacity: number; uses: BreakRoomUseItem[] };
+          breakRoom: { capacity: number; uses: BreakRoomUseItem[]; amenities?: BreakRoomAmenityItem[] };
         } = await res.json();
         setLocalMembers(prev => prev.map(m => {
           const s = data.statuses.find(d => d.staffId === m.staffId);
@@ -429,6 +433,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
         if (data.breakRoom) {
           setRoomCapacity(data.breakRoom.capacity);
           setRoomUses(data.breakRoom.uses);
+          if (Array.isArray(data.breakRoom.amenities)) setRoomAmenities(data.breakRoom.amenities);
         }
       } catch { /* ignore */ }
     };
@@ -1079,6 +1084,23 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       </p>
                     </div>
                   </RpgWindow>
+
+                  {/* せつび（環境情報） */}
+                  {roomAmenities.length > 0 && (
+                    <RpgWindow className="mb-3 shadow-xl shadow-black/50">
+                      <div className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                        <span className="text-cyan-300 text-[10px] shrink-0">【せつび】</span>
+                        {roomAmenities.map((a, i) => (
+                          <span key={`${a.label}-${i}`} className="flex items-center gap-1 text-[11px]">
+                            <span className={a.ok ? "text-emerald-300 font-bold" : "text-red-400 font-bold"}>
+                              {a.ok ? "○" : "×"}
+                            </span>
+                            <span className={a.ok ? "text-white" : "text-white/45"}>{a.label}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </RpgWindow>
+                  )}
 
                   {/* パーティーメンバー */}
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">

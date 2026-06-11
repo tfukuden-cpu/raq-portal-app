@@ -107,7 +107,7 @@ export default async function PunchPage({
       .eq("assignment_date", today),
     admin
       .from("break_room_settings")
-      .select("capacity")
+      .select("capacity, amenities")
       .eq("project_id", projectId)
       .maybeSingle(),
     admin
@@ -277,6 +277,15 @@ export default async function PunchPage({
     staffId:   u.staff_id as string,
     enteredAt: u.entered_at as string,
   }));
+  const rawAmenities = (breakRoomSetting as { amenities?: unknown } | null)?.amenities;
+  const breakRoomAmenities = Array.isArray(rawAmenities)
+    ? (rawAmenities as { label: string; ok: boolean }[])
+    : [
+        { label: "トイレ", ok: true },
+        { label: "Wi-Fi", ok: true },
+        { label: "冷蔵庫", ok: false },
+        { label: "電子レンジ", ok: false },
+      ];
 
   return (
     <TerminalPunchClient
@@ -291,6 +300,7 @@ export default async function PunchPage({
       motaSlotInfoMap={motaSlotInfoMap}
       breakRoomCapacity={breakRoomCapacity}
       breakRoomUses={breakRoomUses}
+      breakRoomAmenities={breakRoomAmenities}
       rpgFontClass={dotGothic.className}
     />
   );

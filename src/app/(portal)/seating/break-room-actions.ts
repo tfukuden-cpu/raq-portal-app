@@ -21,10 +21,32 @@ export type BreakRoomUse = {
   enteredAt: string; // ISO
 };
 
+export type BreakRoomAmenity = { label: string; ok: boolean };
+
 export type BreakRoomState = {
   capacity: number;
   uses: BreakRoomUse[];
+  amenities: BreakRoomAmenity[];
 };
+
+// 設定行が無い案件のデフォルト設備（DBカラムのdefaultと同値）
+const DEFAULT_AMENITIES: BreakRoomAmenity[] = [
+  { label: "トイレ", ok: true },
+  { label: "Wi-Fi", ok: true },
+  { label: "冷蔵庫", ok: false },
+  { label: "電子レンジ", ok: false },
+];
+
+function normalizeAmenities(raw: unknown): BreakRoomAmenity[] {
+  if (!Array.isArray(raw)) return DEFAULT_AMENITIES;
+  return raw
+    .filter((a): a is { label: string; ok: boolean } =>
+      !!a && typeof a === "object"
+      && typeof (a as { label?: unknown }).label === "string"
+      && typeof (a as { ok?: unknown }).ok === "boolean")
+    .map(a => ({ label: a.label.slice(0, 20), ok: a.ok }))
+    .slice(0, 12);
+}
 
 export type BreakRoomResult = { ok: boolean; error?: string };
 
@@ -36,7 +58,7 @@ export async function getBreakRoomStateAction(projectId: string): Promise<BreakR
   const [{ data: setting }, { data: uses }] = await Promise.all([
     admin
       .from("break_room_settings")
-      .select("capacity")
+      .select("capacity, amenities")
       .eq("project_id", projectId)
       .maybeSingle(),
     admin
@@ -54,7 +76,23 @@ export async function getBreakRoomStateAction(projectId: string): Promise<BreakR
       staffId:   u.staff_id as string,
       enteredAt: u.entered_at as string,
     })),
+    amenities: setting ? normalizeAmenities((setting as { amenities?: unknown }).amenities) : DEFAULT_AMENITIES,
   };
+}
+
+// ── 設備情報の更新（管理者ビューのみ） ────────────────────
+export async function setBreakRoomAmenitiesAction(
+  projectId: string,
+  amenities: BreakRoomAmenity[],
+): Promise<BreakRoomResult> {
+  const clean = normalizeAmenities(amenities).filter(a => a.label.trim().length > 0);
+  const admin = createAdminClient();
+  const { error } = await admin.from("break_room_settings").upsert(
+    { project_id: projectId, amenities: clean, updated_at: new Date().toISOString() },
+    { onConflict: "project_id" },
+  );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 // ── 入室（箱に名前を入れる） ──────────────────────────────
