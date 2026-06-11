@@ -93,7 +93,7 @@ function RpgWindow({ children, className = "" }: { children: ReactNode; classNam
 }
 
 // ── ドット絵キャラクター（休憩室パーティー用・AI生成画像） ──────
-// public/rpg/char-1..6.png（透過PNG・ChatGPT生成をスクリプトで分割）
+// public/rpg/char-1..12.png（透過PNG・ChatGPT生成をスクリプトで分割）
 type RpgClass = { label: string; img: string };
 const RPG_CLASSES: RpgClass[] = [
   { label: "ゆうしゃ",     img: "/rpg/char-1.png" },
@@ -102,6 +102,12 @@ const RPG_CLASSES: RpgClass[] = [
   { label: "そうりょ",     img: "/rpg/char-4.png" },
   { label: "ぶとうか",     img: "/rpg/char-5.png" },
   { label: "あそびにん",   img: "/rpg/char-6.png" },
+  { label: "けんじゃ",     img: "/rpg/char-7.png" },
+  { label: "とうぞく",     img: "/rpg/char-8.png" },
+  { label: "しょうにん",   img: "/rpg/char-9.png" },
+  { label: "おどりこ",     img: "/rpg/char-10.png" },
+  { label: "きし",         img: "/rpg/char-11.png" },
+  { label: "ゆみつかい",   img: "/rpg/char-12.png" },
 ];
 
 /** staffId から職業を決定（同じ人は常に同じキャラ） */
