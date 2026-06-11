@@ -703,6 +703,7 @@ sendEventNotify(
 - **管理者ビュー**: 座席表 `/seating` ツールバーの「休憩室」ボタン → パネルで占有状況閲覧・**強制解放**・**定員変更**（1〜50・`break_room_settings.capacity`）。定員を減らすとはみ出した箱は自動解放
 - **本人のスマホから退室**: ダッシュボード（`/dashboard`）に入室中のみアンバーのカードを表示。「退室する」ボタンで自分の枠を解放（`leaveMyBreakRoomAction`・staffId はセッションから導出するため他人の枠は外せない）
 - **設備情報の表示**: 端末の休憩室タブに「【せつび】○トイレ ○Wi-Fi ×冷蔵庫 ×電子レンジ」のように○×で表示。`break_room_settings.amenities`（jsonb・`[{label, ok}]` 最大12件）。管理者は `/seating` 休憩室パネルで追加・削除・あり/なし切替・保存ができる。デフォルトはトイレ○/Wi-Fi○/冷蔵庫×/電子レンジ×
+- **キャラクター108体・本人選択**: キャラ定義は `src/lib/rpg-chars.ts`（職業・モンスター・ドラゴン・魔人・妖精・アンデッド等108体、`public/rpg/char-1..108.png`）。スタッフは myページ（`/dashboard`）の「マイキャラクター」カード →「変更する」で全キャラ一覧から自分のキャラを選択（`staffs.rpg_character` に保存・未選択は社員IDハッシュで自動割当）。休憩室の表示・入退室モーダルすべてに反映
 - サーバーアクション: `src/app/(portal)/seating/break-room-actions.ts`
 
 ### 6-6. Google スプレッドシート連携

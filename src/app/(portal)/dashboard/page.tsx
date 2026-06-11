@@ -50,7 +50,7 @@ export default async function DashboardPage() {
 
   const { data: staff } = await supabase
     .from("staffs")
-    .select("id, name, display_name, global_role, must_change_password")
+    .select("id, name, display_name, global_role, must_change_password, rpg_character")
     .eq("id", staffId)
     .maybeSingle();
 
@@ -323,6 +323,8 @@ export default async function DashboardPage() {
           enteredAt: fmtTime((breakRoomUseRow as { entered_at: string }).entered_at),
         }
       : null,
+    myStaffId: staffId,
+    myRpgCharId: (staff as { rpg_character?: number | null } | null)?.rpg_character ?? null,
   };
 
   // ── 管理者・運用者はタスクタブ付きラッパーを返す ──

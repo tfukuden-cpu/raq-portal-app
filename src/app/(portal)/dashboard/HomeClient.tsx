@@ -5,8 +5,10 @@ import {
   recordDepartureAction,
   submitAbsenceAction,
   submitLateAction,
+  setMyRpgCharacterAction,
 } from "./actions";
 import { leaveMyBreakRoomAction } from "../seating/break-room-actions";
+import { RPG_CHARS, rpgCharFor, rpgCharImg } from "@/lib/rpg-chars";
 import { ChevronRightIcon } from "@/components/icons";
 import { DepartureModal } from "./DepartureModal";
 import { AbsenceModal } from "./AbsenceModal";
@@ -39,6 +41,8 @@ export interface HomeClientProps {
   nextDayHasShift?: boolean;
   tasksWidget?: React.ReactNode;
   breakRoomUse?: { boxNumber: number; enteredAt: string } | null;
+  myStaffId?: string;
+  myRpgCharId?: number | null;
 }
 
 const NAVY    = "#0d1b35";
@@ -200,6 +204,8 @@ export default function HomeClient({
   nextDayHasShift  = false,
   tasksWidget,
   breakRoomUse     = null,
+  myStaffId        = "",
+  myRpgCharId      = null,
 }: HomeClientProps) {
 
   const [modal,        setModal]        = useState<ModalType>("none");
@@ -247,6 +253,24 @@ export default function HomeClient({
       if (data.recoveryStatus) fd.set("recoveryStatus", data.recoveryStatus);
       const r = await submitAbsenceAction(fd);
       setFeedback({ ok: r.success, msg: r.message ?? "欠勤報告しました" });
+    });
+  };
+
+  // ── マイキャラクター選択 ──────────────────────────────────
+  const [optCharId, setOptCharId] = useState<number | null>(myRpgCharId);
+  const [charPickerOpen, setCharPickerOpen] = useState(false);
+  const myChar = rpgCharFor(myStaffId, optCharId);
+
+  const handlePickChar = (charId: number) => {
+    startTransition(async () => {
+      const r = await setMyRpgCharacterAction(charId);
+      if (r.success) {
+        setOptCharId(charId);
+        setCharPickerOpen(false);
+        setFeedback({ ok: true, msg: "キャラクターを変更しました" });
+      } else {
+        setFeedback({ ok: false, msg: r.message ?? "変更に失敗しました" });
+      }
     });
   };
 
@@ -333,6 +357,26 @@ export default function HomeClient({
               </button>
             </div>
           )}
+
+          {/* ── マイキャラクター ── */}
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-6 py-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-4 min-w-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={rpgCharImg(myChar.id)} alt="" draggable={false} className="h-14 w-auto select-none shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">マイキャラクター</p>
+                <p className="text-[12px] text-zinc-400 mt-0.5 truncate">
+                  {myChar.label}{optCharId ? "" : "（おまかせ）"}　休憩室で表示されます
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setCharPickerOpen(true)}
+              className="shrink-0 text-[13px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 px-4 py-2.5 rounded-xl hover:bg-blue-100 transition-colors"
+            >
+              変更する
+            </button>
+          </div>
 
           {/* ── 上段 3カラム ── */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -571,6 +615,48 @@ export default function HomeClient({
       )}
       {modal === "late" && (
         <LateModal onClose={closeModal} onSubmit={handleLate} isPending={isPending} />
+      )}
+
+      {/* ── マイキャラクター選択モーダル ── */}
+      {charPickerOpen && (
+        <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4" onClick={() => setCharPickerOpen(false)}>
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-700 w-full max-w-2xl max-h-[85dvh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between shrink-0">
+              <div>
+                <p className="text-[15px] font-bold text-zinc-800 dark:text-zinc-100">キャラクターを選ぶ</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5">休憩室であなたのキャラとして表示されます（全{RPG_CHARS.length}体）</p>
+              </div>
+              <button onClick={() => setCharPickerOpen(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg px-2">✕</button>
+            </div>
+            <div className="overflow-y-auto overscroll-contain p-4">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                {RPG_CHARS.map(c => {
+                  const isCurrent = c.id === myChar.id;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => handlePickChar(c.id)}
+                      disabled={isPending}
+                      className={[
+                        "flex flex-col items-center pt-2 pb-1.5 px-1 rounded-xl border transition-all active:scale-95 disabled:opacity-50",
+                        isCurrent
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40 ring-2 ring-blue-300 dark:ring-blue-800"
+                          : "border-zinc-150 dark:border-zinc-700 hover:border-blue-300 hover:bg-zinc-50 dark:hover:bg-zinc-800",
+                      ].join(" ")}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={rpgCharImg(c.id)} alt="" draggable={false} loading="lazy" className="h-14 w-auto select-none" />
+                      <p className="text-[10px] text-zinc-600 dark:text-zinc-300 mt-1 w-full truncate text-center">{c.label}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

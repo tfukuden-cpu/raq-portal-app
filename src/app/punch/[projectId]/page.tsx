@@ -57,7 +57,7 @@ export default async function PunchPage({
   ] = await Promise.all([
     admin
       .from("project_members")
-      .select("staff_id, section, staffs(id, name, display_name, account_number)")
+      .select("staff_id, section, staffs(id, name, display_name, account_number, rpg_character)")
       .eq("project_id", projectId),
     admin
       .from("shifts")
@@ -181,6 +181,7 @@ export default async function PunchPage({
       display_name?: string | null;
       name?: string | null;
       account_number?: string | null;
+      rpg_character?: number | null;
     } | null;
     const name  = s?.display_name ?? s?.name ?? staffId;
     const shift = shiftMap.get(staffId);
@@ -203,6 +204,7 @@ export default async function PunchPage({
       hadBreak60:     punch.hadBreak60,
       breakStartedAt: punch.breakStartedAt,
       breakNote:      punch.breakNote,
+      rpgCharId:      s?.rpg_character ?? null,
     });
   }
 

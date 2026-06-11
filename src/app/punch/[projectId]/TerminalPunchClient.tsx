@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useTransition, type ReactNode } f
 import { terminalPunchAction, terminalBreakAction, saveConsentAction, type PunchKind } from "./actions";
 import { enterBreakRoomAction, leaveBreakRoomAction } from "@/app/(portal)/seating/break-room-actions";
 import { getSeatBgClass, resolveShiftSection, formatSectionShift } from "@/lib/seatColors";
+import { RPG_CHARS, rpgCharFor, rpgCharImg } from "@/lib/rpg-chars";
 
 // ── 型 ───────────────────────────────────────────────────────
 export type TerminalMember = {
@@ -23,6 +24,7 @@ export type TerminalMember = {
   hadBreak60: boolean;       // 本日「休憩（60分）」済み
   breakStartedAt: string | null; // 現在の離席開始時刻（ISO）
   breakNote: string | null;      // 現在の離席種別メモ
+  rpgCharId?: number | null;     // 本人が選んだRPGキャラ（staffs.rpg_character）
 };
 
 export type TerminalSeat = {
@@ -96,29 +98,8 @@ function RpgWindow({ children, className = "" }: { children: ReactNode; classNam
 }
 
 // ── ドット絵キャラクター（休憩室パーティー用・AI生成画像） ──────
-// public/rpg/char-1..12.png（透過PNG・ChatGPT生成をスクリプトで分割）
-type RpgClass = { label: string; img: string };
-const RPG_CLASSES: RpgClass[] = [
-  { label: "ゆうしゃ",     img: "/rpg/char-1.png" },
-  { label: "せんし",       img: "/rpg/char-2.png" },
-  { label: "まほうつかい", img: "/rpg/char-3.png" },
-  { label: "そうりょ",     img: "/rpg/char-4.png" },
-  { label: "ぶとうか",     img: "/rpg/char-5.png" },
-  { label: "あそびにん",   img: "/rpg/char-6.png" },
-  { label: "けんじゃ",     img: "/rpg/char-7.png" },
-  { label: "とうぞく",     img: "/rpg/char-8.png" },
-  { label: "しょうにん",   img: "/rpg/char-9.png" },
-  { label: "おどりこ",     img: "/rpg/char-10.png" },
-  { label: "きし",         img: "/rpg/char-11.png" },
-  { label: "ゆみつかい",   img: "/rpg/char-12.png" },
-];
-
-/** staffId から職業を決定（同じ人は常に同じキャラ） */
-function rpgClassFor(staffId: string): RpgClass {
-  let h = 0;
-  for (const ch of staffId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return RPG_CLASSES[h % RPG_CLASSES.length];
-}
+// キャラ定義は src/lib/rpg-chars.ts に集約（myページのキャラ選択と共用）
+// 本人が選んだキャラ（staffs.rpg_character）優先、未選択は staffId ハッシュで自動割当
 
 // ── ページ全体のRPGテーマ（夜空・アニメーション） ────────────────
 const PAGE_BG = "linear-gradient(180deg, #02040f 0%, #050a24 45%, #0a1340 100%)";
@@ -1108,7 +1089,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       const use = roomUses.find(u => u.boxNumber === boxNumber);
                       const occupant = use ? memberMap.get(use.staffId) : null;
                       if (use) {
-                        const cls = rpgClassFor(use.staffId);
+                        const cls = rpgCharFor(use.staffId, occupant?.rpgCharId);
                         return (
                           <button
                             key={boxNumber}
@@ -1119,7 +1100,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                             <div className="relative">
                               <div style={{ animation: `rpgBob ${1.2 + (boxNumber % 3) * 0.15}s steps(2) ${(boxNumber % 6) * 0.2}s infinite` }}>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={cls.img} alt="" draggable={false} className="h-16 w-auto select-none" />
+                                <img src={rpgCharImg(cls.id)} alt="" draggable={false} className="h-16 w-auto select-none" />
                               </div>
                               <span
                                 className="absolute -top-1.5 -right-4 text-amber-300 text-[11px]"
@@ -1145,7 +1126,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src="/rpg/char-1.png" alt="" draggable={false}
+                            src={rpgCharImg(RPG_CHARS[(boxNumber - 1) % 12].id)} alt="" draggable={false}
                             className="h-16 w-auto select-none opacity-50"
                             style={{ filter: "brightness(0) saturate(0)" }}
                           />
@@ -1190,7 +1171,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       );
                     }
                     return candidates.map(m => {
-                      const cls = rpgClassFor(m.staffId);
+                      const cls = rpgCharFor(m.staffId, m.rpgCharId);
                       return (
                         <li key={m.staffId}>
                           <button
@@ -1200,7 +1181,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                           >
                             <span className="text-amber-300 opacity-0 group-hover:opacity-100 group-hover:animate-pulse shrink-0">▶</span>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={cls.img} alt="" draggable={false} className="h-10 w-auto shrink-0 select-none" />
+                            <img src={rpgCharImg(cls.id)} alt="" draggable={false} className="h-10 w-auto shrink-0 select-none" />
                             <div className="flex-1 min-w-0">
                               <p className="text-white font-bold text-sm truncate">{m.name}</p>
                               <p className="text-cyan-300/80 text-[10px] mt-0.5">
@@ -1241,7 +1222,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                   <div className="px-5 py-4">
                     <div className="flex items-center gap-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={rpgClassFor(use.staffId).img} alt="" draggable={false} className="h-14 w-auto shrink-0 select-none" />
+                      <img src={rpgCharImg(rpgCharFor(use.staffId, occupant?.rpgCharId).id)} alt="" draggable={false} className="h-14 w-auto shrink-0 select-none" />
                       <p className="text-white text-sm leading-relaxed">
                         ＊「{occupant?.name ?? use.staffId}は ぐっすり ねむっている…<span className="text-amber-300 ml-1 animate-pulse">Zzz</span><br />
                         　 おこしますか？

@@ -42,6 +42,7 @@
 - **管理者ビュー**: `/seating` ツールバー「休憩室」ボタン → パネルで占有状況・強制解放・定員変更（SeatingClient、isAdminのみ）
 - **本人スマホ退室**: `/dashboard` に入室中のみカード表示＋「退室する」ボタン（`leaveMyBreakRoomAction`＝セッションからstaffId導出）
 - **設備情報**: `break_room_settings.amenities`（jsonb `[{label, ok}]`・最大12件）。端末休憩室タブに○×表示、管理者は/seatingパネルで編集。statuses APIの breakRoom にも同梱
+- **キャラクター108体**: 定義は `src/lib/rpg-chars.ts`（id=char-{id}.png と一致）。職業・モンスター・魔人など。`staffs.rpg_character` で本人選択（null=ハッシュ自動割当）。myページ（/dashboard）の「マイキャラクター」カードから変更可（`setMyRpgCharacterAction`）。新キャラ追加手順: ChatGPTで4列×3行シート生成 → `scripts/split-rpg-sheet.ps1`（$env:SHEET/STARTIDX/COLS/ROWS）で分割 → rpg-chars.ts にラベル追記
 - サーバーアクション: `seating/break-room-actions.ts`（get/enter/leave/leaveMy/forceRelease/setCapacity/setAmenities）
 
 #### 新規DBテーブル（Supabaseマイグレーション実行済み: create_break_room_tables）

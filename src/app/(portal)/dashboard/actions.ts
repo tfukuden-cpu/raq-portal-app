@@ -16,6 +16,32 @@ export type ActionResult = {
   message?: string;
 };
 
+/** マイキャラクター変更（staffs.rpg_character・本人のみ） */
+export async function setMyRpgCharacterAction(charId: number | null): Promise<ActionResult> {
+  try {
+    if (charId !== null && (!Number.isInteger(charId) || charId < 1 || charId > 500)) {
+      return { success: false, message: "不正なキャラクター番号です" };
+    }
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, message: "ログインしてください" };
+    const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+    if (!staffId) return { success: false, message: "スタッフIDを特定できません" };
+
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("staffs")
+      .update({ rpg_character: charId })
+      .eq("id", staffId);
+    if (error) return { success: false, message: error.message };
+    revalidatePath("/dashboard");
+    return { success: true, message: "キャラクターを変更しました" };
+  } catch (e) {
+    console.error("setMyRpgCharacter error:", e);
+    return { success: false, message: "キャラクターの変更に失敗しました" };
+  }
+}
+
 /** 出発報告 */
 export async function recordDepartureAction(
   fd: FormData
