@@ -15,7 +15,13 @@
 
 ## 現在の開発状態（2026-06-12更新）
 
-### 直近の作業（ホームの王道RPG風リデザイン）
+### 直近の作業（ホームに休憩室ウィンドウ＋開放/閉鎖切替）
+- ホームに「きゅうけいしつ」RPGウィンドウ追加: 空き数＋箱グリッド表示。空き箱タップで本人入室（`enterMyBreakRoomAction`＝セッションからstaffId導出→`enterBreakRoomAction`に委譲、休憩打刻中チェックはサーバー側）。自分の箱タップで退室。占有者は名前＋キャラ＋入室時刻表示（`getBreakRoomStateAction` が staffs join で name/rpgCharId を解決するよう拡張）
+- **開放/閉鎖**: `break_room_settings.is_open`（マイグレーション add_break_room_is_open 済み）。ホームで管理者（isAdmin）に「▶閉鎖する/開放する」ボタン。閉鎖中: ホーム=全箱✕・端末=「とざされている……」＋ヘイサちゅう表示・`enterBreakRoomAction` がサーバー側拒否
+- statuses API breakRoom に `isOpen` 追加（端末30秒ポーリングで反映）。`BreakRoomState` 型に isOpen・`BreakRoomUse` に name?/rpgCharId? 追加
+- dashboard/page.tsx が `getBreakRoomStateAction` を呼び homeProps に `isAdmin`/`projectId`/`breakRoomState` を追加。**AdminHomeWrapper は projectId を自分用に destructure するため HomeClient へ明示的に渡し直している**（忘れると管理者だけ休憩室操作不能）
+
+### 前の作業（ホームの王道RPG風リデザイン）
 - `/dashboard`（HomeClient.tsx）を全面RPG化。夜空グラデ背景＋`DotGothic16`＋ドラクエ風 `RpgWindow`（紺#000846・白二重枠・枠上タイトルラベル）。機能・ロジックは無変更で見た目のみ変換
 - 構成: ヒーローバナー（AI生成 `public/rpg/home-hero.png`・Higgsfield nano_banana_pro 2クレジット・星アニメ＋時計＋中央にマイキャラがrpgBobで立つ。タップでキャラ選択）→ メッセージウィンドウ（挨拶＋▼点滅）→ きゅうけいちゅう → きょうのクエスト（シフト）/ステータス（勤怠）→ コマンド（▶欠勤報告 ▶遅刻報告）→ おしらせ → こんしゅうの よてい（週間カレンダー）
 - 旧UI（白カード・StatusCircle・マイキャラクターカード・モバイル時計ヘッダー）は削除。キャラ選択モーダル・トーストもRPG配色に変更

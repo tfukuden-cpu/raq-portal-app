@@ -81,6 +81,7 @@ interface Props {
   motaAccountNumbers?: string[];
   motaSlotInfoMap?: Record<string, MotaSlotInfo[]>;
   breakRoomCapacity?: number;
+  breakRoomIsOpen?: boolean;
   breakRoomUses?: BreakRoomUseItem[];
   breakRoomAmenities?: BreakRoomAmenityItem[];
   rpgFontClass?: string;
@@ -433,13 +434,14 @@ function LiveClock() {
 }
 
 // ── メインコンポーネント ──────────────────────────────────────
-export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [], motaSlotInfoMap = {}, breakRoomCapacity = 6, breakRoomUses = [], breakRoomAmenities = [], rpgFontClass = "" }: Props) {
+export default function TerminalPunchClient({ projectId, projectName, members, seats, walls, breakAssignmentMap = {}, breakSlots = [], motaAccountNumbers = [], motaSlotInfoMap = {}, breakRoomCapacity = 6, breakRoomUses = [], breakRoomAmenities = [], breakRoomIsOpen = true, rpgFontClass = "" }: Props) {
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [localMembers, setLocalMembers] = useState(members);
   const [isPending, startTransition] = useTransition();
 
   // 休憩室
   const [roomCapacity, setRoomCapacity] = useState(breakRoomCapacity);
+  const [roomIsOpen, setRoomIsOpen] = useState(breakRoomIsOpen);
   const [roomUses, setRoomUses] = useState<BreakRoomUseItem[]>(breakRoomUses);
   const [roomAmenities, setRoomAmenities] = useState<BreakRoomAmenityItem[]>(breakRoomAmenities);
   const [roomPickBox, setRoomPickBox] = useState<number | null>(null);   // 入室する箱番号（名前選択モーダル表示中）
@@ -488,7 +490,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             onBreak: boolean; isAbsent: boolean; hadBreak60: boolean;
             breakStartedAt: string | null; breakNote: string | null;
           }[];
-          breakRoom: { capacity: number; uses: BreakRoomUseItem[]; amenities?: BreakRoomAmenityItem[] };
+          breakRoom: { capacity: number; uses: BreakRoomUseItem[]; amenities?: BreakRoomAmenityItem[]; isOpen?: boolean };
         } = await res.json();
         setLocalMembers(prev => prev.map(m => {
           const s = data.statuses.find(d => d.staffId === m.staffId);
@@ -499,6 +501,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
           setRoomCapacity(data.breakRoom.capacity);
           setRoomUses(data.breakRoom.uses);
           if (Array.isArray(data.breakRoom.amenities)) setRoomAmenities(data.breakRoom.amenities);
+          if (typeof data.breakRoom.isOpen === "boolean") setRoomIsOpen(data.breakRoom.isOpen);
         }
       } catch { /* ignore */ }
     };
@@ -1138,6 +1141,9 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                         <p className="text-white text-sm leading-relaxed">
                           {roomToast ? (
                             <>＊「{roomToast}」</>
+                          ) : !roomIsOpen ? (
+                            <>＊「きゅうけいキャンプは いま<br />
+                            　 とざされている……。</>
                           ) : (
                             <>＊「ここは きゅうけいキャンプ。<br />
                             　 なかまと ひとやすみ していこう。</>
@@ -1215,6 +1221,22 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                             </p>
                             <BreakTimer startedAt={use.enteredAt} breakNote={null} size="compact" />
                           </button>
+                        );
+                      }
+                      if (!roomIsOpen) {
+                        return (
+                          <div
+                            key={boxNumber}
+                            className="flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c]/50 opacity-50"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={rpgCharImg(RPG_CHARS[(boxNumber - 1) % 12].id)} alt="" draggable={false}
+                              className="h-16 w-auto select-none opacity-40"
+                              style={{ filter: "brightness(0) saturate(0)" }}
+                            />
+                            <p className="text-red-400 text-[10px] mt-1 font-bold">ヘイサちゅう</p>
+                          </div>
                         );
                       }
                       return (

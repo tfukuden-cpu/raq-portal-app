@@ -35,7 +35,7 @@ export async function GET(
       .eq("absence_date", today),
     admin
       .from("break_room_settings")
-      .select("capacity, amenities")
+      .select("capacity, amenities, is_open")
       .eq("project_id", projectId)
       .maybeSingle(),
     admin
@@ -113,6 +113,7 @@ export async function GET(
       enteredAt: u.entered_at as string,
     })),
     amenities: Array.isArray(rawAmenities) ? rawAmenities : DEFAULT_AMENITIES,
+    isOpen: (breakRoomSetting as { is_open?: boolean } | null)?.is_open ?? true,
   };
 
   return NextResponse.json({ statuses: result, breakRoom });

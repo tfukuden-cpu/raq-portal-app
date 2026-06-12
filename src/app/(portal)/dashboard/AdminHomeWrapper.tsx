@@ -34,6 +34,7 @@ export default function AdminHomeWrapper(props: AdminHomeWrapperProps) {
     <HomeClient
       {...homeProps}
       myStaffId={myStaffId}
+      projectId={projectId}
       tasksWidget={<MyTasksWidget tasks={myTodayTasks} />}
     />
   );

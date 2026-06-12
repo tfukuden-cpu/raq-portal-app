@@ -9,6 +9,7 @@ import { cookies } from "next/headers";
 import { getCurrentProjectId } from "@/lib/project-context";
 import HomeClient from "./HomeClient";
 import AdminHomeWrapper from "./AdminHomeWrapper";
+import { getBreakRoomStateAction } from "../seating/break-room-actions";
 import type { GroupTask, TaskGroup, StaffOption, NameMapping } from "../tasks/TasksClient";
 
 function tokyoToday(): string {
@@ -289,8 +290,14 @@ export default async function DashboardPage() {
     .reverse()
     .find((p) => p.punch_type === "clock_out");
 
+  // ── 休憩室の全体状況（空き箱・開放/閉鎖） ──
+  const breakRoomState = await getBreakRoomStateAction(currentProjectId!);
+
   // ── 共通の home props ──
   const homeProps = {
+    isAdmin,
+    projectId: currentProjectId!,
+    breakRoomState,
     displayName,
     projectName: currentProject?.name ?? "",
     hasMultipleProjects: activeMemberships.length > 1,

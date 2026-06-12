@@ -107,7 +107,7 @@ export default async function PunchPage({
       .eq("assignment_date", today),
     admin
       .from("break_room_settings")
-      .select("capacity, amenities")
+      .select("capacity, amenities, is_open")
       .eq("project_id", projectId)
       .maybeSingle(),
     admin
@@ -274,6 +274,7 @@ export default async function PunchPage({
   }
 
   const breakRoomCapacity = (breakRoomSetting as { capacity?: number } | null)?.capacity ?? 6;
+  const breakRoomIsOpen   = (breakRoomSetting as { is_open?: boolean } | null)?.is_open ?? true;
   const breakRoomUses = (breakRoomUseRows ?? []).map(u => ({
     boxNumber: u.box_number as number,
     staffId:   u.staff_id as string,
@@ -301,6 +302,7 @@ export default async function PunchPage({
       motaAccountNumbers={motaAccountNumbers}
       motaSlotInfoMap={motaSlotInfoMap}
       breakRoomCapacity={breakRoomCapacity}
+      breakRoomIsOpen={breakRoomIsOpen}
       breakRoomUses={breakRoomUses}
       breakRoomAmenities={breakRoomAmenities}
       rpgFontClass={dotGothic.className}
