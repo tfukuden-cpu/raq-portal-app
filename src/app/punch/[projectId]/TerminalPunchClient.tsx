@@ -444,6 +444,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   const [roomIsOpen, setRoomIsOpen] = useState(breakRoomIsOpen);
   const [roomUses, setRoomUses] = useState<BreakRoomUseItem[]>(breakRoomUses);
   const [roomAmenities, setRoomAmenities] = useState<BreakRoomAmenityItem[]>(breakRoomAmenities);
+  const [roomHelpOpen, setRoomHelpOpen] = useState(false);               // つかいかたモーダル
   const [roomPickBox, setRoomPickBox] = useState<number | null>(null);   // 入室する箱番号（名前選択モーダル表示中）
   const [roomLeaveBox, setRoomLeaveBox] = useState<number | null>(null); // 退室確認中の箱番号
   const [roomError, setRoomError] = useState<string | null>(null);
@@ -1160,14 +1161,22 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                         <p className="text-cyan-300/80 text-[10px] leading-relaxed">
                           ※きゅうけいちゅうの ひとだけ くわわれます。きゅうけいもどりで じどうで パーティーから ぬけます。
                         </p>
-                        <a
-                          href={BREAK_ROOM_MAP_URL}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 text-[11px] text-white border border-white/50 rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition-all"
-                        >
-                          <span className="text-amber-300 mr-1">▶</span>ちずをみる
-                        </a>
+                        <div className="flex gap-1.5 shrink-0">
+                          <button
+                            onClick={() => setRoomHelpOpen(true)}
+                            className="text-[11px] text-white border border-white/50 rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition-all"
+                          >
+                            <span className="text-amber-300 mr-1">▶</span>つかいかた
+                          </button>
+                          <a
+                            href={BREAK_ROOM_MAP_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-white border border-white/50 rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition-all"
+                          >
+                            <span className="text-amber-300 mr-1">▶</span>ちずをみる
+                          </a>
+                        </div>
                       </div>
                     </div>
                   </RpgWindow>
@@ -1265,6 +1274,48 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
             </div>
           )}
         </div>
+
+        {/* ── 休憩室: つかいかたモーダル（RPG風） ─────────── */}
+        {roomHelpOpen && (
+          <div className={`fixed inset-0 z-[300] bg-black/80 flex items-center justify-center px-6 ${rpgFontClass}`} onClick={() => setRoomHelpOpen(false)}>
+            <div className="w-full max-w-md max-h-[85dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <RpgWindow>
+                <div className="px-5 py-4">
+                  <p className="text-amber-300 text-sm mb-3">【きゅうけいしつの つかいかた】</p>
+
+                  <div className="space-y-3 text-white text-[13px] leading-relaxed">
+                    <div>
+                      <p className="text-cyan-300 text-[11px] mb-0.5">▼ はいるとき</p>
+                      <p>１．きゅうけいの だかくを する</p>
+                      <p>２．あいている わくの「▶くわわる」を おす</p>
+                      <p>３．じぶんの なまえを えらぶ</p>
+                    </div>
+                    <div>
+                      <p className="text-cyan-300 text-[11px] mb-0.5">▼ でるとき</p>
+                      <p>・じぶんの キャラを タップして「ぬける」</p>
+                      <p>・きゅうけいもどり / たいきんの だこくでも<br />　じどうで パーティーから ぬけます</p>
+                    </div>
+                    <div>
+                      <p className="text-cyan-300 text-[11px] mb-0.5">▼ ちゅうい</p>
+                      <p>・きゅうけいちゅうの ひとだけ はいれます</p>
+                      <p>・まんいんの ときは あきを まってね</p>
+                      <p>・「ヘイサちゅう」の ときは つかえません</p>
+                      <p>・ばしょは「▶ちずをみる」で かくにん（とほ５ふん）</p>
+                      <p>・せつびの ○×は キャンプに あるもの／ないもの</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setRoomHelpOpen(false)}
+                    className="mt-4 w-full h-11 rounded-lg border-2 border-white text-white text-[14px] hover:bg-white/10 active:scale-[0.98] transition"
+                  >
+                    ▶ とじる
+                  </button>
+                </div>
+              </RpgWindow>
+            </div>
+          </div>
+        )}
 
         {/* ── 休憩室: 入室する名前の選択モーダル（RPG風） ──── */}
         {roomPickBox !== null && (

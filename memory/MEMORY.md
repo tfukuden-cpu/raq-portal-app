@@ -16,7 +16,8 @@
 ## 現在の開発状態（2026-06-12更新）
 
 ### 直近の作業（ホームに休憩室ウィンドウ＋開放/閉鎖切替）
-- ホームに「きゅうけいしつ」RPGウィンドウ追加: 空き数＋箱グリッド表示。空き箱タップで本人入室（`enterMyBreakRoomAction`＝セッションからstaffId導出→`enterBreakRoomAction`に委譲、休憩打刻中チェックはサーバー側）。自分の箱タップで退室。占有者は名前＋キャラ＋入室時刻表示（`getBreakRoomStateAction` が staffs join で name/rpgCharId を解決するよう拡張）
+- ホームに「きゅうけいキャンプ」を追加（**打刻端末の休憩室タブと同一スタイル**: camp-bg-v2.png＋焚き火rpgFlicker/火の粉rpgSpark＋メッセージウィンドウ「なかま N/Mにん」＋箱グリッド）。空き箱「▶くわわる」タップで本人入室（`enterMyBreakRoomAction`＝セッションからstaffId導出→`enterBreakRoomAction`に委譲、休憩打刻中チェックはサーバー側）。**占有箱は表示のみ（タップ不可・退室は「きゅうけいちゅう」カードの退室ボタン）**。自分の箱はアンバー枠「じぶん」。占有者は名前＋キャラ＋入室時刻表示（`getBreakRoomStateAction` が staffs join で name/rpgCharId を解決するよう拡張）
+- 打刻端末の休憩室タブに「▶つかいかた」ボタン→RPG風マニュアルモーダル（はいるとき/でるとき/ちゅうい。ひらがな表記）
 - **開放/閉鎖**: `break_room_settings.is_open`（マイグレーション add_break_room_is_open 済み）。ホームで管理者（isAdmin）に「▶閉鎖する/開放する」ボタン。閉鎖中: ホーム=全箱✕・端末=「とざされている……」＋ヘイサちゅう表示・`enterBreakRoomAction` がサーバー側拒否
 - statuses API breakRoom に `isOpen` 追加（端末30秒ポーリングで反映）。`BreakRoomState` 型に isOpen・`BreakRoomUse` に name?/rpgCharId? 追加
 - dashboard/page.tsx が `getBreakRoomStateAction` を呼び homeProps に `isAdmin`/`projectId`/`breakRoomState` を追加。**AdminHomeWrapper は projectId を自分用に destructure するため HomeClient へ明示的に渡し直している**（忘れると管理者だけ休憩室操作不能）
