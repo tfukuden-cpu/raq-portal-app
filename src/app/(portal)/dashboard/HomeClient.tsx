@@ -238,8 +238,10 @@ export default function HomeClient({
   const [feedback,     setFeedback]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [optDeparture, setOptDeparture] = useState(departureTime);
   const [optBreakRoom, setOptBreakRoom] = useState(breakRoomUse);
-  const [liveTime,  setLiveTime]  = useState(nowHHMM);
-  const [greetMsg,  setGreetMsg]  = useState(getGreetingMessage);
+  // 時刻・ランダム挨拶はサーバーとクライアントで結果が変わり hydration mismatch (#418) になるため、
+  // SSR時は固定プレースホルダにしてマウント後に useEffect で確定させる
+  const [liveTime,  setLiveTime]  = useState("--:--");
+  const [greetMsg,  setGreetMsg]  = useState<{ word: string; message: string }>({ word: "", message: "……" });
 
   useEffect(() => {
     setLiveTime(nowHHMM());

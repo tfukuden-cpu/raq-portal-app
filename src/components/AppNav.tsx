@@ -84,11 +84,14 @@ export default function AppNav({
   const router   = useRouter();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [switching, startSwitch]  = useTransition();
-  const [liveTime,  setLiveTime]  = useState(nowHHMM);
-  const [dateStr,   setDateStr]   = useState(fmtDateHeader);
+  // SSRとクライアントで時刻がズレると hydration mismatch (#418) になるため、
+  // 初期値は固定プレースホルダにしてマウント後に確定させる
+  const [liveTime,  setLiveTime]  = useState("--:--");
+  const [dateStr,   setDateStr]   = useState("");
 
   useEffect(() => {
     const tick = () => { setLiveTime(nowHHMM()); setDateStr(fmtDateHeader()); };
+    tick();
     const id = setInterval(tick, 15000);
     return () => clearInterval(id);
   }, []);
