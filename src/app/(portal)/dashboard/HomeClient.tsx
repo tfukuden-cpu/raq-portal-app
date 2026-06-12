@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, type ReactNode } from "react";
+import { DotGothic16 } from "next/font/google";
 import {
   recordDepartureAction,
   submitAbsenceAction,
@@ -9,7 +10,6 @@ import {
 } from "./actions";
 import { leaveMyBreakRoomAction } from "../seating/break-room-actions";
 import { RPG_CHARS, rpgCharFor, rpgCharImg } from "@/lib/rpg-chars";
-import { ChevronRightIcon } from "@/components/icons";
 import { DepartureModal } from "./DepartureModal";
 import { AbsenceModal } from "./AbsenceModal";
 import { LateModal } from "./LateModal";
@@ -48,6 +48,47 @@ export interface HomeClientProps {
 const NAVY    = "#0d1b35";
 const WD      = ["日","月","火","水","木","金","土"];
 const OFF_NAMES = new Set(["公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休","休暇"]);
+
+// ── RPGテーマ（打刻端末・休憩室と共通の世界観） ───────────────────────────────
+const dotGothic = DotGothic16({ weight: "400", subsets: ["latin"], preload: false });
+
+const RPG_PAGE_BG = "linear-gradient(180deg, #02040f 0%, #050a24 45%, #0a1340 100%)";
+
+const RPG_HOME_KEYFRAMES = `
+@keyframes rpgTwinkle { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
+@keyframes rpgBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes rpgCursor { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+`;
+
+const RPG_STARS: { l: number; t: number; d: number; s: number }[] = [
+  { l: 5, t: 14, d: 0,   s: 2 }, { l: 12, t: 42, d: 1.3, s: 3 }, { l: 19, t: 22, d: 0.6, s: 2 },
+  { l: 27, t: 55, d: 2.0, s: 2 }, { l: 34, t: 18, d: 0.9, s: 3 }, { l: 42, t: 38, d: 1.6, s: 2 },
+  { l: 58, t: 35, d: 0.4, s: 2 }, { l: 66, t: 16, d: 1.9, s: 3 }, { l: 73, t: 48, d: 1.1, s: 2 },
+  { l: 81, t: 24, d: 0.2, s: 2 }, { l: 88, t: 52, d: 1.5, s: 3 }, { l: 95, t: 18, d: 0.8, s: 2 },
+];
+
+/** ドラクエ風ウィンドウ（紺背景＋白二重枠）。title を渡すと枠上にラベルを重ねる */
+function RpgWindow({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
+  return (
+    <div className={`relative ${className}`}>
+      <div className="rounded-lg border-2 border-white bg-[#000846] p-[3px]">
+        <div className="rounded-md border border-white/80 bg-[#000846] w-full h-full">
+          {children}
+        </div>
+      </div>
+      {title && (
+        <p className="absolute -top-[11px] left-4 bg-[#000846] border border-white rounded px-2.5 py-0.5 text-[12px] leading-none text-white select-none">
+          {title}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** メッセージ末尾の点滅▼カーソル */
+function BlinkCursor() {
+  return <span className="inline-block text-white ml-1" style={{ animation: "rpgCursor 1s steps(1) infinite" }}>▼</span>;
+}
 
 function nowHHMM(): string {
   return new Date().toLocaleTimeString("ja-JP", {
@@ -117,36 +158,7 @@ function dayOfWeek(dateStr: string): string {
 function isSunday(dateStr: string)   { return new Date(dateStr + "T00:00:00").getDay() === 0; }
 function isSaturday(dateStr: string) { return new Date(dateStr + "T00:00:00").getDay() === 6; }
 
-// ── アイコン ───────────────────────────────────────────────────────────────────
-
-function DepartureIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-      <path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>
-    </svg>
-  );
-}
-
-function AbsenceIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-      <rect x="3" y="4" width="18" height="18" rx="2"/>
-      <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-      <line x1="3" y1="10" x2="21" y2="10"/>
-      <line x1="9" y1="15" x2="15" y2="15"/>
-    </svg>
-  );
-}
-
-function LateIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-    </svg>
-  );
-}
-
-// ── ステータス円バッジ ─────────────────────────────────────────────────────────
+// ── 勤怠ステータス表示設定 ─────────────────────────────────────────────────────
 
 const STATE_CONFIG: Record<HomeState, { label: string; border: string; text: string; bg: string }> = {
   pre_departure: {
@@ -174,21 +186,6 @@ const STATE_CONFIG: Record<HomeState, { label: string; border: string; text: str
     bg:     "",
   },
 };
-
-function StatusCircle({ state }: { state: HomeState }) {
-  const cfg = STATE_CONFIG[state];
-  return (
-    <div className={`w-[88px] h-[88px] rounded-full border-[3px] ${cfg.border} flex flex-col items-center justify-center gap-0.5 flex-shrink-0`}>
-      {state === "working" && (
-        <span className="relative flex h-1.5 w-1.5 mb-0.5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-        </span>
-      )}
-      <span className={`text-[14px] font-bold leading-none ${cfg.text}`}>{cfg.label}</span>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -313,163 +310,179 @@ export default function HomeClient({
 
   return (
     <>
-      <main className="min-h-screen bg-[#f4f6fa] dark:bg-zinc-950">
+      <main className={`min-h-screen ${dotGothic.className}`} style={{ background: RPG_PAGE_BG }}>
+        <style>{RPG_HOME_KEYFRAMES}</style>
 
-        {/* モバイル用ヘッダー（PCではAppNavのヘッダーが担当） */}
-        <div className="md:hidden px-5 pt-6 pb-4 bg-white border-b border-zinc-100 dark:bg-zinc-900 dark:border-zinc-800">
-          <p className="text-[12px] text-zinc-400 mb-0.5">{todayLabel}</p>
-          <p className="text-[40px] font-bold tabular-nums leading-none text-zinc-900 dark:text-white">{liveTime}</p>
-        </div>
+        <div className="max-w-6xl mx-auto px-4 md:px-8 pt-6 md:pt-7 pb-32 md:pb-12 space-y-5">
 
-        <div className="max-w-6xl mx-auto px-4 md:px-8 pt-5 md:pt-6 pb-32 md:pb-12 space-y-4">
+          {/* ── ヒーローバナー（夜のフィールド＋マイキャラクター） ── */}
+          <RpgWindow>
+            <div className="relative overflow-hidden rounded-md h-44 md:h-56">
+              {/* 背景: AI生成の夜の城下町。読み込めない間は夜空グラデ＋星 */}
+              <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, #02040f 0%, #0a1340 70%, #14275c 100%)" }} />
+              {RPG_STARS.map((s, i) => (
+                <span
+                  key={i}
+                  className="absolute rounded-full bg-white"
+                  style={{
+                    left: `${s.l}%`, top: `${s.t}%`, width: s.s, height: s.s,
+                    animation: `rpgTwinkle ${2 + (i % 3)}s ease-in-out ${s.d}s infinite`,
+                  }}
+                />
+              ))}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/rpg/home-hero.png"
+                alt=""
+                draggable={false}
+                className="absolute inset-0 w-full h-full object-cover object-bottom select-none"
+                style={{ imageRendering: "pixelated" }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#02040f]/70 via-transparent to-[#02040f]/40" />
 
-          {/* ── 挨拶カード ── */}
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-6 py-5">
-            <div className="flex flex-col gap-0.5">
+              {/* 日付・時刻 */}
+              <div className="absolute top-2.5 left-3 right-3 flex items-center justify-between">
+                <span className="text-[11px] text-white/90 bg-[#000846]/80 border border-white/60 rounded px-2 py-0.5">{todayLabel}</span>
+                <span className="text-[20px] font-bold tabular-nums leading-none text-white bg-[#000846]/80 border border-white/60 rounded px-2.5 py-1">{liveTime}</span>
+              </div>
+
+              {/* マイキャラクター（タップで変更） */}
+              <button
+                onClick={() => setCharPickerOpen(true)}
+                className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center active:scale-95 transition-transform"
+              >
+                <div style={{ animation: "rpgBob 1.4s steps(2) infinite" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={rpgCharImg(myChar.id)} alt="" draggable={false} className="h-20 md:h-24 w-auto select-none" style={{ imageRendering: "pixelated" }} />
+                </div>
+                <span className="mt-1 text-[11px] text-white bg-[#000846]/85 border border-white/70 rounded px-2 py-0.5 whitespace-nowrap">
+                  {displayName}（{myChar.label}）
+                </span>
+              </button>
+            </div>
+          </RpgWindow>
+
+          {/* ── メッセージウィンドウ（挨拶） ── */}
+          <RpgWindow>
+            <div className="px-4 py-3.5 md:px-5">
               {greetMsg.message.split("\n").map((line, i) => (
-                <p key={i} className={i === 0
-                  ? "text-[20px] md:text-[22px] font-bold text-[#0d1b35] dark:text-white leading-snug"
-                  : "text-[15px] md:text-[16px] text-zinc-500 dark:text-zinc-400 leading-relaxed"
-                }>
-                  {line}
+                <p key={i} className="text-[14px] md:text-[15px] text-white leading-relaxed">
+                  {i === 0 ? `＊「${line}` : `　　${line}`}
+                  {i === greetMsg.message.split("\n").length - 1 && <>」<BlinkCursor /></>}
                 </p>
               ))}
             </div>
-          </div>
+          </RpgWindow>
 
-          {/* ── 休憩室 入室中カード ── */}
+          {/* ── 休憩室 入室中ウィンドウ ── */}
           {optBreakRoom && (
-            <div className="bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-800 px-6 py-4 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-amber-700 dark:text-amber-300">
-                  休憩室に入室中
-                </p>
-                <p className="text-[12px] text-amber-600/80 dark:text-amber-400/80 mt-0.5 tabular-nums">
-                  No.{optBreakRoom.boxNumber}・{optBreakRoom.enteredAt}〜　休憩戻り打刻でも自動退室されます
-                </p>
+            <RpgWindow title="きゅうけいちゅう">
+              <div className="px-4 py-3.5 md:px-5 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[14px] text-amber-300">休憩室に入室中</p>
+                  <p className="text-[11px] text-white/60 mt-1 tabular-nums">
+                    No.{optBreakRoom.boxNumber}・{optBreakRoom.enteredAt}〜　休憩戻り打刻でも自動退室されます
+                  </p>
+                </div>
+                <button
+                  onClick={handleLeaveBreakRoom}
+                  disabled={isPending}
+                  className="shrink-0 text-[13px] text-white border-2 border-white rounded-lg px-4 py-2 hover:bg-white/10 active:scale-95 transition disabled:opacity-50"
+                >
+                  ▶ 退室する
+                </button>
               </div>
-              <button
-                onClick={handleLeaveBreakRoom}
-                disabled={isPending}
-                className="shrink-0 text-[13px] font-bold text-white bg-amber-600 hover:bg-amber-500 px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50"
-              >
-                退室する
-              </button>
-            </div>
+            </RpgWindow>
           )}
 
-          {/* ── マイキャラクター ── */}
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-6 py-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-4 min-w-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={rpgCharImg(myChar.id)} alt="" draggable={false} className="h-14 w-auto select-none shrink-0" />
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">マイキャラクター</p>
-                <p className="text-[12px] text-zinc-400 mt-0.5 truncate">
-                  {myChar.label}{optCharId ? "" : "（おまかせ）"}　休憩室で表示されます
-                </p>
+          {/* ── きょうのクエスト＋ステータス ── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1.5">
+
+            {/* きょうのクエスト（本日のシフト） */}
+            <RpgWindow title="きょうのクエスト">
+              <div className="px-4 py-4 md:px-5">
+                {hasShift ? (
+                  <>
+                    <p className="text-[11px] text-white/50 mb-1">シフトネーム</p>
+                    <p className="text-[24px] text-amber-300 leading-tight mb-3">{shift.name}</p>
+                    <p className="text-[11px] text-white/50 mb-1">シフト時間</p>
+                    <p className="text-[16px] text-white tabular-nums">
+                      {shift.start?.slice(0,5) ?? "--:--"} - {shift.end?.slice(0,5) ?? "--:--"}
+                    </p>
+                  </>
+                ) : isHoliday ? (
+                  <p className="text-[18px] text-white/70 py-3">きょうは おやすみだ。ゆっくり やすもう。</p>
+                ) : (
+                  <p className="text-[15px] text-white/40 py-3">クエストは ない（シフト未登録）</p>
+                )}
+
+                {/* 出発報告（出発前のみ） */}
+                {enableDeparture && state === "pre_departure" && (
+                  <button
+                    onClick={() => !isPending && setModal("departure")}
+                    disabled={isPending}
+                    className="mt-4 w-full h-11 rounded-lg border-2 border-white text-white text-[14px] flex items-center justify-center gap-2 hover:bg-white/10 active:scale-[0.98] transition disabled:opacity-50"
+                  >
+                    ▶ しゅっぱつ ほうこく
+                  </button>
+                )}
               </div>
-            </div>
-            <button
-              onClick={() => setCharPickerOpen(true)}
-              className="shrink-0 text-[13px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 px-4 py-2.5 rounded-xl hover:bg-blue-100 transition-colors"
-            >
-              変更する
-            </button>
-          </div>
+            </RpgWindow>
 
-          {/* ── 上段 3カラム ── */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-
-            {/* LEFT: 本日のシフト */}
-            <div className="md:col-span-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-6">
-              <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 mb-5">本日のシフト</p>
-              {hasShift ? (
-                <>
-                  <p className="text-[11px] text-zinc-400 mb-1">シフトネーム</p>
-                  <p className="text-[26px] font-bold text-[#0d1b35] dark:text-white leading-tight mb-4">{shift.name}</p>
-                  <p className="text-[11px] text-zinc-400 mb-1">シフト時間</p>
-                  <p className="text-[16px] font-medium text-[#0d1b35] dark:text-zinc-200 tabular-nums">
-                    {shift.start?.slice(0,5) ?? "--:--"} - {shift.end?.slice(0,5) ?? "--:--"}
-                  </p>
-                </>
-              ) : isHoliday ? (
-                <>
-                  <p className="text-[11px] text-zinc-400 mb-1">シフトネーム</p>
-                  <p className="text-[26px] font-bold text-zinc-400 leading-tight">休日</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-[11px] text-zinc-400 mb-1">シフトネーム</p>
-                  <p className="text-[18px] text-zinc-300 dark:text-zinc-600">シフト未登録</p>
-                </>
-              )}
-
-              {/* 出発報告ボタン（出発前のみ） */}
-              {enableDeparture && state === "pre_departure" && (
-                <button
-                  onClick={() => !isPending && setModal("departure")}
-                  disabled={isPending}
-                  className="mt-6 w-full h-10 rounded-xl bg-[#0d1b35] text-white text-[13px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-[#162b50] transition-colors"
-                >
-                  <DepartureIcon />出発報告
-                </button>
-              )}
-            </div>
-
-            {/* MIDDLE: 勤怠ステータス */}
-            <div className="md:col-span-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-6">
-              <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 mb-5">勤怠ステータス</p>
-              <div className="flex items-center gap-6">
-                <StatusCircle state={state} />
-                <div className="flex flex-col gap-5 flex-1">
-                  <div>
-                    <p className="text-[11px] text-zinc-400 mb-1">打刻時間</p>
-                    <p className="text-[22px] font-bold tabular-nums text-[#0d1b35] dark:text-white">
-                      {clockInTime ?? "--:--"}
-                    </p>
+            {/* ステータス（勤怠） */}
+            <RpgWindow title="ステータス">
+              <div className="px-4 py-4 md:px-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[13px] text-white/60">じょうたい</span>
+                  <span className={`text-[16px] ${
+                    state === "working"       ? "text-emerald-300"
+                    : state === "clocked_out" ? "text-white/40"
+                    : state === "pre_departure" ? "text-amber-300"
+                    : "text-white"
+                  }`}>
+                    {state === "working" && (
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-300 mr-1.5 align-middle" style={{ animation: "rpgCursor 1.2s steps(1) infinite" }} />
+                    )}
+                    {STATE_CONFIG[state].label}
+                  </span>
+                </div>
+                <div className="border-t border-white/20 pt-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-white/60">しゅっきん</span>
+                    <span className="text-[20px] text-white tabular-nums">{clockInTime ?? "--:--"}</span>
                   </div>
-                  <div>
-                    <p className="text-[11px] text-zinc-400 mb-1">退勤時間</p>
-                    <p className="text-[22px] font-bold tabular-nums text-[#0d1b35] dark:text-white">
-                      {clockOutTime ?? "--:--"}
-                    </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-white/60">たいきん</span>
+                    <span className="text-[20px] text-white tabular-nums">{clockOutTime ?? "--:--"}</span>
                   </div>
                 </div>
               </div>
-            </div>
+            </RpgWindow>
+          </div>
 
-            {/* RIGHT: アクションカード */}
-            <div className="md:col-span-1 flex flex-row md:flex-col gap-3">
+          {/* ── コマンド（報告メニュー） ── */}
+          <RpgWindow title="コマンド" className="mt-1.5">
+            <div className="px-3 py-3 md:px-4 grid grid-cols-2 gap-2">
 
               {/* 欠勤報告 */}
               {showAbsenceBtn ? (
                 <button
                   onClick={() => !isPending && setModal("absence")}
                   disabled={isPending}
-                  className="flex-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-4 py-4 flex items-center justify-between gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50 text-left"
+                  className="flex items-center gap-2 px-3 py-3 rounded-lg text-left text-[14px] text-white hover:bg-white/10 active:scale-[0.98] transition disabled:opacity-50"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-[#0d1b35] dark:text-zinc-300"><AbsenceIcon /></span>
-                    <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-200">欠勤報告</span>
-                  </div>
-                  <ChevronRightIcon className="w-4 h-4 text-zinc-300 dark:text-zinc-600 flex-shrink-0" />
+                  <span className="text-amber-300">▶</span>欠勤報告
                 </button>
               ) : hasAbsenceReport ? (
                 <a
                   href="/absence-followup"
-                  className="flex-1 bg-blue-50 dark:bg-blue-950/30 rounded-2xl border border-blue-100 dark:border-blue-800 px-4 py-4 flex items-center justify-between gap-2 hover:bg-blue-100/50 transition-colors"
+                  className="flex items-center gap-2 px-3 py-3 rounded-lg text-[14px] text-sky-300 hover:bg-white/10 transition"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-blue-500"><AbsenceIcon /></span>
-                    <span className="text-[13px] font-medium text-blue-600 dark:text-blue-400">経過報告</span>
-                  </div>
-                  <ChevronRightIcon className="w-4 h-4 text-blue-300 flex-shrink-0" />
+                  <span>▶</span>経過報告
                 </a>
               ) : (
-                <div className="flex-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-4 py-4 flex items-center gap-2.5 opacity-40">
-                  <span className="text-zinc-400"><AbsenceIcon /></span>
-                  <span className="text-[13px] font-medium text-zinc-400">欠勤報告済</span>
+                <div className="flex items-center gap-2 px-3 py-3 text-[14px] text-white/30">
+                  <span>▶</span>欠勤報告済
                 </div>
               )}
 
@@ -478,98 +491,87 @@ export default function HomeClient({
                 <button
                   onClick={() => !isPending && setModal("late")}
                   disabled={isPending}
-                  className="flex-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-4 py-4 flex items-center justify-between gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50 text-left"
+                  className="flex items-center gap-2 px-3 py-3 rounded-lg text-left text-[14px] text-white hover:bg-white/10 active:scale-[0.98] transition disabled:opacity-50"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-[#0d1b35] dark:text-zinc-300"><LateIcon /></span>
-                    <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-200">遅刻報告</span>
-                  </div>
-                  <ChevronRightIcon className="w-4 h-4 text-zinc-300 dark:text-zinc-600 flex-shrink-0" />
+                  <span className="text-amber-300">▶</span>遅刻報告
                 </button>
               ) : (
-                <div className="flex-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 px-4 py-4 flex items-center gap-2.5 opacity-40">
-                  <span className="text-zinc-400"><LateIcon /></span>
-                  <span className="text-[13px] font-medium text-zinc-400">
-                    {hasLateReport ? "遅刻済み" : "退勤済"}
-                  </span>
+                <div className="flex items-center gap-2 px-3 py-3 text-[14px] text-white/30">
+                  <span>▶</span>{hasLateReport ? "遅刻報告済" : "退勤済"}
                 </div>
               )}
 
             </div>
-          </div>
+          </RpgWindow>
 
-          {/* ── お知らせタイムライン ── */}
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
-            <div className="px-6 pt-5 pb-3 flex items-center justify-between">
-              <h2 className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">お知らせタイムライン</h2>
-              <a href="/notices" className="flex items-center gap-0.5 text-[12px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                すべて見る
-                <ChevronRightIcon className="w-3.5 h-3.5" />
+          {/* ── おしらせ（ギルドけいじばん） ── */}
+          <RpgWindow title="おしらせ" className="mt-1.5">
+            <div className="px-4 pt-4 pb-2 md:px-5 flex items-center justify-between">
+              <span className="text-[12px] text-white/50">ギルドけいじばん</span>
+              <a href="/notices" className="flex items-center gap-1 text-[12px] text-sky-300 hover:text-sky-200 transition-colors">
+                すべて見る ▶
                 {noticeCount > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold tabular-nums">
+                  <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold tabular-nums">
                     {noticeCount > 99 ? "99+" : noticeCount}
                   </span>
                 )}
               </a>
             </div>
             {recentNotices.length > 0 ? (
-              <div>
-                {recentNotices.map((n, i) => (
+              <div className="pb-2">
+                {recentNotices.map(n => (
                   <a
                     key={n.id}
                     href="/notices"
-                    className={`flex items-center gap-4 px-6 py-3.5 border-t border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${i === 0 ? "border-zinc-100 dark:border-zinc-800" : ""}`}
+                    className="flex items-center gap-3 px-4 md:px-5 py-2.5 border-t border-white/10 hover:bg-white/5 transition-colors"
                   >
-                    <span className="w-2 h-2 rounded-full bg-[#0d1b35] dark:bg-blue-400 flex-shrink-0" />
-                    <span className="text-[11px] text-zinc-400 tabular-nums w-36 flex-shrink-0">{n.createdAt}</span>
-                    <span className="text-[13px] text-zinc-700 dark:text-zinc-300 truncate">{n.title}</span>
+                    <span className="text-amber-300 text-[11px] flex-shrink-0">★</span>
+                    <span className="text-[11px] text-white/40 tabular-nums w-32 md:w-36 flex-shrink-0">{n.createdAt}</span>
+                    <span className="text-[13px] text-white truncate">{n.title}</span>
                   </a>
                 ))}
               </div>
             ) : (
-              <p className="px-6 pb-5 pt-2 text-[13px] text-zinc-400">お知らせはありません</p>
+              <p className="px-4 md:px-5 pb-4 pt-1 text-[13px] text-white/40">おしらせは ない</p>
             )}
-          </div>
+          </RpgWindow>
 
-          {/* ── 1週間カレンダーカード ── */}
+          {/* ── こんしゅうの ぼうけん（1週間カレンダー） ── */}
           {weekSchedule.length > 0 && (
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
-              <div className="px-6 pt-5 pb-5">
-                <h2 className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 mb-5">1週間カレンダーカード</h2>
-                <div className="grid grid-cols-7 gap-2">
+            <RpgWindow title="こんしゅうの よてい" className="mt-1.5">
+              <div className="px-3 pt-4 pb-3 md:px-5">
+                <div className="grid grid-cols-7 gap-1.5 md:gap-2">
                   {weekSchedule.map(day => {
                     const isToday = day.date === todayDateStr;
                     const isOff   = !day.name || OFF_NAMES.has(day.name);
                     const sun     = isSunday(day.date);
                     const sat     = isSaturday(day.date);
                     return (
-                      <div key={day.date} className="flex flex-col items-center gap-1">
-                        {/* 日付円 */}
-                        <div className={`w-10 h-10 rounded-full flex flex-col items-center justify-center ${
-                          isToday ? "bg-[#0d1b35]" : ""
+                      <div
+                        key={day.date}
+                        className={`flex flex-col items-center gap-1 rounded-md py-2 ${
+                          isToday ? "bg-white" : ""
+                        }`}
+                      >
+                        <p className={`text-[12px] tabular-nums leading-none ${
+                          isToday ? "text-[#000846] font-bold" : sun ? "text-red-300" : sat ? "text-sky-300" : "text-white"
                         }`}>
-                          <p className={`text-[12px] font-bold tabular-nums leading-none ${
-                            isToday ? "text-white" : sun ? "text-red-500" : sat ? "text-blue-500" : "text-zinc-700 dark:text-zinc-300"
-                          }`}>
-                            {fmtMD(day.date)}
-                          </p>
-                          <p className={`text-[9px] leading-none mt-0.5 ${
-                            isToday ? "text-white/60" : sun ? "text-red-400" : sat ? "text-blue-400" : "text-zinc-400"
-                          }`}>
-                            ({dayOfWeek(day.date)})
-                          </p>
-                        </div>
-                        {/* シフト名 */}
-                        <p className={`text-[12px] font-semibold text-center leading-tight ${
-                          isOff ? "text-zinc-300 dark:text-zinc-600"
-                          : isToday ? "text-[#0d1b35] dark:text-blue-300"
-                          : "text-zinc-700 dark:text-zinc-200"
+                          {fmtMD(day.date)}
+                        </p>
+                        <p className={`text-[9px] leading-none ${
+                          isToday ? "text-[#000846]/60" : sun ? "text-red-300/70" : sat ? "text-sky-300/70" : "text-white/40"
+                        }`}>
+                          ({dayOfWeek(day.date)})
+                        </p>
+                        <p className={`text-[11px] text-center leading-tight mt-0.5 ${
+                          isToday ? (isOff ? "text-[#000846]/40" : "text-[#000846] font-bold")
+                          : isOff ? "text-white/30"
+                          : "text-amber-300"
                         }`}>
                           {isOff ? (day.name ? "公休" : "-") : (day.name ?? "-")}
                         </p>
-                        {/* 時間 */}
                         {!isOff && day.start && (
-                          <p className="text-[9px] text-zinc-400 tabular-nums text-center leading-tight">
+                          <p className={`text-[9px] tabular-nums text-center leading-tight ${isToday ? "text-[#000846]/60" : "text-white/40"}`}>
                             {day.start.slice(0,5)}-{day.end?.slice(0,5) ?? "--"}
                           </p>
                         )}
@@ -578,13 +580,12 @@ export default function HomeClient({
                   })}
                 </div>
               </div>
-              <div className="border-t border-zinc-50 dark:border-zinc-800 px-6 py-3">
-                <a href="/shifts" className="flex items-center justify-center gap-1 text-[12px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                  スケジュールをすべて見る
-                  <ChevronRightIcon className="w-3.5 h-3.5" />
+              <div className="border-t border-white/15 px-4 py-2.5">
+                <a href="/shifts" className="flex items-center justify-center gap-1 text-[12px] text-sky-300 hover:text-sky-200 transition-colors">
+                  スケジュールを すべて見る ▶
                 </a>
               </div>
-            </div>
+            </RpgWindow>
           )}
 
           {/* ── 今日のタスク（管理者のみ） ── */}
@@ -595,8 +596,8 @@ export default function HomeClient({
 
       {/* ── トースト ── */}
       {feedback && (
-        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap px-5 py-3 rounded-2xl text-[14px] font-semibold shadow-2xl ${
-          feedback.ok ? "bg-[#0d1b35] text-white" : "bg-red-500 text-white"
+        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap px-5 py-3 rounded-lg border-2 text-[14px] shadow-2xl ${dotGothic.className} ${
+          feedback.ok ? "bg-[#000846] border-white text-white" : "bg-red-700 border-white text-white"
         }`}>
           {feedback.msg}
         </div>
@@ -619,40 +620,42 @@ export default function HomeClient({
 
       {/* ── マイキャラクター選択モーダル ── */}
       {charPickerOpen && (
-        <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4" onClick={() => setCharPickerOpen(false)}>
+        <div className={`fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4 ${dotGothic.className}`} onClick={() => setCharPickerOpen(false)}>
           <div
-            className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-700 w-full max-w-2xl max-h-[85dvh] flex flex-col overflow-hidden"
+            className="rounded-lg border-2 border-white bg-[#000846] p-[3px] w-full max-w-2xl max-h-[85dvh] flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
-            <div className="px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between shrink-0">
-              <div>
-                <p className="text-[15px] font-bold text-zinc-800 dark:text-zinc-100">キャラクターを選ぶ</p>
-                <p className="text-[11px] text-zinc-400 mt-0.5">休憩室であなたのキャラとして表示されます（全{RPG_CHARS.length}体）</p>
+            <div className="rounded-md border border-white/80 bg-[#000846] flex flex-col overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-white/20 flex items-center justify-between shrink-0">
+                <div>
+                  <p className="text-[15px] text-white">キャラクターを えらぶ</p>
+                  <p className="text-[11px] text-white/50 mt-0.5">あなたの ぶんしんに なる（全{RPG_CHARS.length}体）</p>
+                </div>
+                <button onClick={() => setCharPickerOpen(false)} className="text-white/50 hover:text-white text-lg px-2">✕</button>
               </div>
-              <button onClick={() => setCharPickerOpen(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg px-2">✕</button>
-            </div>
-            <div className="overflow-y-auto overscroll-contain p-4">
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                {RPG_CHARS.map(c => {
-                  const isCurrent = c.id === myChar.id;
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => handlePickChar(c.id)}
-                      disabled={isPending}
-                      className={[
-                        "flex flex-col items-center pt-2 pb-1.5 px-1 rounded-xl border transition-all active:scale-95 disabled:opacity-50",
-                        isCurrent
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40 ring-2 ring-blue-300 dark:ring-blue-800"
-                          : "border-zinc-150 dark:border-zinc-700 hover:border-blue-300 hover:bg-zinc-50 dark:hover:bg-zinc-800",
-                      ].join(" ")}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={rpgCharImg(c.id)} alt="" draggable={false} loading="lazy" className="h-14 max-w-full object-contain select-none" />
-                      <p className="text-[10px] text-zinc-600 dark:text-zinc-300 mt-1 w-full truncate text-center">{c.label}</p>
-                    </button>
-                  );
-                })}
+              <div className="overflow-y-auto overscroll-contain p-4">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                  {RPG_CHARS.map(c => {
+                    const isCurrent = c.id === myChar.id;
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => handlePickChar(c.id)}
+                        disabled={isPending}
+                        className={[
+                          "flex flex-col items-center pt-2 pb-1.5 px-1 rounded-lg border transition-all active:scale-95 disabled:opacity-50",
+                          isCurrent
+                            ? "border-amber-300 bg-amber-300/10 ring-1 ring-amber-300"
+                            : "border-white/25 hover:border-white/70 hover:bg-white/5",
+                        ].join(" ")}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={rpgCharImg(c.id)} alt="" draggable={false} loading="lazy" className="h-14 max-w-full object-contain select-none" />
+                        <p className={`text-[10px] mt-1 w-full truncate text-center ${isCurrent ? "text-amber-300" : "text-white/80"}`}>{c.label}</p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
