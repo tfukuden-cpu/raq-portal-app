@@ -366,6 +366,7 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | insert直後のID取得に `.single()` 禁止 | RLSのSELECTポリシーが通らないとエラー。insertとselectを分離し、取れない場合のフォールバックを用意（周知投稿で発生済み） |
 | Server Actions のアップロードは bodySizeLimit に注意 | Vercelデフォルト1MB。next.config.ts で `serverActions.bodySizeLimit: "10mb"` 設定済み。クライアント側でも10MB検証を入れる |
 | Server Action は全体 try/catch で保護 | 未補足例外がクライアントで「This page couldn't load」クラッシュになる。catchしてエラーメッセージを返し console.error でVercelログに残す |
+| クライアントコンポーネントの useState 初期値に時刻・乱数を使わない | SSRとクライアントで結果が変わり hydration mismatch（React #418）になる。`useState("--:--")` 等の固定プレースホルダ＋マウント後の useEffect で確定させる（HomeClient の挨拶ランダム・AppNav の時計で発生済み） |
 | 周知の添付は1周知1ファイル | `notices.attachment_url/attachment_name`＋`notice-attachments`バケット（public）。周知削除時にストレージも削除すること |
 | public/ の画像を同一URLで差し替えたら `sw.js` の CACHE_VERSION を上げる | Service Worker が画像をキャッシュしており旧画像が表示され続ける（RPGキャラ画像差し替えで発生済み）。v2 から画像は Stale While Revalidate（次回表示で更新）だが、即時反映したい場合はバージョンを上げて全キャッシュ破棄させる |
 
