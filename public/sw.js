@@ -2,14 +2,15 @@
  * Raq ポータル Service Worker
  *
  * 戦略:
- * - Next.js 静的アセット (_next/static/) → Cache First（永続キャッシュ）
+ * - Next.js 静的アセット (_next/static/) → Cache First（永続キャッシュ・URLにハッシュ付きのため安全）
  * - ページ → Network First（オフライン時はキャッシュにフォールバック）
- * - フォント・アイコン → Cache First（1週間）
+ * - 画像・フォント → Stale While Revalidate（即キャッシュ表示＋裏で更新。同一URLで差し替えても次回反映される）
  *
  * キャッシュ名にバージョンを付けているので、SW 更新時に古いキャッシュを自動削除する。
+ * ※ public/ 配下の画像を同一URLのまま差し替えたら CACHE_VERSION を上げること
  */
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const STATIC_CACHE  = `raq-static-${CACHE_VERSION}`;
 const PAGES_CACHE   = `raq-pages-${CACHE_VERSION}`;
 const KNOWN_CACHES  = [STATIC_CACHE, PAGES_CACHE];
@@ -54,12 +55,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 画像・フォント: Cache First（1週間）
+  // 画像・フォント: Stale While Revalidate（キャッシュ即返し＋裏で最新を取得）
   if (
     url.pathname.startsWith("/icons/") ||
     url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|woff2?)$/)
   ) {
-    event.respondWith(cacheFirst(request, STATIC_CACHE));
+    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
     return;
   }
 
@@ -88,6 +89,22 @@ async function cacheFirst(request, cacheName) {
   } catch {
     return new Response("Offline", { status: 503 });
   }
+}
+
+async function staleWhileRevalidate(request, cacheName) {
+  const cached = await caches.match(request);
+  const fetchAndUpdate = fetch(request)
+    .then(async (response) => {
+      if (response.ok) {
+        const cache = await caches.open(cacheName);
+        cache.put(request, response.clone());
+      }
+      return response;
+    })
+    .catch(() => null);
+  if (cached) return cached;
+  const fresh = await fetchAndUpdate;
+  return fresh ?? new Response("Offline", { status: 503 });
 }
 
 async function networkFirst(request, cacheName) {
