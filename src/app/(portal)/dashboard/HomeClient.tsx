@@ -323,13 +323,24 @@ export default function HomeClient({
     });
   };
 
-  const handleEnterBreakRoom = (boxNumber: number) => {
-    if (!window.confirm(`休憩室の No.${boxNumber} に入室しますか？\n（休憩打刻中のみ入室できます）`)) return;
+  // 先頭の空き箱に入室する（ホームは箱を選ばないコンパクト表示）
+  const handleEnterBreakRoom = () => {
+    if (!roomState) return;
+    const usedBoxes = new Set(roomState.uses.map(u => u.boxNumber));
+    let boxNumber = 0;
+    for (let i = 1; i <= roomState.capacity; i++) {
+      if (!usedBoxes.has(i)) { boxNumber = i; break; }
+    }
+    if (boxNumber === 0) {
+      setFeedback({ ok: false, msg: "空き枠がありません" });
+      return;
+    }
+    if (!window.confirm("休憩室に入室しますか？\n（休憩打刻中のみ入室できます）")) return;
     startTransition(async () => {
       const r = await enterMyBreakRoomAction(boxNumber);
       if (r.ok) {
         setOptBreakRoom({ boxNumber, enteredAt: nowHHMM() });
-        setFeedback({ ok: true, msg: `No.${boxNumber} に入室しました` });
+        setFeedback({ ok: true, msg: "休憩室に入室しました" });
       } else {
         setFeedback({ ok: false, msg: r.error ?? "入室に失敗しました" });
       }
@@ -651,49 +662,19 @@ export default function HomeClient({
                   </div>
                 </RpgWindow>
 
-                {/* パーティーメンバー（箱） */}
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                  {Array.from({ length: roomState.capacity }, (_, i) => i + 1).map(boxNumber => {
-                    const use = roomState.uses.find(u => u.boxNumber === boxNumber);
-                    if (use) {
-                      const isMe = use.staffId === myStaffId;
-                      const cls = rpgCharFor(use.staffId, use.rpgCharId);
-                      return (
-                        <div
-                          key={boxNumber}
-                          className={`flex flex-col items-center pt-2 pb-1.5 px-1 rounded-xl bg-[#000846]/40 border ${
-                            isMe ? "border-amber-300" : "border-white/15"
-                          }`}
-                        >
-                          <div className="relative">
-                            <div style={{ animation: `rpgBob ${1.2 + (boxNumber % 3) * 0.15}s steps(2) ${(boxNumber % 6) * 0.2}s infinite` }}>
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={rpgCharImg(cls.id)} alt="" draggable={false} className="h-16 w-auto select-none" />
-                            </div>
-                            <span
-                              className="absolute -top-1.5 -right-4 text-amber-300 text-[11px]"
-                              style={{ animation: `rpgZzz 2.4s ease-out ${(boxNumber % 4) * 0.5}s infinite` }}
-                            >
-                              Zzz
-                            </span>
-                          </div>
-                          <p className="text-cyan-300 text-[9px] mt-1">{cls.label}</p>
-                          <p className={`text-[11px] font-bold w-full truncate text-center leading-tight ${isMe ? "text-amber-300" : "text-white"}`}>
-                            {isMe ? "じぶん" : (use.name ?? use.staffId)}
-                          </p>
-                          <p className="text-[9px] text-white/40 tabular-nums">{fmtHM(use.enteredAt)}〜</p>
-                        </div>
-                      );
-                    }
+                {/* 1枠のみのコンパクト表示 */}
+                <div className="flex justify-center">
+                  {(() => {
+                    const myUse = roomState.uses.find(u => u.staffId === myStaffId);
+                    const isFull = roomState.uses.length >= roomState.capacity;
+
+                    // 閉鎖中
                     if (!roomState.isOpen) {
                       return (
-                        <div
-                          key={boxNumber}
-                          className="flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c]/50 opacity-50"
-                        >
+                        <div className="w-32 flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c]/50 opacity-60">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={rpgCharImg(RPG_CHARS[(boxNumber - 1) % 12].id)} alt="" draggable={false}
+                            src={rpgCharImg(RPG_CHARS[0].id)} alt="" draggable={false}
                             className="h-16 w-auto select-none opacity-40"
                             style={{ filter: "brightness(0) saturate(0)" }}
                           />
@@ -701,16 +682,55 @@ export default function HomeClient({
                         </div>
                       );
                     }
+
+                    // 自分が入室中
+                    if (myUse) {
+                      const cls = rpgCharFor(myUse.staffId, myUse.rpgCharId);
+                      return (
+                        <div className="w-32 flex flex-col items-center pt-2 pb-1.5 px-1 rounded-xl bg-[#000846]/40 border border-amber-300">
+                          <div className="relative">
+                            <div style={{ animation: "rpgBob 1.3s steps(2) infinite" }}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={rpgCharImg(cls.id)} alt="" draggable={false} className="h-16 w-auto select-none" />
+                            </div>
+                            <span
+                              className="absolute -top-1.5 -right-4 text-amber-300 text-[11px]"
+                              style={{ animation: "rpgZzz 2.4s ease-out infinite" }}
+                            >
+                              Zzz
+                            </span>
+                          </div>
+                          <p className="text-amber-300 text-[11px] font-bold mt-1">きゅうけいちゅう</p>
+                          <p className="text-[9px] text-white/40 tabular-nums">{fmtHM(myUse.enteredAt)}〜</p>
+                        </div>
+                      );
+                    }
+
+                    // 満員
+                    if (isFull) {
+                      return (
+                        <div className="w-32 flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c]/60 opacity-70">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={rpgCharImg(RPG_CHARS[0].id)} alt="" draggable={false}
+                            className="h-16 w-auto select-none opacity-40"
+                            style={{ filter: "brightness(0) saturate(0)" }}
+                          />
+                          <p className="text-red-300 text-[10px] mt-1 font-bold">あきわく なし</p>
+                        </div>
+                      );
+                    }
+
+                    // 空きあり → 募集中
                     return (
                       <button
-                        key={boxNumber}
-                        onClick={() => handleEnterBreakRoom(boxNumber)}
+                        onClick={handleEnterBreakRoom}
                         disabled={isPending}
-                        className="flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c] hover:border-white/60 active:scale-95 transition-all disabled:opacity-60"
+                        className="w-32 flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c] hover:border-white/60 active:scale-95 transition-all disabled:opacity-60"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={rpgCharImg(RPG_CHARS[(boxNumber - 1) % 12].id)} alt="" draggable={false}
+                          src={rpgCharImg(RPG_CHARS[0].id)} alt="" draggable={false}
                           className="h-16 w-auto select-none opacity-50"
                           style={{ filter: "brightness(0) saturate(0)" }}
                         />
@@ -720,7 +740,7 @@ export default function HomeClient({
                         </p>
                       </button>
                     );
-                  })}
+                  })()}
                 </div>
               </div>
             </div>

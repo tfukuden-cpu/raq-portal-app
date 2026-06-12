@@ -16,7 +16,7 @@
 ## 現在の開発状態（2026-06-12更新）
 
 ### 直近の作業（ホームに休憩室ウィンドウ＋開放/閉鎖切替）
-- ホームに「きゅうけいキャンプ」を追加（**打刻端末の休憩室タブと同一スタイル**: camp-bg-v2.png＋焚き火rpgFlicker/火の粉rpgSpark＋メッセージウィンドウ「なかま N/Mにん」＋箱グリッド）。空き箱「▶くわわる」タップで本人入室（`enterMyBreakRoomAction`＝セッションからstaffId導出→`enterBreakRoomAction`に委譲、休憩打刻中チェックはサーバー側）。**占有箱は表示のみ（タップ不可・退室は「きゅうけいちゅう」カードの退室ボタン）**。自分の箱はアンバー枠「じぶん」。占有者は名前＋キャラ＋入室時刻表示（`getBreakRoomStateAction` が staffs join で name/rpgCharId を解決するよう拡張）
+- ホームに「きゅうけいキャンプ」を追加（**打刻端末の休憩室タブと同一スタイル**: camp-bg-v2.png＋焚き火rpgFlicker/火の粉rpgSpark＋メッセージウィンドウ「なかま N/Mにん」＋箱グリッド）。**箱は1枠のみのコンパクト表示**（人数は「なかま N/Mにん」カウントで把握）: ①閉鎖中=ヘイサちゅう ②自分が入室中=自分のキャラ＋きゅうけいちゅう（アンバー枠） ③満員=あきわく なし ④空きあり=ぼしゅうちゅう「▶くわわる」→先頭の空き箱番号に自動入室（`enterMyBreakRoomAction`＝セッションからstaffId導出→`enterBreakRoomAction`に委譲、休憩打刻中チェックはサーバー側）。退室は「きゅうけいちゅう」カードの退室ボタン。`getBreakRoomStateAction` は staffs join で name/rpgCharId を解決
 - 打刻端末の休憩室タブに「▶つかいかた」ボタン→RPG風マニュアルモーダル（はいるとき/でるとき/ちゅうい。ひらがな表記）
 - **開放/閉鎖**: `break_room_settings.is_open`（マイグレーション add_break_room_is_open 済み）。ホームで管理者（isAdmin）に「▶閉鎖する/開放する」ボタン。閉鎖中: ホーム=全箱✕・端末=「とざされている……」＋ヘイサちゅう表示・`enterBreakRoomAction` がサーバー側拒否
 - statuses API breakRoom に `isOpen` 追加（端末30秒ポーリングで反映）。`BreakRoomState` 型に isOpen・`BreakRoomUse` に name?/rpgCharId? 追加
