@@ -310,12 +310,16 @@ export default function HomeClient({
 
   return (
     <>
-      <main className={`min-h-screen ${dotGothic.className}`} style={{ background: RPG_PAGE_BG }}>
+      <main className={`min-h-screen ${dotGothic.className}`} style={{ background: RPG_PAGE_BG, backgroundAttachment: "fixed" }}>
         <style>{RPG_HOME_KEYFRAMES}</style>
 
-        <div className="max-w-6xl mx-auto px-4 md:px-8 pt-6 md:pt-7 pb-32 md:pb-12 space-y-5">
+        <div className="max-w-6xl mx-auto px-4 md:px-8 pb-32 md:pb-12">
 
-          {/* ── ヒーローバナー（夜のフィールド＋マイキャラクター） ── */}
+          {/* ── ヒーローバナー（固定・スクロールしても残る） ── */}
+          <div
+            className="sticky top-0 md:top-14 z-20 -mx-4 md:-mx-8 px-4 md:px-8 pt-5 md:pt-6 pb-3"
+            style={{ background: RPG_PAGE_BG, backgroundAttachment: "fixed" }}
+          >
           <RpgWindow>
             <div className="relative overflow-hidden rounded-md h-44 md:h-56">
               {/* 背景: AI生成の夜の城下町。読み込めない間は夜空グラデ＋星 */}
@@ -361,6 +365,9 @@ export default function HomeClient({
               </button>
             </div>
           </RpgWindow>
+          </div>
+
+          <div className="space-y-5 relative z-0 pt-1">
 
           {/* ── メッセージウィンドウ（挨拶） ── */}
           <RpgWindow>
@@ -591,6 +598,7 @@ export default function HomeClient({
           {/* ── 今日のタスク（管理者のみ） ── */}
           {tasksWidget}
 
+          </div>
         </div>
       </main>
 

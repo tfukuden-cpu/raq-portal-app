@@ -20,6 +20,9 @@
 - 構成: ヒーローバナー（AI生成 `public/rpg/home-hero.png`・Higgsfield nano_banana_pro 2クレジット・星アニメ＋時計＋中央にマイキャラがrpgBobで立つ。タップでキャラ選択）→ メッセージウィンドウ（挨拶＋▼点滅）→ きゅうけいちゅう → きょうのクエスト（シフト）/ステータス（勤怠）→ コマンド（▶欠勤報告 ▶遅刻報告）→ おしらせ → こんしゅうの よてい（週間カレンダー）
 - 旧UI（白カード・StatusCircle・マイキャラクターカード・モバイル時計ヘッダー）は削除。キャラ選択モーダル・トーストもRPG配色に変更
 - 注意: AdminHomeWrapper の「今日のタスク」ウィジェット（MyTasksWidget）は白カードのまま（未RPG化）。出発/欠勤/遅刻モーダルも白のまま
+- **ヒーローバナーは sticky 固定**（`sticky top-0 md:top-14 z-20`・PCヘッダー(h-14)の下に張り付く）。main と sticky 双方に `backgroundAttachment: "fixed"` の同一グラデを指定して継ぎ目を消している
+- **AppNav も RPG化（全ページ共通）**: サイドバー=夜空グラデ＋右白枠＋DotGothic16、アクティブ項目は白枠＋amber▶。PCヘッダー=紺#000846＋白下枠。モバイルボトムナビ=紺＋白上枠＋アクティブamber。アイコンは AI生成ドット絵 `public/rpg/nav-*.png`（`src/lib/rpg-nav-icons.ts` で IconKey→画像をマップ、未定義キーはSVGフォールバック=`NavIcon`コンポーネント）
+- **画像生成はChatGPTで行う（Higgsfield禁止・ユーザー指示）**: Chrome拡張(Claude in Chrome)で chatgpt.com にプロンプト送信→画像クリック→ライトボックスの↓でDL→Downloads から public/rpg/ へコピー→ `resplit-rpg-sheet.ps1` で分割。nav-icons-sheet.png（4列×5行・20個）から nav-home/calendar/chart/pen/bell/chat/help/user/users/calendar-gear/idcard/megaphone/clipboard/smartphone/gear/grid/shield/door/crown/star を切り出し済み（door/crown/star は予備）
 
 ### 直近の作業（周知のファイル添付・LINE深リンク）
 

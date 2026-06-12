@@ -4,9 +4,32 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { DotGothic16 } from "next/font/google";
 import type { NavItem, NavSection } from "@/app/(portal)/layout";
-import { ICON_MAP } from "@/components/icons";
+import { ICON_MAP, type IconKey } from "@/components/icons";
 import { rpgCharFor, rpgCharImg } from "@/lib/rpg-chars";
+import { RPG_NAV_ICONS } from "@/lib/rpg-nav-icons";
+
+const dotGothic = DotGothic16({ weight: "400", subsets: ["latin"], preload: false });
+
+/** AI生成ドット絵アイコン。未定義キーは従来のSVGにフォールバック */
+function NavIcon({ icon, className = "" }: { icon: IconKey; className?: string }) {
+  const src = RPG_NAV_ICONS[icon];
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        draggable={false}
+        className={`${className} object-contain select-none`}
+        style={{ imageRendering: "pixelated" }}
+      />
+    );
+  }
+  const Svg = ICON_MAP[icon];
+  return <Svg className={className} />;
+}
 
 interface AppNavProps {
   sections: NavSection[];
@@ -122,17 +145,17 @@ export default function AppNav({
 
   function ProjectTabsMobile({ tabs }: { tabs: NonNullable<NavSection["projectTabs"]> }) {
     return (
-      <div className="flex overflow-x-auto gap-1.5 px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800" style={{ scrollbarWidth: "none" }}>
+      <div className="flex overflow-x-auto gap-1.5 px-3 py-1.5 border-b border-white/15" style={{ scrollbarWidth: "none" }}>
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => handleSwitchProject(tab.id)}
             disabled={switching}
             className={[
-              "flex-shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-colors whitespace-nowrap",
+              "flex-shrink-0 px-3 py-1 rounded-full text-[11px] transition-colors whitespace-nowrap",
               tab.isActive
-                ? "bg-[#0d1b35] text-white"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400",
+                ? "bg-white text-[#000846]"
+                : "bg-white/10 text-white/50",
             ].join(" ")}
           >
             {tab.name}
@@ -145,11 +168,12 @@ export default function AppNav({
   return (
     <div className={`flex bg-[#f4f6fa] dark:bg-zinc-950 ${isNoScrollPage ? "md:h-screen min-h-screen" : "min-h-screen"}`}>
 
-      {/* ── PC サイドバー（ネイビー） ── */}
+      {/* ── PC サイドバー（RPG：夜空ネイビー＋白枠） ── */}
       <aside
-        className={`hidden md:flex flex-col fixed left-0 top-0 h-full z-40 bg-[#0d1b35] transition-[width] duration-200 ease-in-out overflow-hidden ${
+        className={`hidden md:flex flex-col fixed left-0 top-0 h-full z-40 border-r-2 border-white/70 transition-[width] duration-200 ease-in-out overflow-hidden ${dotGothic.className} ${
           isCol ? "w-14" : "w-60"
         }`}
+        style={{ background: "linear-gradient(180deg, #02040f 0%, #050a24 55%, #0a1340 100%)" }}
       >
         {/* ロゴ + トグル */}
         <div className={`flex items-center h-14 flex-shrink-0 border-b border-white/[0.08] ${
@@ -207,23 +231,25 @@ export default function AppNav({
               )}
               {section.items.map((item) => {
                 const active = isActive(item.href);
-                const Icon = ICON_MAP[item.icon];
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     title={isCol ? item.label : undefined}
-                    className={`flex items-center h-10 rounded-xl transition-colors ${
-                      isCol ? "justify-center" : "gap-3 px-3"
+                    className={`flex items-center h-10 rounded-lg border transition-colors ${
+                      isCol ? "justify-center" : "gap-2.5 px-3"
                     } ${
                       active
-                        ? "bg-white/[0.12] text-white"
-                        : "text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                        ? "bg-[#000846] border-white/90 text-white"
+                        : "border-transparent text-white/50 hover:bg-white/[0.06] hover:text-white/80"
                     }`}
                   >
-                    <Icon className="w-[18px] h-[18px] flex-shrink-0" />
                     {!isCol && (
-                      <span className={`text-[13.5px] leading-none ${active ? "font-semibold" : "font-normal"}`}>
+                      <span className={`text-[10px] w-3 flex-shrink-0 ${active ? "text-amber-300" : "text-transparent"}`}>▶</span>
+                    )}
+                    <NavIcon icon={item.icon} className={`w-[18px] h-[18px] flex-shrink-0 ${active ? "" : "opacity-70"}`} />
+                    {!isCol && (
+                      <span className="text-[13px] leading-none">
                         {item.label}
                       </span>
                     )}
@@ -268,26 +294,26 @@ export default function AppNav({
         isCol ? "md:pl-14" : "md:pl-60"
       }`}>
 
-        {/* ── PC トップヘッダー ── */}
-        <header className="hidden md:flex sticky top-0 z-30 h-14 bg-white border-b border-zinc-100 dark:bg-zinc-900 dark:border-zinc-800 items-center px-6 gap-3 flex-shrink-0">
+        {/* ── PC トップヘッダー（RPGウィンドウ風） ── */}
+        <header className={`hidden md:flex sticky top-0 z-30 h-14 bg-[#000846] border-b-2 border-white/70 items-center px-6 gap-3 flex-shrink-0 ${dotGothic.className}`}>
           {projectName && (
             <>
-              <span className="text-[14px] font-semibold text-[#0d1b35] dark:text-zinc-100">{projectName}</span>
-              <span className="text-zinc-200 dark:text-zinc-700 select-none">|</span>
+              <span className="text-[14px] text-amber-300">{projectName}</span>
+              <span className="text-white/20 select-none">|</span>
             </>
           )}
-          <span className="text-[13px] text-zinc-400 tabular-nums">{dateStr}</span>
-          <span className="text-[20px] font-bold tabular-nums text-zinc-800 dark:text-zinc-100 ml-0.5">{liveTime}</span>
+          <span className="text-[13px] text-white/50 tabular-nums">{dateStr}</span>
+          <span className="text-[20px] tabular-nums text-white ml-0.5">{liveTime}</span>
           <div className="ml-auto flex items-center gap-3">
-            <Link href="/notices" className="p-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
-              <BellIcon className="w-5 h-5 text-zinc-400" />
+            <Link href="/notices" className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+              <NavIcon icon="Bell" className="w-5 h-5" />
             </Link>
-            <div className="flex items-center gap-2.5 pl-2 border-l border-zinc-100 dark:border-zinc-800">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-end justify-center overflow-hidden flex-shrink-0">
+            <div className="flex items-center gap-2.5 pl-2 border-l border-white/15">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 border border-white/60 flex items-end justify-center overflow-hidden flex-shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={myCharSrc} alt="" draggable={false} className="h-7 max-w-[85%] object-contain object-bottom select-none" style={{ imageRendering: "pixelated" }} />
               </div>
-              <span className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 hidden lg:block">
+              <span className="text-[13px] text-white hidden lg:block">
                 {staffName}
               </span>
             </div>
@@ -297,12 +323,12 @@ export default function AppNav({
         {children}
       </div>
 
-      {/* ── モバイル bottom nav ── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border-t border-zinc-200/60 dark:border-zinc-800/60" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      {/* ── モバイル bottom nav（RPGウィンドウ風） ── */}
+      <div className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#000846]/95 backdrop-blur-xl border-t-2 border-white/70 ${dotGothic.className}`} style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
 
         {showSectionTabs && (
           <div className="px-3 pt-2 pb-1">
-            <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+            <div className="flex bg-white/10 rounded-lg p-0.5 border border-white/20">
               {sections.map((section, idx) => {
                 const isActiveSec = idx === activeSectionIdx;
                 const SectionIcon = section.icon ? ICON_MAP[section.icon] : null;
@@ -312,10 +338,10 @@ export default function AppNav({
                     key={idx}
                     type="button"
                     onClick={() => setActiveSectionIdx(idx)}
-                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
+                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] transition-all ${
                       isActiveSec
-                        ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm"
-                        : "text-zinc-500 dark:text-zinc-400"
+                        ? "bg-white text-[#000846] shadow-sm"
+                        : "text-white/50"
                     }`}
                   >
                     {SectionIcon && <SectionIcon className="w-3 h-3" />}
@@ -334,21 +360,20 @@ export default function AppNav({
         <nav className="flex overflow-x-auto px-1 pb-1" style={{ scrollbarWidth: "none" }}>
           {activeSection.items.map((item) => {
             const active = isActive(item.href);
-            const Icon = ICON_MAP[item.icon];
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={`flex-shrink-0 flex flex-col items-center justify-center py-2 px-2.5 gap-1 min-w-[58px] transition-colors ${
-                  active ? "text-[#0d1b35] dark:text-blue-400" : "text-zinc-400 dark:text-zinc-500"
+                  active ? "text-amber-300" : "text-white/45"
                 }`}
               >
-                <div className={`w-10 h-7 flex items-center justify-center rounded-xl transition-all ${
-                  active ? "bg-blue-50 dark:bg-blue-950/70" : ""
+                <div className={`w-10 h-7 flex items-center justify-center rounded-lg border transition-all ${
+                  active ? "bg-white/10 border-white/80" : "border-transparent"
                 }`}>
-                  <Icon className={`w-[22px] h-[22px] transition-transform ${active ? "scale-105" : ""}`} />
+                  <NavIcon icon={item.icon} className={`w-[20px] h-[20px] transition-transform ${active ? "scale-105" : "opacity-70"}`} />
                 </div>
-                <span className={`text-[10px] leading-none tracking-tight ${active ? "font-bold" : "font-medium"}`}>
+                <span className="text-[10px] leading-none tracking-tight">
                   {item.label}
                 </span>
               </Link>
