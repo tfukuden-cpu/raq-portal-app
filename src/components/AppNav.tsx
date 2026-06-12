@@ -6,10 +6,13 @@ import Link from "next/link";
 import Image from "next/image";
 import type { NavItem, NavSection } from "@/app/(portal)/layout";
 import { ICON_MAP } from "@/components/icons";
+import { rpgCharFor, rpgCharImg } from "@/lib/rpg-chars";
 
 interface AppNavProps {
   sections: NavSection[];
   staffName: string;
+  staffId: string;
+  rpgCharId?: number | null;
   projectName: string | null;
   logoutAction: () => Promise<void>;
   switchProjectAction: (projectId: string) => Promise<void>;
@@ -46,6 +49,8 @@ function BellIcon({ className }: { className?: string }) {
 export default function AppNav({
   sections,
   staffName,
+  staffId,
+  rpgCharId = null,
   projectName,
   logoutAction,
   switchProjectAction,
@@ -105,7 +110,7 @@ export default function AppNav({
   }
 
   const isCol = collapsed;
-  const initial = staffName.charAt(0).toUpperCase();
+  const myCharSrc = rpgCharImg(rpgCharFor(staffId, rpgCharId).id);
 
   const defaultSectionIdx = Math.max(
     0,
@@ -239,8 +244,9 @@ export default function AppNav({
                 isCol ? "justify-center" : "gap-3 px-2"
               }`}
             >
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0">
-                {initial}
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-end justify-center overflow-hidden flex-shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={myCharSrc} alt="" draggable={false} className="h-6 max-w-[85%] object-contain object-bottom select-none" style={{ imageRendering: "pixelated" }} />
               </div>
               {!isCol && (
                 <div className="flex-1 min-w-0 text-left">
@@ -277,8 +283,9 @@ export default function AppNav({
               <BellIcon className="w-5 h-5 text-zinc-400" />
             </Link>
             <div className="flex items-center gap-2.5 pl-2 border-l border-zinc-100 dark:border-zinc-800">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0">
-                {initial}
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-end justify-center overflow-hidden flex-shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={myCharSrc} alt="" draggable={false} className="h-7 max-w-[85%] object-contain object-bottom select-none" style={{ imageRendering: "pixelated" }} />
               </div>
               <span className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-200 hidden lg:block">
                 {staffName}

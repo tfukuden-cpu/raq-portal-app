@@ -648,7 +648,7 @@ export default function HomeClient({
                       ].join(" ")}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={rpgCharImg(c.id)} alt="" draggable={false} loading="lazy" className="h-14 w-auto select-none" />
+                      <img src={rpgCharImg(c.id)} alt="" draggable={false} loading="lazy" className="h-14 max-w-full object-contain select-none" />
                       <p className="text-[10px] text-zinc-600 dark:text-zinc-300 mt-1 w-full truncate text-center">{c.label}</p>
                     </button>
                   );

@@ -35,6 +35,9 @@ export async function setMyRpgCharacterAction(charId: number | null): Promise<Ac
       .eq("id", staffId);
     if (error) return { success: false, message: error.message };
     revalidatePath("/dashboard");
+    revalidatePath("/my");
+    revalidatePath("/", "layout"); // サイドバーのアイコンも更新
+
     return { success: true, message: "キャラクターを変更しました" };
   } catch (e) {
     console.error("setMyRpgCharacter error:", e);

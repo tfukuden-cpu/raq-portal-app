@@ -6,8 +6,7 @@ import { redirect } from "next/navigation";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { logoutAction } from "@/app/login/actions";
 import { unlinkLineAction } from "./actions";
-import AvatarEditor from "@/app/(portal)/admin/my/AvatarEditor";
-import type { AvatarConfig } from "@/app/(portal)/admin/my/avatar-types";
+import MyCharacterAvatar from "./MyCharacterAvatar";
 
 // ── アイコン ──────────────────────────────────────────────────────────────────
 
@@ -22,9 +21,6 @@ function LockIcon() {
 }
 function LogoutIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-zinc-500"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
-}
-function CameraIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-white"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
 }
 function LineIcon({ size = 32 }: { size?: number }) {
   return <svg viewBox="0 0 24 24" width={size} height={size} style={{ fill: "#06C755" }}><path d="M12 2C6.477 2 2 6.036 2 11c0 2.67 1.28 5.063 3.306 6.73.145.122.203.316.151.496l-.47 1.717c-.073.266.107.538.378.538.07 0 .14-.018.202-.054L8.05 19.05c.131-.076.284-.09.427-.039C9.357 19.332 10.666 19.5 12 19.5c5.523 0 10-4.036 10-9s-4.477-9-10-9z"/></svg>;
@@ -59,7 +55,7 @@ export default async function MyPage({
 
   const { data: staff } = await supabase
     .from("staffs")
-    .select("id, name, display_name, global_role, line_user_id, line_friend, avatar_config")
+    .select("id, name, display_name, global_role, line_user_id, line_friend, rpg_character")
     .eq("id", staffId)
     .maybeSingle();
 
@@ -85,7 +81,7 @@ export default async function MyPage({
   const displayName  = staff?.display_name ?? staff?.name ?? staffId;
   const lineLinked   = !!staff?.line_user_id;
   const lineFriend   = !!(staff as { line_friend?: boolean | null } | null)?.line_friend;
-  const avatarConfig = (staff as { avatar_config?: AvatarConfig | null } | null)?.avatar_config ?? null;
+  const rpgCharId    = (staff as { rpg_character?: number | null } | null)?.rpg_character ?? null;
 
   // LINE公式アカウントの友達追加URL（env優先、なければAPI取得）
   let lineAddFriendUrl = process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL ?? "";
@@ -148,20 +144,9 @@ export default async function MyPage({
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm p-6 mb-6">
         <div className="flex flex-col lg:flex-row gap-6">
 
-          {/* 左：アバター */}
+          {/* 左：アバター（RPGキャラクター） */}
           <div className="flex-shrink-0 flex justify-center lg:justify-start">
-            <div className="relative">
-              {isExecutiveOrAdmin ? (
-                <AvatarEditor initialConfig={avatarConfig} />
-              ) : (
-                <div className="w-36 h-36 rounded-full bg-[#0d1b35] flex items-center justify-center text-white text-[52px] font-bold select-none">
-                  {displayName.charAt(0)}
-                </div>
-              )}
-              <div className="absolute bottom-1 right-1 w-8 h-8 rounded-full bg-zinc-600 border-2 border-white flex items-center justify-center cursor-pointer hover:bg-zinc-700 transition-colors">
-                <CameraIcon />
-              </div>
-            </div>
+            <MyCharacterAvatar staffId={staffId} initialCharId={rpgCharId} />
           </div>
 
           {/* 中：名前 + 情報 */}
@@ -228,18 +213,6 @@ export default async function MyPage({
       <div>
         <h2 className="text-[16px] font-bold text-[#0d1b35] dark:text-white mb-3">アカウント設定</h2>
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
-
-          {/* プロフィール画像 */}
-          {isExecutiveOrAdmin && (
-            <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
-              <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center"><PersonIcon /></div>
-              <div className="flex-1">
-                <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">プロフィール画像（アバター）変更</p>
-                <p className="text-[12px] text-zinc-400 mt-0.5">プロフィール画像を変更できます</p>
-              </div>
-              <ChevronRightIcon />
-            </div>
-          )}
 
           {/* スタッフのみ */}
           {isStaffOnly && (

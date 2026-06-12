@@ -42,7 +42,8 @@
 - **管理者ビュー**: `/seating` ツールバー「休憩室」ボタン → パネルで占有状況・強制解放・定員変更（SeatingClient、isAdminのみ）
 - **本人スマホ退室**: `/dashboard` に入室中のみカード表示＋「退室する」ボタン（`leaveMyBreakRoomAction`＝セッションからstaffId導出）
 - **設備情報**: `break_room_settings.amenities`（jsonb `[{label, ok}]`・最大12件）。端末休憩室タブに○×表示、管理者は/seatingパネルで編集。statuses APIの breakRoom にも同梱
-- **キャラクター108体**: 定義は `src/lib/rpg-chars.ts`（id=char-{id}.png と一致）。職業・モンスター・魔人など。`staffs.rpg_character` で本人選択（null=ハッシュ自動割当）。myページ（/dashboard）の「マイキャラクター」カードから変更可（`setMyRpgCharacterAction`）。新キャラ追加手順: ChatGPTで4列×3行シート生成 → `scripts/split-rpg-sheet.ps1`（$env:SHEET/STARTIDX/COLS/ROWS）で分割 → rpg-chars.ts にラベル追記
+- **キャラクター108体**: 定義は `src/lib/rpg-chars.ts`（id=char-{id}.png と一致）。職業・モンスター・魔人など。`staffs.rpg_character` で本人選択（null=ハッシュ自動割当）。変更UIは2箇所＝Myページ（/my）のプロフィールアイコンタップ（`my/MyCharacterAvatar.tsx`）とホーム（/dashboard）の「マイキャラクター」カード（どちらも `setMyRpgCharacterAction`）。新キャラ追加手順: ChatGPTで4列×3行シート生成 → `scripts/split-rpg-sheet.ps1`（$env:SHEET/STARTIDX/COLS/ROWS）で分割 → rpg-chars.ts にラベル追記
+- **キャラ＝ユーザーアイコン化（2026-06-12）**: 選択キャラを各所のアイコンに使用。①/my プロフィールアイコン（旧 AvatarEditor 顔アバターは /my から廃止、`staffs.avatar_config` と `admin/my/AvatarEditor.tsx` は残置）②AppNav サイドバー下部＋PCヘッダーのユーザー円（layout.tsx が `rpg_character` を取得し `staffId`/`rpgCharId` propsで渡す）③打刻端末 `/punch/[projectId]` の名前選択リスト（イニシャル円→キャラ画像、ステータス色は円背景で維持）。`setMyRpgCharacterAction` は `/my` と layout も revalidate
 - サーバーアクション: `seating/break-room-actions.ts`（get/enter/leave/leaveMy/forceRelease/setCapacity/setAmenities）
 - **地図リンク**: 端末休憩室タブ「▶ちずをみる」→ Googleマップの徒歩経路ページ（現場⇔休憩室）を新規タブで開く外部リンク（`BREAK_ROOM_MAP_URL` in TerminalPunchClient.tsx）。当初のRPG風マップモーダルは「分かりにくい」とのことで廃止（AI生成画像 `public/rpg/world-map.png` はPDFマニュアル用に残置。旧SVG版 `WorldMapSvgLegacy` も未使用で残置）
 - **操作マニュアルPDF**: `docs/休憩室操作マニュアル.pdf`（A4・1枚・スタッフ向け）。生成元は `docs/manual-build/manual.html` → Edge headless `--headless=new --print-to-pdf` で再生成可。マップ画像・キャラ画像は同フォルダにコピー済み

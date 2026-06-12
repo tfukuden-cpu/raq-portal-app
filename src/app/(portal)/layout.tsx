@@ -61,7 +61,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
   const { data: staff } = await supabase
     .from("staffs")
-    .select("name, display_name, global_role, line_user_id, line_friend")
+    .select("name, display_name, global_role, line_user_id, line_friend, rpg_character")
     .eq("id", staffId)
     .maybeSingle();
 
@@ -175,6 +175,8 @@ export default async function PortalLayout({ children }: { children: React.React
       <AppNav
         sections={sections}
         staffName={staffName}
+        staffId={staffId}
+        rpgCharId={(staff as { rpg_character?: number | null } | null)?.rpg_character ?? null}
         projectName={projectName}
         logoutAction={logoutAction}
         switchProjectAction={switchProjectAction}

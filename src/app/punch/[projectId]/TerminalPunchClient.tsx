@@ -1043,8 +1043,14 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                                 onClick={() => handleMemberSelect(m)}
                                 className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-zinc-700/60 transition-colors"
                               >
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0 ${STATUS_AVATAR_BG[st]}`}>
-                                  {m.name.charAt(0)}
+                                <div className={`w-10 h-10 rounded-full flex items-end justify-center overflow-hidden flex-shrink-0 ${STATUS_AVATAR_BG[st]}`}>
+                                  <img
+                                    src={rpgCharImg(rpgCharFor(m.staffId, m.rpgCharId).id)}
+                                    alt=""
+                                    draggable={false}
+                                    className="h-9 max-w-[85%] object-contain object-bottom select-none"
+                                    style={{ imageRendering: "pixelated" }}
+                                  />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-white font-bold text-base leading-tight">{m.name}</p>
