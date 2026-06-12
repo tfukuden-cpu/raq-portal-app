@@ -8,6 +8,7 @@ import {
   submitLateAction,
   setMyRpgCharacterAction,
 } from "./actions";
+import { BREAK_ROOM_MAP_URL } from "@/lib/break-room-info";
 import {
   leaveMyBreakRoomAction,
   enterMyBreakRoomAction,
@@ -300,6 +301,7 @@ export default function HomeClient({
 
   // ── 休憩室（空き状況・入退室・開閉） ─────────────────────
   const [roomState, setRoomState] = useState<BreakRoomState | null>(breakRoomState);
+  const [roomHelpOpen, setRoomHelpOpen] = useState(false);
 
   const refreshRoom = async () => {
     if (!projectId) return;
@@ -646,19 +648,33 @@ export default function HomeClient({
                         </p>
                       </div>
                     </div>
-                    {isAdmin && (
-                      <div className="flex justify-end mt-2">
+                    <div className="flex items-center justify-end gap-1.5 mt-2 flex-wrap">
+                      <button
+                        onClick={() => setRoomHelpOpen(true)}
+                        className="text-[11px] text-white border border-white/50 rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition-all"
+                      >
+                        <span className="text-amber-300 mr-1">▶</span>つかいかた
+                      </button>
+                      <a
+                        href={BREAK_ROOM_MAP_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-white border border-white/50 rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition-all"
+                      >
+                        <span className="text-amber-300 mr-1">▶</span>ちずをみる
+                      </a>
+                      {isAdmin && (
                         <button
                           onClick={handleToggleRoomOpen}
                           disabled={isPending}
-                          className={`shrink-0 text-[11px] border rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition disabled:opacity-50 ${
+                          className={`text-[11px] border rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition disabled:opacity-50 ${
                             roomState.isOpen ? "text-red-300 border-red-400/60" : "text-emerald-300 border-emerald-400/60"
                           }`}
                         >
                           ▶ {roomState.isOpen ? "閉鎖する" : "開放する"}
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </RpgWindow>
 
@@ -859,6 +875,46 @@ export default function HomeClient({
       )}
       {modal === "late" && (
         <LateModal onClose={closeModal} onSubmit={handleLate} isPending={isPending} />
+      )}
+
+      {/* ── 休憩室つかいかたモーダル（RPG風） ── */}
+      {roomHelpOpen && (
+        <div className={`fixed inset-0 z-[200] bg-black/80 flex items-center justify-center px-6 ${dotGothic.className}`} onClick={() => setRoomHelpOpen(false)}>
+          <div className="w-full max-w-md max-h-[85dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <RpgWindow>
+              <div className="px-5 py-4">
+                <p className="text-amber-300 text-sm mb-3">【きゅうけいしつの つかいかた】</p>
+
+                <div className="space-y-3 text-white text-[13px] leading-relaxed">
+                  <div>
+                    <p className="text-cyan-300 text-[11px] mb-0.5">▼ はいるとき</p>
+                    <p>１．きゅうけいの だこくを する</p>
+                    <p>２．「▶くわわる」を おす</p>
+                  </div>
+                  <div>
+                    <p className="text-cyan-300 text-[11px] mb-0.5">▼ でるとき</p>
+                    <p>・「きゅうけいちゅう」ウィンドウの<br />　「▶退室する」を おす</p>
+                    <p>・きゅうけいもどり / たいきんの だこくでも<br />　じどうで パーティーから ぬけます</p>
+                  </div>
+                  <div>
+                    <p className="text-cyan-300 text-[11px] mb-0.5">▼ ちゅうい</p>
+                    <p>・きゅうけいちゅうの ひとだけ はいれます</p>
+                    <p>・「あきわく なし」の ときは あきを まってね</p>
+                    <p>・「ヘイサちゅう」の ときは つかえません</p>
+                    <p>・ばしょは「▶ちずをみる」で かくにん（とほ５ふん）</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setRoomHelpOpen(false)}
+                  className="mt-4 w-full h-11 rounded-lg border-2 border-white text-white text-[14px] hover:bg-white/10 active:scale-[0.98] transition"
+                >
+                  ▶ とじる
+                </button>
+              </div>
+            </RpgWindow>
+          </div>
+        </div>
       )}
 
       {/* ── マイキャラクター選択モーダル ── */}

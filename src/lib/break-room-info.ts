@@ -1,0 +1,9 @@
+/**
+ * 休憩室の案内情報（打刻端末・ホームで共用）
+ * クライアント・サーバー両方から import 可能な定数のみ置く
+ */
+
+// 休憩室への道のり（Googleマップ経路・徒歩5分/350m）
+// 現場（入船1丁目 サンパーク東京銀座）⇔ 休憩室（八丁堀3丁目 S-Gate Fit 八丁堀）
+export const BREAK_ROOM_MAP_URL =
+  "https://www.google.com/maps/dir/%E3%80%92104-0032+%E6%9D%B1%E4%BA%AC%E9%83%BD%E4%B8%AD%E5%A4%AE%E5%8C%BA%E5%85%AB%E4%B8%81%E5%A0%80%EF%BC%93%E4%B8%81%E7%9B%AE%EF%BC%91%EF%BC%98+S-Gate+Fit+%E5%85%AB%E4%B8%81%E5%A0%80/%E3%80%92104-0042+%E6%9D%B1%E4%BA%AC%E9%83%BD%E4%B8%AD%E5%A4%AE%E5%8C%BA%E5%85%A5%E8%88%B9%EF%BC%91%E4%B8%81%E7%9B%AE%EF%BC%92%E2%88%92%EF%BC%98+%E3%82%B5%E3%83%B3%E3%83%91%E3%83%BC%E3%82%AF%E6%9D%B1%E4%BA%AC%E9%8A%80%E5%BA%A7/@35.6740994,139.776656,18z/data=!3m1!4b1!4m14!4m13!1m5!1m1!1s0x6018895ee9685503:0xfa40e80b84c5ce70!2m2!1d139.7763241!2d35.6749559!1m5!1m1!1s0x6018895e6ab009f9:0x84bc70012d6052cb!2m2!1d139.7767403!2d35.6730537!3e2?entry=ttu&g_ep=EgoyMDI2MDYwMy4xIKXMDSoASAFQAw%3D%3D";
