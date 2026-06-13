@@ -493,8 +493,10 @@ export default function SeatingClient({
   }
 
   // ── 超過判定用 tick（30秒ごと） ──────────────────────────
-  const [nowMs, setNowMs] = useState(Date.now());
+  // 初期値は0（SSR/クライアントで一致）にし、マウント後に実時刻を入れて #418 を防ぐ
+  const [nowMs, setNowMs] = useState(0);
   useEffect(() => {
+    setNowMs(Date.now());
     const id = setInterval(() => setNowMs(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);

@@ -122,7 +122,7 @@ export default function ShiftsTabs({
   const isOffDay = OFF_NAMES.includes(shiftForDate?.shift_name ?? "");
 
   // 選択日のシフト詳細（PC・モバイル共用）
-  const ShiftDetail = () => (
+  const renderShiftDetail = () => (
     <>
       {shiftForDate?.shift_name ? (
         <div>
@@ -218,7 +218,7 @@ export default function ShiftsTabs({
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
-                  <ShiftDetail />
+                  {renderShiftDetail()}
 
                   {/* メモ */}
                   <div className="flex flex-col gap-2 flex-1">
@@ -283,7 +283,7 @@ export default function ShiftsTabs({
                 <button onClick={() => setSelected(null)} className="text-white/50 hover:text-white text-lg px-1">✕</button>
               </div>
               <div className="px-5 py-4 space-y-3 max-h-[60dvh] overflow-y-auto">
-                <ShiftDetail />
+                {renderShiftDetail()}
                 <div className="flex flex-col gap-2">
                   <p className="text-[11px] font-semibold text-cyan-300">▼ メモ</p>
                   <textarea value={memo} onChange={e => setMemo(e.target.value)} onBlur={saveMemo}
