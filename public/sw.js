@@ -15,9 +15,6 @@ const STATIC_CACHE  = `raq-static-${CACHE_VERSION}`;
 const PAGES_CACHE   = `raq-pages-${CACHE_VERSION}`;
 const KNOWN_CACHES  = [STATIC_CACHE, PAGES_CACHE];
 
-// オフライン時に返す最小HTMLページ
-const OFFLINE_URL = "/offline";
-
 // ── インストール: 基本ページを事前キャッシュ ──
 self.addEventListener("install", (event) => {
   self.skipWaiting();

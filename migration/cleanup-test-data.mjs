@@ -7,7 +7,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 

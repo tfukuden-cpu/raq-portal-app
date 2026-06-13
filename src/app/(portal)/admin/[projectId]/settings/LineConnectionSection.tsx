@@ -43,6 +43,7 @@ export default function LineConnectionSection({
   const [isFetching, setIsFetching]         = useState(false);
   const pollTimerRef                        = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollEndRef                          = useRef<number>(0);
+  const [isPolling, setIsPolling]           = useState(false);
 
   const linkedCount    = members.filter(m => m.lineLinked).length;
   const unlinkedCount  = members.length - linkedCount;
@@ -68,17 +69,20 @@ export default function LineConnectionSection({
     }
   }, [projectId]);
 
-  // 初回取得
+  // 初回取得（マウント時のデータ取得＝意図的）
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchConfirmations(); }, [fetchConfirmations]);
 
   // ポーリング開始
   function startPolling() {
     pollEndRef.current = Date.now() + 60_000;
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    setIsPolling(true);
     pollTimerRef.current = setInterval(async () => {
       if (Date.now() >= pollEndRef.current) {
         clearInterval(pollTimerRef.current!);
         pollTimerRef.current = null;
+        setIsPolling(false);
         return;
       }
       await fetchConfirmations();
@@ -88,8 +92,6 @@ export default function LineConnectionSection({
   useEffect(() => () => {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
   }, []);
-
-  const isPolling = pollTimerRef.current !== null;
 
   function showFlash(ok: boolean, msg: string) {
     setFlash({ ok, msg });
