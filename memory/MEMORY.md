@@ -15,8 +15,9 @@
 
 ## 現在の開発状態（2026-06-13更新）
 
-### キャラクター体系の全面改訂＝基本職100体＋モンスターガチャ（①データ設計 済 / ②画像・UI 未）
-**SPEC.md §6-7 に仕様確定済み。順序 ①データ設計 → ②画像100枚（ユーザー指示）。①完了・新APIは既存と並行追加で画面未接続（②画像が揃うまで表示切替しない）。**
+### キャラクター体系の全面改訂＝基本職100体＋モンスターガチャ（アバター切替まで完了・本番デプロイ済 / 残=ガチャUI）
+**SPEC.md §6-7 に仕様確定。①データ設計→②画像100枚→アバター切替 まで完了し本番反映済み。残るはガチャ画面UIのみ。**
+- **🚀 デプロイ状況（2026-06-13・本番反映済）**: 本プロジェクトは `git push origin master` → GitHub → **Vercel が自動ビルド・デプロイ**（本番 https://raq-portal-app.vercel.app）。SPEC §8参照。この日の主なデプロイ済コミット: `2649798`(キャラ100体刷新＋ガチャ基盤)／`419ba30`(ホームを画面半分のゲーム風ステージに・背景home-stage.png)／`bbc55d9`(マイキャラ拡大 h-56/h-80)／休憩室の管理操作にサーバー側adminチェック追加。DB(マイグレーション・rpg_character全件nullリセット)も本番Supabaseに適用済。**masterへのpushは毎回ユーザー承認が必要**（自動モードがブロック・恒久許可するなら settings に permission ルール追加）
 - **①で作ったもの（2026-06-13）**: `rpg-chars.ts` に新API追記（`RPG_JOBS`/`RPG_RACES`/`jobCharId`/`jobCharInfo`/`jobCharImg`/`jobCharIdFor`/`RPG_MONSTERS`(72・rarity付)/`monsterImg`/`monsterById`。旧 `RPG_CHARS`/`rpgCharFor`/`rpgCharImg` は残置）／抽選ロジック `src/lib/gacha.ts`（plain・`drawGacha`/`rarityFromRoll`/`pickMonster`/`gachaPlan`/`RARITY_RATES`/`RARITY_INFO`/コスト定数）／サーバーアクション `src/app/(portal)/gacha/actions.ts`（`drawGachaAction`/`getGachaStateAction`/`setActivePartnerAction`・UI未接続）／DB: `staff_partners`＋`staffs.active_partner_id`（マイグレーション create_staff_partners 適用済）
 - **②画像 完了（2026-06-13）**: 基本職100体 `char-1..100.png` 生成済（ChatGPTで `jobs-sheet1..10.png`→`scripts/resplit-rpg-sheet.ps1` で分割。1シート=5列種族×2行職業=10体・行優先IDが `(職-1)*5+種族` に一致）。**方針=「全員別人」**（職業ごとに性別・年齢・髪色・配色・ポーズをばらす。種族列は強調）。プロンプト集 `docs/基本職100体_画像生成プロンプト.md`。モンスター退避 `char-37..108`→`mon-1..72`(72体) も完了（`scripts/rename-monsters-to-mon.ps1`）
 - **アバター切替 完了（2026-06-13）**: `rpg-chars.ts` の旧 `RPG_CHARS`(100体に再定義・label="種族の職業")/`rpgCharFor`(→1-100)/`rpgCharImg`(→char-N.png) を**シグネチャ互換のまま新100体システムに差し替え**。これで My・AppNav・ホーム・打刻端末・休憩室は**無改修で切替**（呼び出し箇所は変更不要だった）。`staffs.rpg_character` 全件nullリセット済（32件→各自ハッシュ自動割当・再選択可）。`sw.js` CACHE_VERSION v3→v4。新コードは `jobCharIdFor`/`jobCharImg`/`jobCharInfo` を直接使ってもよい（同結果）
@@ -394,6 +395,7 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | break_end を挿入する処理は休憩室の箱も解放すること | `releaseBreakRoomBox()`（lib/break-room.ts）を呼ばないと幽霊が箱に残る。新しい break_end / clock_out 経路を作るときは必ず追加 |
 | `/api/punch/[projectId]/statuses` のレスポンスはオブジェクト形式 | `{ statuses: [...], breakRoom: {...} }`。以前は配列だった。端末クライアントの型と一致させること |
 | 休憩室の定員超過はDBのUNIQUE制約で防止 | カウント方式は同時タップで競合する。箱番号UNIQUE(project_id,use_date,box_number)方式を維持。error.code 23505 を「箱が使用中」と表示 |
+| 休憩室の管理操作（開閉・定員・設備・強制解放）はサーバー側で管理者チェック必須 | `break-room-actions.ts` の `setBreakRoomOpenAction`/`setBreakRoomCapacityAction`/`setBreakRoomAmenitiesAction`/`forceReleaseBreakRoomAction` は当初UIで隠すだけ＝adminクライアントで無条件更新だった（一般スタッフが直接呼べば実行できる穴）。共通ヘルパー `isProjectAdmin(projectId)`（全社admin/executive または project_admin を session→staffs/project_members で判定）でサーバー側ガード追加済（2026-06-13）。**新しい管理者専用サーバーアクションを作るときは必ず同じガードを入れる**（admin系は UI 非表示だけでは不十分） |
 | insert直後のID取得に `.single()` 禁止 | RLSのSELECTポリシーが通らないとエラー。insertとselectを分離し、取れない場合のフォールバックを用意（周知投稿で発生済み） |
 | Server Actions のアップロードは bodySizeLimit に注意 | Vercelデフォルト1MB。next.config.ts で `serverActions.bodySizeLimit: "10mb"` 設定済み。クライアント側でも10MB検証を入れる |
 | Server Action は全体 try/catch で保護 | 未補足例外がクライアントで「This page couldn't load」クラッシュになる。catchしてエラーメッセージを返し console.error でVercelログに残す |

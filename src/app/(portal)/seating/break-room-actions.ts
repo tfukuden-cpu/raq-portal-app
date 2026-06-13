@@ -108,6 +108,9 @@ export async function setBreakRoomAmenitiesAction(
   projectId: string,
   amenities: BreakRoomAmenity[],
 ): Promise<BreakRoomResult> {
+  if (!(await isProjectAdmin(projectId))) {
+    return { ok: false, error: "この操作は管理者のみ可能です" };
+  }
   const clean = normalizeAmenities(amenities).filter(a => a.label.trim().length > 0);
   const admin = createAdminClient();
   const { error } = await admin.from("break_room_settings").upsert(
@@ -203,10 +206,31 @@ export async function enterMyBreakRoomAction(boxNumber: number): Promise<BreakRo
 }
 
 // ── 開放/閉鎖の切り替え（管理者ビューのみ） ────────────────
+/** ログインユーザーがこの案件の管理者か（全社admin/executive または project_admin）をサーバー側で検証 */
+async function isProjectAdmin(projectId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const staffId = user?.email?.split("@")[0]?.toUpperCase() ?? "";
+  if (!staffId) return false;
+  const admin = createAdminClient();
+  const { data: staff } = await admin
+    .from("staffs").select("global_role").eq("id", staffId).maybeSingle();
+  const role = (staff as { global_role?: string } | null)?.global_role;
+  if (role === "admin" || role === "executive") return true;
+  const { data: mem } = await admin
+    .from("project_members").select("role")
+    .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle();
+  return (mem as { role?: string } | null)?.role === "project_admin";
+}
+
 export async function setBreakRoomOpenAction(
   projectId: string,
   isOpen: boolean,
 ): Promise<BreakRoomResult> {
+  // UIでボタンを隠すだけでなく、サーバー側でも管理者のみに限定する
+  if (!(await isProjectAdmin(projectId))) {
+    return { ok: false, error: "休憩室の開閉は管理者のみ可能です" };
+  }
   const admin = createAdminClient();
   const { error } = await admin.from("break_room_settings").upsert(
     { project_id: projectId, is_open: isOpen, updated_at: new Date().toISOString() },
@@ -238,6 +262,9 @@ export async function forceReleaseBreakRoomAction(
   projectId: string,
   boxNumber: number,
 ): Promise<BreakRoomResult> {
+  if (!(await isProjectAdmin(projectId))) {
+    return { ok: false, error: "強制解放は管理者のみ可能です" };
+  }
   const admin = createAdminClient();
   const { error } = await admin
     .from("break_room_uses")
@@ -254,6 +281,9 @@ export async function setBreakRoomCapacityAction(
   projectId: string,
   capacity: number,
 ): Promise<BreakRoomResult> {
+  if (!(await isProjectAdmin(projectId))) {
+    return { ok: false, error: "定員変更は管理者のみ可能です" };
+  }
   if (!Number.isInteger(capacity) || capacity < 1 || capacity > 50) {
     return { ok: false, error: "定員は1〜50で指定してください" };
   }

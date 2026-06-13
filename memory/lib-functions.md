@@ -87,9 +87,9 @@ Cookie名: `rqp_project_id`、30日有効
 
 ## src/lib/rpg-chars.ts — RPGキャラクター定義
 
-旧API（108体フラット・残置）: `RPG_CHARS`, `rpgCharImg(id)`, `rpgCharFor(staffId, overrideId?)`
+旧シグネチャ（互換維持・中身は新100体システムに差し替え済）: `RPG_CHARS`(=100体・label="種族の職業")／`rpgCharImg(id)`(=`/rpg/char-${id}.png`)／`rpgCharFor(staffId, overrideId?)`(→1-100の`{id,label}`)。My・AppNav・ホーム・打刻端末・休憩室はこの旧シグネチャ経由で新アバターを表示中。
 
-新API（SPEC.md §6-7・基本職100体＋パートナー72体。②画像が揃うまで画面未接続）:
+新API（SPEC.md §6-7・基本職100体＋パートナー72体）:
 | 関数/定数 | 用途 |
 |------|------|
 | `RPG_JOBS`(20)/`RPG_RACES`(5) | 職業・種族ラベル配列 |
