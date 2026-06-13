@@ -520,7 +520,7 @@ export async function bulkUpsertShiftsAction(
     ...deletes.map(d => ({ staffId: d.staffId, shiftDate: d.shiftDate })),
   ];
 
-  let existingMap = new Map<string, { id: string; shift_name: string | null; shift_start: string | null; shift_end: string | null }>();
+  const existingMap = new Map<string, { id: string; shift_name: string | null; shift_start: string | null; shift_end: string | null }>();
   if (allKeys.length > 0) {
     // OR条件で一括取得（PostgREST は .or() でサポート）
     const orFilter = allKeys

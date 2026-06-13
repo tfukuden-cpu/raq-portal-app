@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   saveSeatAssignmentsAction, autoAssignSeatsAction,
   acquireSeatingEditAction, releaseSeatingEditAction, heartbeatSeatingEditAction,
@@ -1007,9 +1008,9 @@ export default function SeatingClient({
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
               <p className="text-sm text-zinc-400">座席が設定されていません</p>
               {isAdmin && (
-                <a href="/admin" className="text-xs text-blue-600 dark:text-blue-400 underline">
+                <Link href="/admin" className="text-xs text-blue-600 dark:text-blue-400 underline">
                   案件設定 → 座席タブで設定
-                </a>
+                </Link>
               )}
             </div>
           )}

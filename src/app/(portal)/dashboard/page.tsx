@@ -74,7 +74,7 @@ export default async function DashboardPage() {
 
   if (activeMemberships.length === 0) redirect("/select-project");
 
-  let currentProjectId = await getCurrentProjectId();
+  const currentProjectId = await getCurrentProjectId();
   const isCurrentValid = activeMemberships.some(
     (m) => m.project_id === currentProjectId
   );
