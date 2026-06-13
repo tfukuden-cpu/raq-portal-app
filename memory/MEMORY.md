@@ -17,11 +17,9 @@
 
 ### デバッグ/Lint整備＆デッドコード掃除（2026-06-14・本番反映済）
 - **現状**: TypeScript 0エラー / ESLint **0エラー**（warning 73）。コミット `9a64f20`〜`213f538`
-- **⚠️ 開発環境の最重要点**: このエージェント実行シェル（Bash/PowerShell）には **node/npm/npx が PATH に無い**。`npx tsc ... | grep error` は無言で空振りし**誤って「通過」に見える**（過去にハマった）。実際に tsc/eslint を走らせるには playwright同梱nodeを使う：
-  - `NODE="/c/Users/fukud/AppData/Local/ms-playwright-go/1.50.1/node.exe"`
-  - 型: `"$NODE" node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
-  - Lint: `"$NODE" node_modules/eslint/bin/eslint.js .`（全件JSON集計は `-f json` → 別nodeで集計・パスは相対で）
+- **開発環境（2026-06-14更新・node導入済）**: ユーザーが node を導入し **Bash/PowerShell 両方のPATHに通った**（`node` v24.16.0 / `npm` 11.13.0・実体 `C:\Users\fukud\OneDrive\デスクトップ\Rap\node.exe`）。**今は `npm run dev` / `npx tsc --noEmit -p tsconfig.json` / `npm run lint`(=eslint) / `next build` がそのまま使える**（以前の「npx空振りで誤通過」は解消）。
   - tsc前に `.next` を消すと、削除済ファイルを参照する `.next/types` の偽エラーが消える
+  - 〔履歴〕導入前は playwright同梱 `/c/Users/fukud/AppData/Local/ms-playwright-go/1.50.1/node.exe` を直接指定して凌いでいた（フォールバックとして記憶）。**PATH反映には Claude Code の再起動が必要だった**
 - **Next 16 はビルド時にESLintを実行しない**＝lintエラーがあってもVercelデプロイは通る（lintは品質チェック用）。ローカル `next dev` は `.env.local` の `NEXT_PUBLIC_SUPABASE_URL` 未読込で500＆認証必須のため再現確認は困難
 - **eslint.config.mjs 方針**: React Compiler系の新ルール（`react-hooks/set-state-in-effect`/`refs`/`purity`/`immutability`/`static-components`）は誤検出が多いため **error→warn に降格**（可視化は維持）。`@typescript-eslint/no-unused-vars` に `ignoreRestSiblings`＋`^_`無視を追加。`set-state-in-effect`（マウント時fetch）は基本無害＝個別対応しない方針
 - **直した実バグ**: LineConnectionSection `isPolling`(ref→state) / SeatingClient `useState(Date.now())`(#418源→0+useEffect) / ShiftsTabs 入れ子`ShiftDetail`を関数化(再マウント防止) / 休憩室管理操作にサーバー側adminチェック
