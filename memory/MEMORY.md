@@ -13,7 +13,19 @@
 
 ---
 
-## 現在の開発状態（2026-06-13更新）
+## 現在の開発状態（2026-06-14更新）
+
+### デバッグ/Lint整備＆デッドコード掃除（2026-06-14・本番反映済）
+- **現状**: TypeScript 0エラー / ESLint **0エラー**（warning 73）。コミット `9a64f20`〜`213f538`
+- **⚠️ 開発環境の最重要点**: このエージェント実行シェル（Bash/PowerShell）には **node/npm/npx が PATH に無い**。`npx tsc ... | grep error` は無言で空振りし**誤って「通過」に見える**（過去にハマった）。実際に tsc/eslint を走らせるには playwright同梱nodeを使う：
+  - `NODE="/c/Users/fukud/AppData/Local/ms-playwright-go/1.50.1/node.exe"`
+  - 型: `"$NODE" node_modules/typescript/bin/tsc --noEmit -p tsconfig.json`
+  - Lint: `"$NODE" node_modules/eslint/bin/eslint.js .`（全件JSON集計は `-f json` → 別nodeで集計・パスは相対で）
+  - tsc前に `.next` を消すと、削除済ファイルを参照する `.next/types` の偽エラーが消える
+- **Next 16 はビルド時にESLintを実行しない**＝lintエラーがあってもVercelデプロイは通る（lintは品質チェック用）。ローカル `next dev` は `.env.local` の `NEXT_PUBLIC_SUPABASE_URL` 未読込で500＆認証必須のため再現確認は困難
+- **eslint.config.mjs 方針**: React Compiler系の新ルール（`react-hooks/set-state-in-effect`/`refs`/`purity`/`immutability`/`static-components`）は誤検出が多いため **error→warn に降格**（可視化は維持）。`@typescript-eslint/no-unused-vars` に `ignoreRestSiblings`＋`^_`無視を追加。`set-state-in-effect`（マウント時fetch）は基本無害＝個別対応しない方針
+- **直した実バグ**: LineConnectionSection `isPolling`(ref→state) / SeatingClient `useState(Date.now())`(#418源→0+useEffect) / ShiftsTabs 入れ子`ShiftDetail`を関数化(再マウント防止) / 休憩室管理操作にサーバー側adminチェック
+- **デッドコード**: 未使用import/変数を51件削除(27ファイル・最大は ShiftEditGrid の死蔵 `EditModal` -272行)。tsc 0維持で挙動変更なし。残23件は意図的保持(引数/useStateの値側/副作用呼び出し/MEMORY記載の残置)
 
 ### キャラクター体系の全面改訂＝基本職100体＋モンスターガチャ（アバター切替まで完了・本番デプロイ済 / 残=ガチャUI）
 **SPEC.md §6-7 に仕様確定。①データ設計→②画像100枚→アバター切替 まで完了し本番反映済み。残るはガチャ画面UIのみ。**
@@ -409,7 +421,7 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | insert直後のID取得に `.single()` 禁止 | RLSのSELECTポリシーが通らないとエラー。insertとselectを分離し、取れない場合のフォールバックを用意（周知投稿で発生済み） |
 | Server Actions のアップロードは bodySizeLimit に注意 | Vercelデフォルト1MB。next.config.ts で `serverActions.bodySizeLimit: "10mb"` 設定済み。クライアント側でも10MB検証を入れる |
 | Server Action は全体 try/catch で保護 | 未補足例外がクライアントで「This page couldn't load」クラッシュになる。catchしてエラーメッセージを返し console.error でVercelログに残す |
-| クライアントコンポーネントの useState 初期値／レンダー時に時刻・乱数を使わない | SSRとクライアントで結果が変わり hydration mismatch（React #418）になる。`useState("--:--")` 等の固定プレースホルダ＋マウント後の useEffect で確定（HomeClient の挨拶ランダム・AppNav の時計）。**useState初期値だけでなくレンダー本体の `new Date()` も同罪**＝`AdminHomeWrapper` がレンダー時に `new Date().toLocaleDateString(Asia/Tokyo)` で当日タスクを絞っていて深夜またぎ/キャッシュで間欠的に #418（2026-06-13修正）。**当日(JST)はサーバーの page.tsx で算出して props で渡す**こと（client で new Date しない） |
+| クライアントコンポーネントの useState 初期値／レンダー時に時刻・乱数を使わない | SSRとクライアントで結果が変わり hydration mismatch（React #418）になる。`useState("--:--")` 等の固定プレースホルダ＋マウント後の useEffect で確定（HomeClient の挨拶ランダム・AppNav の時計）。**useState初期値だけでなくレンダー本体の `new Date()` も同罪**＝`AdminHomeWrapper` がレンダー時に `new Date().toLocaleDateString(Asia/Tokyo)` で当日タスクを絞っていて深夜またぎ/キャッシュで間欠的に #418（2026-06-13修正）。**当日(JST)はサーバーの page.tsx で算出して props で渡す**こと（client で new Date しない）。**`useState(Date.now())` も同種**＝SeatingClient の超過判定tickが該当（2026-06-14・`useState(0)`＋マウント後 `setNowMs(Date.now())` に修正）。全ソース横断で `useState(Date.now()/new Date()/Math.random())` を grep して潰すのが確実 |
 | 周知の添付は1周知1ファイル | `notices.attachment_url/attachment_name`＋`notice-attachments`バケット（public）。周知削除時にストレージも削除すること |
 | `"YYYY-MM-DD"+T..+09:00` の `getDay()` はhydration不一致になる | 絶対時刻を実行環境のローカル曜日で返すため、SSR(UTC)とクライアント(JST)で曜日がずれReact #418。曜日は `new Date(ds+"T00:00:00Z").getUTCDay()` で算出する（ShiftsTabs panelDateLabel で発生済み）。※`new Date(y,m-1,d).getDay()`（ローカル構成要素）はTZ非依存で安全 |
 | ダーク背景の固定ページは `h-dvh` だと白帯が出る | AppNavのコンテンツラッパーは下部に `pb-safe`/`pb-safe-xl`(9rem)の余白を持ち、その背景はレイアウト由来の `#f4f6fa`。`h-dvh` 固定だとこの余白を覆えず白帯が露出。モバイルは `min-h-[100dvh]`＋ボトムナビ分の `pb-36` でダーク背景を確保し、PCだけ `md:h-dvh md:overflow-hidden` でフル表示にする（/shifts で対応済み） |
