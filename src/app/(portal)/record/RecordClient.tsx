@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import { submitCorrectionAction } from "@/app/(portal)/corrections/actions";
+import { RpgWindow, BlinkCursor, dotGothic, RPG_PAGE_BG, RPG_KEYFRAMES, RpgStarfield } from "@/components/rpg-ui";
 
 const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -50,16 +50,16 @@ type Props = {
 type CorrKind = "定時" | "遅刻" | "早退" | "残業";
 const KIND_LIST: CorrKind[] = ["定時", "遅刻", "早退", "残業"];
 const KIND_INACTIVE: Record<CorrKind, string> = {
-  定時: "border-blue-200 bg-blue-50 text-blue-600",
-  遅刻: "border-red-200 bg-red-50 text-red-600",
-  早退: "border-amber-200 bg-amber-50 text-amber-600",
-  残業: "border-violet-200 bg-violet-50 text-violet-600",
+  定時: "border-white/40 text-white/70",
+  遅刻: "border-red-400/50 text-red-300",
+  早退: "border-amber-300/50 text-amber-300",
+  残業: "border-violet-400/50 text-violet-300",
 };
 const KIND_ACTIVE: Record<CorrKind, string> = {
-  定時: "border-blue-600 bg-blue-600 text-white",
-  遅刻: "border-red-600 bg-red-600 text-white",
-  早退: "border-amber-500 bg-amber-500 text-white",
-  残業: "border-violet-600 bg-violet-600 text-white",
+  定時: "border-white bg-white/15 text-white",
+  遅刻: "border-red-400 bg-red-500/25 text-red-100",
+  早退: "border-amber-300 bg-amber-400/25 text-amber-100",
+  残業: "border-violet-400 bg-violet-500/25 text-violet-100",
 };
 
 function calcWorkedMins(inIso: string, outIso: string): number {
@@ -81,22 +81,30 @@ function getRowStatus(r: DayRecord, corr?: CorrectionSummary): { label: string; 
   const OFF = ["公休", "休", "公休日", "有休", "希望休", "特別休暇", "代休", "振替休日", "休暇"];
   const isHoliday = OFF.includes(r.shiftName ?? "");
   if (isHoliday || (!r.shiftName && !r.clockIn && !r.clockOut))
-    return { label: "休日", type: "holiday" };
-  if (corr?.status === "pending")   return { label: "修正待ち", type: "pending" };
-  if (corr?.status === "approved")  return { label: "承認済", type: "corrected" };
-  if (r.clockIn && r.clockOut)      return { label: "出勤済", type: "ok" };
-  if (r.shiftStart)                 return { label: "未打刻", type: "missing" };
-  return { label: "休日", type: "holiday" };
+    return { label: "おやすみ", type: "holiday" };
+  if (corr?.status === "pending")   return { label: "しんせいちゅう", type: "pending" };
+  if (corr?.status === "approved")  return { label: "しょうにん済", type: "corrected" };
+  if (r.clockIn && r.clockOut)      return { label: "しゅつげき済", type: "ok" };
+  if (r.shiftStart)                 return { label: "みだこく", type: "missing" };
+  return { label: "おやすみ", type: "holiday" };
 }
 
+const STATUS_CLASS: Record<StatusType, string> = {
+  ok:        "text-emerald-300 border-emerald-400/60 bg-emerald-500/10",
+  holiday:   "text-white/50 border-white/25 bg-white/5",
+  missing:   "text-amber-300 border-amber-300/60 bg-amber-400/10",
+  pending:   "text-amber-300 border-amber-300/60 bg-amber-400/10",
+  corrected: "text-cyan-300 border-cyan-400/60 bg-cyan-500/10",
+};
+
 function StatusBadge({ label, type }: { label: string; type: StatusType }) {
-  const base = "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold";
-  if (type === "ok")       return <span className={`${base} bg-green-50 text-green-700 border border-green-200`}><CheckIcon />{ label}</span>;
-  if (type === "holiday")  return <span className={`${base} bg-zinc-100 text-zinc-500 border border-zinc-200`}><CheckIcon />{ label}</span>;
-  if (type === "missing")  return <span className={`${base} bg-orange-50 text-orange-700 border border-orange-200`}><WarnIcon />{ label}</span>;
-  if (type === "pending")  return <span className={`${base} bg-orange-50 text-orange-700 border border-orange-200`}><ClockIcon />{ label}</span>;
-  if (type === "corrected")return <span className={`${base} bg-blue-50 text-blue-700 border border-blue-200`}><CheckIcon />{ label}</span>;
-  return null;
+  const icon = type === "missing" || type === "pending" ? <WarnIcon />
+    : type === "corrected" ? <ClockIcon /> : <CheckIcon />;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] border ${STATUS_CLASS[type]}`}>
+      {icon}{label}
+    </span>
+  );
 }
 
 function CheckIcon() {
@@ -113,10 +121,10 @@ function EditIcon() {
 }
 
 export default function RecordClient({
-  records, corrections, projectName,
+  records, corrections,
   year, month, prevMonth, nextMonth,
   workDays, totalStr, today, isFuture,
-  scheduledDays, absentDays, lateDays, earlyDays, complianceRate,
+  scheduledDays, absentDays, lateDays, earlyDays,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -131,7 +139,7 @@ export default function RecordClient({
   const pendingCount   = corrections.filter(c => c.status === "pending").length;
   const missingCount   = records.filter(r => {
     const OFF = ["公休","休","公休日","有休","希望休","特別休暇","代休","振替休日","休暇"];
-    return r.shiftStart && !r.clockIn && !OFF.includes(r.shiftName ?? "");
+    return r.shiftStart && !r.clockIn && !OFF.includes(r.shiftName ?? "") && r.date <= today;
   }).length;
   const alertCount     = pendingCount + missingCount;
   const vacationDays   = records.filter(r => ["有休","希望休","特別休暇","代休","振替休日","休暇"].includes(r.shiftName ?? "")).length;
@@ -174,276 +182,215 @@ export default function RecordClient({
 
   return (
     <>
-      <style>{`@media print{aside,nav.fixed,.no-print{display:none!important}[class*="md:pl-"]{padding-left:0!important}.pb-safe{padding-bottom:0!important}body{background:white!important;color:black!important}.record-table{border-radius:0!important;border:none!important}.record-table table{border-collapse:collapse!important;width:100%!important;font-size:10px!important}.record-table th,.record-table td{border:1px solid #d4d4d8!important;padding:5px 7px!important;background:white!important;color:black!important}.record-table thead tr{background:#f4f4f5!important}.record-table thead th{font-weight:600!important;color:#52525b!important;background:#f4f4f5!important}.print-show{display:block!important}.print-hide{display:none!important}}.print-show{display:none;}`}</style>
+      <style>{`@media print{aside,nav.fixed,.no-print{display:none!important}[class*="md:pl-"]{padding-left:0!important}.pb-safe{padding-bottom:0!important}body{background:white!important;color:black!important}.record-table{border-radius:0!important;border:none!important;background:white!important}.record-table table{border-collapse:collapse!important;width:100%!important;font-size:10px!important}.record-table th,.record-table td{border:1px solid #d4d4d8!important;padding:5px 7px!important;background:white!important;color:black!important}.record-table thead tr{background:#f4f4f5!important}.record-table thead th{font-weight:600!important;color:#52525b!important;background:#f4f4f5!important}}`}{RPG_KEYFRAMES}</style>
 
-      <main className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 md:overflow-hidden min-h-0">
+      <main className={`flex flex-col min-h-[100dvh] md:h-dvh md:overflow-hidden ${dotGothic.className}`} style={{ background: RPG_PAGE_BG }}>
 
-        {/* ── 固定ヘッダーエリア（タイトル・タブ・統計・アラート） ── */}
-        <div className="flex-shrink-0 w-full px-4 md:px-8 pt-5 pb-3">
-
-          {/* ── タイトル + タブ + 月ナビ ── */}
-          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-            <h1 className="text-[22px] font-bold text-[#0d1b35] dark:text-white">勤怠実績</h1>
-            <div className="flex items-center gap-3">
-              {/* 日別/週別/月別タブ（現在は日別のみ） */}
-              <div className="flex border border-zinc-200 dark:border-zinc-700 rounded-xl overflow-hidden">
-                {["日別","週別","月別"].map((t, i) => (
-                  <button key={t} type="button"
-                    className={`px-3.5 py-1.5 text-[12px] font-semibold transition-colors ${
-                      i === 0
-                        ? "bg-[#0d1b35] text-white"
-                        : "bg-white dark:bg-zinc-900 text-zinc-400 hover:text-zinc-600"
-                    } ${i > 0 ? "border-l border-zinc-200 dark:border-zinc-700" : ""}`}>
-                    {t}
-                  </button>
-                ))}
-              </div>
-              {/* 月ナビ */}
-              <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 px-1">
-                <a href={`/record?month=${prevMonth}`}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
-                  <ChevronLeftIcon className="w-4 h-4" />
-                </a>
-                <span className="text-[13px] font-bold tabular-nums text-zinc-800 dark:text-zinc-100 px-1 min-w-[72px] text-center">
-                  {year}年{String(month).padStart(2,"0")}月
-                </span>
-                <a href={`/record?month=${nextMonth}`}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 transition-colors">
-                  <ChevronRightIcon className="w-4 h-4" />
-                </a>
-              </div>
-            </div>
-          </div>
-
-          {/* ── 統計カード行 ── */}
-          <div className="mb-4 space-y-2">
-            {/* 総勤務時間（大カード） */}
-            <div className="bg-[#0d1b35] dark:bg-zinc-800 rounded-2xl px-4 py-3 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-1.5 text-white/60 text-[11px] font-semibold mb-0.5">
-                  <ClockIcon /> 総勤務時間
-                </div>
-                <p className="text-[26px] font-bold text-white tabular-nums leading-tight">{totalStr}</p>
-              </div>
-              <div className="text-right text-[11px] text-white/50 tabular-nums space-y-0.5">
-                <p>所定 {scheduledDays}日</p>
-                <p>出勤 {workDays}日</p>
-              </div>
-            </div>
-            {/* 6統計カード: モバイル3列 */}
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-              <StatCard label="出勤日数" value={`${workDays}日`} sub={`所定${scheduledDays}日`} />
-              <StatCard label="遅刻" value={`${lateDays}回`} />
-              <StatCard label="早退" value={`${earlyDays}回`} />
-              <StatCard label="欠勤" value={`${absentDays}日`} />
-              <StatCard label="休暇" value={`${vacationDays}日`} />
-              <StatCard label="修正待ち" value={`${pendingCount}件`} sub={pendingCount > 0 ? "要確認" : undefined} accent={pendingCount > 0} />
-            </div>
-          </div>
-
-          {/* ── アラートバナー ── */}
-          {alertCount > 0 && (
-            <div className="mb-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-full bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center flex-shrink-0">
-                  <WarnIcon />
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-orange-800 dark:text-orange-300">確認が必要な勤怠があります</p>
-                  <p className="text-[12px] text-orange-600 dark:text-orange-400">
-                    未打刻や修正待ちの勤怠が {alertCount} 件あります。
-                  </p>
-                </div>
-              </div>
-              <span className="text-[12px] text-orange-600 dark:text-orange-400 font-medium whitespace-nowrap flex items-center gap-0.5">
-                該当日を確認 <ChevronRightIcon className="w-3.5 h-3.5" />
+        {/* ── ヘッダー（星空＋タイトル＋月ナビ） ── */}
+        <div className="relative shrink-0 w-full px-4 md:px-8 pt-5 pb-3 overflow-hidden">
+          <RpgStarfield />
+          <div className="relative flex items-center justify-between flex-wrap gap-3">
+            <h1 className="text-[20px] md:text-[22px] text-white">★ きんむ きろく</h1>
+            {/* 月ナビ */}
+            <div className="flex items-center gap-1">
+              <a href={`/record?month=${prevMonth}`}
+                className="w-8 h-8 flex items-center justify-center rounded border border-amber-300/60 text-amber-300 hover:bg-amber-300/10 transition-colors">◀</a>
+              <span className="text-[14px] text-white tabular-nums px-2 min-w-[100px] text-center">
+                {year}年{String(month).padStart(2,"0")}月
               </span>
+              <a href={`/record?month=${nextMonth}`}
+                className="w-8 h-8 flex items-center justify-center rounded border border-amber-300/60 text-amber-300 hover:bg-amber-300/10 transition-colors">▶</a>
             </div>
-          )}
+          </div>
+        </div>
 
-        </div>{/* /固定ヘッダーエリア */}
+        {/* ── スクロール領域 ── */}
+        <div className="flex-1 md:min-h-0 overflow-y-auto px-4 md:px-8 pb-36 md:pb-6 space-y-3.5">
 
-        {/* ── スクロールエリア（テーブルのみ） ── */}
-        <div className="flex-1 md:min-h-0 overflow-y-auto px-4 md:px-8 pb-4">
+          {/* メッセージウィンドウ */}
+          <RpgWindow>
+            <div className="px-4 py-3">
+              <p className="text-[13px] md:text-[14px] text-white leading-relaxed">
+                ＊「こんげつの きんむきろくだ。みだこくは そのひの ▶ボタンから ほうこく できるぞ。<BlinkCursor /></p>
+            </div>
+          </RpgWindow>
+
           {isFuture ? (
-            <p className="text-[13px] text-zinc-500 text-center py-10">未来の月は表示できません</p>
+            <RpgWindow>
+              <div className="px-4 py-10 text-center text-[13px] text-white/60">みらいの つきは まだ みられない。</div>
+            </RpgWindow>
           ) : (
-            <div className="record-table bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[480px] border-separate border-spacing-0">
-                  <thead>
-                    <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-left whitespace-nowrap w-10">日</th>
-                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-1 py-2 text-[11px] font-bold text-zinc-500 text-center w-7">曜</th>
-                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap">状態</th>
-                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap">予定</th>
-                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap">出勤</th>
-                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap">退勤</th>
-                      <th className="sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap">勤務</th>
-                      <th className="no-print sticky top-0 z-10 bg-zinc-50 dark:bg-zinc-800 px-2 py-2 text-[11px] font-bold text-zinc-500 text-center whitespace-nowrap w-14">申請</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/80">
-                    {records.map((r) => {
-                      const isToday = r.date === today;
-                      const isSun   = r.dow === 0;
-                      const isSat   = r.dow === 6;
-                      const corr    = corrMap.get(r.date);
-                      const status  = getRowStatus(r, corr);
-                      const OFF     = ["公休","休","公休日","有休","希望休","特別休暇","代休","振替休日","休暇"];
-                      const isHoliday = OFF.includes(r.shiftName ?? "");
-                      const hasData   = !!(r.clockIn || r.clockOut || r.shiftName);
-                      const canApply  = !isHoliday && hasData && !corr;
-                      const needsAttn = status.type === "missing" || status.type === "pending";
+            <>
+              {/* 総勤務時間 */}
+              <RpgWindow title="そうかつ">
+                <div className="px-4 py-3.5 flex items-center justify-between">
+                  <div>
+                    <p className="flex items-center gap-1.5 text-white/60 text-[11px] mb-0.5"><ClockIcon /> そうきんむ じかん</p>
+                    <p className="text-[26px] text-amber-300 tabular-nums leading-tight">{totalStr}</p>
+                  </div>
+                  <div className="text-right text-[11px] text-white/55 tabular-nums space-y-0.5">
+                    <p>しょてい {scheduledDays}日</p>
+                    <p>しゅっきん {workDays}日</p>
+                  </div>
+                </div>
+              </RpgWindow>
 
-                      return (
-                        <tr key={r.date}
-                          className={`transition-colors ${
-                            isToday   ? "bg-blue-50/60 dark:bg-blue-950/20"
-                            : isHoliday ? "bg-zinc-50/50 dark:bg-zinc-900/30"
-                            : "hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20"
-                          }`}>
-
-                          {/* 日付 */}
-                          <td className={`px-2 py-2 text-[13px] font-bold tabular-nums whitespace-nowrap ${
-                            isToday ? "text-blue-600 dark:text-blue-400"
-                            : isSun ? "text-red-500 dark:text-red-400"
-                            : "text-zinc-700 dark:text-zinc-300"
-                          }`}>
-                            {Number(r.date.slice(8))}
-                          </td>
-
-                          {/* 曜日 */}
-                          <td className={`px-1 py-2 text-[11px] font-semibold text-center ${
-                            isSun ? "text-red-400" : isSat ? "text-blue-400" : "text-zinc-400"
-                          }`}>
-                            {WEEKDAY_JP[r.dow]}
-                          </td>
-
-                          {/* ステータスバッジ */}
-                          <td className="px-2 py-2 text-center">
-                            <StatusBadge label={status.label} type={status.type} />
-                          </td>
-
-                          {/* 予定 */}
-                          <td className="px-2 py-2 text-center text-[11px] tabular-nums text-zinc-400 dark:text-zinc-500 whitespace-nowrap">
-                            {r.shiftStart
-                              ? <>{r.shiftStart.slice(0,5)}<br />{r.shiftEnd?.slice(0,5) ?? "─"}</>
-                              : <span className="text-zinc-300 dark:text-zinc-600">─</span>}
-                          </td>
-
-                          {/* 出勤 */}
-                          <td className={`px-2 py-2 text-center text-[12px] font-semibold tabular-nums whitespace-nowrap ${
-                            r.clockIn ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-300 dark:text-zinc-600"
-                          }`}>
-                            {r.clockIn ?? "─"}
-                          </td>
-
-                          {/* 退勤 */}
-                          <td className={`px-2 py-2 text-center text-[12px] font-semibold tabular-nums whitespace-nowrap ${
-                            r.clockOut ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-300 dark:text-zinc-600"
-                          }`}>
-                            {r.clockOut ?? "─"}
-                          </td>
-
-                          {/* 勤務時間 */}
-                          <td className="px-2 py-2 text-center text-[12px] font-semibold tabular-nums whitespace-nowrap text-zinc-700 dark:text-zinc-300">
-                            {fmtWorked(r.clockInIso, r.clockOutIso)}
-                          </td>
-
-                          {/* 申請ボタン */}
-                          <td className="no-print px-2 py-2 text-center whitespace-nowrap">
-                            {canApply && (
-                              needsAttn ? (
-                                <button type="button" onClick={() => openModal(r)}
-                                  className="px-2 py-1 bg-[#0d1b35] text-white text-[10px] font-bold rounded-lg hover:bg-[#162b50] transition-colors">
-                                  申請
-                                </button>
-                              ) : (
-                                <button type="button" onClick={() => openModal(r)}
-                                  className="w-6 h-6 inline-flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-                                  <EditIcon />
-                                </button>
-                              )
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              {/* 統計（6項目） */}
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                <StatCard label="しゅっきん" value={`${workDays}日`} sub={`しょてい${scheduledDays}`} />
+                <StatCard label="ちこく" value={`${lateDays}回`} />
+                <StatCard label="そうたい" value={`${earlyDays}回`} />
+                <StatCard label="けっきん" value={`${absentDays}日`} />
+                <StatCard label="きゅうか" value={`${vacationDays}日`} />
+                <StatCard label="しんせい中" value={`${pendingCount}件`} sub={pendingCount > 0 ? "ようかくにん" : undefined} accent={pendingCount > 0} />
               </div>
-            </div>
+
+              {/* アラート */}
+              {alertCount > 0 && (
+                <RpgWindow>
+                  <div className="px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 text-amber-300">
+                      <WarnIcon />
+                      <div>
+                        <p className="text-[13px]">かくにんが ひつような きんむが あるぞ</p>
+                        <p className="text-[11px] text-amber-300/80">みだこく・しんせいちゅうが {alertCount}けん。したの ひょうで ▶を おそう。</p>
+                      </div>
+                    </div>
+                  </div>
+                </RpgWindow>
+              )}
+
+              {/* 勤怠テーブル */}
+              <RpgWindow title="★きんむの きろく" bodyClassName="overflow-hidden">
+                <div className="record-table overflow-x-auto">
+                  <table className="w-full min-w-[480px] border-separate border-spacing-0 text-white">
+                    <thead>
+                      <tr>
+                        {["日","曜","じょうたい","よてい","しゅっきん","たいきん","きんむ"].map((h, i) => (
+                          <th key={h} className={`sticky top-0 z-10 bg-[#000846] px-2 py-2 text-[10px] text-white/60 whitespace-nowrap border-b border-white/30 ${i <= 1 ? "text-center" : i === 0 ? "text-left" : "text-center"}`}>{h}</th>
+                        ))}
+                        <th className="no-print sticky top-0 z-10 bg-[#000846] px-2 py-2 text-[10px] text-white/60 text-center whitespace-nowrap w-12 border-b border-white/30">しんせい</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {records.map((r) => {
+                        const isToday = r.date === today;
+                        const isSun   = r.dow === 0;
+                        const isSat   = r.dow === 6;
+                        const corr    = corrMap.get(r.date);
+                        const status  = getRowStatus(r, corr);
+                        const OFF     = ["公休","休","公休日","有休","希望休","特別休暇","代休","振替休日","休暇"];
+                        const isHoliday = OFF.includes(r.shiftName ?? "");
+                        const hasData   = !!(r.clockIn || r.clockOut || r.shiftName);
+                        const canApply  = !isHoliday && hasData && !corr;
+                        const needsAttn = status.type === "missing" || status.type === "pending";
+
+                        return (
+                          <tr key={r.date}
+                            className={`border-b border-white/10 ${isToday ? "bg-amber-400/10" : isHoliday ? "bg-white/[0.03]" : ""}`}>
+                            <td className={`px-2 py-2 text-[13px] tabular-nums whitespace-nowrap ${isToday ? "text-amber-300" : isSun ? "text-red-400" : "text-white/90"}`}>
+                              {Number(r.date.slice(8))}
+                            </td>
+                            <td className={`px-1 py-2 text-[11px] text-center ${isSun ? "text-red-400" : isSat ? "text-cyan-300" : "text-white/45"}`}>
+                              {WEEKDAY_JP[r.dow]}
+                            </td>
+                            <td className="px-2 py-2 text-center"><StatusBadge label={status.label} type={status.type} /></td>
+                            <td className="px-2 py-2 text-center text-[11px] tabular-nums text-white/45 whitespace-nowrap">
+                              {r.shiftStart
+                                ? <>{r.shiftStart.slice(0,5)}<br />{r.shiftEnd?.slice(0,5) ?? "─"}</>
+                                : <span className="text-white/25">─</span>}
+                            </td>
+                            <td className={`px-2 py-2 text-center text-[12px] tabular-nums whitespace-nowrap ${r.clockIn ? "text-white" : "text-white/25"}`}>{r.clockIn ?? "─"}</td>
+                            <td className={`px-2 py-2 text-center text-[12px] tabular-nums whitespace-nowrap ${r.clockOut ? "text-white" : "text-white/25"}`}>{r.clockOut ?? "─"}</td>
+                            <td className="px-2 py-2 text-center text-[12px] tabular-nums whitespace-nowrap text-white/80">{fmtWorked(r.clockInIso, r.clockOutIso)}</td>
+                            <td className="no-print px-2 py-2 text-center whitespace-nowrap">
+                              {canApply && (
+                                needsAttn ? (
+                                  <button type="button" onClick={() => openModal(r)}
+                                    className="px-2 py-1 border border-amber-300 text-amber-300 text-[10px] rounded hover:bg-amber-300/15 transition-colors">▶</button>
+                                ) : (
+                                  <button type="button" onClick={() => openModal(r)}
+                                    className="w-6 h-6 inline-flex items-center justify-center rounded border border-white/30 text-white/50 hover:bg-white/10 transition-colors"><EditIcon /></button>
+                                )
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </RpgWindow>
+            </>
           )}
-        </div>{/* /スクロールエリア */}
+        </div>
       </main>
 
-      {/* 修正申請モーダル */}
+      {/* 修正申請モーダル（RPG枠） */}
       {modal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={closeModal}>
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-            <div>
-              <h2 className="text-[15px] font-bold text-zinc-900 dark:text-zinc-50">打刻補正申請</h2>
-              <p className="text-[13px] text-zinc-400 mt-0.5">
-                {Number(modal.date.slice(5,7))}月{Number(modal.date.slice(8))}日（{WEEKDAY_JP[modal.dow]}）
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-2">区分を選択</p>
-              <div className="grid grid-cols-4 gap-1.5">
-                {KIND_LIST.map(k => (
-                  <button key={k} type="button" onClick={() => handleKindChange(k)}
-                    className={`py-2 rounded-lg text-[11px] font-bold border transition-colors ${kind === k ? KIND_ACTIVE[k] : KIND_INACTIVE[k]}`}>
-                    {k}
+        <div className={`fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-4 ${dotGothic.className}`} onClick={closeModal}>
+          <div className="w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <RpgWindow title="だこく ほせい しんせい">
+              <div className="px-5 py-4 space-y-4">
+                <p className="text-[12px] text-white/60">
+                  {Number(modal.date.slice(5,7))}月{Number(modal.date.slice(8))}日（{WEEKDAY_JP[modal.dow]}）
+                </p>
+                <div>
+                  <p className="text-[11px] text-white/70 mb-2">くぶんを えらぶ</p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {KIND_LIST.map(k => (
+                      <button key={k} type="button" onClick={() => handleKindChange(k)}
+                        className={`py-2 rounded text-[11px] border transition-colors ${kind === k ? KIND_ACTIVE[k] : KIND_INACTIVE[k]}`}>
+                        {k}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {(kind === "定時" || kind === "遅刻") && (
+                    <div>
+                      <label className="block text-[11px] text-white/70 mb-1">
+                        {kind === "遅刻" ? "じっさいの しゅっきん時刻" : "しゅうせいご しゅっきん時刻"}
+                      </label>
+                      <select value={timeIn} onChange={e => setTimeIn(e.target.value)}
+                        className="w-full px-3 py-2 rounded border border-white/40 bg-[#02040f] text-white text-[13px]">
+                        <option value="">えらんでください</option>
+                        {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {(kind === "定時" || kind === "早退" || kind === "残業") && (
+                    <div>
+                      <label className="block text-[11px] text-white/70 mb-1">
+                        {kind === "定時" ? "しゅうせいご たいきん時刻" : kind === "早退" ? "じっさいの たいきん時刻" : "ざんぎょう しゅうりょう時刻"}
+                      </label>
+                      <select value={timeOut} onChange={e => setTimeOut(e.target.value)}
+                        className="w-full px-3 py-2 rounded border border-white/40 bg-[#02040f] text-white text-[13px]">
+                        <option value="">えらんでください</option>
+                        {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-[11px] text-white/70 mb-1">しゅうせい りゆう <span className="text-red-400">*</span></label>
+                  <textarea value={reason} onChange={e => setReason(e.target.value)}
+                    placeholder="れい：だこく わすれ、きき ふぐあい など" rows={3}
+                    className="w-full px-3 py-2 rounded border border-white/40 bg-[#02040f] text-white text-[13px] resize-none placeholder:text-white/30" />
+                </div>
+                {error && <p className="text-[13px] text-red-400">{error}</p>}
+                <div className="flex gap-2">
+                  <button type="button" onClick={closeModal}
+                    className="flex-1 py-2.5 rounded border border-white/40 text-[13px] text-white/70 hover:bg-white/10 transition-colors">
+                    やめる
                   </button>
-                ))}
+                  <button type="button" onClick={handleSubmit} disabled={isPending}
+                    className="flex-1 py-2.5 rounded border-2 border-amber-300 text-amber-300 text-[13px] hover:bg-amber-300/15 disabled:opacity-50 transition-colors">
+                    {isPending ? "しんせい中..." : "▶しんせいする"}
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="space-y-3">
-              {(kind === "定時" || kind === "遅刻") && (
-                <div>
-                  <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
-                    {kind === "遅刻" ? "実際の出勤時刻" : "修正後の出勤時刻"}
-                  </label>
-                  <select value={timeIn} onChange={e => setTimeIn(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]">
-                    <option value="">選択してください</option>
-                    {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              )}
-              {(kind === "定時" || kind === "早退" || kind === "残業") && (
-                <div>
-                  <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
-                    {kind === "定時" ? "修正後の退勤時刻" : kind === "早退" ? "実際の退勤時刻" : "残業終了時刻"}
-                  </label>
-                  <select value={timeOut} onChange={e => setTimeOut(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]">
-                    <option value="">選択してください</option>
-                    {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
-                修正理由 <span className="text-red-500">*</span>
-              </label>
-              <textarea value={reason} onChange={e => setReason(e.target.value)}
-                placeholder="例：打刻忘れ、機器不具合など" rows={3}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] resize-none" />
-            </div>
-            {error && <p className="text-[13px] text-red-600 dark:text-red-400">{error}</p>}
-            <div className="flex gap-2">
-              <button type="button" onClick={closeModal}
-                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-[13px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
-                キャンセル
-              </button>
-              <button type="button" onClick={handleSubmit} disabled={isPending}
-                className="flex-1 py-2.5 rounded-xl bg-[#0d1b35] hover:bg-[#162b50] disabled:opacity-50 text-white text-[13px] font-semibold transition-colors">
-                {isPending ? "申請中..." : "申請する"}
-              </button>
-            </div>
+            </RpgWindow>
           </div>
         </div>
       )}
@@ -451,15 +398,13 @@ export default function RecordClient({
   );
 }
 
-// ── 統計カード ────────────────────────────────────────────────────────────────
+// ── 統計カード（RPGミニ枠） ──
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-3.5 flex flex-col gap-1">
-      <p className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500">{label}</p>
-      <p className={`text-[22px] font-bold tabular-nums leading-none ${accent ? "text-orange-500" : "text-[#0d1b35] dark:text-white"}`}>
-        {value}
-      </p>
-      {sub && <p className={`text-[10px] tabular-nums ${accent ? "text-orange-400" : "text-zinc-400"}`}>{sub}</p>}
+    <div className="rounded-md border border-white/40 bg-[#000846] px-2.5 py-2 flex flex-col gap-0.5">
+      <p className="text-[10px] text-white/55">{label}</p>
+      <p className={`text-[18px] tabular-nums leading-none ${accent ? "text-amber-300" : "text-white"}`}>{value}</p>
+      {sub && <p className={`text-[9px] tabular-nums ${accent ? "text-amber-300/80" : "text-white/40"}`}>{sub}</p>}
     </div>
   );
 }
