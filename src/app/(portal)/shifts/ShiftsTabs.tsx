@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import ShiftCalendar, { type ShiftChangeLog } from "./ShiftCalendar";
 import HolidayTab from "./HolidayTab";
-import { ChevronRightIcon } from "@/components/icons";
+import { dotGothic, RPG_PAGE_BG, RPG_KEYFRAMES, RpgWindow, BlinkCursor } from "@/components/rpg-ui";
 
 type ShiftData = {
   shift_date: string;
@@ -50,27 +50,21 @@ const JP_HOLIDAYS: Record<string, string> = {
   "2026-11-03":"文化の日","2026-11-23":"勤労感謝の日",
 };
 
+const OFF_NAMES = ["公休","休","公休日","希望休","有休","特別休暇","代休","振替休日","欠勤"];
+
 function getShiftBadge(name: string | null) {
   if (!name) return null;
   if (["公休","休","公休日"].includes(name))
-    return { bg: "bg-blue-100",    text: "text-blue-700",    border: "border border-blue-200" };
+    return { bg: "bg-sky-500/20",     text: "text-sky-200",     border: "border border-sky-400/50" };
   if (["希望休","有休","特別休暇","代休","振替休日"].includes(name))
-    return { bg: "bg-purple-100",  text: "text-purple-700",  border: "border border-purple-200" };
+    return { bg: "bg-purple-500/20",  text: "text-purple-200",  border: "border border-purple-400/50" };
   if (["欠勤"].includes(name))
-    return { bg: "bg-red-100",     text: "text-red-700",     border: "border border-red-200" };
+    return { bg: "bg-red-500/25",     text: "text-red-200",     border: "border border-red-400/50" };
   if (name.includes("早番"))
-    return { bg: "bg-emerald-100", text: "text-emerald-800", border: "border border-emerald-200" };
+    return { bg: "bg-emerald-500/20", text: "text-emerald-200", border: "border border-emerald-400/50" };
   if (name.includes("遅番"))
-    return { bg: "bg-orange-100",  text: "text-orange-800",  border: "border border-orange-200" };
-  return { bg: "bg-sky-100",       text: "text-sky-800",     border: "border border-sky-200" };
-}
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-    </svg>
-  );
+    return { bg: "bg-orange-500/20",  text: "text-orange-200",  border: "border border-orange-400/50" };
+  return { bg: "bg-amber-400/20",     text: "text-amber-200",   border: "border border-amber-300/50" };
 }
 
 function fmtLogAt(iso: string): string {
@@ -123,141 +117,152 @@ export default function ShiftsTabs({
   })();
 
   const badge = getShiftBadge(shiftForDate?.shift_name ?? null);
+  const isOffDay = OFF_NAMES.includes(shiftForDate?.shift_name ?? "");
+
+  // 選択日のシフト詳細（PC・モバイル共用）
+  const ShiftDetail = () => (
+    <>
+      {shiftForDate?.shift_name ? (
+        <div>
+          {badge && (
+            <div className={`inline-block px-3 py-1.5 rounded-lg text-[13px] font-bold mb-2 ${badge.bg} ${badge.text} ${badge.border}`}>
+              {shiftForDate.shift_name}
+            </div>
+          )}
+          {shiftForDate.shift_start && !isOffDay ? (
+            <p className="text-[28px] font-bold tabular-nums text-white leading-tight">
+              {shiftForDate.shift_start.slice(0, 5)}
+              <span className="text-white/30 text-xl font-light mx-2">〜</span>
+              {shiftForDate.shift_end?.slice(0, 5) ?? "--:--"}
+            </p>
+          ) : isOffDay ? (
+            <p className="text-[15px] text-white/60 mt-1">きょうは ゆっくり やすもう。</p>
+          ) : null}
+          {shiftForDate.note && (
+            <p className="text-[12px] text-white/50 mt-2">{shiftForDate.note}</p>
+          )}
+        </div>
+      ) : (
+        <p className="text-[14px] text-white/50">＊「この日の クエストは まだ ない。」<BlinkCursor /></p>
+      )}
+
+      {/* 変更履歴 */}
+      {changeLogsForDate.length > 0 && (
+        <div className="rounded-lg border border-amber-300/40 bg-amber-300/5 p-3 space-y-1.5">
+          <p className="text-[11px] font-semibold text-amber-300 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-300 inline-block" />へんこう りれき
+          </p>
+          {changeLogsForDate.map((l, i) => (
+            <p key={i} className="text-[11px] text-white/70 leading-snug">
+              <span className="font-semibold text-white">{l.changed_by_name}</span>
+              {" "}
+              {l.action === "delete" ? "さくじょ"
+                : l.action === "create" ? "ついか"
+                : `${l.before_shift_name ?? "なし"} → ${l.after_shift_name ?? "なし"}`}
+              <span className="text-white/40 ml-1">{fmtLogAt(l.changed_at)}</span>
+            </p>
+          ))}
+        </div>
+      )}
+    </>
+  );
 
   return (
-    <div className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 md:overflow-hidden min-h-0">
+    <div className={`flex-1 flex flex-col min-h-0 ${dotGothic.className}`} style={{ background: RPG_PAGE_BG, backgroundAttachment: "fixed" }}>
+      <style>{RPG_KEYFRAMES}</style>
+
       {/* ── ページヘッダー ── */}
       <div className="flex-shrink-0 px-4 md:px-8 pt-4 pb-3 flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-[20px] md:text-[22px] font-bold text-[#0d1b35] dark:text-white">
-          勤務スケジュール
+        <h1 className="text-[20px] md:text-[22px] font-bold text-white">
+          <span className="text-amber-300 mr-1.5">★</span>クエストカレンダー
         </h1>
         <button
           type="button"
           onClick={() => setShowHoliday(true)}
-          className="px-3.5 py-1.5 rounded-xl text-[13px] font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-colors shadow-sm"
+          className="text-[13px] text-white border-2 border-white rounded-lg px-4 py-1.5 hover:bg-white/10 active:scale-95 transition"
         >
-          希望休申請
+          <span className="text-amber-300 mr-1">▶</span>きゅうか きぼう
         </button>
       </div>
 
       {/* ── コンテンツ：カレンダー常時表示 ── */}
       <div className="flex-1 min-h-0 px-4 md:px-8 pb-4 flex gap-4">
 
-        <>
-            {/* カレンダー（常時表示） */}
-            <ShiftCalendar
-              shifts={shifts} changeLogs={changeLogs}
-              holidayRequests={holidayRequests}
-              todayStr={todayStr} initialYear={initialYear} initialMonth={initialMonth}
-              minMonth={minMonth} maxMonth={maxMonth}
-              controlledYear={year} controlledMonth={month} onGoMonth={goMonth}
-              selectedDate={selectedDate} onSelectDate={setSelected}
-              className="flex-1 min-w-0 h-full"
-            />
+        {/* カレンダー（常時表示） */}
+        <ShiftCalendar
+          shifts={shifts} changeLogs={changeLogs}
+          holidayRequests={holidayRequests}
+          todayStr={todayStr} initialYear={initialYear} initialMonth={initialMonth}
+          minMonth={minMonth} maxMonth={maxMonth}
+          controlledYear={year} controlledMonth={month} onGoMonth={goMonth}
+          selectedDate={selectedDate} onSelectDate={setSelected}
+          className="flex-1 min-w-0 h-full"
+        />
 
-            {/* サイドパネル（PC） */}
-            {selectedDate && (
-              <div className="hidden md:flex w-72 flex-shrink-0 flex-col bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
-
+        {/* サイドパネル（PC） */}
+        {selectedDate && (
+          <div className="hidden md:block w-72 flex-shrink-0">
+            <RpgWindow title="クエストの ないよう" className="h-full">
+              <div className="flex flex-col h-full">
                 {/* パネルヘッダー */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
-                  <p className="text-[13px] font-bold text-[#0d1b35] dark:text-white leading-snug">{panelDateLabel}</p>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-white/20">
+                  <p className="text-[13px] font-bold text-amber-300 leading-snug">{panelDateLabel}</p>
                   <button onClick={() => setSelected(null)}
-                    className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors">
-                    <CloseIcon />
+                    className="text-white/50 hover:text-white transition-colors text-lg leading-none px-1">
+                    ✕
                   </button>
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
-
-                  {/* シフト情報 */}
-                  {shiftForDate?.shift_name ? (
-                    <div>
-                      {badge && (
-                        <div className={`inline-block px-3 py-1.5 rounded-xl text-[13px] font-bold mb-2 ${badge.bg} ${badge.text} ${badge.border}`}>
-                          {shiftForDate.shift_name}
-                        </div>
-                      )}
-                      {shiftForDate.shift_start && (
-                        <p className="text-[28px] font-bold tabular-nums text-[#0d1b35] dark:text-white">
-                          {shiftForDate.shift_start.slice(0, 5)}
-                          <span className="text-zinc-300 dark:text-zinc-600 text-xl font-light mx-2">〜</span>
-                          {shiftForDate.shift_end?.slice(0, 5) ?? "--:--"}
-                        </p>
-                      )}
-                      {shiftForDate.note && (
-                        <p className="text-[12px] text-zinc-500 mt-1">{shiftForDate.note}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-[13px] text-zinc-400">シフト未登録</p>
-                  )}
-
-                  {/* 変更履歴 */}
-                  {changeLogsForDate.length > 0 && (
-                    <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl p-3 space-y-1.5">
-                      <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />変更履歴
-                      </p>
-                      {changeLogsForDate.map((l, i) => (
-                        <p key={i} className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-snug">
-                          <span className="font-semibold">{l.changed_by_name}</span>
-                          {" "}
-                          {l.action === "delete" ? "削除"
-                            : l.action === "create" ? "追加"
-                            : `${l.before_shift_name ?? "なし"} → ${l.after_shift_name ?? "なし"}`}
-                          <span className="text-zinc-400 ml-1">{fmtLogAt(l.changed_at)}</span>
-                        </p>
-                      ))}
-                    </div>
-                  )}
+                  <ShiftDetail />
 
                   {/* メモ */}
                   <div className="flex flex-col gap-2 flex-1">
-                    <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">メモ</p>
+                    <p className="text-[11px] font-semibold text-cyan-300">▼ メモ（じぶんようの おぼえがき）</p>
                     <textarea
                       value={memo}
                       onChange={e => setMemo(e.target.value)}
                       onBlur={saveMemo}
                       placeholder="メモを入力..."
-                      className="flex-1 min-h-[100px] w-full px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[13px] text-zinc-700 dark:text-zinc-200 placeholder-zinc-300 dark:placeholder-zinc-600 resize-none focus:outline-none focus:ring-2 focus:ring-[#0d1b35]/20 dark:focus:ring-blue-500/20 transition"
+                      className="flex-1 min-h-[100px] w-full px-3 py-2.5 rounded-lg border border-white/30 bg-[#02040f]/60 text-[13px] text-white placeholder-white/30 resize-none focus:outline-none focus:border-amber-300/70 transition"
                     />
                     <button
                       onClick={saveMemo}
-                      className="w-full py-2 rounded-xl bg-[#0d1b35] text-white text-[13px] font-semibold hover:bg-[#162b50] transition-colors"
+                      className="w-full py-2 rounded-lg border-2 border-white text-white text-[13px] hover:bg-white/10 active:scale-[0.98] transition"
                     >
-                      保存
+                      ▶ ほぞん
                     </button>
                   </div>
-
                 </div>
               </div>
-            )}
-          </>
-
+            </RpgWindow>
+          </div>
+        )}
       </div>
 
       {/* ── 希望休申請オーバーレイ ── */}
       {showHoliday && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50"
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 px-0 md:px-4"
           onClick={() => setShowHoliday(false)}>
-          <div
-            className="w-full md:max-w-2xl md:mx-4 md:rounded-2xl rounded-t-2xl bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden max-h-[90dvh] flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
-              <h2 className="text-[15px] font-bold text-[#0d1b35] dark:text-white">希望休申請</h2>
-              <button onClick={() => setShowHoliday(false)} className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400">
-                <CloseIcon />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1">
-              <HolidayTab
-                projectId={projectId} holidayRequests={holidayRequests}
-                initialYear={year} initialMonth={month}
-                openDay={holidayOpenDay} deadlineDay={holidayDeadlineDay}
-                maxDaysPerMonth={holidayMaxDaysPerMonth} weekendLimit={holidayWeekendLimit}
-              />
+          <div className="w-full md:max-w-2xl max-h-[90dvh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="rounded-lg border-2 border-white bg-[#000846] p-[3px] flex flex-col overflow-hidden max-h-[90dvh]">
+              <div className="rounded-md border border-white/80 bg-[#000846] flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/20 flex-shrink-0">
+                  <div>
+                    <h2 className="text-[15px] text-white">きゅうか きぼうを もうしでる</h2>
+                    <p className="text-[11px] text-white/50 mt-0.5">やすみたい ひを えらんでね</p>
+                  </div>
+                  <button onClick={() => setShowHoliday(false)} className="text-white/50 hover:text-white text-lg px-2">✕</button>
+                </div>
+                <div className="overflow-y-auto flex-1">
+                  <HolidayTab
+                    projectId={projectId} holidayRequests={holidayRequests}
+                    initialYear={year} initialMonth={month}
+                    openDay={holidayOpenDay} deadlineDay={holidayDeadlineDay}
+                    maxDaysPerMonth={holidayMaxDaysPerMonth} weekendLimit={holidayWeekendLimit}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -265,47 +270,31 @@ export default function ShiftsTabs({
 
       {/* モバイル用ボトムシート */}
       {selectedDate && (
-        <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+        <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center bg-black/60"
           onClick={() => setSelected(null)}>
-          <div className="w-full max-w-lg rounded-t-2xl bg-white dark:bg-zinc-900 shadow-xl overflow-hidden"
-            onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
-              <p className="text-[14px] font-bold text-[#0d1b35]">{panelDateLabel}</p>
-              <button onClick={() => setSelected(null)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400">
-                <CloseIcon />
-              </button>
-            </div>
-            <div className="px-5 py-4 space-y-3">
-              {shiftForDate?.shift_name ? (
-                <>
-                  {badge && (
-                    <span className={`inline-block px-3 py-1.5 rounded-xl text-[13px] font-bold ${badge.bg} ${badge.text}`}>
-                      {shiftForDate.shift_name}
-                    </span>
-                  )}
-                  {shiftForDate.shift_start && (
-                    <p className="text-[32px] font-bold tabular-nums text-[#0d1b35]">
-                      {shiftForDate.shift_start.slice(0, 5)}
-                      <span className="text-zinc-300 text-2xl font-light mx-3">〜</span>
-                      {shiftForDate.shift_end?.slice(0, 5) ?? "--:--"}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <p className="text-[13px] text-zinc-400">シフト未登録</p>
-              )}
-              <textarea value={memo} onChange={e => setMemo(e.target.value)} onBlur={saveMemo}
-                placeholder="メモを入力..." rows={3}
-                className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50 text-[13px] resize-none focus:outline-none" />
-              <button onClick={() => { saveMemo(); setSelected(null); }}
-                className="w-full py-2.5 rounded-xl bg-[#0d1b35] text-white text-[13px] font-semibold">
-                閉じる
-              </button>
-            </div>
+          <div className="w-full max-w-lg p-3" onClick={e => e.stopPropagation()}>
+            <RpgWindow>
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/20">
+                <p className="text-[14px] font-bold text-amber-300">{panelDateLabel}</p>
+                <button onClick={() => setSelected(null)} className="text-white/50 hover:text-white text-lg px-1">✕</button>
+              </div>
+              <div className="px-5 py-4 space-y-3 max-h-[60dvh] overflow-y-auto">
+                <ShiftDetail />
+                <div className="flex flex-col gap-2">
+                  <p className="text-[11px] font-semibold text-cyan-300">▼ メモ</p>
+                  <textarea value={memo} onChange={e => setMemo(e.target.value)} onBlur={saveMemo}
+                    placeholder="メモを入力..." rows={3}
+                    className="w-full px-3 py-2.5 rounded-lg border border-white/30 bg-[#02040f]/60 text-[13px] text-white placeholder-white/30 resize-none focus:outline-none focus:border-amber-300/70" />
+                </div>
+                <button onClick={() => { saveMemo(); setSelected(null); }}
+                  className="w-full py-2.5 rounded-lg border-2 border-white text-white text-[13px] hover:bg-white/10 active:scale-[0.98] transition">
+                  ▶ とじる
+                </button>
+              </div>
+            </RpgWindow>
           </div>
         </div>
       )}
     </div>
   );
 }
-

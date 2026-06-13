@@ -129,7 +129,7 @@ export default async function ShiftsPage({
   const maxMonth = `${rangeEnd.getFullYear()}-${String(rangeEnd.getMonth() + 1).padStart(2, "0")}`;
 
   return (
-    <main className="h-dvh flex flex-col bg-white dark:bg-zinc-950 overflow-hidden">
+    <main className="h-dvh flex flex-col overflow-hidden" style={{ background: "#02040f" }}>
       {/* ShiftsTabs がヘッダー（タイトル・タブ・月ナビ）を内包 */}
       <ShiftsTabs
         projectId={projectId}

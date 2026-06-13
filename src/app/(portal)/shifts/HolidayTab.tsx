@@ -21,7 +21,7 @@ export default function HolidayTab({
   maxDaysPerMonth = null,
 }: Props) {
   return (
-    <div className="p-4">
+    <div>
       <StaffOffRequestCalendar
         initialYear={initialYear}
         initialMonth={initialMonth}

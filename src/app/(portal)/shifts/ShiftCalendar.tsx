@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 
 type ShiftData = {
   shift_date: string;
@@ -61,20 +60,20 @@ const JP_HOLIDAYS: Record<string, string> = {
   "2026-11-03": "文化の日",    "2026-11-23": "勤労感謝の日",
 };
 
-// ── シフトバッジ色 ─────────────────────────────────────────────────────────────
+// ── シフトバッジ色（夜空背景に映える半透明＋明色） ─────────────────────────────
 function getShiftBadge(name: string | null): { bg: string; text: string; border: string } | null {
   if (!name) return null;
   if (["公休", "休", "公休日"].includes(name))
-    return { bg: "bg-blue-100 dark:bg-blue-900/50",    text: "text-blue-700 dark:text-blue-200",    border: "border border-blue-200 dark:border-blue-700" };
+    return { bg: "bg-sky-500/20",     text: "text-sky-200",     border: "border border-sky-400/50" };
   if (["希望休", "有休", "特別休暇", "代休", "振替休日"].includes(name))
-    return { bg: "bg-purple-100 dark:bg-purple-900/40", text: "text-purple-700 dark:text-purple-200", border: "border border-purple-200 dark:border-purple-700" };
+    return { bg: "bg-purple-500/20",  text: "text-purple-200",  border: "border border-purple-400/50" };
   if (["欠勤"].includes(name))
-    return { bg: "bg-red-100 dark:bg-red-900/40",      text: "text-red-700 dark:text-red-200",       border: "border border-red-200 dark:border-red-700" };
+    return { bg: "bg-red-500/25",     text: "text-red-200",     border: "border border-red-400/50" };
   if (name.includes("早番"))
-    return { bg: "bg-emerald-100 dark:bg-emerald-900/40", text: "text-emerald-800 dark:text-emerald-200", border: "border border-emerald-200 dark:border-emerald-700" };
+    return { bg: "bg-emerald-500/20", text: "text-emerald-200", border: "border border-emerald-400/50" };
   if (name.includes("遅番"))
-    return { bg: "bg-orange-100 dark:bg-orange-900/40",   text: "text-orange-800 dark:text-orange-200",   border: "border border-orange-200 dark:border-orange-700" };
-  return { bg: "bg-sky-100 dark:bg-sky-900/40",        text: "text-sky-800 dark:text-sky-200",       border: "border border-sky-200 dark:border-sky-700" };
+    return { bg: "bg-orange-500/20",  text: "text-orange-200",  border: "border border-orange-400/50" };
+  return { bg: "bg-amber-400/20",     text: "text-amber-200",   border: "border border-amber-300/50" };
 }
 
 function isOff(name: string | null): boolean {
@@ -83,22 +82,6 @@ function isOff(name: string | null): boolean {
 
 function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
-}
-
-function BriefcaseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
-    </svg>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-    </svg>
-  );
 }
 
 export default function ShiftCalendar({
@@ -156,43 +139,42 @@ export default function ShiftCalendar({
   }
 
   return (
-    <div className={cx("bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 flex flex-col overflow-hidden", className)}>
+    <div className={cx("rounded-lg border-2 border-white bg-[#000846] p-[3px] flex flex-col overflow-hidden", className)}>
+     <div className="rounded-md border border-white/80 bg-[#000846] flex flex-col flex-1 min-h-0 overflow-hidden">
 
       {/* 月ナビ + 統計 */}
-      <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="flex items-center gap-3">
+      <div className="flex-shrink-0 flex items-center justify-between px-3 md:px-5 py-3 border-b border-white/20">
+        <div className="flex items-center gap-2 md:gap-3">
           <button type="button" onClick={() => goMonth(-1)} disabled={!canPrev}
-            className="w-8 h-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
-            <ChevronLeftIcon className="w-4 h-4 text-zinc-500" />
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-white/40 text-white/80 hover:bg-white/10 active:scale-95 disabled:opacity-20 transition">
+            ◀
           </button>
-          <span className="text-[20px] font-bold text-[#0d1b35] dark:text-white tabular-nums min-w-[120px] text-center">
+          <span className="text-[18px] md:text-[20px] font-bold text-amber-300 tabular-nums min-w-[110px] md:min-w-[120px] text-center">
             {year}年 {month}月
           </span>
           <button type="button" onClick={() => goMonth(1)} disabled={!canNext}
-            className="w-8 h-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-30 transition-colors">
-            <ChevronRightIcon className="w-4 h-4 text-zinc-500" />
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-white/40 text-white/80 hover:bg-white/10 active:scale-95 disabled:opacity-20 transition">
+            ▶
           </button>
         </div>
         {(workCount > 0 || holidayCount > 0) && (
-          <div className="flex items-center gap-4 text-zinc-500 dark:text-zinc-400">
-            <div className="flex items-center gap-1.5">
-              <BriefcaseIcon />
-              <span className="text-[13px]">出勤 <b className="text-[#0d1b35] dark:text-white">{workCount}</b>日</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CalendarIcon />
-              <span className="text-[13px]">公休 <b className="text-[#0d1b35] dark:text-white">{holidayCount}</b>日</span>
-            </div>
+          <div className="flex items-center gap-3 md:gap-4">
+            <span className="text-[12px] md:text-[13px] text-white/70">
+              しゅつげき <b className="text-amber-300 text-[15px]">{workCount}</b>
+            </span>
+            <span className="text-[12px] md:text-[13px] text-white/70">
+              おやすみ <b className="text-sky-300 text-[15px]">{holidayCount}</b>
+            </span>
           </div>
         )}
       </div>
 
       {/* 曜日ヘッダー */}
-      <div className="flex-shrink-0 grid grid-cols-7 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/30">
+      <div className="flex-shrink-0 grid grid-cols-7 border-b border-white/20 bg-white/5">
         {WEEKDAY_SHORT.map((w, i) => (
           <div key={w} className={cx(
-            "text-center text-[13px] font-bold py-2",
-            i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-zinc-500 dark:text-zinc-400",
+            "text-center text-[12px] md:text-[13px] font-bold py-2",
+            i === 0 ? "text-red-300" : i === 6 ? "text-sky-300" : "text-white/70",
           )}>{w}</div>
         ))}
       </div>
@@ -202,8 +184,8 @@ export default function ShiftCalendar({
 
         {/* 先月末 */}
         {Array.from({ length: firstDow }, (_, i) => (
-          <div key={`pre${i}`} className="border-r border-b border-zinc-50 dark:border-zinc-800/50 p-1.5">
-            <span className="text-[12px] text-zinc-200 dark:text-zinc-700">{prevDays - firstDow + i + 1}</span>
+          <div key={`pre${i}`} className="border-r border-b border-white/5 p-1.5">
+            <span className="text-[12px] text-white/15">{prevDays - firstDow + i + 1}</span>
           </div>
         ))}
 
@@ -228,41 +210,39 @@ export default function ShiftCalendar({
               type="button"
               onClick={() => onSelectDate?.(ds)}
               className={cx(
-                "relative flex flex-col justify-between p-1 md:p-2.5 border-r border-b border-zinc-100 dark:border-zinc-800 transition-all",
-                isToday && isSel ? "bg-blue-50 dark:bg-blue-950/30 border-l-2 border-l-[#0d1b35]"
-                : isToday        ? "bg-blue-50/50 dark:bg-blue-950/20"
-                : isSel          ? "bg-[#0d1b35]/[0.04] dark:bg-zinc-800/50 border-l-2 border-l-[#0d1b35] dark:border-l-blue-400"
-                :                  "hover:bg-zinc-50 dark:hover:bg-zinc-800/30",
+                "relative flex flex-col justify-between p-1 md:p-2 border-r border-b border-white/10 transition-all",
+                isSel   ? "bg-amber-300/15 ring-1 ring-inset ring-amber-300"
+                : isToday ? "bg-white/10"
+                :          "hover:bg-white/5",
               )}
             >
               {/* 上部：日付 + 祝日名 */}
               <div>
                 <div className="flex items-center justify-between">
                   {isToday ? (
-                    <span className="w-5 h-5 md:w-7 md:h-7 rounded-full bg-[#0d1b35] dark:bg-blue-500 text-white text-[10px] md:text-[13px] font-bold flex items-center justify-center leading-none">
+                    <span className="w-5 h-5 md:w-7 md:h-7 rounded-full bg-amber-300 text-[#000846] text-[10px] md:text-[13px] font-bold flex items-center justify-center leading-none">
                       {d}
                     </span>
                   ) : (
                     <span className={cx(
-                      "text-[13px] md:text-[18px] font-bold leading-none",
-                      isRed   ? "text-red-500 dark:text-red-400"
-                      : isBlue  ? "text-blue-500 dark:text-blue-400"
-                      : isSel   ? "text-[#0d1b35] dark:text-blue-300"
-                      : "text-zinc-800 dark:text-zinc-200",
+                      "text-[13px] md:text-[17px] font-bold leading-none",
+                      isRed   ? "text-red-300"
+                      : isBlue  ? "text-sky-300"
+                      : "text-white",
                     )}>
                       {d}
                     </span>
                   )}
                   <div className="flex items-center gap-0.5">
                     {hasLog && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-300 flex-shrink-0" />
                     )}
                     {holidayReqStatus && (
                       <span className={cx(
                         "text-[8px] font-bold px-1 py-0.5 rounded leading-none",
-                        holidayReqStatus === "approved" ? "bg-purple-200 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300"
-                        : holidayReqStatus === "rejected" ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400"
-                        : "bg-purple-100 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400",
+                        holidayReqStatus === "approved" ? "bg-purple-400/30 text-purple-200"
+                        : holidayReqStatus === "rejected" ? "bg-red-400/30 text-red-200"
+                        : "bg-purple-400/15 text-purple-300",
                       )}>
                         {holidayReqStatus === "approved" ? "承認" : holidayReqStatus === "rejected" ? "却下" : "申請"}
                       </span>
@@ -270,7 +250,7 @@ export default function ShiftCalendar({
                   </div>
                 </div>
                 {holidayName && (
-                  <p className="text-[9px] text-red-400 leading-tight mt-0.5 truncate font-medium">{holidayName}</p>
+                  <p className="text-[9px] text-red-300/80 leading-tight mt-0.5 truncate font-medium">{holidayName}</p>
                 )}
               </div>
 
@@ -284,8 +264,8 @@ export default function ShiftCalendar({
                     )}>
                       {s.shift_name}
                     </div>
-                    {s.shift_start && !["公休","休","公休日","希望休","有休","特別休暇","代休","振替休日","欠勤"].includes(s.shift_name) && (
-                      <p className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums text-center mt-0.5 font-medium">
+                    {s.shift_start && !isOff(s.shift_name) && (
+                      <p className="text-[9px] text-white/45 tabular-nums text-center mt-0.5 font-medium">
                         {s.shift_start.slice(0,5)}–{s.shift_end?.slice(0,5) ?? "--:--"}
                       </p>
                     )}
@@ -300,11 +280,12 @@ export default function ShiftCalendar({
 
         {/* 来月頭 */}
         {Array.from({ length: trailing }, (_, i) => (
-          <div key={`post${i}`} className="border-r border-b border-zinc-50 dark:border-zinc-800/50 p-1.5">
-            <span className="text-[12px] text-zinc-200 dark:text-zinc-700">{i + 1}</span>
+          <div key={`post${i}`} className="border-r border-b border-white/5 p-1.5">
+            <span className="text-[12px] text-white/15">{i + 1}</span>
           </div>
         ))}
       </div>
+     </div>
     </div>
   );
 }
