@@ -485,10 +485,10 @@ export default function HomeClient({
               >
                 <div style={{ animation: "rpgBob 1.4s steps(2) infinite" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={rpgCharImg(myChar.id)} alt="" draggable={false} className="h-40 md:h-60 w-auto select-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.6)]" style={{ imageRendering: "pixelated" }} />
+                  <img src={rpgCharImg(myChar.id)} alt="" draggable={false} className="h-56 md:h-80 w-auto select-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.6)]" style={{ imageRendering: "pixelated" }} />
                 </div>
                 {/* 足元の影 */}
-                <div className="h-2.5 w-24 md:w-32 -mt-1 rounded-[50%] bg-black/45 blur-[3px]" />
+                <div className="h-3 w-32 md:w-44 -mt-1 rounded-[50%] bg-black/45 blur-[3px]" />
                 <span className="mt-1.5 text-[12px] md:text-[13px] text-white bg-[#000846]/85 border border-white/70 rounded px-2.5 py-1 whitespace-nowrap">
                   {displayName}（{myChar.label}）
                 </span>
