@@ -3,6 +3,10 @@
  * クライアント・サーバー両方から import 可能な定数のみ置く
  */
 
+// 休憩室の建物名・所在地（場所が変わったらここを直す）
+export const BREAK_ROOM_NAME = "S-Gate Fit 八丁堀";
+export const BREAK_ROOM_ADDRESS = "中央区八丁堀3丁目18";
+
 // 休憩室への道のり（Googleマップ経路・徒歩5分/350m）
 // 現場（入船1丁目 サンパーク東京銀座）⇔ 休憩室（八丁堀3丁目 S-Gate Fit 八丁堀）
 export const BREAK_ROOM_MAP_URL =

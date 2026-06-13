@@ -5,7 +5,7 @@ import { terminalPunchAction, terminalBreakAction, saveConsentAction, type Punch
 import { enterBreakRoomAction, leaveBreakRoomAction } from "@/app/(portal)/seating/break-room-actions";
 import { getSeatBgClass, resolveShiftSection, formatSectionShift } from "@/lib/seatColors";
 import { RPG_CHARS, rpgCharFor, rpgCharImg } from "@/lib/rpg-chars";
-import { BREAK_ROOM_MAP_URL } from "@/lib/break-room-info";
+import { BREAK_ROOM_MAP_URL, BREAK_ROOM_NAME } from "@/lib/break-room-info";
 
 // ── 型 ───────────────────────────────────────────────────────
 export type TerminalMember = {
@@ -1155,6 +1155,10 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                           </p>
                         </div>
                       </div>
+                      <p className="text-amber-300 text-[11px] mt-2 flex items-center gap-1">
+                        <span className="text-cyan-300">【ばしょ】</span>{BREAK_ROOM_NAME}
+                        <span className="text-white/50">（とほ5ふん）</span>
+                      </p>
                       <div className="flex items-end justify-between gap-2 mt-2">
                         <p className="text-cyan-300/80 text-[10px] leading-relaxed">
                           ※きゅうけいちゅうの ひとだけ くわわれます。きゅうけいもどりで じどうで パーティーから ぬけます。
@@ -1298,7 +1302,7 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                       <p>・きゅうけいちゅうの ひとだけ はいれます</p>
                       <p>・まんいんの ときは あきを まってね</p>
                       <p>・「ヘイサちゅう」の ときは つかえません</p>
-                      <p>・ばしょは「▶ちずをみる」で かくにん（とほ５ふん）</p>
+                      <p>・ばしょは {BREAK_ROOM_NAME}（とほ５ふん）<br />　「▶ちずをみる」で けいろを かくにん</p>
                       <p>・せつびの ○×は キャンプに あるもの／ないもの</p>
                     </div>
                   </div>

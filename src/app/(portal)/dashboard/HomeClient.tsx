@@ -8,7 +8,7 @@ import {
   submitLateAction,
   setMyRpgCharacterAction,
 } from "./actions";
-import { BREAK_ROOM_MAP_URL } from "@/lib/break-room-info";
+import { BREAK_ROOM_MAP_URL, BREAK_ROOM_NAME } from "@/lib/break-room-info";
 import {
   leaveMyBreakRoomAction,
   enterMyBreakRoomAction,
@@ -666,6 +666,10 @@ export default function HomeClient({
                         </p>
                       </div>
                     </div>
+                    <p className="text-amber-300 text-[11px] mt-2">
+                      <span className="text-cyan-300">【ばしょ】</span>{BREAK_ROOM_NAME}
+                      <span className="text-white/50">（とほ5ふん）</span>
+                    </p>
                     {/* ボタン: モバイルは均等グリッドで折り返さない */}
                     <div className={`grid gap-1.5 mt-2.5 ${isAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
                       <button
@@ -959,7 +963,7 @@ export default function HomeClient({
                     <p>・きゅうけいちゅうの ひとだけ はいれます</p>
                     <p>・「あきわく なし」の ときは あきを まってね</p>
                     <p>・「ヘイサちゅう」の ときは つかえません</p>
-                    <p>・ばしょは「▶ちずをみる」で かくにん（とほ５ふん）</p>
+                    <p>・ばしょは {BREAK_ROOM_NAME}（とほ５ふん）<br />　「▶ちずをみる」で けいろを かくにん</p>
                   </div>
                 </div>
 
