@@ -13,7 +13,16 @@
 
 ---
 
-## 現在の開発状態（2026-06-12更新）
+## 現在の開発状態（2026-06-13更新）
+
+### 直近の作業（シフトメニューを王道RPG風に刷新）
+- スタッフの `/shifts` をホーム/打刻端末と同じRPGの世界観に統一（夜空グラデ＋DotGothic16＋紺#000846の白二重枠ウィンドウ）
+- **共有RPG部品を新設 `src/components/rpg-ui.tsx`**: `RpgWindow`（title対応・className/bodyClassName/h-full対応）・`BlinkCursor`・`dotGothic`（next/fontインスタンス）・`RPG_PAGE_BG`・`RPG_KEYFRAMES`・`RPG_STARS`・`RpgStarfield`。今後ホーム(HomeClient)・打刻端末(TerminalPunchClient)の重複定義もここへ寄せられる（**今回は安全のため既存2箇所は未変更**）
+- `ShiftCalendar.tsx`: クエストボード化。月ナビ◀▶（アンバー）、統計「しゅつげき/おやすみ」、本日=金色丸、選択日=アンバー枠。シフトバッジは夜空映えの半透明配色。外枠はRpgWindow相当を手書き（classNameでflex fillさせるため）
+- `ShiftsTabs.tsx`: 見出し「★クエストカレンダー」/ボタン「▶きゅうか きぼう」。詳細パネル（PC=サイドパネル「クエストの ないよう」/モバイル=ボトムシート）をRPGウィンドウ化。希望休モーダルもRPG枠
+- `StaffOffRequestCalendar.tsx`: 希望休申請カレンダーもRPG化（第1〜4希望=金/シアン/紫/グレー、申請・取下げモーダルRPG枠）
+- `HolidayTab.tsx`/`page.tsx`/`loading.tsx`: 背景・余白をRPGに調整
+- **修正したバグ2件**（下記「地雷」参照）: ①詳細パネルの曜日計算がローカルTZ依存でhydration mismatch(React #418) ②モバイルで `h-dvh` 固定だとレイアウト由来の白帯(#f4f6fa)が露出
 
 ### 直近の作業（ログインボーナス＝コインのガチャ）
 - 毎日1回ホームで自動ポップアップするログインボーナス（`LoginBonusModal.tsx`・宝箱を開ける演出）。**連続ログインの概念なし**（累計コイン＋累計ログイン日数のみ）
@@ -378,6 +387,9 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | Server Action は全体 try/catch で保護 | 未補足例外がクライアントで「This page couldn't load」クラッシュになる。catchしてエラーメッセージを返し console.error でVercelログに残す |
 | クライアントコンポーネントの useState 初期値に時刻・乱数を使わない | SSRとクライアントで結果が変わり hydration mismatch（React #418）になる。`useState("--:--")` 等の固定プレースホルダ＋マウント後の useEffect で確定させる（HomeClient の挨拶ランダム・AppNav の時計で発生済み） |
 | 周知の添付は1周知1ファイル | `notices.attachment_url/attachment_name`＋`notice-attachments`バケット（public）。周知削除時にストレージも削除すること |
+| `"YYYY-MM-DD"+T..+09:00` の `getDay()` はhydration不一致になる | 絶対時刻を実行環境のローカル曜日で返すため、SSR(UTC)とクライアント(JST)で曜日がずれReact #418。曜日は `new Date(ds+"T00:00:00Z").getUTCDay()` で算出する（ShiftsTabs panelDateLabel で発生済み）。※`new Date(y,m-1,d).getDay()`（ローカル構成要素）はTZ非依存で安全 |
+| ダーク背景の固定ページは `h-dvh` だと白帯が出る | AppNavのコンテンツラッパーは下部に `pb-safe`/`pb-safe-xl`(9rem)の余白を持ち、その背景はレイアウト由来の `#f4f6fa`。`h-dvh` 固定だとこの余白を覆えず白帯が露出。モバイルは `min-h-[100dvh]`＋ボトムナビ分の `pb-36` でダーク背景を確保し、PCだけ `md:h-dvh md:overflow-hidden` でフル表示にする（/shifts で対応済み） |
+| 共有RPG部品は `src/components/rpg-ui.tsx` | `RpgWindow`/`BlinkCursor`/`dotGothic`/`RPG_PAGE_BG`/`RPG_KEYFRAMES`/`RpgStarfield`。新規RPG画面はここから import する。HomeClient・TerminalPunchClient には同名の重複定義が残っている（未統合・触らない限り問題なし） |
 | public/ の画像を同一URLで差し替えたら `sw.js` の CACHE_VERSION を上げる | Service Worker が画像をキャッシュしており旧画像が表示され続ける（RPGキャラ画像差し替えで発生済み）。v2 から画像は Stale While Revalidate（次回表示で更新）だが、即時反映したい場合はバージョンを上げて全キャッシュ破棄させる |
 
 ---
