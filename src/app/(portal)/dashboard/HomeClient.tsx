@@ -594,94 +594,94 @@ export default function HomeClient({
           {/* ── きゅうけいキャンプ（打刻端末と同スタイル） ── */}
           {roomState && (
             <div
-              className="relative rounded-2xl overflow-hidden border-2 border-[#2a3a8c] pb-5 mt-1.5"
+              className="relative rounded-2xl overflow-hidden border-2 border-[#2a3a8c] mt-1.5"
               style={{
                 background: "url(/rpg/camp-bg-v2.png) center / cover no-repeat, linear-gradient(180deg, #050a24 0%, #0a1340 55%, #14275c 100%)",
               }}
             >
               {/* 可読性のための暗めオーバーレイ */}
-              <div className="absolute inset-0 bg-[#020617]/35 pointer-events-none" />
+              <div className="absolute inset-0 bg-[#020617]/45 pointer-events-none" />
 
-              {/* 焚き火のゆらめき */}
-              <div className="absolute left-1/2 top-[64%] -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-                <div
-                  className="w-28 h-20 rounded-full bg-orange-500/30 blur-xl"
-                  style={{ animation: "rpgFlicker 1.7s ease-in-out infinite" }}
-                />
-                <div
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-9 rounded-full bg-amber-300/35 blur-md"
-                  style={{ animation: "rpgFlicker 1.1s ease-in-out .3s infinite" }}
-                />
-                {[
-                  { sx: "-8px", d: 0 },
-                  { sx: "5px",  d: 0.6 },
-                  { sx: "12px", d: 1.2 },
-                  { sx: "-3px", d: 1.7 },
-                ].map((sp, i) => (
-                  <span
-                    key={i}
-                    className="absolute left-1/2 top-1/2 w-[3px] h-[3px] bg-amber-300 rounded-full"
-                    style={{
-                      "--sx": sp.sx,
-                      animation: `rpgSpark 2.1s ease-out ${sp.d}s infinite`,
-                    } as CSSProperties}
-                  />
-                ))}
-              </div>
-
-              <div className="relative px-4 pt-4">
-                {/* メッセージウィンドウ＋なかまカウント */}
-                <RpgWindow className="mb-3 shadow-xl shadow-black/50">
-                  <div className="px-4 py-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-white text-sm leading-relaxed">
-                        {!roomState.isOpen ? (
-                          <>＊「きゅうけいキャンプは いま<br />
-                          　 とざされている……。</>
-                        ) : (
-                          <>＊「ここは きゅうけいキャンプ。<br />
-                          　 なかまと ひとやすみ していこう。</>
-                        )}
+              <div className="relative px-3 pt-3 md:px-4 md:pt-4">
+                {/* メッセージウィンドウ */}
+                <RpgWindow className="shadow-xl shadow-black/50">
+                  <div className="px-3.5 py-3 md:px-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-white text-[13px] md:text-sm leading-relaxed">
+                        {!roomState.isOpen
+                          ? "＊「きゅうけいキャンプは いま とざされている……。」"
+                          : "＊「ここは きゅうけいキャンプ。なかまと ひとやすみ していこう。」"}
                       </p>
                       <div className="text-right shrink-0">
-                        <p className="text-cyan-300 text-[10px]">なかま</p>
-                        <p className="text-white text-xl font-bold tabular-nums">
-                          {roomState.uses.length}<span className="text-cyan-300 text-xs">／{roomState.capacity}にん</span>
+                        <p className="text-cyan-300 text-[10px] leading-none">なかま</p>
+                        <p className="text-white text-lg md:text-xl font-bold tabular-nums leading-tight">
+                          {roomState.uses.length}<span className="text-cyan-300 text-xs">／{roomState.capacity}</span>
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-end gap-1.5 mt-2 flex-wrap">
+                    {/* ボタン: モバイルは均等グリッドで折り返さない */}
+                    <div className={`grid gap-1.5 mt-2.5 ${isAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
                       <button
                         onClick={() => setRoomHelpOpen(true)}
-                        className="text-[11px] text-white border border-white/50 rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition-all"
+                        className="text-[11px] text-white border border-white/50 rounded-md px-1 py-1.5 hover:bg-white/10 active:scale-95 transition-all"
                       >
-                        <span className="text-amber-300 mr-1">▶</span>つかいかた
+                        <span className="text-amber-300 mr-0.5">▶</span>つかいかた
                       </button>
                       <a
                         href={BREAK_ROOM_MAP_URL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[11px] text-white border border-white/50 rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition-all"
+                        className="text-[11px] text-white border border-white/50 rounded-md px-1 py-1.5 text-center hover:bg-white/10 active:scale-95 transition-all"
                       >
-                        <span className="text-amber-300 mr-1">▶</span>ちずをみる
+                        <span className="text-amber-300 mr-0.5">▶</span>ちずをみる
                       </a>
                       {isAdmin && (
                         <button
                           onClick={handleToggleRoomOpen}
                           disabled={isPending}
-                          className={`text-[11px] border rounded-md px-2.5 py-1.5 hover:bg-white/10 active:scale-95 transition disabled:opacity-50 ${
+                          className={`text-[11px] border rounded-md px-1 py-1.5 hover:bg-white/10 active:scale-95 transition disabled:opacity-50 ${
                             roomState.isOpen ? "text-red-300 border-red-400/60" : "text-emerald-300 border-emerald-400/60"
                           }`}
                         >
-                          ▶ {roomState.isOpen ? "閉鎖する" : "開放する"}
+                          ▶{roomState.isOpen ? "閉鎖" : "開放"}
                         </button>
                       )}
                     </div>
                   </div>
                 </RpgWindow>
+              </div>
+
+              {/* 焚き火シーン（高さを固定して間延びを防ぐ）＋ 1枠表示 */}
+              <div className="relative h-36 md:h-40 flex items-end justify-center pb-4">
+                {/* 焚き火のゆらめき（シーン下部中央） */}
+                <div className="absolute left-1/2 bottom-5 -translate-x-1/2 pointer-events-none">
+                  <div
+                    className="w-24 h-16 rounded-full bg-orange-500/30 blur-xl"
+                    style={{ animation: "rpgFlicker 1.7s ease-in-out infinite" }}
+                  />
+                  <div
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-8 rounded-full bg-amber-300/35 blur-md"
+                    style={{ animation: "rpgFlicker 1.1s ease-in-out .3s infinite" }}
+                  />
+                  {[
+                    { sx: "-8px", d: 0 },
+                    { sx: "5px",  d: 0.6 },
+                    { sx: "12px", d: 1.2 },
+                    { sx: "-3px", d: 1.7 },
+                  ].map((sp, i) => (
+                    <span
+                      key={i}
+                      className="absolute left-1/2 top-1/2 w-[3px] h-[3px] bg-amber-300 rounded-full"
+                      style={{
+                        "--sx": sp.sx,
+                        animation: `rpgSpark 2.1s ease-out ${sp.d}s infinite`,
+                      } as CSSProperties}
+                    />
+                  ))}
+                </div>
 
                 {/* 1枠のみのコンパクト表示 */}
-                <div className="flex justify-center">
+                <div className="relative">
                   {(() => {
                     const myUse = roomState.uses.find(u => u.staffId === myStaffId);
                     const isFull = roomState.uses.length >= roomState.capacity;
@@ -689,11 +689,11 @@ export default function HomeClient({
                     // 閉鎖中
                     if (!roomState.isOpen) {
                       return (
-                        <div className="w-32 flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c]/50 opacity-60">
+                        <div className="w-28 flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl bg-[#000846]/50 border border-dashed border-[#3a4a9c]/60">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={rpgCharImg(RPG_CHARS[0].id)} alt="" draggable={false}
-                            className="h-16 w-auto select-none opacity-40"
+                            className="h-14 w-auto select-none opacity-40"
                             style={{ filter: "brightness(0) saturate(0)" }}
                           />
                           <p className="text-red-400 text-[10px] mt-1 font-bold">ヘイサちゅう</p>
@@ -705,11 +705,11 @@ export default function HomeClient({
                     if (myUse) {
                       const cls = rpgCharFor(myUse.staffId, myUse.rpgCharId);
                       return (
-                        <div className="w-32 flex flex-col items-center pt-2 pb-1.5 px-1 rounded-xl bg-[#000846]/40 border border-amber-300">
+                        <div className="w-28 flex flex-col items-center pt-2 pb-1.5 px-1 rounded-xl bg-[#000846]/50 border border-amber-300">
                           <div className="relative">
                             <div style={{ animation: "rpgBob 1.3s steps(2) infinite" }}>
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={rpgCharImg(cls.id)} alt="" draggable={false} className="h-16 w-auto select-none" />
+                              <img src={rpgCharImg(cls.id)} alt="" draggable={false} className="h-14 w-auto select-none" />
                             </div>
                             <span
                               className="absolute -top-1.5 -right-4 text-amber-300 text-[11px]"
@@ -719,7 +719,7 @@ export default function HomeClient({
                             </span>
                           </div>
                           <p className="text-amber-300 text-[11px] font-bold mt-1">きゅうけいちゅう</p>
-                          <p className="text-[9px] text-white/40 tabular-nums">{fmtHM(myUse.enteredAt)}〜</p>
+                          <p className="text-[9px] text-white/50 tabular-nums">{fmtHM(myUse.enteredAt)}〜</p>
                         </div>
                       );
                     }
@@ -727,11 +727,11 @@ export default function HomeClient({
                     // 満員
                     if (isFull) {
                       return (
-                        <div className="w-32 flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c]/60 opacity-70">
+                        <div className="w-28 flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl bg-[#000846]/50 border border-dashed border-[#3a4a9c]/60">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={rpgCharImg(RPG_CHARS[0].id)} alt="" draggable={false}
-                            className="h-16 w-auto select-none opacity-40"
+                            className="h-14 w-auto select-none opacity-40"
                             style={{ filter: "brightness(0) saturate(0)" }}
                           />
                           <p className="text-red-300 text-[10px] mt-1 font-bold">あきわく なし</p>
@@ -744,16 +744,16 @@ export default function HomeClient({
                       <button
                         onClick={handleEnterBreakRoom}
                         disabled={isPending}
-                        className="w-32 flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl border border-dashed border-[#3a4a9c] hover:border-white/60 active:scale-95 transition-all disabled:opacity-60"
+                        className="w-28 flex flex-col items-center justify-center pt-2 pb-1.5 px-1 rounded-xl bg-[#000846]/40 border border-dashed border-[#3a4a9c] hover:border-white/60 hover:bg-[#000846]/60 active:scale-95 transition-all disabled:opacity-60"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={rpgCharImg(RPG_CHARS[0].id)} alt="" draggable={false}
-                          className="h-16 w-auto select-none opacity-50"
+                          className="h-14 w-auto select-none opacity-50"
                           style={{ filter: "brightness(0) saturate(0)" }}
                         />
-                        <p className="text-[#5a6abc] text-[9px] mt-1">ぼしゅうちゅう</p>
-                        <p className="text-white/80 text-[10px] leading-tight">
+                        <p className="text-[#7c8ad4] text-[9px] mt-1">ぼしゅうちゅう</p>
+                        <p className="text-white text-[11px] font-bold leading-tight">
                           <span className="text-amber-300 animate-pulse mr-0.5">▶</span>くわわる
                         </p>
                       </button>
