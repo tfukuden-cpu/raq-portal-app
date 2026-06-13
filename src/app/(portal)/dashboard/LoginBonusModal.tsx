@@ -12,46 +12,33 @@ import { BONUS_TIERS, type BonusTier } from "@/lib/login-bonus";
 
 type Phase = "ready" | "opening" | "done";
 
-function ChestSvg({ open }: { open: boolean }) {
+/** AI生成ドット絵の宝箱（閉/開）。public/rpg/bonus-chest-closed/open.png */
+function Chest({ open }: { open: boolean }) {
   return (
-    <svg viewBox="0 0 64 56" width="120" height="105" style={{ imageRendering: "pixelated" }} shapeRendering="crispEdges">
-      {/* フタ */}
-      {open ? (
-        <g>
-          <rect x="10" y="2"  width="44" height="6"  fill="#7a4a1e" />
-          <rect x="8"  y="8"  width="48" height="10" fill="#9a6328" />
-          <rect x="8"  y="8"  width="48" height="3"  fill="#c89a4e" />
-        </g>
-      ) : (
-        <g>
-          <rect x="8"  y="14" width="48" height="14" fill="#9a6328" />
-          <rect x="8"  y="14" width="48" height="4"  fill="#c89a4e" />
-          <rect x="6"  y="26" width="52" height="4"  fill="#5a3614" />
-          <rect x="29" y="20" width="6"  height="8"  fill="#f5d061" />
-          <rect x="30" y="22" width="4"  height="4"  fill="#7a4a1e" />
-        </g>
-      )}
-      {/* 箱本体 */}
-      <rect x="8"  y="30" width="48" height="22" fill="#7a4a1e" />
-      <rect x="8"  y="30" width="48" height="4"  fill="#9a6328" />
-      <rect x="8"  y="48" width="48" height="4"  fill="#5a3614" />
-      {/* 金具 */}
-      <rect x="14" y="30" width="4" height="22" fill="#c89a4e" />
-      <rect x="46" y="30" width="4" height="22" fill="#c89a4e" />
-      {!open && <rect x="29" y="36" width="6" height="8" fill="#f5d061" />}
-      {/* 中の光（開いたとき） */}
-      {open && <rect x="14" y="30" width="36" height="6" fill="#fff7d6" opacity="0.9" />}
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={open ? "/rpg/bonus-chest-open.png" : "/rpg/bonus-chest-closed.png"}
+      alt=""
+      draggable={false}
+      className="h-28 w-auto select-none"
+      style={{ imageRendering: "pixelated" }}
+    />
   );
 }
 
+/** AI生成ドット絵の金貨。public/rpg/bonus-coin.png */
 function CoinIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 16 16" width={size} height={size} className="inline-block align-middle">
-      <circle cx="8" cy="8" r="7" fill="#f5c542" stroke="#a8740a" strokeWidth="1.5" />
-      <circle cx="8" cy="8" r="4.5" fill="none" stroke="#d99b1c" strokeWidth="1" />
-      <text x="8" y="11" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#7a5200">G</text>
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/rpg/bonus-coin.png"
+      alt="コイン"
+      draggable={false}
+      width={size}
+      height={size}
+      className="inline-block align-middle select-none"
+      style={{ imageRendering: "pixelated" }}
+    />
   );
 }
 
@@ -125,7 +112,7 @@ export default function LoginBonusModal({
                       : "rpgBob 1.6s steps(2) infinite",
                   }}
                 >
-                  <ChestSvg open={phase === "done"} />
+                  <Chest open={phase === "done"} />
                 </div>
               </div>
 

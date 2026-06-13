@@ -131,14 +131,19 @@ function BlinkCursor() {
   return <span className="inline-block text-white ml-1" style={{ animation: "rpgCursor 1s steps(1) infinite" }}>▼</span>;
 }
 
-/** ゴールドコインのアイコン */
+/** ゴールドコインのアイコン（AI生成ドット絵） */
 function CoinIcon({ size = 14 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 16 16" width={size} height={size} className="inline-block align-middle shrink-0">
-      <circle cx="8" cy="8" r="7" fill="#f5c542" stroke="#a8740a" strokeWidth="1.5" />
-      <circle cx="8" cy="8" r="4.5" fill="none" stroke="#d99b1c" strokeWidth="1" />
-      <text x="8" y="11" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#7a5200">G</text>
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/rpg/bonus-coin.png"
+      alt="コイン"
+      draggable={false}
+      width={size}
+      height={size}
+      className="inline-block align-middle shrink-0 select-none"
+      style={{ imageRendering: "pixelated" }}
+    />
   );
 }
 

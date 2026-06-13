@@ -22,6 +22,7 @@
 - **二重受取防止**: claim は当日未受取の行だけ更新（`.or(last_claimed_date is null / lt today)`）。負けたら alreadyClaimed を返す。`last_claimed_date === today(JST)` で受取済み判定
 - ホームのヒーローバナー左上に「しょじコイン」バッジ（CoinIcon＝金貨SVG＋数）。`bonusCoins`/`bonusAvailable` を dashboard/page.tsx が homeProps で渡す（AdminHomeWrapper は素通し）。**コインの使い道は未実装**（貯まるだけ）
 - 演出 keyframes（bonusShake/bonusBurst/bonusPop）は HomeClient の RPG_HOME_KEYFRAMES に定義（グローバル）
+- 画像はChatGPT生成（`public/rpg/bonus-chest-closed.png`/`bonus-chest-open.png`/`bonus-coin.png`）。bonus-sheet.png（3列×1行）を resplit-rpg-sheet.ps1 で分割。Chest/CoinIcon コンポーネントが img で表示（旧SVG版は廃止）。差し替えにより sw.js CACHE_VERSION を v3 に更新
 
 ### 直近の作業（ホームに休憩室ウィンドウ＋開放/閉鎖切替）
 - ホームに「きゅうけいキャンプ」を追加（**打刻端末の休憩室タブと同一スタイル**: camp-bg-v2.png＋焚き火rpgFlicker/火の粉rpgSpark＋メッセージウィンドウ「なかま N/Mにん」＋箱グリッド）。**箱は1枠のみのコンパクト表示**（人数は「なかま N/Mにん」カウントで把握）: ①閉鎖中=ヘイサちゅう ②自分が入室中=自分のキャラ＋きゅうけいちゅう（アンバー枠） ③満員=あきわく なし ④空きあり=ぼしゅうちゅう「▶くわわる」→先頭の空き箱番号に自動入室（`enterMyBreakRoomAction`＝セッションからstaffId導出→`enterBreakRoomAction`に委譲、休憩打刻中チェックはサーバー側）。退室は「きゅうけいちゅう」カードの退室ボタン。`getBreakRoomStateAction` は staffs join で name/rpgCharId を解決
