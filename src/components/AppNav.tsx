@@ -96,7 +96,7 @@ export default function AppNav({
     return () => clearInterval(id);
   }, []);
 
-  const isNoScrollPage = pathname.startsWith("/shifts") || pathname.startsWith("/record") || pathname.startsWith("/post") || pathname.startsWith("/notices") || pathname === "/inquiries";
+  const isNoScrollPage = pathname.startsWith("/shifts") || pathname.startsWith("/record") || pathname.startsWith("/notices") || pathname === "/inquiries";
 
   useEffect(() => {
     document.documentElement.classList.toggle("noscroll", isNoScrollPage);

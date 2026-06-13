@@ -173,7 +173,7 @@ const admin = createAdminClient();
 
 ### 15. 視点モード（DevBanner）対応
 
-`/post` のように **管理者ビューが画面UIに影響する** ページは、Cookie `rqp-view-mode` を読んで
+**管理者ビューが画面UIに影響する** ページ（管理者だけ操作ボタンを出す等）は、Cookie `rqp-view-mode` を読んで
 `staff` モード時は管理機能を出さない、という分岐を入れる：
 
 ```typescript
