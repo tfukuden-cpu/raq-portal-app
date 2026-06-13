@@ -439,11 +439,11 @@ export default function HomeClient({
 
           {/* ── ヒーローバナー（固定・スクロールしても残る） ── */}
           <div
-            className="sticky top-0 md:top-14 z-20 -mx-4 md:-mx-8 px-4 md:px-8 pt-5 md:pt-6 pb-3"
+            className="relative z-20 -mx-4 md:-mx-8 px-4 md:px-8 pt-5 md:pt-6 pb-3"
             style={{ background: RPG_PAGE_BG, backgroundAttachment: "fixed" }}
           >
           <RpgWindow>
-            <div className="relative overflow-hidden rounded-md h-44 md:h-56">
+            <div className="relative overflow-hidden rounded-md h-[50vh] md:h-[56vh] min-h-[320px]">
               {/* 背景: AI生成の夜の城下町。読み込めない間は夜空グラデ＋星 */}
               <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, #02040f 0%, #0a1340 70%, #14275c 100%)" }} />
               {RPG_STARS.map((s, i) => (
@@ -458,13 +458,14 @@ export default function HomeClient({
               ))}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/rpg/home-hero.png"
+                src="/rpg/home-stage.png"
                 alt=""
                 draggable={false}
                 className="absolute inset-0 w-full h-full object-cover object-bottom select-none"
-                style={{ imageRendering: "pixelated" }}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#02040f]/70 via-transparent to-[#02040f]/40" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#02040f]/85 via-transparent to-[#02040f]/30" />
+              {/* ゲーム画面風ビネット */}
+              <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: "inset 0 0 140px 36px rgba(2,4,15,0.72)" }} />
 
               {/* 日付・時刻・しょじコイン */}
               <div className="absolute top-2.5 left-3 right-3 flex items-start justify-between">
@@ -480,13 +481,15 @@ export default function HomeClient({
               {/* マイキャラクター（タップで変更） */}
               <button
                 onClick={() => setCharPickerOpen(true)}
-                className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center active:scale-95 transition-transform"
+                className="absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-col items-center active:scale-95 transition-transform"
               >
                 <div style={{ animation: "rpgBob 1.4s steps(2) infinite" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={rpgCharImg(myChar.id)} alt="" draggable={false} className="h-20 md:h-24 w-auto select-none" style={{ imageRendering: "pixelated" }} />
+                  <img src={rpgCharImg(myChar.id)} alt="" draggable={false} className="h-40 md:h-60 w-auto select-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.6)]" style={{ imageRendering: "pixelated" }} />
                 </div>
-                <span className="mt-1 text-[11px] text-white bg-[#000846]/85 border border-white/70 rounded px-2 py-0.5 whitespace-nowrap">
+                {/* 足元の影 */}
+                <div className="h-2.5 w-24 md:w-32 -mt-1 rounded-[50%] bg-black/45 blur-[3px]" />
+                <span className="mt-1.5 text-[12px] md:text-[13px] text-white bg-[#000846]/85 border border-white/70 rounded px-2.5 py-1 whitespace-nowrap">
                   {displayName}（{myChar.label}）
                 </span>
               </button>
