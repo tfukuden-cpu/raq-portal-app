@@ -408,6 +408,7 @@ export default async function DashboardPage() {
         myStaffId={staffId}
         nameMappings={nameMappings}
         pendingTaskCount={pendingTaskCount}
+        todayStr={today}
       />
     );
   }

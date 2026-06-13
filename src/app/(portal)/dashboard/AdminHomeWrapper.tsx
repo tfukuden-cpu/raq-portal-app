@@ -13,17 +13,18 @@ interface AdminHomeWrapperProps extends HomeClientProps {
   myStaffId: string;
   nameMappings: NameMapping[];
   pendingTaskCount: number;
+  /** サーバーで算出した当日(JST, YYYY-MM-DD)。クライアントで new Date() するとhydration不一致(#418)になるため必ずpropsで受ける */
+  todayStr: string;
 }
 
 export default function AdminHomeWrapper(props: AdminHomeWrapperProps) {
   const {
     tasks, taskGroups, staffOptions, projectId,
-    discoveredGroups, myStaffId, nameMappings,
+    discoveredGroups, myStaffId, nameMappings, todayStr,
     ...homeProps
   } = props;
 
-  // 今日が期限 or 今日作成の自分担当 pending タスク
-  const todayStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  // 今日が期限 or 今日作成の自分担当 pending タスク（todayStr はサーバー算出値）
   const myTodayTasks = tasks.filter(
     t => t.assignee_staff_id === myStaffId
       && t.status === "pending"
