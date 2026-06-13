@@ -30,6 +30,7 @@
 - **開放/閉鎖**: `break_room_settings.is_open`（マイグレーション add_break_room_is_open 済み）。ホームで管理者（isAdmin）に「▶閉鎖する/開放する」ボタン。閉鎖中: ホーム=全箱✕・端末=「とざされている……」＋ヘイサちゅう表示・`enterBreakRoomAction` がサーバー側拒否
 - statuses API breakRoom に `isOpen` 追加（端末30秒ポーリングで反映）。`BreakRoomState` 型に isOpen・`BreakRoomUse` に name?/rpgCharId? 追加
 - dashboard/page.tsx が `getBreakRoomStateAction` を呼び homeProps に `isAdmin`/`projectId`/`breakRoomState` を追加。**AdminHomeWrapper は projectId を自分用に destructure するため HomeClient へ明示的に渡し直している**（忘れると管理者だけ休憩室操作不能）
+- **建物名表示（2026-06-13）**: `src/lib/break-room-info.ts` に `BREAK_ROOM_NAME="サンパーク東京銀座708"` / `BREAK_ROOM_ADDRESS="中央区入船1丁目2-8"` を一元管理。ホームの「きゅうけいキャンプ」ウィンドウに「【ばしょ】サンパーク東京銀座708（とほ5ふん）」として表示。打刻端末のマニュアルモーダルにも同定数を使用
 
 ### 前の作業（ホームの王道RPG風リデザイン）
 - `/dashboard`（HomeClient.tsx）を全面RPG化。夜空グラデ背景＋`DotGothic16`＋ドラクエ風 `RpgWindow`（紺#000846・白二重枠・枠上タイトルラベル）。機能・ロジックは無変更で見た目のみ変換

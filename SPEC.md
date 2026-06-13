@@ -714,6 +714,7 @@ sendEventNotify(
 - **キャラクター108体・本人選択**: キャラ定義は `src/lib/rpg-chars.ts`（職業・モンスター・ドラゴン・魔人・妖精・アンデッド等108体、`public/rpg/char-1..108.png`）。スタッフは Myページ（`/my`）のプロフィールアイコンをタップ、またはホーム（`/dashboard`）の「マイキャラクター」カード →「変更する」で全キャラ一覧から自分のキャラを選択（`staffs.rpg_character` に保存・未選択は社員IDハッシュで自動割当）。選んだキャラは Myページのプロフィールアイコン・サイドバー/PCヘッダーのユーザーアイコン・打刻端末の名前選択リスト・休憩室の表示・入退室モーダルすべてに反映（旧 AvatarEditor の顔アバターは /my から廃止）
 - **開放/閉鎖**: `break_room_settings.is_open boolean default true`（マイグレーション add_break_room_is_open 実行済み）。管理者がホームの「きゅうけいしつ」ウィンドウから切替。閉鎖中は `enterBreakRoomAction` がサーバー側で拒否（「休憩室は閉鎖中です」）。statuses API の breakRoom に `isOpen` 同梱・端末は30秒ポーリングで反映
 - **ホームからの入退室**: `enterMyBreakRoomAction(boxNumber)`（セッションからstaffId導出）で本人入室。`getBreakRoomStateAction` は占有者の `name`・`rpgCharId` も解決して返す
+- **建物名・住所**: `src/lib/break-room-info.ts` に一元管理。`BREAK_ROOM_NAME = "サンパーク東京銀座708"`・`BREAK_ROOM_ADDRESS = "中央区入船1丁目2-8"`。ホームの「きゅうけいキャンプ」ウィンドウに「【ばしょ】サンパーク東京銀座708（とほ5ふん）」として表示。打刻端末の休憩室タブ・マニュアルモーダルにも同定数を使用
 - サーバーアクション: `src/app/(portal)/seating/break-room-actions.ts`
 
 ### 6-6. Google スプレッドシート連携
