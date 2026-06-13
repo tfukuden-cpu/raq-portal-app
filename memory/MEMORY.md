@@ -15,6 +15,14 @@
 
 ## 現在の開発状態（2026-06-12更新）
 
+### 直近の作業（ログインボーナス＝コインのガチャ）
+- 毎日1回ホームで自動ポップアップするログインボーナス（`LoginBonusModal.tsx`・宝箱を開ける演出）。**連続ログインの概念なし**（累計コイン＋累計ログイン日数のみ）
+- DB `login_bonuses(staff_id PK 全社共通, coins, total_logins, last_claimed_date)`（マイグレーション create_login_bonuses 済み・RLSは本人select可）。更新は `claimLoginBonusAction`（dashboard/actions.ts）が admin クライアントで実施
+- 抽選は `src/lib/login-bonus.ts`（plain・"use server"なし）の `rollBonus(Math.random())`→ティア5段階（common10/uncommon30/rare50/epic100/jackpot500・期待値≈36/日）。`BONUS_TIERS` がコイン額・見出し・色を持ちクライアントの演出と共用
+- **二重受取防止**: claim は当日未受取の行だけ更新（`.or(last_claimed_date is null / lt today)`）。負けたら alreadyClaimed を返す。`last_claimed_date === today(JST)` で受取済み判定
+- ホームのヒーローバナー左上に「しょじコイン」バッジ（CoinIcon＝金貨SVG＋数）。`bonusCoins`/`bonusAvailable` を dashboard/page.tsx が homeProps で渡す（AdminHomeWrapper は素通し）。**コインの使い道は未実装**（貯まるだけ）
+- 演出 keyframes（bonusShake/bonusBurst/bonusPop）は HomeClient の RPG_HOME_KEYFRAMES に定義（グローバル）
+
 ### 直近の作業（ホームに休憩室ウィンドウ＋開放/閉鎖切替）
 - ホームに「きゅうけいキャンプ」を追加（**打刻端末の休憩室タブと同一スタイル**: camp-bg-v2.png＋焚き火rpgFlicker/火の粉rpgSpark＋メッセージウィンドウ「なかま N/Mにん」＋箱グリッド）。**箱は1枠のみのコンパクト表示**（人数は「なかま N/Mにん」カウントで把握）: ①閉鎖中=ヘイサちゅう ②自分が入室中=自分のキャラ＋きゅうけいちゅう（アンバー枠） ③満員=あきわく なし ④空きあり=ぼしゅうちゅう「▶くわわる」→先頭の空き箱番号に自動入室（`enterMyBreakRoomAction`＝セッションからstaffId導出→`enterBreakRoomAction`に委譲、休憩打刻中チェックはサーバー側）。退室は「きゅうけいちゅう」カードの退室ボタン。`getBreakRoomStateAction` は staffs join で name/rpgCharId を解決
 - 打刻端末の休憩室タブに「▶つかいかた」ボタン→RPG風マニュアルモーダル（はいるとき/でるとき/ちゅうい。ひらがな表記）

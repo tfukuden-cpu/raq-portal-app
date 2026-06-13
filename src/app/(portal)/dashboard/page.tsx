@@ -124,6 +124,7 @@ export default async function DashboardPage() {
     { data: yesterdayAbsence },
     { data: tomorrowShift },
     { data: breakRoomUseRow },
+    { data: loginBonusRow },
     rawTasksResult,
     rawGroupsResult,
     membersResult,
@@ -227,6 +228,12 @@ export default async function DashboardPage() {
       .eq("staff_id", staffId)
       .eq("use_date", today)
       .maybeSingle(),
+    // ログインボーナス（本人・全社共通）
+    adminClient
+      .from("login_bonuses")
+      .select("coins, last_claimed_date")
+      .eq("staff_id", staffId)
+      .maybeSingle(),
     // タスク関連（管理者のみ使用）
     isAdmin
       ? supabase.from("group_tasks")
@@ -293,11 +300,18 @@ export default async function DashboardPage() {
   // ── 休憩室の全体状況（空き箱・開放/閉鎖） ──
   const breakRoomState = await getBreakRoomStateAction(currentProjectId!);
 
+  // ── ログインボーナス（コイン残高・当日受取済みか） ──
+  const bonusCoins = (loginBonusRow as { coins?: number } | null)?.coins ?? 0;
+  const bonusLastClaimed = (loginBonusRow as { last_claimed_date?: string | null } | null)?.last_claimed_date ?? null;
+  const bonusAvailable = bonusLastClaimed !== today;
+
   // ── 共通の home props ──
   const homeProps = {
     isAdmin,
     projectId: currentProjectId!,
     breakRoomState,
+    bonusCoins,
+    bonusAvailable,
     displayName,
     projectName: currentProject?.name ?? "",
     hasMultipleProjects: activeMemberships.length > 1,

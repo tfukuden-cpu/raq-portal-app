@@ -55,7 +55,8 @@
 | `staff_break_overrides` | スタッフ別当日休憩時間（project_id, staff_id, override_date, regular_minutes, short_minutes）デフォルト60/15分 |
 | `work_exception_requests` | 早退・残業申請（request_type: early_leave/overtime, signer_name, status: pending/approved/rejected） |
 | `break_slot_assignments` | 休憩スロット割り当て（UNIQUE: project_id, assignment_date, staff_id） |
-| `break_room_settings` | 休憩室の定員＋設備（project_id PK, capacity 1〜50 デフォルト6, amenities jsonb `[{label, ok}]`） |
+| `break_room_settings` | 休憩室の定員＋設備＋開閉（project_id PK, capacity 1〜50 デフォルト6, amenities jsonb `[{label, ok}]`, is_open boolean default true） |
+| `login_bonuses` | ログインボーナス（staff_id PK・全社共通, coins, total_logins, last_claimed_date）。毎日1回コインのガチャ。更新はサーバーアクションの admin クライアント |
 | `notices.attachment_url/attachment_name` | 周知の添付ファイル（1周知1ファイル）。Storage バケット `notice-attachments`（public）に実体 |
 | `break_room_uses` | 休憩室の占有（入室中のみ行が存在・退室で削除。UNIQUE: project_id, use_date, box_number / UNIQUE: project_id, use_date, staff_id） |
 

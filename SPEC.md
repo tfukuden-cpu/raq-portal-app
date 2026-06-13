@@ -92,6 +92,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 「おしらせ」= ギルドけいじばん風タイムライン（★＋日時＋タイトル）
 - 「こんしゅうの よてい」= 1週間カレンダー（今日を白反転ハイライト・シフト名はアンバー）
 - PC版トップヘッダー（AppNav）: 案件名 | 日付 | ライブ時計 | ベル | キャラアイコン+名前
+- **ログインボーナス**: その日初めてホームを開くと宝箱のガチャモーダルが自動表示（`LoginBonusModal.tsx`）。「▶たからばこを あける」で `claimLoginBonusAction` を呼び、ランダムにコイン獲得（10/30/50/100/500の5段階・期待値≈36/日）。**連続ログインの概念なし**（累計のみ）。獲得コインはヒーローバナー左上の「しょじコイン」バッジに反映。**コインの使い道は未実装（貯まるだけ）**。抽選テーブルは `src/lib/login-bonus.ts`、残高は `login_bonuses` テーブル（staff_id PK・全社共通）
 
 **アクションボタン:**
 - 出発報告（`departure_reports` テーブルに挿入）
@@ -104,7 +105,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 「すべて見る →」で `/tasks` へ遷移（タブ切り替えなし）
 
 **関連テーブル:**
-`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `notices`, `notice_reads`, `group_tasks`, `project_settings`
+`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `notices`, `notice_reads`, `group_tasks`, `project_settings`, `login_bonuses`, `break_room_settings`, `break_room_uses`
 
 ---
 

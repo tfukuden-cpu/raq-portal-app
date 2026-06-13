@@ -20,6 +20,7 @@ import { RPG_CHARS, rpgCharFor, rpgCharImg } from "@/lib/rpg-chars";
 import { DepartureModal } from "./DepartureModal";
 import { AbsenceModal } from "./AbsenceModal";
 import { LateModal } from "./LateModal";
+import LoginBonusModal from "./LoginBonusModal";
 import type { Symptoms } from "@/components/SymptomRow";
 
 type HomeState = "pre_departure" | "pre_clock_in" | "working" | "clocked_out";
@@ -52,6 +53,8 @@ export interface HomeClientProps {
   projectId?: string;
   myStaffId?: string;
   myRpgCharId?: number | null;
+  bonusCoins?: number;
+  bonusAvailable?: boolean;
 }
 
 const NAVY    = "#0d1b35";
@@ -83,6 +86,19 @@ const RPG_HOME_KEYFRAMES = `
   15%  { opacity: 1; }
   100% { opacity: 0; transform: translate(var(--sx, 0px), -38px); }
 }
+@keyframes bonusShake {
+  0%,100% { transform: translate(0,0) rotate(0); }
+  20% { transform: translate(-3px,0) rotate(-5deg); }
+  40% { transform: translate(3px,0) rotate(5deg); }
+  60% { transform: translate(-2px,0) rotate(-3deg); }
+  80% { transform: translate(2px,0) rotate(3deg); }
+}
+@keyframes bonusBurst { 0% { opacity: 0; transform: scale(.4); } 50% { opacity: 1; } 100% { opacity: .85; transform: scale(1); } }
+@keyframes bonusPop {
+  0%  { opacity: 0; transform: scale(.3) translateY(10px); }
+  60% { transform: scale(1.15); }
+  100%{ opacity: 1; transform: scale(1) translateY(0); }
+}
 `;
 
 const RPG_STARS: { l: number; t: number; d: number; s: number }[] = [
@@ -113,6 +129,17 @@ function RpgWindow({ title, children, className = "" }: { title?: string; childr
 /** メッセージ末尾の点滅▼カーソル */
 function BlinkCursor() {
   return <span className="inline-block text-white ml-1" style={{ animation: "rpgCursor 1s steps(1) infinite" }}>▼</span>;
+}
+
+/** ゴールドコインのアイコン */
+function CoinIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} className="inline-block align-middle shrink-0">
+      <circle cx="8" cy="8" r="7" fill="#f5c542" stroke="#a8740a" strokeWidth="1.5" />
+      <circle cx="8" cy="8" r="4.5" fill="none" stroke="#d99b1c" strokeWidth="1" />
+      <text x="8" y="11" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#7a5200">G</text>
+    </svg>
+  );
 }
 
 function nowHHMM(): string {
@@ -231,6 +258,8 @@ export default function HomeClient({
   projectId        = "",
   myStaffId        = "",
   myRpgCharId      = null,
+  bonusCoins       = 0,
+  bonusAvailable   = false,
 }: HomeClientProps) {
 
   const [modal,        setModal]        = useState<ModalType>("none");
@@ -249,6 +278,14 @@ export default function HomeClient({
     const id = setInterval(() => setLiveTime(nowHHMM()), 15000);
     return () => clearInterval(id);
   }, []);
+
+  // ── ログインボーナス ──────────────────────────────────────
+  const [coins, setCoins] = useState(bonusCoins);
+  const [bonusOpen, setBonusOpen] = useState(false);
+  useEffect(() => {
+    // その日初回ログインなら自動でガチャを表示（マウント後＝hydration安全）
+    if (bonusAvailable) setBonusOpen(true);
+  }, [bonusAvailable]);
 
   const state: HomeState =
     clockOutTime     ? "clocked_out"
@@ -424,9 +461,14 @@ export default function HomeClient({
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#02040f]/70 via-transparent to-[#02040f]/40" />
 
-              {/* 日付・時刻 */}
-              <div className="absolute top-2.5 left-3 right-3 flex items-center justify-between">
-                <span className="text-[11px] text-white/90 bg-[#000846]/80 border border-white/60 rounded px-2 py-0.5">{todayLabel}</span>
+              {/* 日付・時刻・しょじコイン */}
+              <div className="absolute top-2.5 left-3 right-3 flex items-start justify-between">
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-[11px] text-white/90 bg-[#000846]/80 border border-white/60 rounded px-2 py-0.5">{todayLabel}</span>
+                  <span className="flex items-center gap-1 text-[11px] text-white bg-[#000846]/80 border border-amber-300/60 rounded px-2 py-0.5">
+                    <CoinIcon size={12} /><span className="tabular-nums">{coins}</span>
+                  </span>
+                </div>
                 <span className="text-[20px] font-bold tabular-nums leading-none text-white bg-[#000846]/80 border border-white/60 rounded px-2.5 py-1">{liveTime}</span>
               </div>
 
@@ -877,6 +919,15 @@ export default function HomeClient({
       )}
       {modal === "late" && (
         <LateModal onClose={closeModal} onSubmit={handleLate} isPending={isPending} />
+      )}
+
+      {/* ── ログインボーナス（ガチャ） ── */}
+      {bonusOpen && (
+        <LoginBonusModal
+          dotClass={dotGothic.className}
+          onClaimed={(total) => setCoins(total)}
+          onClose={() => setBonusOpen(false)}
+        />
       )}
 
       {/* ── 休憩室つかいかたモーダル（RPG風） ── */}

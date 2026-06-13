@@ -10,11 +10,88 @@ import { revalidatePath } from "next/cache";
 import { appendSheetRow, extractSpreadsheetId } from "@/lib/gsheets";
 import { sendEventNotify } from "@/lib/notify";
 import { pushLine } from "@/lib/line";
+import { rollBonus, BONUS_TIERS, type BonusTier } from "@/lib/login-bonus";
 
 export type ActionResult = {
   success: boolean;
   message?: string;
 };
+
+// ── ログインボーナス（毎日1回・コインのガチャ） ────────────────
+export type LoginBonusResult =
+  | { ok: true; alreadyClaimed: false; tier: BonusTier; gain: number; totalCoins: number; totalLogins: number }
+  | { ok: true; alreadyClaimed: true; totalCoins: number }
+  | { ok: false; message: string };
+
+export async function claimLoginBonusAction(): Promise<LoginBonusResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, message: "ログインしてください" };
+    const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+    if (!staffId) return { ok: false, message: "スタッフIDを特定できません" };
+
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+    const admin = createAdminClient();
+
+    // 行が無ければ作る（コイン0・未受取）
+    await admin.from("login_bonuses").upsert(
+      { staff_id: staffId },
+      { onConflict: "staff_id", ignoreDuplicates: true },
+    );
+
+    const { data: row } = await admin
+      .from("login_bonuses")
+      .select("coins, total_logins, last_claimed_date")
+      .eq("staff_id", staffId)
+      .maybeSingle();
+
+    const coins  = (row as { coins?: number } | null)?.coins ?? 0;
+    const logins = (row as { total_logins?: number } | null)?.total_logins ?? 0;
+    const lastClaimed = (row as { last_claimed_date?: string | null } | null)?.last_claimed_date ?? null;
+
+    if (lastClaimed === today) {
+      return { ok: true, alreadyClaimed: true, totalCoins: coins };
+    }
+
+    const tier = rollBonus(Math.random());
+    const gain = BONUS_TIERS[tier].coins;
+
+    // 当日未受取の行だけを更新（同時タップ・二重受取をDBレベルで防止）
+    const { data: updated } = await admin
+      .from("login_bonuses")
+      .update({
+        coins: coins + gain,
+        total_logins: logins + 1,
+        last_claimed_date: today,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("staff_id", staffId)
+      .or(`last_claimed_date.is.null,last_claimed_date.lt.${today}`)
+      .select("coins, total_logins")
+      .maybeSingle();
+
+    if (!updated) {
+      // レースに負けた＝既に受取済み
+      const { data: fresh } = await admin
+        .from("login_bonuses").select("coins").eq("staff_id", staffId).maybeSingle();
+      return { ok: true, alreadyClaimed: true, totalCoins: (fresh as { coins?: number } | null)?.coins ?? coins };
+    }
+
+    revalidatePath("/dashboard");
+    return {
+      ok: true,
+      alreadyClaimed: false,
+      tier,
+      gain,
+      totalCoins: (updated as { coins: number }).coins,
+      totalLogins: (updated as { total_logins: number }).total_logins,
+    };
+  } catch (e) {
+    console.error("claimLoginBonus error:", e);
+    return { ok: false, message: "ボーナスの受け取りに失敗しました" };
+  }
+}
 
 /** マイキャラクター変更（staffs.rpg_character・本人のみ） */
 export async function setMyRpgCharacterAction(charId: number | null): Promise<ActionResult> {
