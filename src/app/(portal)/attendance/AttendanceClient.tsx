@@ -455,16 +455,6 @@ export default function AttendanceClient({
     });
   }
 
-  function toggleReminder(staffId: string, mode: SelectionMode) {
-    if (selectedMode !== null && selectedMode !== mode) return;
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(staffId)) next.delete(staffId); else next.add(staffId);
-      if (next.size === 0) setSelectedMode(null); else setSelectedMode(mode);
-      return next;
-    });
-  }
-
   // モーダル
   const [modalState, setModalState]   = useState<ModalState>(null);
   const [pendingSend, setPendingSend] = useState<{ staffIds: string[]; mode: SelectionMode } | null>(null);

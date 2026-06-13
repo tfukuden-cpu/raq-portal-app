@@ -8,7 +8,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { multicastLine, pushLine, pushLineWithButton } from "@/lib/line";
 import {
   pushWebToStaff,
-  pushWebToStaffs,
   pushWebToAdmins,
   pushWebToProject,
 } from "@/lib/webpush";

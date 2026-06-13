@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { replyInquiryAction, closeInquiryAction } from "../actions";
+import { replyInquiryAction } from "../actions";
 
 type Inquiry = {
   id: string;
@@ -35,14 +35,6 @@ export function InquiryManageClient({ inquiries }: { inquiries: Inquiry[] }) {
       const r = await replyInquiryAction(fd);
       setMsg({ ok: r.success, text: r.message ?? "" });
       if (r.success) { setSelected(null); setReply(""); }
-    });
-  };
-
-  const close = (id: string) => {
-    const fd = new FormData();
-    fd.set("id", id);
-    startTransition(async () => {
-      await closeInquiryAction(fd);
     });
   };
 

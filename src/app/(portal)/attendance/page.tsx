@@ -247,9 +247,7 @@ export default async function AttendancePage({
 
   // 今日・明日でデータを分割
   const todayShifts = (allShiftRows ?? []).filter(r => r.shift_date === today);
-  const tomorrowShiftRows = (allShiftRows ?? []).filter(r => r.shift_date === tomorrow);
   const assignmentRows = (allAssignmentRows ?? []).filter(a => a.assignment_date === today);
-  const tomorrowAssignmentRows = (allAssignmentRows ?? []).filter(a => a.assignment_date === tomorrow);
 
   // シフトパターンの時刻マップ
   const patternTimeMap = new Map<string, { start: string; end: string }>(
@@ -671,9 +669,7 @@ export default async function AttendancePage({
 
   // ── 全体サマリー ─────────────────────────────────────────
   const total      = allInternal.length;
-  const departed   = allInternal.filter(m => m.departureTime || m.clockIn).length;
   const clockedIn  = allInternal.filter(m => m.clockIn).length;
-  const late       = allInternal.filter(m => m.status === "late").length;
   const absent     = allInternal.filter(m => m.status === "absent").length;
   const notClocked = total - clockedIn - absent;
 

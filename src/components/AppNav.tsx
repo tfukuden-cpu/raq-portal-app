@@ -5,7 +5,7 @@ import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { DotGothic16 } from "next/font/google";
-import type { NavItem, NavSection } from "@/app/(portal)/layout";
+import type { NavSection } from "@/app/(portal)/layout";
 import { ICON_MAP, type IconKey } from "@/components/icons";
 import { rpgCharFor, rpgCharImg } from "@/lib/rpg-chars";
 import { RPG_NAV_ICONS } from "@/lib/rpg-nav-icons";
@@ -61,13 +61,6 @@ function fmtDateHeader(): string {
   return `${y}.${m}.${day}（${wd}）`;
 }
 
-function BellIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-    </svg>
-  );
-}
 
 export default function AppNav({
   sections,

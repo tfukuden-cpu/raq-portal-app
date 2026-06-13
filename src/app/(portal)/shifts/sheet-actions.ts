@@ -131,7 +131,7 @@ export async function importShiftFromSheetAction(fd: FormData): Promise<SyncResu
   if (!url) return { success: false, message: "URLを入力してください" };
 
   try {
-    const { supabase, staffId, projectId } = await getContext();
+    const { supabase, projectId } = await getContext();
     const rows = await readSheet(sheetId(url), "シフト");
     const data = rows.slice(1).filter((r) => r[0] && r[2]);
 
@@ -878,7 +878,7 @@ export async function importShiftTableAction(fd: FormData): Promise<SyncResult> 
   if (!url) return { success: false, message: "URLを入力してください" };
 
   try {
-    const { supabase, staffId, projectId } = await getContext();
+    const { supabase, projectId } = await getContext();
     const sheetTabName = `${year}年${month}月シフト表`;
     // 列数制限なし（先頭ヘッダー列数がスプシフォーマットにより異なるため全列取得）
     const rows = await readSheet(sheetId(url), sheetTabName, "");

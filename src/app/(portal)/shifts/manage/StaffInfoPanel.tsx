@@ -50,13 +50,6 @@ export type StaffOffRequestEntry = {
   source?: string;
 };
 
-const OFF_PRIORITY_LABEL: Record<string, string> = {
-  "第一希望休": "希休1",
-  "第二希望休": "希休2",
-  "第三希望休": "希休3",
-  "第四希望休": "希休4",
-  "冠婚葬祭":   "冠婚",
-};
 
 export default function StaffInfoPanel({
   member,

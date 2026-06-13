@@ -19,7 +19,6 @@ type Props = {
 function RankLabel({ label }: { label: string }) {
   const isNum = /^\d+$/.test(label);
   const isG = label === "G";
-  const isSpecial = !isNum && !isG;
   return (
     <span className={
       isNum

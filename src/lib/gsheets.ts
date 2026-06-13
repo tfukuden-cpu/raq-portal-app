@@ -352,10 +352,6 @@ async function ensureSheetExists(
   };
 }
 
-/** シートIDをシート名から取得する（後方互換用） */
-async function getSheetId(spreadsheetId: string, sheetName: string): Promise<number> {
-  return (await getSheetInfo(spreadsheetId, sheetName)).sheetId;
-}
 
 /** 1-indexed 列番号をアルファベットに変換 (1→A, 26→Z, 27→AA) */
 function columnLetter(col: number): string {
@@ -485,10 +481,6 @@ export async function generateShiftTableSheet(
   const iAdminEnd1   = M_admin > 0 ? rAdminEnd + 1 : rI0 + 1; // 管理者入力行 終了
 
   // ── 充足サマリー行を生成（確認ビューの上に表示、COUNTIF で自動反映） ──
-  const dayLabelHeaders = Array.from({ length: daysInMonth }, (_, i) => {
-    const d = new Date(year, month - 1, i + 1);
-    return `${month}/${i + 1}(${["日","月","火","水","木","金","土"][d.getDay()]})`;
-  });
   const summaryHeaderRow: string[][] = summaryPatterns.length > 0
     ? [["充足サマリー", "", "", ...dateCells]]
     : [];

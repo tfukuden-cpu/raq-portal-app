@@ -835,7 +835,6 @@ export async function generateShiftDraftAction(
     const diagDate    = allDates[0] ?? "";
     const diagPattern = patterns[0];
     const diag = { endDate: 0, holiday: 0, training: 0, alreadyOn: 0, section: 0, role: 0, monthLimit: 0, consec: 0, interval: 0, pass: 0 };
-    const diagWeekKey = isoWeekKey(diagDate);
     for (const m of activeMemberRows) {
       const endDate = (m as { end_date?: string | null }).end_date ?? null;
       if (endDate && diagDate > endDate)                        { diag.endDate++;   continue; }

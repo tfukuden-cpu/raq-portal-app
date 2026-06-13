@@ -882,7 +882,6 @@ export async function importShiftsCsvAction(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, imported: 0, skipped: 0, errors: ["ログインしてください"] };
 
-  const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
   if (!projectId) return { success: false, imported: 0, skipped: 0, errors: ["案件が選択されていません"] };
 
@@ -995,7 +994,6 @@ export async function importFromSheetAction(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, count: 0, message: "ログインしてください" };
 
-  const myStaffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
   if (!projectId) return { success: false, count: 0, message: "案件が選択されていません" };
 

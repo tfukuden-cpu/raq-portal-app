@@ -30,13 +30,6 @@ function toYMD(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function fmtLabel(entry: TrainingEntry): string {
-  const [, m, d] = entry.training_date.split("-");
-  const base = `${parseInt(m)}/${parseInt(d)}`;
-  const name = entry.training_name ? ` ${entry.training_name}` : "";
-  return base + name;
-}
-
 
 export default function TrainingSection({ staffId, initialDates, onTrainingAdded }: Props) {
   const now = new Date();

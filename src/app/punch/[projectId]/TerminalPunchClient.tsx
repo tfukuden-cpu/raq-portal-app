@@ -282,12 +282,6 @@ function isShiftStartPassed(shiftStart: string | null): boolean {
   const todayJST = now.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
   return now >= new Date(`${todayJST}T${shiftStart}+09:00`);
 }
-function isShiftEndPassed(shiftEnd: string | null): boolean {
-  if (!shiftEnd) return false;
-  const now = new Date();
-  const todayJST = now.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
-  return now >= new Date(`${todayJST}T${shiftEnd}+09:00`);
-}
 
 // ── ステップ定義 ──────────────────────────────────────────────
 type Step =
@@ -1641,7 +1635,6 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   // ══════════════════════════════════════════════════════════
   if (step.kind === "clock_kind") {
     const { member, punchType } = step;
-    const isClockIn = punchType === "clock_in";
 
     return (
       <div className={`min-h-screen flex flex-col items-center justify-center px-6 ${rpgFontClass}`} style={{ background: PAGE_BG }}>

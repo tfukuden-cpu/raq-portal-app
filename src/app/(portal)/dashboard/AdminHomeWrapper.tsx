@@ -1,7 +1,7 @@
 "use client";
 
 import HomeClient, { type HomeClientProps } from "./HomeClient";
-import TasksClient, { type GroupTask, type TaskGroup, type StaffOption, type NameMapping } from "../tasks/TasksClient";
+import { type GroupTask, type TaskGroup, type StaffOption, type NameMapping } from "../tasks/TasksClient";
 import MyTasksWidget from "./MyTasksWidget";
 
 interface AdminHomeWrapperProps extends HomeClientProps {

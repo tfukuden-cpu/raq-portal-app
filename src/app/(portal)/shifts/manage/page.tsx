@@ -84,9 +84,6 @@ export default async function ManageShiftsPage(props: {
     if (t === "shift" || t === "logs") return `/shifts/manage?${projectParam}tab=${t}&${monthParam}`;
     return `/shifts/manage?${projectParam}tab=${t}`;
   }
-  function projectTabUrl(pid: string) {
-    return `/shifts/manage?project=${pid}&tab=${tab}${tab === "shift" ? `&${monthParam}` : ""}`;
-  }
 
   // ── 案件名取得（共通） ────────────────────────────────────
   const { data: project } = await admin

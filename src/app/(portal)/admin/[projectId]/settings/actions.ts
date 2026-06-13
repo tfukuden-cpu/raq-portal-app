@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
-import { pushLine, pushLineTestButton, pushLineWithButton, multicastLine } from "@/lib/line";
+import { pushLine, pushLineTestButton, pushLineWithButton } from "@/lib/line";
 import { getAdminLineIds, logNotify, resolveMessage } from "@/lib/notify";
 import { redirect } from "next/navigation";
 import {
@@ -716,7 +716,6 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   const staffId       = String(fd.get("staffId")        ?? "").trim().toUpperCase();
   const name          = String(fd.get("name")           ?? "").trim();
   const companyName   = String(fd.get("company_name")   ?? "").trim() || null;
-  const section       = String(fd.get("section")        ?? "").trim() || null;
   const role          = String(fd.get("role")           ?? "staff");
   const accountNumber = String(fd.get("account_number") ?? "").trim() || null;
   const workDaysTypeRaw = String(fd.get("work_days_type") ?? "").trim();

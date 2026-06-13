@@ -25,7 +25,7 @@ import {
   type GridDraftEntry,
 } from "../actions";
 import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction, acquireEditLockAction, heartbeatEditLockAction, releaseEditLockAction, toggleShiftPublishedAction } from "./actions";
-import StaffInfoPanel, { type StaffInfoMember } from "./StaffInfoPanel";
+import StaffInfoPanel from "./StaffInfoPanel";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -46,7 +46,6 @@ type Member = {
   company_name?: string | null; role?: string | null; start_date?: string | null;
   shift_published?: boolean | null;
 };
-type MemberWithStatus = Member & { currentShift: string | null };
 type Pattern = {
   name: string;
   required_count: number;
@@ -71,11 +70,6 @@ export type ChangeLog = {
 type DraftValue = { shiftName: string | null; shiftStart: string | null; shiftEnd: string | null };
 type DraftCell = DraftValue | null;
 
-
-type EditTarget =
-  | { kind: "existing";     staffId: string; patternName: string; date: string }
-  | { kind: "empty";        patternName: string; date: string }
-  | { kind: "staff_assign"; staffId: string; date: string };
 
 type PendingNotify = {
   changes: { staffId: string; staffName: string; date: string; from: string | null; to: string | null }[];
@@ -544,221 +538,6 @@ function NotifyModal({
   );
 }
 
-// ── Edit Modal ─────────────────────────────────────────────────
-
-function EditModal({
-  target, patterns, availableStaff, logs, staffMember,
-  originalPattern, consecutiveDays, isDuplicate,
-  projectId,
-  onClose, onChangePattern, onRemove, onAdd, onAssignPattern,
-}: {
-  target: EditTarget;
-  patterns: Pattern[];
-  availableStaff: MemberWithStatus[];
-  logs: ChangeLog[];
-  staffMember: Member | null;
-  originalPattern: string | null;
-  consecutiveDays: number;
-  isDuplicate: boolean;
-  projectId: string;
-  onClose: () => void;
-  onChangePattern: (p: string) => void;
-  onRemove: () => void;
-  onAdd: (staffId: string) => void;
-  onAssignPattern: (p: string) => void;
-}) {
-  const dateLabel = fmtDate(target.date);
-  const wasMoved =
-    target.kind === "existing" &&
-    originalPattern !== null &&
-    originalPattern !== target.patternName;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm px-4 pt-4"
-        style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px))" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* ヘッダー */}
-        <div className="mb-3">
-          <p className="text-xs text-zinc-400 mb-0.5">{dateLabel}</p>
-          {target.kind === "existing" && staffMember ? (
-            <>
-              <div className="flex items-center gap-2">
-                <p className="text-base font-bold text-zinc-800 dark:text-zinc-100 leading-snug">{staffMember.name}</p>
-                <a
-                  href={`/admin/${projectId}/settings?tab=members`}
-                  className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
-                >
-                  設定
-                </a>
-              </div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">{target.patternName}</p>
-              {staffMember.section && (
-                <span className="inline-block mt-0.5 text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
-                  {staffMember.section}
-                </span>
-              )}
-            </>
-          ) : target.kind === "staff_assign" && staffMember ? (
-            <>
-              <div className="flex items-center gap-2">
-                <p className="text-base font-bold text-zinc-800 dark:text-zinc-100 leading-snug">{staffMember.name}</p>
-                <a
-                  href={`/admin/${projectId}/settings?tab=members`}
-                  className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
-                >
-                  設定
-                </a>
-              </div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">シフトを設定</p>
-              {staffMember.section && (
-                <span className="inline-block mt-0.5 text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
-                  {staffMember.section}
-                </span>
-              )}
-            </>
-          ) : (
-            <p className="text-base font-bold text-zinc-800 dark:text-zinc-100">
-              {target.kind === "empty" ? `${target.patternName} に追加` : "シフトを設定"}
-            </p>
-          )}
-        </div>
-
-        {/* エラー・警告バナー */}
-        {isDuplicate && (
-          <div className="mb-2 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
-            <p className="text-xs font-bold text-red-600 dark:text-red-400">⚠ この日に重複配置があります</p>
-          </div>
-        )}
-        {consecutiveDays >= 5 && (
-          <div className="mb-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-            <p className="text-xs font-bold text-amber-700 dark:text-amber-300">⚠ {consecutiveDays}連勤になります</p>
-          </div>
-        )}
-
-        {/* 移動前の配置 */}
-        {wasMoved && (
-          <div className="mb-3 px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-700">
-            <p className="text-[10px] text-zinc-400 mb-0.5">移動前の配置</p>
-            <p className="text-xs font-semibold">
-              <span className="text-zinc-400">{originalPattern ?? "（なし）"}</span>
-              <span className="text-zinc-300 dark:text-zinc-600 mx-1.5">→</span>
-              <span className="text-blue-600 dark:text-blue-400">{target.patternName}</span>
-            </p>
-          </div>
-        )}
-
-        {target.kind === "existing" && (
-          <>
-            <p className="text-[11px] text-zinc-400 uppercase tracking-wide mb-1.5">パターンを変更</p>
-            <div className="space-y-1 max-h-44 overflow-y-auto mb-3">
-              {patterns
-                .filter((p) => p.name !== target.patternName && (!staffMember || canAssign(staffMember, p)))
-                .map((p) => (
-                  <button key={p.name} onClick={() => onChangePattern(p.name)}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{p.name}</span>
-                    {p.start_time && p.end_time && (
-                      <span className="text-xs text-zinc-400 tabular-nums ml-auto">
-                        {p.start_time.slice(0, 5)}～{p.end_time.slice(0, 5)}
-                      </span>
-                    )}
-                  </button>
-                ))}
-            </div>
-            <button onClick={onRemove}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 mb-2 transition-colors">
-              公休に変更
-            </button>
-
-            {/* 変更履歴 */}
-            {logs.length > 0 && (
-              <div className="mt-1 mb-2">
-                <p className="text-[10px] text-zinc-400 uppercase tracking-wide mb-1">変更履歴</p>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {logs.map((l, i) => (
-                    <div key={i} className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-start gap-1.5 px-2 py-1 bg-zinc-50 dark:bg-zinc-800/60 rounded-lg">
-                      <span className="shrink-0 text-zinc-300">▸</span>
-                      <span className="flex-1">
-                        <span className="font-semibold text-zinc-600 dark:text-zinc-300">{l.changed_by_name}</span>
-                        {" が "}
-                        {l.action === "delete" ? "削除"
-                          : l.action === "create" ? "追加"
-                          : `${l.before_shift_name ?? "（なし）"} → ${l.after_shift_name ?? "（なし）"}`}
-                        <span className="ml-1 text-zinc-400">{fmtAt(l.changed_at)}</span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {target.kind === "empty" && (
-          <>
-            <p className="text-[11px] text-zinc-400 uppercase tracking-wide mb-1.5">スタッフを追加</p>
-            {availableStaff.length === 0 ? (
-              <p className="text-sm text-zinc-400 py-3 text-center">空きスタッフがいません</p>
-            ) : (
-              <div className="space-y-1 max-h-64 overflow-y-auto mb-3">
-                {availableStaff.map((m) => (
-                  <button key={m.id} onClick={() => onAdd(m.id)}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{m.name}</span>
-                      {m.section && <span className="ml-1.5 text-[10px] text-zinc-400">{m.section}</span>}
-                    </div>
-                    {m.currentShift && (
-                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-medium">
-                        {m.currentShift}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {target.kind === "staff_assign" && (
-          <>
-            <p className="text-[11px] text-zinc-400 uppercase tracking-wide mb-1.5">パターンを選択</p>
-            {patterns.filter(p => !staffMember || canAssign(staffMember, p)).length === 0 ? (
-              <p className="text-sm text-zinc-400 py-3 text-center">配置可能なパターンがありません</p>
-            ) : (
-              <div className="space-y-1 max-h-64 overflow-y-auto mb-3">
-                {patterns
-                  .filter(p => !staffMember || canAssign(staffMember, p))
-                  .map((p) => (
-                    <button key={p.name} onClick={() => onAssignPattern(p.name)}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-                      <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{p.name}</span>
-                      {p.start_time && p.end_time && (
-                        <span className="text-xs text-zinc-400 tabular-nums ml-auto">
-                          {p.start_time.slice(0, 5)}～{p.end_time.slice(0, 5)}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-              </div>
-            )}
-          </>
-        )}
-
-        <button onClick={onClose}
-          className="w-full py-2.5 rounded-xl text-sm font-semibold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-          キャンセル
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ── Main ────────────────────────────────────────────────────────
 
@@ -788,20 +567,6 @@ function getPatternBg(shiftName: string | null, pattern: Pattern | null): string
   return colors.def;
 }
 
-const OFF_PRIORITY_BG: Record<string, string> = {
-  "第一希望休": "bg-red-100 dark:bg-red-950/60",
-  "第二希望休": "bg-rose-100 dark:bg-rose-950/60",
-  "第三希望休": "bg-orange-100 dark:bg-orange-950/60",
-  "第四希望休": "bg-amber-100 dark:bg-amber-950/60",
-  "冠婚葬祭":   "bg-pink-100 dark:bg-pink-950/60",
-};
-const OFF_PRIORITY_TEXT: Record<string, string> = {
-  "第一希望休": "text-red-600 dark:text-red-400",
-  "第二希望休": "text-rose-500 dark:text-rose-400",
-  "第三希望休": "text-orange-500 dark:text-orange-400",
-  "第四希望休": "text-amber-500 dark:text-amber-400",
-  "冠婚葬祭":   "text-pink-600 dark:text-pink-400",
-};
 const OFF_PRIORITY_LABEL: Record<string, string> = {
   "第一希望休": "希休1",
   "第二希望休": "希休2",
@@ -867,7 +632,6 @@ export default function ShiftEditGrid({
     }
     return m;
   });
-  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [showSummary, setShowSummary] = useState(false);
   const [isPending] = useTransition();
   const [isSavingDraft, startDraftTransition] = useTransition();
@@ -1195,21 +959,6 @@ export default function ShiftEditGrid({
   }, [resolvedGrid, allDates, shiftPatterns]);
 
   // ── 人数不足リスト ─────────────────────────────────────────────
-  const shortageList = useMemo(() => {
-    const list: { patternName: string; date: string; assigned: number; required: number }[] = [];
-    for (const p of shiftPatterns) {
-      for (const date of allDates) {
-        const assigned = getEffectiveCount(p.name, date);
-        const required = getRequired(p.name, date);
-        if (required > 0 && assigned < required) {
-          list.push({ patternName: p.name, date, assigned, required });
-        }
-      }
-    }
-    return list.sort((a, b) => a.date.localeCompare(b.date));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedGrid, allDates, shiftPatterns, slotReqMap, churnRiskSinceMap]);
-
   // ── セクション仮確定ステータス ─────────────────────────────────
   // 'none' = 未着手, 'draft' = ドラフト済, 'staff_locked' = 人確定, 'slot_locked' = 枠確定
   const sectionDraftStatus = useMemo(() => {
@@ -1348,21 +1097,6 @@ export default function ShiftEditGrid({
     next.set(key, { shiftName: "公休", shiftStart: null, shiftEnd: null });
     applyEdit(next);
     setPopover(null);
-  }
-
-  // ── (kept for future use / empty pattern axis cells) ──────────
-  function handleAssignPattern(patternName: string) {
-    if (!editTarget || editTarget.kind !== "staff_assign") return;
-    const { staffId, date } = editTarget;
-    const p = patternByName.get(patternName);
-    const next = new Map(drafts);
-    next.set(`${staffId}__${date}`, {
-      shiftName: patternName,
-      shiftStart: p?.start_time ?? null,
-      shiftEnd: p?.end_time ?? null,
-    });
-    applyEdit(next);
-    setEditTarget(null);
   }
 
   // ── 仮保存 ────────────────────────────────────────────────────
@@ -1790,7 +1524,6 @@ export default function ShiftEditGrid({
   const ACCT_W = 68;    // アカウント番号列幅
   const NAME_W = 88;    // 名前列幅
   const TOT_W = 52;     // 合計列幅
-  const HEADER_H = 44;  // h-11 = 44px (日付ヘッダー行の高さ)
   const SUM_ROW_H = 22; // 22px (充足サマリー行の高さ)
   const GRAND_TOTAL_EXCLUDE = ["SV", "ローン", "リメイク", "H MOTA"]; // 全体合計から除外（SVは早+遅合計行で別表示）
   const GRAY_ROW_SECTIONS  = ["ローン", "リメイク", "H MOTA"];       // グレーアウト対象セクション
@@ -2261,9 +1994,6 @@ export default function ShiftEditGrid({
                     && (arr[patIdx + 1]?.section !== "SV"
                         || arr[patIdx + 1]?.name.includes("中")
                         || (!arr[patIdx + 1]?.name.includes("早") && !arr[patIdx + 1]?.name.includes("遅")));
-                  // 旧個別合計は使用しない
-                  const isEarlyTotal = false;
-                  const isLateTotal  = false;
                   const isFirst = patIdx === 0;
                   const isLast  = patIdx === arr.length - 1;
                   // SV中番 または ローン/リメイク/H MOTA はグレーアウト表示（SV早/遅は通常表示）

@@ -212,7 +212,6 @@ export async function reapplyCorrectionAction(id: string): Promise<ReviewResult>
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: "ログインしてください" };
 
-  const projectId = id; // 実際は correction から取得
   const admin = createAdminClient();
 
   const { data: correction } = await admin

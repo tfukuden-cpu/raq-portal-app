@@ -15,6 +15,13 @@ const eslintConfig = defineConfig([
       "react-hooks/purity": "warn",
       "react-hooks/immutability": "warn",
       "react-hooks/static-components": "warn",
+      // 除外目的の分割代入（...rest と一緒に書く兄弟）や、意図的に未使用な _ 始まりは許可
+      "@typescript-eslint/no-unused-vars": ["warn", {
+        ignoreRestSiblings: true,
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+      }],
     },
   },
   // Override default ignores of eslint-config-next.

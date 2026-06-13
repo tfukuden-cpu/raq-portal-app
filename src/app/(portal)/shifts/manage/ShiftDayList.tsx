@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, Fragment } from "react";
 import StaffPopupMenu from "@/components/StaffPopupMenu";
-import StaffInfoPanel, { type StaffInfoMember } from "./StaffInfoPanel";
+import StaffInfoPanel from "./StaffInfoPanel";
 
 const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 

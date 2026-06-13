@@ -157,8 +157,6 @@ function getAccNum(acc: string | null | undefined): number {
   return m ? parseInt(m[1]) : Infinity;
 }
 
-const SECTION_ORDER_LIST = ["SV", "査定", "販売", "MOTA", "リメイク", "ローン"];
-
 export default function ShiftManageClient({
   projectId, targetYear, targetMonth, allDates, defaultDate,
   shifts, activeMembers: activeMembersRaw, shiftPatterns, shiftRequests, slotRequirements,
@@ -210,7 +208,7 @@ export default function ShiftManageClient({
   const [activeDraft, setActiveDraft] = useState<GridDraftEntry[] | null>(null);
   const [isClearing, startClear] = useTransition();
   const [isRegenerating, startRegen] = useTransition();
-  const [isSettingKyukyu, startSetKyukyu] = useTransition();
+  const [, startSetKyukyu] = useTransition();
   const router = useRouter();
 
   const targetMonthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;

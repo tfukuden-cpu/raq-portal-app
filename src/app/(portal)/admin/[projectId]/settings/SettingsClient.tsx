@@ -2,9 +2,8 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import LineConnectionSection from "./LineConnectionSection";
 import RankingTab from "@/app/(portal)/members/RankingTab";
-import TrainingSection, { type TrainingDate, type TrainingEntry } from "@/components/TrainingSection";
+import TrainingSection, { type TrainingEntry } from "@/components/TrainingSection";
 import HolidayRequestSection, { type HolidayRequestEntry } from "@/components/HolidayRequestSection";
 import { fetchTrainingDatesAction } from "./training-actions";
 import { fetchHolidayRequestsForStaffAction } from "./holiday-request-actions";
@@ -12,8 +11,6 @@ import {
   updateProjectNameAction,
   saveSheetUrlAction,
   createSpreadsheetAction,
-  removeMemberAction,
-  updateMemberRoleAction,
   updateMemberInfoAction,
   saveShiftPatternsAction,
   saveHolidayRulesAction,
@@ -528,12 +525,6 @@ export function SpreadsheetForm({
 
 // ── メンバー管理 ─────────────────────────────────────────
 
-const ROLE_LABEL: Record<string, string> = {
-  project_admin: "管理者",
-  staff: "スタッフ",
-  ops: "運営者",
-};
-
 // 会社ごとのアバターカラーパレット
 const AVATAR_PALETTE = [
   { bg: "bg-blue-100 dark:bg-blue-950/50",    text: "text-blue-600 dark:text-blue-400"    },
@@ -774,22 +765,6 @@ export function MemberList({
       setCsvResults(r.results);
       setResult({ ok: r.success, msg: r.message });
     });
-  };
-
-  const handleRemove = (staffId: string) => {
-    if (!confirm(`${staffId} をメンバーから削除しますか？`)) return;
-    const fd = new FormData();
-    fd.set("projectId", projectId); fd.set("staffId", staffId);
-    start(async () => {
-      const r = await removeMemberAction(fd);
-      setResult({ ok: r.success, msg: r.message ?? (r.success ? "削除しました" : "エラー") });
-    });
-  };
-
-  const handleRoleChange = (staffId: string, role: string) => {
-    const fd = new FormData();
-    fd.set("projectId", projectId); fd.set("staffId", staffId); fd.set("role", role);
-    start(async () => { await updateMemberRoleAction(fd); });
   };
 
   return (
@@ -2056,52 +2031,6 @@ function TimeInput({
 }
 
 /** 分数入力 */
-function MinutesInput({
-  value,
-  onChange,
-  max,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  max?: number;
-}) {
-  return (
-    <input
-      type="number"
-      min={1}
-      max={max ?? 120}
-      value={value}
-      onChange={e => onChange(Number(e.target.value))}
-      className="w-14 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-700 dark:text-zinc-300 text-center"
-    />
-  );
-}
-
-/** 変数チップ（クリックでカーソル位置に挿入） */
-function VarChip({
-  label,
-  note,
-  onInsert,
-}: {
-  label: string;
-  note?: string;
-  onInsert: (v: string) => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={note}
-      onClick={() => onInsert(label)}
-      className="group flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-[10px] font-mono text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
-    >
-      {label}
-      {note && (
-        <span className="text-[9px] text-blue-400 dark:text-blue-500 font-sans not-italic">※{note}</span>
-      )}
-    </button>
-  );
-}
-
 function SendNowButton({ projectId }: { projectId: string }) {
   const [status, setStatus] = useState<"idle" | "sending" | "ok" | "err">("idle");
   const [msg, setMsg] = useState("");

@@ -126,7 +126,6 @@ export async function sendRemindReportNowAction(): Promise<{ ok: boolean; messag
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "未認証です" };
 
-  const staffId   = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
   if (!projectId) return { ok: false, message: "案件が選択されていません" };
 

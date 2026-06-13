@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition } from "react";
 import {
   fetchTrainingSessionsAction,
   createTrainingSessionAction,

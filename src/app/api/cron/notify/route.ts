@@ -144,7 +144,6 @@ export async function GET(req: NextRequest) {
   }
   const today  = todayJST();
   const tmrw   = tomorrowJST();
-  const nowMin = nowMinuteJST();
   let sent     = 0;
 
   // 全案件の通知設定を一括取得
