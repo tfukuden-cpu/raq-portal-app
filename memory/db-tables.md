@@ -59,6 +59,8 @@
 | `login_bonuses` | ログインボーナス（staff_id PK・全社共通, coins, total_logins, last_claimed_date）。毎日1回コインのガチャ。更新はサーバーアクションの admin クライアント |
 | `notices.attachment_url/attachment_name` | 周知の添付ファイル（1周知1ファイル）。Storage バケット `notice-attachments`（public）に実体 |
 | `break_room_uses` | 休憩室の占有（入室中のみ行が存在・退室で削除。UNIQUE: project_id, use_date, box_number / UNIQUE: project_id, use_date, staff_id） |
+| `staff_partners` | パートナーモンスター所持（SPEC.md §6-7・全社共通。id 代理PK, staff_id, monster_id 1〜72, obtained_at）。**重複所持OK**＝同一 monster_id の行が複数あり得る（複合PK不可）。insert はガチャアクションの admin クライアントのみ。RLS: 本人 select 可 |
+| `staffs.active_partner_id` | 現在連れているパートナー（mon 1〜72・null=なし） |
 
 ## タスク・LINE連携
 

@@ -85,6 +85,34 @@ Cookie名: `rqp_project_id`、30日有効
 
 型: `DailyRecord`, `StaffMonthlySummary`（勤怠計算ロジック）
 
+## src/lib/rpg-chars.ts — RPGキャラクター定義
+
+旧API（108体フラット・残置）: `RPG_CHARS`, `rpgCharImg(id)`, `rpgCharFor(staffId, overrideId?)`
+
+新API（SPEC.md §6-7・基本職100体＋パートナー72体。②画像が揃うまで画面未接続）:
+| 関数/定数 | 用途 |
+|------|------|
+| `RPG_JOBS`(20)/`RPG_RACES`(5) | 職業・種族ラベル配列 |
+| `jobCharId(jobIndex,raceIndex)` | 職(1-20)×種族(1-5) → charId(1-100) |
+| `jobCharInfo(id)` | charId → `{jobIndex,raceIndex,jobLabel,raceLabel,label}` |
+| `jobCharImg(id)` | `/rpg/char-${id}.png` |
+| `jobCharIdFor(staffId,overrideId?)` | 本人選択優先・未選択はハッシュで1-100 |
+| `RPG_MONSTERS`(72・`{id,label,rarity}`)/`monsterImg(id)`/`monsterById(id)` | パートナー。`/rpg/mon-${id}.png` |
+
+## src/lib/gacha.ts — モンスターガチャ抽選（plain・"use server"なし）
+
+定数: `GACHA_COST_SINGLE`(100)/`GACHA_COST_TEN`(1000)/`GACHA_TEN_COUNT`(10)/`GACHA_TEN_GUARANTEE`(3)/`RARITY_RATES`(★1=.5/★2=.35/★3=.12/★4=.03)/`RARITY_INFO`(色・★文字)
+| 関数 | 用途 |
+|------|------|
+| `rarityFromRoll(roll)` | 0〜1 → レアリティ |
+| `pickMonster(rarity,pickRoll)` | レアリティ内から1体 |
+| `drawOne(roll)` / `drawGacha(count,rolls)` | 抽選（10連は★3以上1体確定） |
+| `gachaPlan(mode)` | "single"/"ten" → `{cost,count}` |
+
+## src/app/(portal)/gacha/actions.ts — ガチャ サーバーアクション（UI未接続）
+
+`drawGachaAction(mode)` 残高チェック→減算→`staff_partners` insert（重複OK・失敗時コイン返却） / `getGachaStateAction()` 残高・所持・連れ歩き / `setActivePartnerAction(monsterId|null)` 連れ歩き設定（所持確認あり）
+
 ## src/app/(portal)/seating/punch-actions.ts — 打刻サーバーアクション
 
 | 関数 | シグネチャ | 用途 |

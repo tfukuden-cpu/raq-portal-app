@@ -92,7 +92,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 「おしらせ」= ギルドけいじばん風タイムライン（★＋日時＋タイトル）
 - 「こんしゅうの よてい」= 1週間カレンダー（今日を白反転ハイライト・シフト名はアンバー）
 - PC版トップヘッダー（AppNav）: 案件名 | 日付 | ライブ時計 | ベル | キャラアイコン+名前
-- **ログインボーナス**: その日初めてホームを開くと宝箱のガチャモーダルが自動表示（`LoginBonusModal.tsx`）。「▶たからばこを あける」で `claimLoginBonusAction` を呼び、ランダムにコイン獲得（10/30/50/100/500の5段階・期待値≈36/日）。**連続ログインの概念なし**（累計のみ）。獲得コインはヒーローバナー左上の「しょじコイン」バッジに反映。**コインの使い道は未実装（貯まるだけ）**。抽選テーブルは `src/lib/login-bonus.ts`、残高は `login_bonuses` テーブル（staff_id PK・全社共通）
+- **ログインボーナス**: その日初めてホームを開くと宝箱のガチャモーダルが自動表示（`LoginBonusModal.tsx`）。「▶たからばこを あける」で `claimLoginBonusAction` を呼び、ランダムにコイン獲得（10/30/50/100/500の5段階・期待値≈36/日）。**連続ログインの概念なし**（累計のみ）。獲得コインはヒーローバナー左上の「しょじコイン」バッジに反映。抽選テーブルは `src/lib/login-bonus.ts`、残高は `login_bonuses` テーブル（staff_id PK・全社共通）。**使い道はモンスターガチャを予定（§6-7・未実装）**
 
 **アクションボタン:**
 - 出発報告（`departure_reports` テーブルに挿入）
@@ -716,7 +716,7 @@ sendEventNotify(
 - **管理者ビュー**: 座席表 `/seating` ツールバーの「休憩室」ボタン → パネルで占有状況閲覧・**強制解放**・**定員変更**（1〜50・`break_room_settings.capacity`）。定員を減らすとはみ出した箱は自動解放
 - **本人のスマホから退室**: ダッシュボード（`/dashboard`）に入室中のみアンバーのカードを表示。「退室する」ボタンで自分の枠を解放（`leaveMyBreakRoomAction`・staffId はセッションから導出するため他人の枠は外せない）
 - **設備情報の表示**: 端末の休憩室タブに「【せつび】○トイレ ○Wi-Fi ×冷蔵庫 ×電子レンジ」のように○×で表示。`break_room_settings.amenities`（jsonb・`[{label, ok}]` 最大12件）。管理者は `/seating` 休憩室パネルで追加・削除・あり/なし切替・保存ができる。デフォルトはトイレ○/Wi-Fi○/冷蔵庫×/電子レンジ×
-- **キャラクター108体・本人選択**: キャラ定義は `src/lib/rpg-chars.ts`（職業・モンスター・ドラゴン・魔人・妖精・アンデッド等108体、`public/rpg/char-1..108.png`）。スタッフは Myページ（`/my`）のプロフィールアイコンをタップ、またはホーム（`/dashboard`）の「マイキャラクター」カード →「変更する」で全キャラ一覧から自分のキャラを選択（`staffs.rpg_character` に保存・未選択は社員IDハッシュで自動割当）。選んだキャラは Myページのプロフィールアイコン・サイドバー/PCヘッダーのユーザーアイコン・打刻端末の名前選択リスト・休憩室の表示・入退室モーダルすべてに反映（旧 AvatarEditor の顔アバターは /my から廃止）
+- **キャラクター＝基本職100体・本人選択**（§6-7へ移行済。旧108体混在は廃止）: キャラ定義は `src/lib/rpg-chars.ts`（20職業×5種族=100体、`public/rpg/char-1..100.png`）。スタッフは Myページ（`/my`）のプロフィールアイコンをタップ、またはホーム（`/dashboard`）の「マイキャラクター」カード →「変更する」で全キャラ一覧から自分のキャラを選択（`staffs.rpg_character` に保存・未選択は社員IDハッシュで自動割当）。選んだキャラは Myページのプロフィールアイコン・サイドバー/PCヘッダーのユーザーアイコン・打刻端末の名前選択リスト・休憩室の表示・入退室モーダルすべてに反映（旧 AvatarEditor の顔アバターは /my から廃止）
 - **開放/閉鎖**: `break_room_settings.is_open boolean default true`（マイグレーション add_break_room_is_open 実行済み）。管理者がホームの「きゅうけいしつ」ウィンドウから切替。閉鎖中は `enterBreakRoomAction` がサーバー側で拒否（「休憩室は閉鎖中です」）。statuses API の breakRoom に `isOpen` 同梱・端末は30秒ポーリングで反映
 - **ホームからの入退室**: `enterMyBreakRoomAction(boxNumber)`（セッションからstaffId導出）で本人入室。`getBreakRoomStateAction` は占有者の `name`・`rpgCharId` も解決して返す
 - **建物名・住所**: `src/lib/break-room-info.ts` に一元管理。`BREAK_ROOM_NAME = "サンパーク東京銀座708"`・`BREAK_ROOM_ADDRESS = "中央区入船1丁目2-8"`。ホームの「きゅうけいキャンプ」ウィンドウに「【ばしょ】サンパーク東京銀座708（とほ5ふん）」として表示。打刻端末の休憩室タブ・マニュアルモーダルにも同定数を使用
@@ -726,6 +726,95 @@ sendEventNotify(
 - `src/lib/gsheets.ts` のヘルパー関数
 - OAuth認証（`/admin/gsheet-oauth`）
 - シフトデータのインポートに使用
+
+### 6-7. キャラクター＆パートナー（基本職100体・モンスターガチャ）＜アバター切替 済・ガチャUI 未＞
+
+> **ステータス（2026-06-13）: 基本職100体アバターへの移行 完了 / モンスターガチャのUIのみ未。**
+> ①データ設計（`rpg-chars.ts`・`src/lib/gacha.ts`・`src/app/(portal)/gacha/actions.ts`・DB `staff_partners`＋`staffs.active_partner_id`）完了。
+> ②画像100体生成（`char-1..100.png`・全員別人方針）＋モンスター退避（`mon-1..72.png`）完了。
+> アバター表示切替 完了：`rpg-chars.ts` の旧 `RPG_CHARS`/`rpgCharFor`/`rpgCharImg` を新100体システムに差し替え（シグネチャ互換のため My・AppNav・ホーム・打刻端末・休憩室は無改修で切替）。`staffs.rpg_character` は全件 null リセット済（32件）。`sw.js` を v4 に。
+> **残: ガチャ画面 `/gacha` のUI＋演出（`drawGachaAction` 等ロジックは実装済）／連れ歩きパートナー(`active_partner_id`)の表示。**
+> 旧仕様（`rpg-chars.ts` に職業＋モンスター混在の108体フラットリスト）からの全面改訂。
+
+#### A. 基本職アバター（100体 = 20職業 × 5種族）
+
+スタッフ本人のアバター。**職業×種族の組み合わせ**で100通り。
+
+- **20職業**（jobIndex 1〜20・この順序固定）:
+  1 ゆうしゃ / 2 せんし / 3 まほうつかい / 4 そうりょ / 5 ぶとうか / 6 とうぞく / 7 ゆみつかい / 8 きし / 9 パラディン / 10 けんじゃ / 11 おどりこ / 12 しょうにん / 13 にんじゃ / 14 さむらい / 15 りゅうきし / 16 ガンナー / 17 ネクロマンサー / 18 ドルイド / 19 うらないし / 20 あそびにん
+- **5種族**（raceIndex 1〜5）: 1 ヒューマン / 2 エルフ / 3 ドワーフ / 4 じゅうじん（獣人）/ 5 りゅうじん（竜人）
+- **ID算出**: `charId = (jobIndex - 1) * 5 + raceIndex`（1〜100）。逆算は `jobIndex = floor((id-1)/5)+1`, `raceIndex = ((id-1) % 5) + 1`
+  - 例: エルフ(2)のまほうつかい(3) → `(3-1)*5 + 2 = 12`
+  - ラベル表記は「{種族}の{職業}」（例「エルフのまほうつかい」）
+- **画像**: `public/rpg/char-{1..100}.png`
+- **保存先**: `staffs.rpg_character`（1〜100）。未選択は社員IDハッシュで 1〜100 に自動割当
+- **移行**: 既存の `rpg_character` 値（旧1〜108の混在ID）は意味が変わるため**全件 null にリセット**（→各自で選び直し、それまでは自動割当）
+
+#### B. パートナー（モンスター72体・ガチャで仲間にする）
+
+モンスターはアバターには使わず、**コイン/ガチャで仲間にするパートナー専用**。既存72体を流用（新規画像不要）。
+
+- **画像**: `public/rpg/mon-{1..72}.png`（旧 `char-37..108.png` をリネーム。`monId = oldId - 36`）
+- **レアリティ**（カテゴリ＝レアリティ）:
+
+  | レア | カテゴリ | monId | 体数 | 排出率 |
+  |------|---------|-------|------|--------|
+  | ★1 | かわいいモンスター | 1〜12 | 12 | 50% |
+  | ★2 | 妖精・亜人 ＋ アンデッド | 49〜60, 61〜72 | 24 | 35% |
+  | ★3 | つよいモンスター ＋ 魔人・悪魔 | 13〜24, 37〜48 | 24 | 12% |
+  | ★4 | ドラゴン・幻獣 | 25〜36 | 12 | 3% |
+
+  ※旧→新ID対応: かわいい(37-48)→1-12 / つよい(49-60)→13-24 / ドラゴン幻獣(61-72)→25-36 / 魔人悪魔(73-84)→37-48 / 妖精亜人(85-96)→49-60 / アンデッド(97-108)→61-72
+  ※妖精・亜人カテゴリには「エルフ」「ドワーフ」が含まれるが、これは種族（基本職側）とは別物（パートナーとしてのモンスター）
+
+- **ガチャ仕様**:
+  - 単発: 100コイン / 1回
+  - 10連: 1000コイン（★3以上1体確定）
+  - 排出は上表の率。**重複所持OK**（同じモンスターが何体でも貯まる・コイン還元はしない）。将来の育成/合成（重複を重ねて強化）への布石
+- **連れ歩き**: 所持パートナーから1体を「現在のパートナー」に設定。ホーム/Myページでアバターの隣に表示（表示箇所は実装時に決定）
+
+#### C. DBテーブル（実装フェーズで作成）
+
+```sql
+-- 所持パートナー（全社共通・project_id なし＝個人のコレクション）
+-- 重複所持OKのため複合PKは使わず代理キー。同じ monster_id の行が複数あり得る
+create table public.staff_partners (
+  id          bigint generated always as identity primary key,
+  staff_id    text not null,
+  monster_id  int  not null check (monster_id between 1 and 72),
+  obtained_at timestamptz not null default now()
+);
+create index staff_partners_staff_idx on public.staff_partners(staff_id);
+alter table public.staff_partners enable row level security;
+create policy "select_own_partners" on public.staff_partners
+  for select to authenticated using (staff_id = public.current_staff_id());
+-- insert はガチャアクション（admin クライアント）経由のみ。スタッフ直接書き込み不可
+
+-- 現在連れているパートナー（mon 1〜72・null=なし）
+alter table public.staffs add column active_partner_id int;
+```
+
+- **コイン**: 既存 `login_bonuses.coins`（全社共通）を消費。ガチャアクションは admin クライアントで残高チェック→減算→`staff_partners` に追加（重複も無条件 insert）を一括実行
+- **二重消費防止**: 残高チェックと減算を1アクション内で。コインがマイナスにならないようサーバー側で検証
+
+#### D. `src/lib/rpg-chars.ts` 改訂方針（実装フェーズ）
+
+旧 `RPG_CHARS`（108体フラット）を廃止し、以下に分離:
+
+```ts
+export const RPG_JOBS  = [/* 20職業 */];   // index 0-19
+export const RPG_RACES = [/* 5種族 */];     // index 0-4
+export function jobCharId(jobIdx, raceIdx) // → 1..100
+export function jobCharInfo(id)            // → { jobIdx, raceIdx, jobLabel, raceLabel, label }
+export function jobCharImg(id)             // → /rpg/char-${id}.png
+
+export type Monster = { id: number; label: string; rarity: 1|2|3|4 };
+export const RPG_MONSTERS: Monster[] = [/* 72体 */];
+export function monsterImg(id)             // → /rpg/mon-${id}.png
+```
+
+- 旧 `rpgCharFor` / `rpgCharImg` の呼び出し箇所（My・AppNav・打刻端末・休憩室など）はアバター=基本職100体に合わせて差し替え
+- 画像差し替え時は `public/sw.js` の `CACHE_VERSION` を上げる（旧キャッシュ破棄）
 
 ---
 
@@ -764,6 +853,8 @@ sendEventNotify(
 | `rankings` | 番付データ（project_id, staff_name, account_number=ASS査定/ASS販売, rank, period） |
 | `break_room_settings` | 休憩室の定員（project_id PK, capacity 1〜50 デフォルト6） |
 | `break_room_uses` | 休憩室の占有状況（入室中のみ行が存在。UNIQUE(project_id,use_date,box_number) / UNIQUE(project_id,use_date,staff_id)） |
+| `login_bonuses` | ログインボーナス残高（staff_id PK・全社共通。coins, total_logins, last_claimed_date） |
+| `staff_partners` | ＜未実装・§6-7＞所持パートナーモンスター（staff_id, monster_id 1〜72, obtained_at。PK(staff_id,monster_id)・全社共通） |
 
 ---
 

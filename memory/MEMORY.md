@@ -15,6 +15,18 @@
 
 ## 現在の開発状態（2026-06-13更新）
 
+### キャラクター体系の全面改訂＝基本職100体＋モンスターガチャ（①データ設計 済 / ②画像・UI 未）
+**SPEC.md §6-7 に仕様確定済み。順序 ①データ設計 → ②画像100枚（ユーザー指示）。①完了・新APIは既存と並行追加で画面未接続（②画像が揃うまで表示切替しない）。**
+- **①で作ったもの（2026-06-13）**: `rpg-chars.ts` に新API追記（`RPG_JOBS`/`RPG_RACES`/`jobCharId`/`jobCharInfo`/`jobCharImg`/`jobCharIdFor`/`RPG_MONSTERS`(72・rarity付)/`monsterImg`/`monsterById`。旧 `RPG_CHARS`/`rpgCharFor`/`rpgCharImg` は残置）／抽選ロジック `src/lib/gacha.ts`（plain・`drawGacha`/`rarityFromRoll`/`pickMonster`/`gachaPlan`/`RARITY_RATES`/`RARITY_INFO`/コスト定数）／サーバーアクション `src/app/(portal)/gacha/actions.ts`（`drawGachaAction`/`getGachaStateAction`/`setActivePartnerAction`・UI未接続）／DB: `staff_partners`＋`staffs.active_partner_id`（マイグレーション create_staff_partners 適用済）
+- **②画像 完了（2026-06-13）**: 基本職100体 `char-1..100.png` 生成済（ChatGPTで `jobs-sheet1..10.png`→`scripts/resplit-rpg-sheet.ps1` で分割。1シート=5列種族×2行職業=10体・行優先IDが `(職-1)*5+種族` に一致）。**方針=「全員別人」**（職業ごとに性別・年齢・髪色・配色・ポーズをばらす。種族列は強調）。プロンプト集 `docs/基本職100体_画像生成プロンプト.md`。モンスター退避 `char-37..108`→`mon-1..72`(72体) も完了（`scripts/rename-monsters-to-mon.ps1`）
+- **アバター切替 完了（2026-06-13）**: `rpg-chars.ts` の旧 `RPG_CHARS`(100体に再定義・label="種族の職業")/`rpgCharFor`(→1-100)/`rpgCharImg`(→char-N.png) を**シグネチャ互換のまま新100体システムに差し替え**。これで My・AppNav・ホーム・打刻端末・休憩室は**無改修で切替**（呼び出し箇所は変更不要だった）。`staffs.rpg_character` 全件nullリセット済（32件→各自ハッシュ自動割当・再選択可）。`sw.js` CACHE_VERSION v3→v4。新コードは `jobCharIdFor`/`jobCharImg`/`jobCharInfo` を直接使ってもよい（同結果）
+- **②で残っている作業（ガチャUIのみ）**: ガチャ画面 `/gacha` のUI＋演出（`drawGachaAction`/`getGachaStateAction`/`setActivePartnerAction` は実装済・未接続）／連れ歩き(`active_partner_id`)パートナーの表示／キャラ選択UIは現状フラット100体グリッド（将来 職業/種族でグループ化の改善余地）
+- **基本職アバター100体 = 20職業 × 5種族**。職業順: ゆうしゃ/せんし/まほうつかい/そうりょ/ぶとうか/とうぞく/ゆみつかい/きし/パラディン/けんじゃ/おどりこ/しょうにん/にんじゃ/さむらい/りゅうきし/ガンナー/ネクロマンサー/ドルイド/うらないし/あそびにん。種族順: ヒューマン/エルフ/ドワーフ/じゅうじん/りゅうじん。`charId = (jobIndex-1)*5 + raceIndex`（1〜100）。画像 `char-{1..100}.png`。`staffs.rpg_character` に保存（既存値は②で全件 null リセット予定）
+- **モンスター72体＝パートナー専用**（アバターには使わない）。画像を `char-37..108.png` → `mon-{1..72}.png` にリネーム（`monId = oldId-36`）。レアリティ＝カテゴリ: ★1かわいい(1-12,50%)/★2妖精亜人+アンデッド(49-72,35%)/★3つよい+魔人悪魔(13-24,37-48,12%)/★4ドラゴン幻獣(25-36,3%)
+- **ガチャ**: 単発100コイン・10連1000コイン(★3以上確定)。**重複所持OK（還元なし・将来の育成/合成への布石）**。コインは既存 `login_bonuses.coins` を消費。既存アバターは移行時に全件nullリセット（ユーザー確定済み）
+- **新DB**（未作成）: `staff_partners(id 代理PK, staff_id, monster_id 1-72, obtained_at・全社共通・重複行あり得る/複合PK不可)` ＋ `staffs.active_partner_id int`（連れ歩き中）。ガチャ更新は admin クライアントで残高チェック→減算→insert を1アクション
+- **rpg-chars.ts 改訂方針**: 旧 `RPG_CHARS`(108フラット) 廃止 → `RPG_JOBS`(20)/`RPG_RACES`(5)/`jobCharId`/`jobCharInfo`/`jobCharImg` ＋ `RPG_MONSTERS`(72・rarity付)/`monsterImg`。旧 `rpgCharFor`/`rpgCharImg` の呼び出し箇所（My・AppNav・打刻端末・休憩室）を差し替え。画像差し替え時 `sw.js` CACHE_VERSION を上げる
+
 ### 直近の作業（シフトメニューを王道RPG風に刷新）
 - スタッフの `/shifts` をホーム/打刻端末と同じRPGの世界観に統一（夜空グラデ＋DotGothic16＋紺#000846の白二重枠ウィンドウ）
 - **共有RPG部品を新設 `src/components/rpg-ui.tsx`**: `RpgWindow`（title対応・className/bodyClassName/h-full対応）・`BlinkCursor`・`dotGothic`（next/fontインスタンス）・`RPG_PAGE_BG`・`RPG_KEYFRAMES`・`RPG_STARS`・`RpgStarfield`。今後ホーム(HomeClient)・打刻端末(TerminalPunchClient)の重複定義もここへ寄せられる（**今回は安全のため既存2箇所は未変更**）
