@@ -111,7 +111,9 @@ export default function ShiftsTabs({
   const panelDateLabel = (() => {
     if (!selectedDate) return "";
     const [, mm, dd] = selectedDate.split("-");
-    const dow = new Date(selectedDate + "T00:00:00+09:00").getDay();
+    // UTC固定で曜日を算出（ローカルTZ依存だとSSR(UTC)とクライアント(JST)で曜日がずれ、
+    // hydration mismatch=React #418 になる）
+    const dow = new Date(selectedDate + "T00:00:00Z").getUTCDay();
     const holiday = JP_HOLIDAYS[selectedDate];
     return `${Number(mm)}月${Number(dd)}日（${WD_FULL[dow]}）${holiday ? `  ${holiday}` : ""}`;
   })();
@@ -168,7 +170,7 @@ export default function ShiftsTabs({
   );
 
   return (
-    <div className={`flex-1 flex flex-col min-h-0 ${dotGothic.className}`} style={{ background: RPG_PAGE_BG, backgroundAttachment: "fixed" }}>
+    <div className={`flex flex-col min-h-[100dvh] md:min-h-0 md:flex-1 ${dotGothic.className}`} style={{ background: RPG_PAGE_BG, backgroundAttachment: "fixed" }}>
       <style>{RPG_KEYFRAMES}</style>
 
       {/* ── ページヘッダー ── */}
@@ -186,7 +188,9 @@ export default function ShiftsTabs({
       </div>
 
       {/* ── コンテンツ：カレンダー常時表示 ── */}
-      <div className="flex-1 min-h-0 px-4 md:px-8 pb-4 flex gap-4">
+      {/* pb-36(=9rem): モバイルの固定ボトムナビ(最大pb-safe-xl=9rem)の高さ分だけダーク背景を確保し、
+          下部にレイアウト由来の白帯(#f4f6fa)が見えないようにする */}
+      <div className="flex-1 min-h-0 px-4 md:px-8 pb-36 md:pb-4 flex gap-4">
 
         {/* カレンダー（常時表示） */}
         <ShiftCalendar
