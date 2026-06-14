@@ -36,17 +36,6 @@ const SPARK_DIRS = Array.from({ length: 16 }, (_, i) => {
   return { tx: Math.round(Math.cos(a) * dist), ty: Math.round(Math.sin(a) * dist) };
 });
 
-function Capsule({ color, size = 96 }: { color: string; size?: number }) {
-  return (
-    <div className="relative" style={{ width: size, height: size * 1.06, filter: `drop-shadow(0 0 14px ${color})` }}>
-      <div className="absolute left-0 right-0 bottom-0 rounded-b-full" style={{ height: "54%", background: color }} />
-      <div className="absolute left-0 right-0 top-0 rounded-t-full" style={{ height: "50%", background: "linear-gradient(160deg,#ffffff 0%,#dfe6ff 100%)" }} />
-      <div className="absolute left-0 right-0" style={{ top: "47%", height: "8%", background: "linear-gradient(#f8de86,#b8860b)", borderRadius: 2 }} />
-      <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ top: "42%", width: "17%", height: "16%", background: "radial-gradient(circle at 35% 30%,#fff,#ffd95a)", border: "2px solid #b8860b" }} />
-      <div className="absolute rounded-full" style={{ left: "18%", top: "11%", width: "24%", height: "15%", background: "rgba(255,255,255,0.7)", transform: "rotate(-25deg)" }} />
-    </div>
-  );
-}
 
 function CoinIcon({ size = 16 }: { size?: number }) {
   return (
@@ -280,10 +269,11 @@ export default function GachaClient({ initialState }: { initialState: GachaState
                   />
                 </>
               ) : (
-                <div className="relative" style={{ animation: "gachaCapDrop 0.7s ease-out both" }}>
-                  <div style={{ animation: "gachaCapShake 0.14s linear 0.7s infinite" }}>
-                    <Capsule color={rareColor} size={108} />
-                  </div>
+                <div className="relative flex items-center justify-center" style={{ width: 180, height: 180 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/rpg/gacha-flare.png" alt="" draggable={false} className="absolute pointer-events-none select-none" style={{ width: 300, height: 300, left: "50%", top: "50%", opacity: 0.5, mixBlendMode: "screen", animation: "gachaRays 6s linear infinite" }} />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/rpg/gacha-capsule.png" alt="" draggable={false} className="relative h-40 w-auto select-none" style={{ imageRendering: "pixelated", filter: `drop-shadow(0 0 16px ${rareColor})`, animation: "gachaCapDrop 0.7s ease-out both, gachaCapShake 0.14s linear 0.7s infinite" }} />
                 </div>
               )}
               <p className="relative text-amber-300 text-[15px]" style={{ animation: "gachaGlow 1s ease-in-out infinite" }}>
@@ -294,28 +284,28 @@ export default function GachaClient({ initialState }: { initialState: GachaState
 
           {phase === "reveal" && result && (
             <div className="relative w-full max-w-md">
-              {/* 公開バースト後光（レア色） */}
-              <div className="absolute top-[42%] left-1/2 pointer-events-none -z-10" style={{
-                width: 460, height: 460, transform: "translate(-50%,-50%)",
-                background: `repeating-conic-gradient(from 0deg, ${rareColor}55 0deg 6deg, transparent 6deg 20deg)`,
-                WebkitMaskImage: "radial-gradient(circle, #000 0%, transparent 64%)",
-                maskImage: "radial-gradient(circle, #000 0%, transparent 64%)",
+              {/* レア色の発光 */}
+              <div className="absolute top-[40%] left-1/2 pointer-events-none -z-10" style={{
+                width: 300, height: 300, transform: "translate(-50%,-50%)", borderRadius: "50%",
+                background: `radial-gradient(circle, ${rareColor} 0%, transparent 62%)`,
+                animation: "gachaBurstFade 0.9s ease-out forwards",
+              }} />
+              {/* 金の閃光バースト */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/rpg/gacha-flare.png" alt="" draggable={false} className="absolute top-[40%] left-1/2 pointer-events-none -z-10 select-none" style={{
+                width: 540, height: 540, transform: "translate(-50%,-50%)", mixBlendMode: "screen",
                 animation: "gachaBurstFade 0.9s ease-out forwards, gachaRays 9s linear infinite",
               }} />
               {/* キラキラ粒子の飛散 */}
               {SPARK_DIRS.map((d, i) => (
-                <span key={i} className="absolute top-[40%] left-1/2 rounded-full pointer-events-none -z-10"
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src="/rpg/gacha-spark.png" alt="" draggable={false} className="absolute top-[40%] left-1/2 pointer-events-none -z-10 select-none"
                   style={{
-                    width: 8, height: 8, background: rareColor, boxShadow: `0 0 6px ${rareColor}`,
+                    width: 48, height: 48, mixBlendMode: "screen",
                     "--tx": `${d.tx}px`, "--ty": `${d.ty}px`,
-                    animation: "gachaSpark 0.7s ease-out 0.05s both",
+                    animation: "gachaSpark 0.8s ease-out 0.05s both",
                   } as CSSVars} />
               ))}
-              {/* 割れて飛ぶカプセル */}
-              <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none -z-10" style={{ width: 96, height: 102 }}>
-                <div className="absolute left-0 right-0 top-0 rounded-t-full" style={{ height: 50, background: "linear-gradient(160deg,#fff,#dfe6ff)", animation: "gachaHalfTop 0.45s ease-in both" }} />
-                <div className="absolute left-0 right-0 bottom-0 rounded-b-full" style={{ height: 54, background: rareColor, animation: "gachaHalfBot 0.45s ease-in both" }} />
-              </div>
               {bestRarity === 4 && (
                 <p className="text-center text-[13px] mb-1" style={{ color: rareColor, animation: "gachaTitle 0.5s ease-out 0.15s both", textShadow: `0 0 8px ${rareColor}` }}>
                   ☆★ ウルトラレア とうじょう！ ★☆
