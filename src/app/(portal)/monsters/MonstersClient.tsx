@@ -116,73 +116,83 @@ export default function MonstersClient({ initial }: { initial: MonsterCollection
         </div>
       </div>
 
-      <div className="px-4 md:px-8 max-w-3xl mx-auto space-y-3.5">
-        {/* タブ */}
-        <div className="grid grid-cols-3 gap-2">
-          {([["party", "パーティー"], ["box", "てもち"], ["dex", "ずかん"]] as [Tab, string][]).map(([t, label]) => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`rounded-lg border-2 py-2 text-[13px] transition active:scale-95 ${
-                tab === t ? "border-amber-300 bg-amber-400/15 text-amber-200" : "border-white/25 bg-white/5 text-white/80 hover:bg-white/10"
-              }`}>
-              {label}
-            </button>
-          ))}
+      <div className="px-4 md:px-8 max-w-3xl mx-auto">
+        {/* タブ＋パーティー枠を上部に固定（スクロールしても残る） */}
+        <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 pt-1 pb-2.5 space-y-2.5 border-b border-white/10" style={{ background: "#02040f" }}>
+          {/* タブ */}
+          <div className="grid grid-cols-3 gap-2">
+            {([["party", "パーティー"], ["box", "てもち"], ["dex", "ずかん"]] as [Tab, string][]).map(([t, label]) => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`rounded-lg border-2 py-2 text-[13px] transition active:scale-95 ${
+                  tab === t ? "border-amber-300 bg-amber-400/15 text-amber-200" : "border-white/25 bg-white/5 text-white/80 hover:bg-white/10"
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* パーティー枠（固定） */}
+          {tab === "party" && (
+            <RpgWindow title="パーティー（3たい）">
+              <div className="px-4 py-3 space-y-2">
+                <p className="text-[11px] text-white/60">＊バトルで たたかう 3たいを えらぶ。<BlinkCursor /></p>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {party.map((inst, i) => (
+                    <div key={i} className="rounded-lg border-2 border-white/25 bg-white/5 p-2 flex flex-col items-center min-h-[110px] justify-center">
+                      <span className="text-[10px] text-amber-200 mb-1">わく {i + 1}</span>
+                      {inst ? (
+                        <button onClick={() => setDetailId(inst.instanceId)} className="flex flex-col items-center active:scale-95 transition">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={monsterImg(inst.monsterId)} alt="" className="h-12 w-auto object-contain" style={{ imageRendering: "pixelated" }} />
+                          <RarityStars rarity={monsterById(inst.monsterId)?.rarity ?? 1} />
+                          <span className="text-[10px] text-white truncate w-full text-center">{monsterById(inst.monsterId)?.label}</span>
+                          <span className="flex items-center gap-1 mt-0.5"><span className="text-[9px] text-white/70">Lv{inst.level}</span><ElementBadge id={inst.monsterId} /></span>
+                        </button>
+                      ) : (
+                        <span className="text-white/30 text-[24px] leading-none">＋</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </RpgWindow>
+          )}
         </div>
 
-        {/* ── パーティー ── */}
-        {tab === "party" && (
-          <RpgWindow title="パーティー（3たい）">
-            <div className="px-4 py-4 space-y-3">
-              <p className="text-[12px] text-white/60">＊バトルで たたかう 3たいを えらぶ。<BlinkCursor /></p>
-              <div className="grid grid-cols-3 gap-2.5">
-                {party.map((inst, i) => (
-                  <div key={i} className="rounded-lg border-2 border-white/25 bg-white/5 p-2 flex flex-col items-center min-h-[120px] justify-center">
-                    <span className="text-[10px] text-amber-200 mb-1">わく {i + 1}</span>
-                    {inst ? (
-                      <button onClick={() => setDetailId(inst.instanceId)} className="flex flex-col items-center active:scale-95 transition">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={monsterImg(inst.monsterId)} alt="" className="h-14 w-auto object-contain" style={{ imageRendering: "pixelated" }} />
-                        <RarityStars rarity={monsterById(inst.monsterId)?.rarity ?? 1} />
-                        <span className="text-[10px] text-white truncate w-full text-center">{monsterById(inst.monsterId)?.label}</span>
-                        <span className="flex items-center gap-1 mt-0.5"><span className="text-[9px] text-white/70">Lv{inst.level}</span><ElementBadge id={inst.monsterId} /></span>
-                      </button>
-                    ) : (
-                      <span className="text-white/30 text-[24px] leading-none">＋</span>
-                    )}
-                  </div>
-                ))}
-              </div>
+        {/* スクロールするコンテンツ */}
+        <div className="space-y-3.5 pt-3.5">
 
-              {/* てもち一覧（タップで編成・もう一度で外す） */}
-              <div className="border-t border-white/15 pt-3 mt-1">
-                <p className="text-[11px] text-white/55 mb-2 px-0.5">
-                  タップで パーティーに いれる／はずす（{instances.length}たい）{partyFull && <span className="text-amber-300/80">・いまは いっぱい</span>}
-                </p>
-                {instances.length === 0 ? (
-                  <p className="text-[12px] text-white/40 text-center py-5">まだ いない。ガチャを ひいてみよう。</p>
-                ) : (
-                  <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
-                    {instances.map(inst => {
-                      const mon = monsterById(inst.monsterId);
-                      if (!mon) return null;
-                      const inParty = inst.partySlot != null;
-                      const disabled = !inParty && partyFull;
-                      return (
-                        <button key={inst.instanceId} onClick={() => toggleParty(inst)} disabled={disabled}
-                          className="relative flex flex-col items-center rounded-lg border-2 p-1 transition active:scale-95 bg-white/5 hover:bg-white/10 disabled:opacity-35"
-                          style={{ borderColor: inParty ? "#fcd34d" : `${RARITY_INFO[mon.rarity].color}66` }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={monsterImg(inst.monsterId)} alt="" loading="lazy" className="h-11 w-auto object-contain" style={{ imageRendering: "pixelated" }} />
-                          <RarityStars rarity={mon.rarity} />
-                          <span className="text-[9px] leading-tight truncate w-full text-center" style={{ color: RARITY_INFO[mon.rarity].color }}>{mon.label}</span>
-                          <span className="absolute top-0.5 left-0.5 text-[8px] text-white bg-[#000846]/90 border border-white/40 rounded px-1 tabular-nums">Lv{inst.level}</span>
-                          {inParty && <span className="absolute -top-1.5 -right-1 text-[8px] text-[#000846] bg-amber-300 rounded-full h-4 w-4 grid place-items-center">{inst.partySlot}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+        {/* ── パーティー: てもちから編成 ── */}
+        {tab === "party" && (
+          <RpgWindow title="てもち（タップで へんせい）">
+            <div className="px-3 py-3">
+              <p className="text-[11px] text-white/55 mb-2 px-0.5">
+                タップで パーティーに いれる／はずす（{instances.length}たい）{partyFull && <span className="text-amber-300/80">・いまは いっぱい</span>}
+              </p>
+              {instances.length === 0 ? (
+                <p className="text-[12px] text-white/40 text-center py-5">まだ いない。ガチャを ひいてみよう。</p>
+              ) : (
+                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
+                  {instances.map(inst => {
+                    const mon = monsterById(inst.monsterId);
+                    if (!mon) return null;
+                    const inParty = inst.partySlot != null;
+                    const disabled = !inParty && partyFull;
+                    return (
+                      <button key={inst.instanceId} onClick={() => toggleParty(inst)} disabled={disabled}
+                        className="relative flex flex-col items-center rounded-lg border-2 p-1 transition active:scale-95 bg-white/5 hover:bg-white/10 disabled:opacity-35"
+                        style={{ borderColor: inParty ? "#fcd34d" : `${RARITY_INFO[mon.rarity].color}66` }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={monsterImg(inst.monsterId)} alt="" loading="lazy" className="h-11 w-auto object-contain" style={{ imageRendering: "pixelated" }} />
+                        <RarityStars rarity={mon.rarity} />
+                        <span className="text-[9px] leading-tight truncate w-full text-center" style={{ color: RARITY_INFO[mon.rarity].color }}>{mon.label}</span>
+                        <span className="absolute top-0.5 left-0.5 text-[8px] text-white bg-[#000846]/90 border border-white/40 rounded px-1 tabular-nums">Lv{inst.level}</span>
+                        {inParty && <span className="absolute -top-1.5 -right-1 text-[8px] text-[#000846] bg-amber-300 rounded-full h-4 w-4 grid place-items-center">{inst.partySlot}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </RpgWindow>
         )}
@@ -253,6 +263,7 @@ export default function MonstersClient({ initial }: { initial: MonsterCollection
             </div>
           </RpgWindow>
         )}
+        </div>
       </div>
 
       {/* ── インスタンス詳細（育成） ── */}
