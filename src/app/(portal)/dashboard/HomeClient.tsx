@@ -495,7 +495,8 @@ export default function HomeClient({
                 </span>
               </button>
 
-              {/* キャラエリアのメニューアイコン（右下） */}
+              {/* キャラエリアのメニューアイコン（右下）。一旦 福傳(O002) のみ表示 */}
+              {myStaffId === "O002" && (
               <div className="absolute bottom-3 right-3 flex flex-col gap-2 z-10">
                 <Link href="/monsters" aria-label="モンスター" className="flex flex-col items-center gap-0.5 active:scale-95 transition-transform">
                   <span className="grid place-items-center h-12 w-12 md:h-14 md:w-14 rounded-xl border-2 border-white/70 bg-[#000846]/85 shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
@@ -504,16 +505,15 @@ export default function HomeClient({
                   </span>
                   <span className="text-[10px] text-white bg-[#000846]/85 border border-white/60 rounded px-1.5 leading-tight">なかま</span>
                 </Link>
-                {myStaffId === "O002" && (
-                  <Link href="/gacha" aria-label="ガチャ" className="flex flex-col items-center gap-0.5 active:scale-95 transition-transform">
-                    <span className="grid place-items-center h-12 w-12 md:h-14 md:w-14 rounded-xl border-2 border-amber-300/80 bg-[#000846]/85 shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/rpg/gacha-machine.png" alt="" draggable={false} className="h-9 w-9 md:h-11 md:w-11 object-contain select-none" style={{ imageRendering: "pixelated" }} />
-                    </span>
-                    <span className="text-[10px] text-amber-200 bg-[#000846]/85 border border-amber-300/60 rounded px-1.5 leading-tight">ガチャ</span>
-                  </Link>
-                )}
+                <Link href="/gacha" aria-label="ガチャ" className="flex flex-col items-center gap-0.5 active:scale-95 transition-transform">
+                  <span className="grid place-items-center h-12 w-12 md:h-14 md:w-14 rounded-xl border-2 border-amber-300/80 bg-[#000846]/85 shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/rpg/gacha-machine.png" alt="" draggable={false} className="h-9 w-9 md:h-11 md:w-11 object-contain select-none" style={{ imageRendering: "pixelated" }} />
+                  </span>
+                  <span className="text-[10px] text-amber-200 bg-[#000846]/85 border border-amber-300/60 rounded px-1.5 leading-tight">ガチャ</span>
+                </Link>
               </div>
+              )}
             </div>
           </RpgWindow>
           </div>

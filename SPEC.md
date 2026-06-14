@@ -783,7 +783,7 @@ sendEventNotify(
 #### B-3. モンスター管理 `/monsters`（ホームのキャラエリアのアイコンから）
 
 - タブ: **パーティー(3体編成) / てもち(育成) / ずかん(150体・未所持はシルエット)**
-- ナビに「ガチャ」項目は**出さない**。ホームのヒーローステージ右下に「なかま(→/monsters)」「ガチャ(→/gacha・O002のみ)」アイコン
+- ナビに「ガチャ」項目は**出さない**。ホームのヒーローステージ右下に「なかま(→/monsters)」「ガチャ(→/gacha)」アイコン。**一旦どちらも O002(福傳) のみ表示**（`/monsters` も `MONSTERS_ALLOWED=["O002"]`・`/gacha` は `GACHA_ALLOWED`）。全員開放時に撤去
 - アクション: `getMonsterCollectionAction`/`setPartySlotAction`/`allocateEvAction`/`setLevelAction`（admin）
 
 #### C. DBテーブル（実装フェーズで作成）
