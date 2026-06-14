@@ -109,8 +109,8 @@ export default async function PortalLayout({ children }: { children: React.React
     viewMode = "staff";
   }
 
-  // ガチャは一旦 S001(福傳) のみ表示・アクセス可（テスト後に全員へ開放）
-  const staffMenu: NavItem[] = staffId === "S001"
+  // ガチャは一旦 福傳(O002) のみ表示・アクセス可（テスト後に全員へ開放）
+  const staffMenu: NavItem[] = staffId === "O002"
     ? [...STAFF_ITEMS, { href: "/gacha", icon: "Trophy", label: "ガチャ" }]
     : STAFF_ITEMS;
 

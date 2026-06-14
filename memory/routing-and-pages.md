@@ -21,7 +21,7 @@
 | `/shifts` | シフト表示・希望休申請 |
 | `/shifts/request` | シフト追加申請 |
 | `/record` | 勤怠実績（王道RPG風） |
-| `/gacha` | モンスターガチャ（**2026-06-14・一旦 S001 限定**。`GACHA_ALLOWED`＋layout の `staffMenu` でゲート） |
+| `/gacha` | モンスターガチャ（**2026-06-14・一旦 福傳(O002) 限定**。`GACHA_ALLOWED`＋layout の `staffMenu` でゲート） |
 | ~~`/post`~~ | 投稿（社内掲示板）＝**2026-06-13 廃止・削除済み**（ナビ・ページとも削除） |
 | `/notices` | 周知事項 |
 | `/inquiries` | 問い合わせ |

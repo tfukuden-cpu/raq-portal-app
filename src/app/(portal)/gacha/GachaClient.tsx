@@ -111,6 +111,10 @@ export default function GachaClient({ initialState }: { initialState: GachaState
         {/* ガチャ実行 */}
         <RpgWindow title="ガチャを ひく">
           <div className="px-4 py-4 space-y-3">
+            <div className="flex justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/rpg/gacha-machine.png" alt="" draggable={false} className="h-28 md:h-32 w-auto select-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]" style={{ imageRendering: "pixelated" }} />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => draw("single")}
@@ -189,7 +193,8 @@ export default function GachaClient({ initialState }: { initialState: GachaState
             // 演出中
             <div className="flex flex-col items-center gap-4">
               <div style={{ animation: "gachaShake 0.5s ease-in-out infinite" }}>
-                <CoinIcon size={64} />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/rpg/gacha-machine.png" alt="" draggable={false} className="h-44 w-auto select-none" style={{ imageRendering: "pixelated" }} />
               </div>
               <p className="text-amber-300 text-[15px]" style={{ animation: "gachaGlow 1s ease-in-out infinite" }}>がしゃがしゃ…</p>
             </div>

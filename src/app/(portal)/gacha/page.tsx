@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { getGachaStateAction } from "./actions";
 import GachaClient from "./GachaClient";
 
-const GACHA_ALLOWED = ["S001"];
+const GACHA_ALLOWED = ["O002"]; // 一旦 福傳(O002) のみ。全員開放時は撤去
 
 export default async function GachaPage() {
   const supabase = await createClient();
