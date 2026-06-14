@@ -109,10 +109,8 @@ export default async function PortalLayout({ children }: { children: React.React
     viewMode = "staff";
   }
 
-  // ガチャは一旦 福傳(O002) のみ表示・アクセス可（テスト後に全員へ開放）
-  const staffMenu: NavItem[] = staffId === "O002"
-    ? [...STAFF_ITEMS, { href: "/gacha", icon: "Trophy", label: "ガチャ" }]
-    : STAFF_ITEMS;
+  // ガチャ／モンスターはナビに出さず、ホームのキャラエリアのアイコンから開く
+  const staffMenu: NavItem[] = STAFF_ITEMS;
 
   // ── セクション構築 ───────────────────────────────────
   let sections: NavSection[];

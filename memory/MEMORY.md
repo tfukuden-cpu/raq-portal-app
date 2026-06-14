@@ -25,6 +25,15 @@
 - **直した実バグ**: LineConnectionSection `isPolling`(ref→state) / SeatingClient `useState(Date.now())`(#418源→0+useEffect) / ShiftsTabs 入れ子`ShiftDetail`を関数化(再マウント防止) / 休憩室管理操作にサーバー側adminチェック
 - **デッドコード**: 未使用import/変数を51件削除(27ファイル・最大は ShiftEditGrid の死蔵 `EditModal` -272行)。tsc 0維持で挙動変更なし。残23件は意図的保持(引数/useStateの値側/副作用呼び出し/MEMORY記載の残置)
 
+### バトル土台＋モンスター管理(/monsters)＋ホームアイコン（2026-06-14・実装済・未デプロイ）
+**ユーザー指示「今後バトル機能を追加。図鑑説明・基礎能力値・Lvアップで努力値割り振りを設計。ガチャはナビ廃止しホームのキャラエリアにガチャ/モンスターアイコンを出す」**
+- **育成データ `src/lib/monster-stats.ts`（plain・"use server"なし）**: 6ステータス `hp/atk/def/spa/spd/spe`(=HP/こうげき/ぼうぎょ/とくこう/とくぼう/すばやさ)／8属性+無 `Element`(火水草雷氷地風闇)＋相性表 `elementMultiplier`／5ロール `Role`(アタッカー/タンク/スピード/まほう/バランス=基礎値配分)。`baseStats(id)`=レア度合計(★1:180〜★5:470)×ロール配分×id個体差(±8%)。`computeStats(id,level,evs)`／レベル1〜50・`expToNext`/`levelFromExp`・努力値 `EV_PER_LEVEL=3`/`EV_MAX_PER_STAT=100`/`EV_MAX_TOTAL=150`・`evBudgetForLevel`。150体ぶんの `属性/ロール/図鑑説明` を `BATTLE_DATA`(画像に合わせて設定)・`monsterDex(id)`/`MONSTER_DEX`
+- **DB（適用済 `staff_partners_battle_columns`）**: `staff_partners` に `level/exp/ev_hp..ev_spe/party_slot(1〜3)` 追加。**育成は所持インスタンス(staff_partners.id)単位**。`UNIQUE(staff_id,party_slot) where not null`（パーティー枠重複防止）
+- **`/monsters` ページ**（`src/app/(portal)/monsters/` page+MonstersClient+actions）: タブ **パーティー(3体)/てもち/ずかん**。てもち→インスタンス詳細(育成: レベル仮調整・努力値±5振り分け・パーティー枠1-3セット)・ずかん(150体・未所持はシルエット＋???)。アクション `getMonsterCollectionAction`/`setPartySlotAction`/`allocateEvAction`/`setLevelAction`(adminクライアント)。**連れ歩き(active_partner_id)とパーティー(party_slot)は別管理**
+- **ホーム/ナビ改修**: `layout.tsx` の `staffMenu` からガチャ項目を**削除**（ナビに出さない）。`HomeClient` ヒーローステージ右下に **なかま(→/monsters・全員)** と **ガチャ(→/gacha・staffId==="O002"のみ)** のアイコン追加。`/gacha` ページは残置(GACHA_ALLOWED=O002のまま)
+- ⚠️ **レベルは現状「仮調整」**（詳細モーダルの±ボタン・`setLevelAction`）＝バトル未実装のため。バトルで経験値→レベルアップ→努力値付与の流れにする予定。努力値UIはLv1だと予算0で振れない（レベルを上げると振れる）
+- バトル相性表 `ELEMENT_STRONG_AGAINST`/`STRONG_MULT(1.5)`/`WEAK_MULT(0.67)` は暫定（バトル実装時に調整）
+
 ### モンスターを150体・5段階レアリティに全面刷新（2026-06-14・コード/DB/画像すべて完了・未デプロイ）
 **ユーザー指示「レア度を加味して全150体に完全に作り直す」。72体→150体・★4段階→★5段階。トーンは紆余曲折の末「カッコいい・勇ましい・完全オリジナル造語・ドット絵」に確定（DQ模倣→却下、可愛すぎ→却下を経て）。**
 - **レア度ピラミッド（id昇順＝レア度昇順）**: ★1ノーマル(mon1-50・50体・50%・グレー#cbd5e1)／★2レア(51-90・40体・30%・緑#6ee7b7)／★3スーパーレア(91-120・30体・13%・青#93c5fd)／★4ウルトラレア(121-140・20体・5%・紫#c4b5fd)／★5レジェンド(141-150・10体・2%・金#fcd34d)。合計150体・100%
