@@ -10,7 +10,7 @@
  * ※ public/ 配下の画像を同一URLのまま差し替えたら CACHE_VERSION を上げること
  */
 
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const STATIC_CACHE  = `raq-static-${CACHE_VERSION}`;
 const PAGES_CACHE   = `raq-pages-${CACHE_VERSION}`;
 const KNOWN_CACHES  = [STATIC_CACHE, PAGES_CACHE];

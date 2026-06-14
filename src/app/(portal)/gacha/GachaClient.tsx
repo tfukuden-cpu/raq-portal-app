@@ -126,9 +126,10 @@ export default function GachaClient({ initialState }: { initialState: GachaState
         {/* ガチャ実行 */}
         <RpgWindow title="ガチャを ひく">
           <div className="px-4 py-4 space-y-3">
-            <div className="flex justify-center">
+            <div className="relative flex justify-center py-1">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none" style={{ width: 160, height: 160, background: "radial-gradient(circle, rgba(252,211,77,0.30) 0%, transparent 70%)" }} />
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/rpg/gacha-machine.png" alt="" draggable={false} className="h-28 md:h-32 w-auto select-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]" style={{ imageRendering: "pixelated" }} />
+              <img src="/rpg/gacha-machine.png" alt="" draggable={false} className="relative h-32 md:h-40 w-auto select-none drop-shadow-[0_6px_14px_rgba(0,0,0,0.55)]" style={{ imageRendering: "pixelated" }} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <button
