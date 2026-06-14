@@ -92,6 +92,15 @@ export default function MonstersClient({ initial }: { initial: MonsterCollection
     startTransition(async () => { await setPartySlotAction(instanceId, slot); });
   }
 
+  // パーティーへの出し入れ（タップで追加＝空き枠へ／もう一度で外す）
+  function toggleParty(inst: OwnedInstance) {
+    if (inst.partySlot) { assignSlot(inst.instanceId, null); return; }
+    const emptyIdx = party.findIndex(s => s === null);
+    if (emptyIdx === -1) return; // パーティーがいっぱい
+    assignSlot(inst.instanceId, emptyIdx + 1);
+  }
+  const partyFull = party.every(s => s !== null);
+
   return (
     <main className={`min-h-[100dvh] pb-28 md:pb-12 ${dotGothic.className}`} style={{ background: RPG_PAGE_BG }}>
       <style>{RPG_KEYFRAMES}</style>
@@ -138,10 +147,41 @@ export default function MonstersClient({ initial }: { initial: MonsterCollection
                         <span className="flex items-center gap-1 mt-0.5"><span className="text-[9px] text-white/70">Lv{inst.level}</span><ElementBadge id={inst.monsterId} /></span>
                       </button>
                     ) : (
-                      <button onClick={() => setTab("box")} className="text-white/40 text-[26px] leading-none active:scale-95">＋</button>
+                      <span className="text-white/30 text-[24px] leading-none">＋</span>
                     )}
                   </div>
                 ))}
+              </div>
+
+              {/* てもち一覧（タップで編成・もう一度で外す） */}
+              <div className="border-t border-white/15 pt-3 mt-1">
+                <p className="text-[11px] text-white/55 mb-2 px-0.5">
+                  タップで パーティーに いれる／はずす（{instances.length}たい）{partyFull && <span className="text-amber-300/80">・いまは いっぱい</span>}
+                </p>
+                {instances.length === 0 ? (
+                  <p className="text-[12px] text-white/40 text-center py-5">まだ いない。ガチャを ひいてみよう。</p>
+                ) : (
+                  <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
+                    {instances.map(inst => {
+                      const mon = monsterById(inst.monsterId);
+                      if (!mon) return null;
+                      const inParty = inst.partySlot != null;
+                      const disabled = !inParty && partyFull;
+                      return (
+                        <button key={inst.instanceId} onClick={() => toggleParty(inst)} disabled={disabled}
+                          className="relative flex flex-col items-center rounded-lg border-2 p-1 transition active:scale-95 bg-white/5 hover:bg-white/10 disabled:opacity-35"
+                          style={{ borderColor: inParty ? "#fcd34d" : `${RARITY_INFO[mon.rarity].color}66` }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={monsterImg(inst.monsterId)} alt="" loading="lazy" className="h-11 w-auto object-contain" style={{ imageRendering: "pixelated" }} />
+                          <RarityStars rarity={mon.rarity} />
+                          <span className="text-[9px] leading-tight truncate w-full text-center" style={{ color: RARITY_INFO[mon.rarity].color }}>{mon.label}</span>
+                          <span className="absolute top-0.5 left-0.5 text-[8px] text-white bg-[#000846]/90 border border-white/40 rounded px-1 tabular-nums">Lv{inst.level}</span>
+                          {inParty && <span className="absolute -top-1.5 -right-1 text-[8px] text-[#000846] bg-amber-300 rounded-full h-4 w-4 grid place-items-center">{inst.partySlot}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </RpgWindow>
