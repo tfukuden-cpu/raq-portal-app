@@ -47,7 +47,7 @@ function CoinIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-const RARITY_ORDER: MonsterRarity[] = [4, 3, 2, 1];
+const RARITY_ORDER: MonsterRarity[] = [5, 4, 3, 2, 1];
 
 export default function GachaClient({ initialState }: { initialState: GachaState }) {
   const [coins, setCoins]       = useState(initialState.coins);
@@ -273,9 +273,9 @@ export default function GachaClient({ initialState }: { initialState: GachaState
                     animation: "gachaSpark 0.8s ease-out 0.05s both",
                   } as CSSVars} />
               ))}
-              {bestRarity === 4 && (
+              {bestRarity >= 4 && (
                 <p className="text-center text-[13px] mb-1" style={{ color: rareColor, animation: "gachaTitle 0.5s ease-out 0.15s both", textShadow: `0 0 8px ${rareColor}` }}>
-                  ☆★ ウルトラレア とうじょう！ ★☆
+                  ☆★ {RARITY_INFO[bestRarity].label} とうじょう！ ★☆
                 </p>
               )}
               <p className="text-center text-white text-[16px] mb-3" style={{ animation: "gachaTitle 0.4s ease-out both" }}>★ けっか ★</p>

@@ -2,6 +2,7 @@
 # グリッド単純切りだとマス境界をはみ出したキャラ（翼など）が断片化するため、
 # 背景除去 → 連結成分ラベリング → 各成分を重心のマスに帰属 → マスごとに合成して切り出す。
 # 使い方: $env:SHEET / $env:STARTIDX / $env:COLS / $env:ROWS を設定してから実行
+# $env:PREFIX で出力ファイル名の接頭辞を指定できる（既定 "char"。モンスターは "mon" を指定）
 Add-Type -AssemblyName System.Drawing
 if (-not ([System.Management.Automation.PSTypeName]'SpriteResplitter').Type) {
 Add-Type -TypeDefinition @"
@@ -59,7 +60,7 @@ public static class SpriteResplitter
 
     // 連結成分ラベリング(8近傍) → 重心のマスに帰属 → マスごとに切り出し
     // 戻り値: 警告メッセージのリスト（空なら問題なし）
-    public static List<string> SplitByComponents(Bitmap clean, string root, int start, int cols, int rows)
+    public static List<string> SplitByComponents(Bitmap clean, string root, int start, int cols, int rows, string prefix)
     {
         var warnings = new List<string>();
         int w = clean.Width, h = clean.Height;
@@ -132,7 +133,7 @@ public static class SpriteResplitter
                 if (c[5] > maxX) maxX = (int)c[5]; if (c[6] > maxY) maxY = (int)c[6];
             }
             int outIdx = start + cell;
-            if (maxX < 0) { warnings.Add(string.Format("cell {0} (char-{1}) has no pixels — NOT saved", cell, outIdx)); continue; }
+            if (maxX < 0) { warnings.Add(string.Format("cell {0} ({1}-{2}) has no pixels — NOT saved", cell, prefix, outIdx)); continue; }
 
             minX = Math.Max(0, minX - pad); minY = Math.Max(0, minY - pad);
             maxX = Math.Min(w - 1, maxX + pad); maxY = Math.Min(h - 1, maxY + pad);
@@ -152,7 +153,7 @@ public static class SpriteResplitter
             }
             System.Runtime.InteropServices.Marshal.Copy(opx, 0, od.Scan0, opx.Length);
             outBmp.UnlockBits(od);
-            outBmp.Save(System.IO.Path.Combine(root, "char-" + outIdx + ".png"), ImageFormat.Png);
+            outBmp.Save(System.IO.Path.Combine(root, prefix + "-" + outIdx + ".png"), ImageFormat.Png);
             outBmp.Dispose();
         }
         return warnings;
@@ -161,18 +162,19 @@ public static class SpriteResplitter
 "@ -ReferencedAssemblies System.Drawing
 }
 
-$root  = "C:\dev\raq-portal-app\public\rpg"
-$sheet = $env:SHEET
-$start = [int]$env:STARTIDX
-$cols  = [int]$env:COLS
-$rows  = [int]$env:ROWS
+$root   = "C:\dev\raq-portal-app\public\rpg"
+$sheet  = $env:SHEET
+$start  = [int]$env:STARTIDX
+$cols   = [int]$env:COLS
+$rows   = [int]$env:ROWS
+$prefix = if ($env:PREFIX) { $env:PREFIX } else { "char" }
 
 $src = [System.Drawing.Bitmap]::FromFile("$root\$sheet")
 $clean = [SpriteResplitter]::RemoveBackground($src)
 $src.Dispose()
 
-$warnings = [SpriteResplitter]::SplitByComponents($clean, $root, $start, $cols, $rows)
+$warnings = [SpriteResplitter]::SplitByComponents($clean, $root, $start, $cols, $rows, $prefix)
 $clean.Dispose()
 
 foreach ($warning in $warnings) { Write-Output "WARN [$sheet]: $warning" }
-Write-Output "done: $sheet -> char-$start .. char-$($start + $cols * $rows - 1)"
+Write-Output "done: $sheet -> $prefix-$start .. $prefix-$($start + $cols * $rows - 1)"

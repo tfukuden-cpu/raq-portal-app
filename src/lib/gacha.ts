@@ -16,19 +16,21 @@ export const GACHA_TEN_GUARANTEE = 3 as const;
 
 /* ── 排出率（合計1.0） ── */
 export const RARITY_RATES: Record<MonsterRarity, number> = {
-  1: 0.50, // ★1 かわいい
-  2: 0.35, // ★2 妖精亜人・アンデッド
-  3: 0.12, // ★3 つよい・魔人悪魔
-  4: 0.03, // ★4 ドラゴン幻獣
+  1: 0.50, // ★1 ノーマル（50体）
+  2: 0.30, // ★2 レア（40体）
+  3: 0.13, // ★3 スーパーレア（30体）
+  4: 0.05, // ★4 ウルトラレア（20体）
+  5: 0.02, // ★5 レジェンド（10体）
 };
 
-/** レアリティごとの表示設定（演出の色・★文字） */
+/** レアリティごとの表示設定（演出の色・★文字）。色は グレー→緑→青→紫→金 のラダー */
 export type RarityInfo = { label: string; stars: string; color: string };
 export const RARITY_INFO: Record<MonsterRarity, RarityInfo> = {
-  1: { label: "ノーマル",   stars: "★",    color: "#e2e8f0" },
-  2: { label: "レア",       stars: "★★",   color: "#86efac" },
-  3: { label: "スーパーレア", stars: "★★★",  color: "#c4b5fd" },
-  4: { label: "ウルトラレア", stars: "★★★★", color: "#fcd34d" },
+  1: { label: "ノーマル",     stars: "★",      color: "#cbd5e1" },
+  2: { label: "レア",         stars: "★★",     color: "#6ee7b7" },
+  3: { label: "スーパーレア", stars: "★★★",    color: "#93c5fd" },
+  4: { label: "ウルトラレア", stars: "★★★★",   color: "#c4b5fd" },
+  5: { label: "レジェンド",   stars: "★★★★★", color: "#fcd34d" },
 };
 
 /** 1回ぶんの乱数ペア（rarityRoll・pickRoll とも [0,1)）。サーバー側で Math.random() を渡す */
@@ -37,7 +39,7 @@ export type GachaRoll = { rarityRoll: number; pickRoll: number };
 /** rarityRoll(0〜1) → レアリティ */
 export function rarityFromRoll(roll: number): MonsterRarity {
   let acc = 0;
-  for (const r of [1, 2, 3, 4] as MonsterRarity[]) {
+  for (const r of [1, 2, 3, 4, 5] as MonsterRarity[]) {
     acc += RARITY_RATES[r];
     if (roll < acc) return r;
   }
@@ -56,6 +58,18 @@ export function drawOne(roll: GachaRoll): Monster {
   return pickMonster(rarityFromRoll(roll.rarityRoll), roll.pickRoll);
 }
 
+/** 10連確定枠のレアリティを ★3/★4/★5 の本来比率で按分して決める（roll: 0〜1） */
+export function guaranteedRarity(roll: number): MonsterRarity {
+  const tiers: MonsterRarity[] = [3, 4, 5];
+  const total = tiers.reduce((s, r) => s + RARITY_RATES[r], 0);
+  let acc = 0;
+  for (const r of tiers) {
+    acc += RARITY_RATES[r] / total;
+    if (roll < acc) return r;
+  }
+  return 3;
+}
+
 /**
  * count 回ぶんを引く。rolls.length === count を渡すこと。
  * 10連（count === GACHA_TEN_COUNT）で★3以上が1体も出なければ、
@@ -66,9 +80,8 @@ export function drawGacha(count: number, rolls: GachaRoll[]): Monster[] {
 
   if (count === GACHA_TEN_COUNT && !results.some(m => m.rarity >= GACHA_TEN_GUARANTEE)) {
     const last = rolls[count - 1] ?? { rarityRoll: 0, pickRoll: 0 };
-    // ★3 と ★4 の本来比率（12:3）で確定枠のレアリティを決める
-    const guaranteed: MonsterRarity = last.rarityRoll < RARITY_RATES[4] / (RARITY_RATES[3] + RARITY_RATES[4]) ? 4 : 3;
-    results[count - 1] = pickMonster(guaranteed, last.pickRoll);
+    // ★3以上（3/4/5）を本来の排出比率で按分して確定枠のレアリティを決める
+    results[count - 1] = pickMonster(guaranteedRarity(last.rarityRoll), last.pickRoll);
   }
   return results;
 }

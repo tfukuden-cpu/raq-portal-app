@@ -746,26 +746,28 @@ sendEventNotify(
 - **保存先**: `staffs.rpg_character`（1〜100）。未選択は社員IDハッシュで 1〜100 に自動割当
 - **移行**: 既存の `rpg_character` 値（旧1〜108の混在ID）は意味が変わるため**全件 null にリセット**（→各自で選び直し、それまでは自動割当）
 
-#### B. パートナー（モンスター72体・ガチャで仲間にする）
+#### B. パートナー（モンスター150体・ガチャで仲間にする）
 
-モンスターはアバターには使わず、**コイン/ガチャで仲間にするパートナー専用**。既存72体を流用（新規画像不要）。
+モンスターはアバターには使わず、**コイン/ガチャで仲間にするパートナー専用**。
+レアリティ**5段階**＝体数ピラミッド（id 昇順＝レア度昇順）。**全150体・全画像を新規生成**（旧72体は廃止）。
 
-- **画像**: `public/rpg/mon-{1..72}.png`（旧 `char-37..108.png` をリネーム。`monId = oldId - 36`）
-- **レアリティ**（カテゴリ＝レアリティ）:
+- **画像**: `public/rpg/mon-{1..150}.png`
+- **レアリティ**（5段階・排出率合計100%）:
 
-  | レア | カテゴリ | monId | 体数 | 排出率 |
-  |------|---------|-------|------|--------|
-  | ★1 | かわいいモンスター | 1〜12 | 12 | 50% |
-  | ★2 | 妖精・亜人 ＋ アンデッド | 49〜60, 61〜72 | 24 | 35% |
-  | ★3 | つよいモンスター ＋ 魔人・悪魔 | 13〜24, 37〜48 | 24 | 12% |
-  | ★4 | ドラゴン・幻獣 | 25〜36 | 12 | 3% |
+  | レア | 名称 | monId | 体数 | 排出率 | 表示色 |
+  |------|------|-------|------|--------|--------|
+  | ★1 | ノーマル | 1〜50 | 50 | 50% | グレー `#cbd5e1` |
+  | ★2 | レア | 51〜90 | 40 | 30% | 緑 `#6ee7b7` |
+  | ★3 | スーパーレア | 91〜120 | 30 | 13% | 青 `#93c5fd` |
+  | ★4 | ウルトラレア | 121〜140 | 20 | 5% | 紫 `#c4b5fd` |
+  | ★5 | レジェンド | 141〜150 | 10 | 2% | 金 `#fcd34d` |
 
-  ※旧→新ID対応: かわいい(37-48)→1-12 / つよい(49-60)→13-24 / ドラゴン幻獣(61-72)→25-36 / 魔人悪魔(73-84)→37-48 / 妖精亜人(85-96)→49-60 / アンデッド(97-108)→61-72
-  ※妖精・亜人カテゴリには「エルフ」「ドワーフ」が含まれるが、これは種族（基本職側）とは別物（パートナーとしてのモンスター）
+  ※ラインナップは `src/lib/rpg-chars.ts` の `RPG_MONSTERS`、排出率・表示色は `src/lib/gacha.ts` の `RARITY_RATES`/`RARITY_INFO` が一次情報
+  ※画像生成プロンプトは `docs/モンスター150体_画像生成プロンプト.md`（15シート×10体・`$env:PREFIX="mon"` で `mon-{n}.png` に直接分割）
 
 - **ガチャ仕様**:
   - 単発: 100コイン / 1回
-  - 10連: 1000コイン（★3以上1体確定）
+  - 10連: 1000コイン（★3以上1体確定。確定枠は★3/★4/★5を本来比率で按分＝`gacha.ts` の `guaranteedRarity`）
   - 排出は上表の率。**重複所持OK**（同じモンスターが何体でも貯まる・コイン還元はしない）。将来の育成/合成（重複を重ねて強化）への布石
 - **連れ歩き**: 所持パートナーから1体を「現在のパートナー」に設定。ホーム/Myページでアバターの隣に表示（表示箇所は実装時に決定）
 
@@ -777,7 +779,7 @@ sendEventNotify(
 create table public.staff_partners (
   id          bigint generated always as identity primary key,
   staff_id    text not null,
-  monster_id  int  not null check (monster_id between 1 and 72),
+  monster_id  int  not null check (monster_id between 1 and 150),
   obtained_at timestamptz not null default now()
 );
 create index staff_partners_staff_idx on public.staff_partners(staff_id);
@@ -786,7 +788,7 @@ create policy "select_own_partners" on public.staff_partners
   for select to authenticated using (staff_id = public.current_staff_id());
 -- insert はガチャアクション（admin クライアント）経由のみ。スタッフ直接書き込み不可
 
--- 現在連れているパートナー（mon 1〜72・null=なし）
+-- 現在連れているパートナー（mon 1〜150・null=なし）
 alter table public.staffs add column active_partner_id int;
 ```
 
@@ -804,8 +806,8 @@ export function jobCharId(jobIdx, raceIdx) // → 1..100
 export function jobCharInfo(id)            // → { jobIdx, raceIdx, jobLabel, raceLabel, label }
 export function jobCharImg(id)             // → /rpg/char-${id}.png
 
-export type Monster = { id: number; label: string; rarity: 1|2|3|4 };
-export const RPG_MONSTERS: Monster[] = [/* 72体 */];
+export type Monster = { id: number; label: string; rarity: 1|2|3|4|5 };
+export const RPG_MONSTERS: Monster[] = [/* 150体 */];
 export function monsterImg(id)             // → /rpg/mon-${id}.png
 ```
 

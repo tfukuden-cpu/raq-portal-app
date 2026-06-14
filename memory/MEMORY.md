@@ -25,6 +25,16 @@
 - **直した実バグ**: LineConnectionSection `isPolling`(ref→state) / SeatingClient `useState(Date.now())`(#418源→0+useEffect) / ShiftsTabs 入れ子`ShiftDetail`を関数化(再マウント防止) / 休憩室管理操作にサーバー側adminチェック
 - **デッドコード**: 未使用import/変数を51件削除(27ファイル・最大は ShiftEditGrid の死蔵 `EditModal` -272行)。tsc 0維持で挙動変更なし。残23件は意図的保持(引数/useStateの値側/副作用呼び出し/MEMORY記載の残置)
 
+### モンスターを150体・5段階レアリティに全面刷新（2026-06-14・コード/DB/画像すべて完了・未デプロイ）
+**ユーザー指示「レア度を加味して全150体に完全に作り直す」。72体→150体・★4段階→★5段階。トーンは紆余曲折の末「カッコいい・勇ましい・完全オリジナル造語・ドット絵」に確定（DQ模倣→却下、可愛すぎ→却下を経て）。**
+- **レア度ピラミッド（id昇順＝レア度昇順）**: ★1ノーマル(mon1-50・50体・50%・グレー#cbd5e1)／★2レア(51-90・40体・30%・緑#6ee7b7)／★3スーパーレア(91-120・30体・13%・青#93c5fd)／★4ウルトラレア(121-140・20体・5%・紫#c4b5fd)／★5レジェンド(141-150・10体・2%・金#fcd34d)。合計150体・100%
+- **変更したコード**: `rpg-chars.ts` `MonsterRarity`に5追加＋`RPG_MONSTERS`を150体に完全置換（カッコいい造語名: ガルル/ツノゴロ…テンオウリュウ）／`gacha.ts` `RARITY_RATES`/`RARITY_INFO`に★5追加・`rarityFromRoll`を[1..5]に・確定枠を新関数`guaranteedRarity(roll)`(★3/4/5を本来比率で按分)に／`GachaClient.tsx` `RARITY_ORDER=[5,4,3,2,1]`・登場バナーを`bestRarity>=4`で`RARITY_INFO[bestRarity].label`表示。**tsc 0エラー**
+- **DB（本番Supabase適用済・マイグレーション `monsters_expand_to_150`）**: `staff_partners.monster_id` の CHECK を `1..72`→`1..150` に拡張。旧IDは別モンスターを指すため `staff_partners` 全件DELETE＋`staffs.active_partner_id` 全件null（テストO002の64行のみ）
+- **画像 完了（2026-06-14・ユーザー生成）**: 全150枚を `public/rpg/mon-1..150.png` に出力済み。**ユーザーがChatGPTで15シート(5列×2行)を生成→`C:\dev\raq-portal-app\MONSTER\sheet1..15.png` に保存→`scripts/resplit-rpg-sheet.ps1`(PREFIX=mon・STARTIDX=(N-1)*10+1)で一括分割**。元シートは `MONSTER/` フォルダに保存（再分割可）。`sw.js` CACHE_VERSION=**v6**（未デプロイなのでこのままでOK・デプロイで全更新）
+- **プロンプト集** `docs/モンスター150体_画像生成プロンプト.md`（共通プレフィックス＋15シートの10体リスト＋分割コマンド・全コピペ可）。`resplit-rpg-sheet.ps1` に **`$env:PREFIX`** 対応を追加（既定char・mon指定で`mon-{n}.png`直接出力。旧`rename-monsters-to-mon.ps1`不要）
+- **名前は実画像に合わせて再命名済み（2026-06-14）**: ユーザーが自由生成したため当初ラベル（ガルル等）と絵がズレていた→Claudeが MONSTER/sheet1..15.png を1枚ずつ確認し、各 mon-ID の絵に合う造語名150体に `RPG_MONSTERS` を再設定（ミツメモグラ/エリマキリザ…コンゴウオウ）。**150ラベルすべて絵基準**。tsc 0。⚠️`docs/モンスター150体_画像生成プロンプト.md` の名前は**生成時の旧名**のまま（履歴）＝コード(`RPG_MONSTERS`)が正
+- 残: 本番反映は未（`git push origin master`でVercel自動デプロイ・ユーザー承認必要）／連れ歩きパートナーのホーム表示演出は従来通り未実装
+
 ### キャラクター体系の全面改訂＝基本職100体＋モンスターガチャ（アバター切替まで完了・本番デプロイ済 / 残=ガチャUI）
 **SPEC.md §6-7 に仕様確定。①データ設計→②画像100枚→アバター切替 まで完了し本番反映済み。残るはガチャ画面UIのみ。**
 - **🚀 デプロイ状況（2026-06-13・本番反映済）**: 本プロジェクトは `git push origin master` → GitHub → **Vercel が自動ビルド・デプロイ**（本番 https://raq-portal-app.vercel.app）。SPEC §8参照。この日の主なデプロイ済コミット: `2649798`(キャラ100体刷新＋ガチャ基盤)／`419ba30`(ホームを画面半分のゲーム風ステージに・背景home-stage.png)／`bbc55d9`(マイキャラ拡大 h-56/h-80)／休憩室の管理操作にサーバー側adminチェック追加。DB(マイグレーション・rpg_character全件nullリセット)も本番Supabaseに適用済。**masterへのpushは毎回ユーザー承認が必要**（自動モードがブロック・恒久許可するなら settings に permission ルール追加）
