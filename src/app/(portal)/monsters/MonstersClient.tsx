@@ -343,9 +343,9 @@ function InstanceDetail({
         <div className="p-4 space-y-3">
           {/* ヘッダー（モンスターを大きく中央に） */}
           <div className="flex flex-col items-center text-center">
-            <div className="rounded-xl bg-black/20 border border-white/10 px-4 pt-2 pb-1 w-full flex justify-center">
+            <div className="rounded-xl bg-black/20 border border-white/10 w-full max-w-[320px] mx-auto aspect-square flex items-center justify-center p-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={monsterImg(inst.monsterId)} alt="" className="h-40 md:h-48 w-auto object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.55)]" style={{ imageRendering: "pixelated" }} />
+              <img src={monsterImg(inst.monsterId)} alt="" className="max-h-full max-w-full object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.55)]" style={{ imageRendering: "pixelated" }} />
             </div>
             <div className="flex items-center gap-1.5 flex-wrap justify-center mt-2">
               <span className="text-[11px]" style={{ color: RARITY_INFO[mon.rarity].color }}>{RARITY_INFO[mon.rarity].stars} {RARITY_INFO[mon.rarity].label}</span>
@@ -426,9 +426,9 @@ function DexDetail({ monsterId, onClose }: { monsterId: number; onClose: () => v
       <div className={`w-full max-w-md rounded-2xl border-2 border-white/70 ${dotGothic.className}`} style={{ background: "#000846" }} onClick={e => e.stopPropagation()}>
         <div className="p-4 space-y-3">
           <div className="flex flex-col items-center text-center">
-            <div className="rounded-xl bg-black/20 border border-white/10 px-4 pt-2 pb-1 w-full flex justify-center">
+            <div className="rounded-xl bg-black/20 border border-white/10 w-full max-w-[320px] mx-auto aspect-square flex items-center justify-center p-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={monsterImg(monsterId)} alt="" className="h-40 md:h-48 w-auto object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.55)]" style={{ imageRendering: "pixelated" }} />
+              <img src={monsterImg(monsterId)} alt="" className="max-h-full max-w-full object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.55)]" style={{ imageRendering: "pixelated" }} />
             </div>
             <div className="flex items-center gap-1.5 flex-wrap justify-center mt-2">
               <span className="text-[10px] text-white/50 tabular-nums">No.{monsterId}</span>
