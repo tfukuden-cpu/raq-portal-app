@@ -17,6 +17,10 @@ const GACHA_KEYFRAMES = `
 @keyframes gachaCharge { 0% { transform: translate(-50%,-50%) scale(.25); opacity: .25; } 100% { transform: translate(-50%,-50%) scale(2.6); opacity: .95; } }
 @keyframes gachaFlash { 0% { opacity: 0; } 12% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes gachaTitle { 0% { transform: scale(.4); opacity: 0; } 60% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes gachaRays { to { transform: translate(-50%,-50%) rotate(360deg); } }
+@keyframes gachaRing { 0% { transform: translate(-50%,-50%) scale(.3); opacity: .7; } 100% { transform: translate(-50%,-50%) scale(2.4); opacity: 0; } }
+@keyframes gachaCapsule { 0% { transform: translateY(-54px) scale(.5); opacity: 0; } 45% { opacity: 1; } 66% { transform: translateY(8px) scale(1.1); } 83% { transform: translateY(-3px); } 100% { transform: translateY(3px) scale(1); opacity: 1; } }
+@keyframes gachaBurstFade { 0% { opacity: 0; transform: translate(-50%,-50%) scale(.4) rotate(0); } 25% { opacity: .85; } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.9) rotate(40deg); } }
 `;
 
 function CoinIcon({ size = 16 }: { size?: number }) {
@@ -43,6 +47,7 @@ export default function GachaClient({ initialState }: { initialState: GachaState
   const [, startTransition]     = useTransition();
 
   const busy = phase !== "idle";
+  const rareColor = RARITY_INFO[bestRarity].color;
   const totalOwned = owned.reduce((a, o) => a + o.count, 0);
 
   async function draw(mode: "single" | "ten") {
@@ -213,12 +218,30 @@ export default function GachaClient({ initialState }: { initialState: GachaState
 
           {(phase === "spin" || phase === "charge") && (
             <div className="relative flex flex-col items-center gap-5">
-              {/* レアリティ色のチャージ発光 */}
+              {/* チャージ時：レア色の回転後光＋拡散リング */}
+              {phase === "charge" && (
+                <>
+                  <div className="absolute top-1/2 left-1/2 pointer-events-none" style={{
+                    width: 360, height: 360, transform: "translate(-50%,-50%)",
+                    background: `repeating-conic-gradient(from 0deg, ${rareColor}66 0deg 7deg, transparent 7deg 22deg)`,
+                    WebkitMaskImage: "radial-gradient(circle, #000 0%, transparent 66%)",
+                    maskImage: "radial-gradient(circle, #000 0%, transparent 66%)",
+                    animation: "gachaRays 3s linear infinite",
+                  }} />
+                  {[0, 0.35, 0.7].map((d, i) => (
+                    <div key={i} className="absolute top-1/2 left-1/2 rounded-full pointer-events-none" style={{
+                      width: 120, height: 120, border: `2px solid ${rareColor}`, transform: "translate(-50%,-50%)",
+                      animation: `gachaRing 1.15s ease-out ${d}s infinite`,
+                    }} />
+                  ))}
+                </>
+              )}
+              {/* 中央発光 */}
               <div
                 className="absolute top-1/2 left-1/2 rounded-full pointer-events-none"
                 style={{
                   width: 200, height: 200, transform: "translate(-50%,-50%)",
-                  background: `radial-gradient(circle, ${phase === "charge" ? RARITY_INFO[bestRarity].color : "#ffffff"} 0%, transparent 70%)`,
+                  background: `radial-gradient(circle, ${phase === "charge" ? rareColor : "#ffffff"} 0%, transparent 70%)`,
                   animation: phase === "charge" ? "gachaCharge 0.9s ease-in forwards" : "gachaGlow 1.1s ease-in-out infinite",
                 }}
               />
@@ -228,6 +251,16 @@ export default function GachaClient({ initialState }: { initialState: GachaState
                 className="relative h-44 w-auto select-none drop-shadow-[0_6px_16px_rgba(0,0,0,0.6)]"
                 style={{ imageRendering: "pixelated", animation: phase === "charge" ? "gachaSpinShake 0.16s linear infinite" : "gachaShake 0.5s ease-in-out infinite" }}
               />
+              {/* カプセル落下（チャージ時） */}
+              {phase === "charge" && (
+                <div className="absolute pointer-events-none rounded-full" style={{
+                  left: "calc(50% + 6px)", top: "58%",
+                  width: 22, height: 22,
+                  background: `radial-gradient(circle at 35% 30%, #fff 0%, ${rareColor} 75%)`,
+                  border: "2px solid rgba(255,255,255,0.85)", boxShadow: `0 0 12px ${rareColor}`,
+                  animation: "gachaCapsule 0.9s ease-out forwards",
+                }} />
+              )}
               <p className="relative text-amber-300 text-[15px]" style={{ animation: "gachaGlow 1s ease-in-out infinite" }}>
                 {phase === "spin" ? "がしゃがしゃ…" : "✨ なにが でるかな…"}
               </p>
@@ -236,6 +269,19 @@ export default function GachaClient({ initialState }: { initialState: GachaState
 
           {phase === "reveal" && result && (
             <div className="relative w-full max-w-md">
+              {/* 公開バースト後光（レア色） */}
+              <div className="absolute top-[42%] left-1/2 pointer-events-none -z-10" style={{
+                width: 460, height: 460, transform: "translate(-50%,-50%)",
+                background: `repeating-conic-gradient(from 0deg, ${rareColor}55 0deg 6deg, transparent 6deg 20deg)`,
+                WebkitMaskImage: "radial-gradient(circle, #000 0%, transparent 64%)",
+                maskImage: "radial-gradient(circle, #000 0%, transparent 64%)",
+                animation: "gachaBurstFade 0.9s ease-out forwards, gachaRays 9s linear infinite",
+              }} />
+              {bestRarity === 4 && (
+                <p className="text-center text-[13px] mb-1" style={{ color: rareColor, animation: "gachaTitle 0.5s ease-out 0.15s both", textShadow: `0 0 8px ${rareColor}` }}>
+                  ☆★ ウルトラレア とうじょう！ ★☆
+                </p>
+              )}
               <p className="text-center text-white text-[16px] mb-3" style={{ animation: "gachaTitle 0.4s ease-out both" }}>★ けっか ★</p>
               <div className={`grid gap-2 ${result.length > 1 ? "grid-cols-5" : "grid-cols-1 justify-items-center"}`}>
                 {result.map((mon, i) => (
