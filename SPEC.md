@@ -1000,6 +1000,26 @@ RLSをバイパスする必要がある場合は `createAdminClient()`（`src/li
 `vercel.json` に設定済み。`/api/cron/notify` を5分ごとに実行。  
 `Authorization: Bearer CRON_SECRET` ヘッダーで保護。
 
+### 画像・動画生成（ChatGPT / Higgsfield）
+
+ゲーム化要素（RPGアバター・モンスター・UI素材・演出動画）の素材は外部の生成AIで作り、`public/rpg/` 等に配置する。**用途で使い分ける**。
+
+#### 静止画 = ChatGPT（※Higgsfield は静止画に使わない／ユーザー指示）
+- **用途**: 基本職アバター100体（`char-1..100.png`）、モンスター150体（`mon-1..150.png`）、ナビ/ガチャ等のUI素材
+- **アカウント**: 拓也 福傳（ChatGPT Plus）
+- **フロー**: Chrome拡張(Claude in Chrome)で chatgpt.com にプロンプト送信 → 生成画像をダウンロード(Downloads) → `MONSTER/sheetN.png` 等に保存 → `scripts/resplit-rpg-sheet.ps1` で分割 → `public/rpg/` へ
+- **シート方式**: 1枚に **5列×2行＝10体**を白背景で生成 → 連結成分ベースで切り出し（`$env:PREFIX`(char/mon)/`SHEET`/`STARTIDX`/`COLS`/`ROWS`）。`STARTIDX=(シート番号-1)*10+1`
+- **プロンプト集**: `docs/モンスター150体_画像生成プロンプト.md`（モンスター）／`docs/基本職100体_画像生成プロンプト.md`（アバター）
+- **⚠️ 著作権**: 既存ゲーム（ドラクエ/FF/ポケモン等）の有名モンスターに**似せない**・固有名をプロンプトに書かない。スライム等の象徴的デザインを避け完全オリジナルに
+
+#### 動画・特殊演出 = Higgsfield
+- **用途**: ガチャ召喚ムービー `public/rpg/gacha-summon.mp4`（**Kling 3.0**・約7.5クレジット・縦**9:16**・約8.5MB）
+- 表示は **`object-contain`**（`object-cover` だとスマホの縦横比で見切れる）。Service Worker キャッシュ対象
+- **静止画には使わない**（静止画は ChatGPT 担当）
+
+#### 素材差し替え時の注意
+- `public/` の画像/動画を**同一URLで差し替えたら** `public/sw.js` の `CACHE_VERSION` を上げる（SWキャッシュ破棄）
+
 ---
 
 ## 11. アーキテクチャメモ・注意事項

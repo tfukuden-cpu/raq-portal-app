@@ -33,6 +33,12 @@
 - **ホーム/ナビ改修**: `layout.tsx` の `staffMenu` からガチャ項目を**削除**（ナビに出さない）。`HomeClient` ヒーローステージ右下に **なかま(→/monsters)** と **ガチャ(→/gacha)** のアイコン追加。**両方とも `myStaffId==="O002"` のみ表示**（ガチャ未開放のため機能一式をO002限定に統一）。`/monsters` page も `MONSTERS_ALLOWED=["O002"]` で非O002は/dashboardへredirect（/gachaのGACHA_ALLOWEDと同様）。**全員開放時**: page.tsx の ALLOWED撤去＋HomeClient の `myStaffId==="O002"` 分岐撤去
 - ⚠️ **レベルは現状「仮調整」**（詳細モーダルの±ボタン・`setLevelAction`）＝バトル未実装のため。バトルで経験値→レベルアップ→努力値付与の流れにする予定。努力値UIはLv1だと予算0で振れない（レベルを上げると振れる）
 - バトル相性表 `ELEMENT_STRONG_AGAINST`/`STRONG_MULT(1.5)`/`WEAK_MULT(0.67)` は暫定（バトル実装時に調整）
+- **/monsters のUI微調整（2026-06-14・デプロイ済）**: 図鑑/手持ち/パーティーの各カードに**レア度★＋色枠**・ずかんに凡例／**パーティー3枠＋タブを上部固定(sticky)**し下の手持ちをスクロール（タップで空き枠へ編成・もう一度で外す・枠番号バッジ）／**詳細モーダルのモンスター画像を正方形(max-w-320px aspect-square)に拡大**。コミット `3aba438`(レア度表示)〜`3485602`(正方形拡大)
+
+### 外部生成ツール（ChatGPT＝静止画 / Higgsfield＝動画）= SPEC §10 に集約
+- **静止画(キャラ/モンスター/UI)はChatGPT**（Higgsfield禁止・ユーザー指示）。アカウント=拓也福傳Plus。Chrome拡張でchatgpt.com→DL→`MONSTER/sheetN.png`→`resplit-rpg-sheet.ps1`分割。1シート=5列×2行=10体・`STARTIDX=(N-1)*10+1`・`$env:PREFIX`(char/mon)。既存ゲーム模倣NG
+- **動画/演出はHiggsfield**: ガチャ召喚 `gacha-summon.mp4`(Kling3.0・約7.5cr・9:16・`object-contain`表示)。静止画には使わない
+- 素材を同一URLで差し替えたら `public/sw.js` の `CACHE_VERSION` を上げる。詳細は **SPEC.md §10「画像・動画生成」**
 
 ### モンスターを150体・5段階レアリティに全面刷新（2026-06-14・コード/DB/画像すべて完了・未デプロイ）
 **ユーザー指示「レア度を加味して全150体に完全に作り直す」。72体→150体・★4段階→★5段階。トーンは紆余曲折の末「カッコいい・勇ましい・完全オリジナル造語・ドット絵」に確定（DQ模倣→却下、可愛すぎ→却下を経て）。**
