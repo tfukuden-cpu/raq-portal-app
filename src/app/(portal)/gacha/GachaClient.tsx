@@ -242,7 +242,7 @@ export default function GachaClient({ initialState }: { initialState: GachaState
           {/* 召喚ムービー（全画面・タップでスキップ） */}
           {phase === "charge" && (
             <div className="absolute inset-0 bg-black" onClick={() => setPhase("reveal")}>
-              <video autoPlay muted playsInline preload="auto" onEnded={() => setPhase("reveal")} className="w-full h-full object-cover">
+              <video autoPlay muted playsInline preload="auto" onEnded={() => setPhase("reveal")} className="w-full h-full object-contain">
                 <source src="/rpg/gacha-summon.mp4" type="video/mp4" />
               </video>
               <span className="absolute bottom-7 left-1/2 -translate-x-1/2 text-[12px] text-white/75 bg-black/45 rounded-full px-3.5 py-1">タップで スキップ ▶</span>
