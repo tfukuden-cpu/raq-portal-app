@@ -723,13 +723,13 @@ sendEventNotify(
 - OAuth認証（`/admin/gsheet-oauth`）
 - シフトデータのインポートに使用
 
-### 6-7. キャラクター＆パートナー（基本職100体・モンスターガチャ）＜アバター切替 済・ガチャUI 未＞
+### 6-7. キャラクター＆パートナー（基本職100体・モンスターガチャ）＜実装ほぼ完了・ガチャは S001 限定公開＞
 
-> **ステータス（2026-06-13）: 基本職100体アバターへの移行 完了 / モンスターガチャのUIのみ未。**
+> **ステータス（2026-06-14）: アバター100体・ガチャUI ともに実装完了。ガチャは一旦 福傳(S001) のみ開放（テスト後に全員へ）。**
 > ①データ設計（`rpg-chars.ts`・`src/lib/gacha.ts`・`src/app/(portal)/gacha/actions.ts`・DB `staff_partners`＋`staffs.active_partner_id`）完了。
-> ②画像100体生成（`char-1..100.png`・全員別人方針）＋モンスター退避（`mon-1..72.png`）完了。
-> アバター表示切替 完了：`rpg-chars.ts` の旧 `RPG_CHARS`/`rpgCharFor`/`rpgCharImg` を新100体システムに差し替え（シグネチャ互換のため My・AppNav・ホーム・打刻端末・休憩室は無改修で切替）。`staffs.rpg_character` は全件 null リセット済（32件）。`sw.js` を v4 に。
-> **残: ガチャ画面 `/gacha` のUI＋演出（`drawGachaAction` 等ロジックは実装済）／連れ歩きパートナー(`active_partner_id`)の表示。**
+> ②画像100体生成（`char-1..100.png`）＋モンスター退避（`mon-1..72.png`）完了。アバター表示切替 完了（旧 `RPG_CHARS`/`rpgCharFor`/`rpgCharImg` を新100体に差し替え・無改修で切替・`rpg_character` 全件nullリセット済・`sw.js` v4）。
+> **ガチャ画面 `/gacha`（2026-06-14）**: `page.tsx`（`GACHA_ALLOWED=["S001"]` 以外は `/dashboard` へ redirect）＋ `GachaClient.tsx`（RPG風・単発100/10連1000・がしゃ演出＋★レアリティ枠＋NEWバッジ・所持パートナーグリッド・タップで連れ歩き設定）。ナビ項目「ガチャ」も `layout.tsx` で `staffId==="S001"` のみ表示（`staffMenu`）。**全員開放時は page.tsx の `GACHA_ALLOWED` 撤去＋layout の S001 分岐を撤去**。
+> **残: 連れ歩きパートナー(`active_partner_id`)をホーム等アバター隣に表示する演出（ガチャ画面での設定は実装済）。**
 > 旧仕様（`rpg-chars.ts` に職業＋モンスター混在の108体フラットリスト）からの全面改訂。
 
 #### A. 基本職アバター（100体 = 20職業 × 5種族）

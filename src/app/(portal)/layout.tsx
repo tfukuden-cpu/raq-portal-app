@@ -109,6 +109,11 @@ export default async function PortalLayout({ children }: { children: React.React
     viewMode = "staff";
   }
 
+  // ガチャは一旦 S001(福傳) のみ表示・アクセス可（テスト後に全員へ開放）
+  const staffMenu: NavItem[] = staffId === "S001"
+    ? [...STAFF_ITEMS, { href: "/gacha", icon: "Trophy", label: "ガチャ" }]
+    : STAFF_ITEMS;
+
   // ── セクション構築 ───────────────────────────────────
   let sections: NavSection[];
 
@@ -119,7 +124,7 @@ export default async function PortalLayout({ children }: { children: React.React
     }));
     sections = [
       { mobileLabel: "メイン", icon: "Home",
-        items: [...STAFF_ITEMS, MY_ITEM] },
+        items: [...staffMenu, MY_ITEM] },
       { title: "管理", icon: "Settings",
         items: ADMIN_MENU_ITEMS,
         projectTabs },
@@ -136,12 +141,12 @@ export default async function PortalLayout({ children }: { children: React.React
     );
     sections = [
       { mobileLabel: "メイン", icon: "Home",
-        items: [...STAFF_ITEMS, MY_ITEM] },
+        items: [...staffMenu, MY_ITEM] },
       { title: "管理", icon: "Settings",
         items: adminItems },
     ];
   } else {
-    sections = [{ items: [...STAFF_ITEMS, MY_ITEM] }];
+    sections = [{ items: [...staffMenu, MY_ITEM] }];
   }
 
   const staffName = staff?.display_name ?? staff?.name ?? staffId;
