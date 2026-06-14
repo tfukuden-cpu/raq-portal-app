@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useTransition, type CSSProperties } from "react";
 import { RpgWindow, BlinkCursor, dotGothic, RPG_PAGE_BG, RPG_KEYFRAMES, RpgStarfield } from "@/components/rpg-ui";
-import { RPG_MONSTERS, monsterById, monsterImg } from "@/lib/rpg-chars";
+import { RPG_MONSTERS, monsterById, monsterImg, type MonsterRarity } from "@/lib/rpg-chars";
 import {
   STAT_KEYS, STAT_LABELS, type StatKey, type Evs, ZERO_EVS,
   ELEMENT_INFO, computeStats, baseStats, monsterBattle, monsterDex,
@@ -24,6 +24,15 @@ function CoinIcon({ size = 14 }: { size?: number }) {
       <circle cx="12" cy="12" r="10" fill="#fcd34d" stroke="#b45309" strokeWidth="1.5" />
       <text x="12" y="16" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#92400e">G</text>
     </svg>
+  );
+}
+
+function RarityStars({ rarity, dim = false }: { rarity: MonsterRarity; dim?: boolean }) {
+  const info = RARITY_INFO[rarity];
+  return (
+    <span className="leading-none tracking-tighter text-[8px]" style={{ color: dim ? "rgba(255,255,255,0.3)" : info.color }}>
+      {info.stars}
+    </span>
   );
 }
 
@@ -124,7 +133,8 @@ export default function MonstersClient({ initial }: { initial: MonsterCollection
                       <button onClick={() => setDetailId(inst.instanceId)} className="flex flex-col items-center active:scale-95 transition">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={monsterImg(inst.monsterId)} alt="" className="h-14 w-auto object-contain" style={{ imageRendering: "pixelated" }} />
-                        <span className="text-[10px] text-white truncate w-full text-center mt-0.5">{monsterById(inst.monsterId)?.label}</span>
+                        <RarityStars rarity={monsterById(inst.monsterId)?.rarity ?? 1} />
+                        <span className="text-[10px] text-white truncate w-full text-center">{monsterById(inst.monsterId)?.label}</span>
                         <span className="flex items-center gap-1 mt-0.5"><span className="text-[9px] text-white/70">Lv{inst.level}</span><ElementBadge id={inst.monsterId} /></span>
                       </button>
                     ) : (
@@ -151,10 +161,11 @@ export default function MonstersClient({ initial }: { initial: MonsterCollection
                     if (!mon) return null;
                     return (
                       <button key={inst.instanceId} onClick={() => setDetailId(inst.instanceId)}
-                        className="relative flex flex-col items-center rounded-lg border p-1 transition active:scale-95 border-white/25 bg-white/5 hover:bg-white/10"
-                        style={{ borderColor: inst.partySlot ? "#fcd34d" : undefined }}>
+                        className="relative flex flex-col items-center rounded-lg border-2 p-1 transition active:scale-95 bg-white/5 hover:bg-white/10"
+                        style={{ borderColor: inst.partySlot ? "#fcd34d" : `${RARITY_INFO[mon.rarity].color}66` }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={monsterImg(inst.monsterId)} alt="" loading="lazy" className="h-12 w-auto object-contain" style={{ imageRendering: "pixelated" }} />
+                        <RarityStars rarity={mon.rarity} />
                         <span className="text-[9px] leading-tight truncate w-full text-center" style={{ color: RARITY_INFO[mon.rarity].color }}>{mon.label}</span>
                         <span className="absolute top-0.5 left-0.5 text-[8px] text-white bg-[#000846]/90 border border-white/40 rounded px-1 tabular-nums">Lv{inst.level}</span>
                         {inst.partySlot && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] text-[#000846] bg-amber-300 rounded px-1 whitespace-nowrap">わく{inst.partySlot}</span>}
@@ -171,16 +182,26 @@ export default function MonstersClient({ initial }: { initial: MonsterCollection
         {tab === "dex" && (
           <RpgWindow title={`ずかん（${ownedIds.size}／${RPG_MONSTERS.length}）`}>
             <div className="px-3 py-3">
+              {/* レア度の凡例 */}
+              <div className="flex flex-wrap gap-x-2.5 gap-y-1 mb-2.5 px-1">
+                {([1, 2, 3, 4, 5] as MonsterRarity[]).map(r => (
+                  <span key={r} className="text-[9px] leading-none" style={{ color: RARITY_INFO[r].color }}>
+                    {RARITY_INFO[r].stars} {RARITY_INFO[r].label}
+                  </span>
+                ))}
+              </div>
               <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
                 {RPG_MONSTERS.map(mon => {
                   const owned = ownedIds.has(mon.id);
                   return (
                     <button key={mon.id} onClick={() => owned && setDexId(mon.id)} disabled={!owned}
-                      className="relative flex flex-col items-center rounded-lg border p-1 border-white/15 bg-white/5 disabled:opacity-100">
+                      className="relative flex flex-col items-center rounded-lg border-2 p-1 bg-white/5 disabled:opacity-100"
+                      style={{ borderColor: owned ? `${RARITY_INFO[mon.rarity].color}66` : "rgba(255,255,255,0.12)" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={monsterImg(mon.id)} alt="" loading="lazy"
                         className="h-12 w-auto object-contain transition"
                         style={{ imageRendering: "pixelated", filter: owned ? "none" : "brightness(0) opacity(0.55)" }} />
+                      <RarityStars rarity={mon.rarity} dim={!owned} />
                       <span className="text-[9px] leading-tight truncate w-full text-center" style={{ color: owned ? RARITY_INFO[mon.rarity].color : "rgba(255,255,255,0.35)" }}>
                         {owned ? mon.label : "？？？"}
                       </span>
@@ -275,7 +296,7 @@ function InstanceDetail({
             <img src={monsterImg(inst.monsterId)} alt="" className="h-20 w-20 object-contain shrink-0" style={{ imageRendering: "pixelated" }} />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px]" style={{ color: RARITY_INFO[mon.rarity].color }}>{RARITY_INFO[mon.rarity].stars}</span>
+                <span className="text-[10px]" style={{ color: RARITY_INFO[mon.rarity].color }}>{RARITY_INFO[mon.rarity].stars} {RARITY_INFO[mon.rarity].label}</span>
                 <span className="text-[9px] rounded px-1 border" style={{ color: ELEMENT_INFO[dex.el].color, borderColor: ELEMENT_INFO[dex.el].color }}>{dex.el}</span>
                 <span className="text-[9px] text-white/70 rounded px-1 border border-white/40">{dex.role}</span>
               </div>
@@ -359,7 +380,7 @@ function DexDetail({ monsterId, onClose }: { monsterId: number; onClose: () => v
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-white/50 tabular-nums">No.{monsterId}</span>
-                <span className="text-[10px]" style={{ color: RARITY_INFO[mon.rarity].color }}>{RARITY_INFO[mon.rarity].stars}</span>
+                <span className="text-[10px]" style={{ color: RARITY_INFO[mon.rarity].color }}>{RARITY_INFO[mon.rarity].stars} {RARITY_INFO[mon.rarity].label}</span>
                 <span className="text-[9px] rounded px-1 border" style={{ color: ELEMENT_INFO[dex.el].color, borderColor: ELEMENT_INFO[dex.el].color }}>{dex.el}</span>
                 <span className="text-[9px] text-white/70 rounded px-1 border border-white/40">{dex.role}</span>
               </div>
