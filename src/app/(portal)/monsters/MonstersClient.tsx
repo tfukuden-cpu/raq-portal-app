@@ -341,19 +341,19 @@ function InstanceDetail({
       <div className={`w-full max-w-md max-h-[88dvh] overflow-y-auto rounded-2xl border-2 border-white/70 ${dotGothic.className}`}
         style={{ background: "#000846" }} onClick={e => e.stopPropagation()}>
         <div className="p-4 space-y-3">
-          {/* ヘッダー */}
-          <div className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={monsterImg(inst.monsterId)} alt="" className="h-20 w-20 object-contain shrink-0" style={{ imageRendering: "pixelated" }} />
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px]" style={{ color: RARITY_INFO[mon.rarity].color }}>{RARITY_INFO[mon.rarity].stars} {RARITY_INFO[mon.rarity].label}</span>
-                <span className="text-[9px] rounded px-1 border" style={{ color: ELEMENT_INFO[dex.el].color, borderColor: ELEMENT_INFO[dex.el].color }}>{dex.el}</span>
-                <span className="text-[9px] text-white/70 rounded px-1 border border-white/40">{dex.role}</span>
-              </div>
-              <p className="text-[16px] text-white mt-0.5">{mon.label}</p>
-              <p className="text-[10px] text-white/55 leading-snug mt-0.5">{dex.desc}</p>
+          {/* ヘッダー（モンスターを大きく中央に） */}
+          <div className="flex flex-col items-center text-center">
+            <div className="rounded-xl bg-black/20 border border-white/10 px-4 pt-2 pb-1 w-full flex justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={monsterImg(inst.monsterId)} alt="" className="h-40 md:h-48 w-auto object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.55)]" style={{ imageRendering: "pixelated" }} />
             </div>
+            <div className="flex items-center gap-1.5 flex-wrap justify-center mt-2">
+              <span className="text-[11px]" style={{ color: RARITY_INFO[mon.rarity].color }}>{RARITY_INFO[mon.rarity].stars} {RARITY_INFO[mon.rarity].label}</span>
+              <span className="text-[9px] rounded px-1 border" style={{ color: ELEMENT_INFO[dex.el].color, borderColor: ELEMENT_INFO[dex.el].color }}>{dex.el}</span>
+              <span className="text-[9px] text-white/70 rounded px-1 border border-white/40">{dex.role}</span>
+            </div>
+            <p className="text-[18px] text-white mt-0.5">{mon.label}</p>
+            <p className="text-[11px] text-white/55 leading-snug mt-1">{dex.desc}</p>
           </div>
 
           {/* レベル（バトル実装までの仮の調整） */}
@@ -425,18 +425,18 @@ function DexDetail({ monsterId, onClose }: { monsterId: number; onClose: () => v
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-3 md:p-6" style={{ background: "rgba(2,4,15,0.8)" }} onClick={onClose}>
       <div className={`w-full max-w-md rounded-2xl border-2 border-white/70 ${dotGothic.className}`} style={{ background: "#000846" }} onClick={e => e.stopPropagation()}>
         <div className="p-4 space-y-3">
-          <div className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={monsterImg(monsterId)} alt="" className="h-24 w-24 object-contain shrink-0" style={{ imageRendering: "pixelated" }} />
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-white/50 tabular-nums">No.{monsterId}</span>
-                <span className="text-[10px]" style={{ color: RARITY_INFO[mon.rarity].color }}>{RARITY_INFO[mon.rarity].stars} {RARITY_INFO[mon.rarity].label}</span>
-                <span className="text-[9px] rounded px-1 border" style={{ color: ELEMENT_INFO[dex.el].color, borderColor: ELEMENT_INFO[dex.el].color }}>{dex.el}</span>
-                <span className="text-[9px] text-white/70 rounded px-1 border border-white/40">{dex.role}</span>
-              </div>
-              <p className="text-[17px] text-white mt-0.5">{mon.label}</p>
+          <div className="flex flex-col items-center text-center">
+            <div className="rounded-xl bg-black/20 border border-white/10 px-4 pt-2 pb-1 w-full flex justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={monsterImg(monsterId)} alt="" className="h-40 md:h-48 w-auto object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.55)]" style={{ imageRendering: "pixelated" }} />
             </div>
+            <div className="flex items-center gap-1.5 flex-wrap justify-center mt-2">
+              <span className="text-[10px] text-white/50 tabular-nums">No.{monsterId}</span>
+              <span className="text-[11px]" style={{ color: RARITY_INFO[mon.rarity].color }}>{RARITY_INFO[mon.rarity].stars} {RARITY_INFO[mon.rarity].label}</span>
+              <span className="text-[9px] rounded px-1 border" style={{ color: ELEMENT_INFO[dex.el].color, borderColor: ELEMENT_INFO[dex.el].color }}>{dex.el}</span>
+              <span className="text-[9px] text-white/70 rounded px-1 border border-white/40">{dex.role}</span>
+            </div>
+            <p className="text-[18px] text-white mt-0.5">{mon.label}</p>
           </div>
           <p className="text-[12px] text-white/80 leading-relaxed bg-white/5 rounded-lg border border-white/15 p-3">{dex.desc || "ーー"}</p>
           <div className="bg-white/5 rounded-lg border border-white/20 p-3">
