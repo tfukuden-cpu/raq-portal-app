@@ -91,16 +91,15 @@ export default function GachaClient({ initialState }: { initialState: GachaState
     setNewIds(new Set(r.monsters.filter(mon => !prevIds.has(mon.id)).map(mon => mon.id)));
 
     const best = Math.max(...r.monsters.map(mon => mon.rarity)) as MonsterRarity;
-    // 演出タイミング：回転を最低0.9秒見せ→レア度で長さが変わるチャージ→公開
-    const chargeMs = best >= 4 ? 1500 : best >= 3 ? 1100 : 750;
-    const goCharge = () => {
+    const goVideo = () => {
       setBestRarity(best);
       setResult(r.monsters);
-      setPhase("charge");
-      setTimeout(() => setPhase("reveal"), chargeMs);
+      setPhase("charge"); // charge = 召喚ムービー再生フェーズ
+      // 動画が onEnded を出さない/読み込み失敗時のフォールバック（動画5秒＋余裕）
+      setTimeout(() => setPhase(p => (p === "charge" ? "reveal" : p)), 6500);
     };
     const remain = 900 - (Date.now() - startedAt);
-    if (remain > 0) setTimeout(goCharge, remain); else goCharge();
+    if (remain > 0) setTimeout(goVideo, remain); else goVideo();
   }
 
   function closeResult() {
@@ -230,55 +229,23 @@ export default function GachaClient({ initialState }: { initialState: GachaState
             <div className="absolute inset-0 pointer-events-none" style={{ background: "#fff", animation: "gachaFlash 0.5s ease-out forwards" }} />
           )}
 
-          {(phase === "spin" || phase === "charge") && (
+          {/* 待機：マシンが揺れる */}
+          {phase === "spin" && (
             <div className="relative flex flex-col items-center gap-5">
-              {/* チャージ時：レア色の回転後光＋拡散リング */}
-              {phase === "charge" && (
-                <>
-                  <div className="absolute top-1/2 left-1/2 pointer-events-none" style={{
-                    width: 360, height: 360, transform: "translate(-50%,-50%)",
-                    background: `repeating-conic-gradient(from 0deg, ${rareColor}66 0deg 7deg, transparent 7deg 22deg)`,
-                    WebkitMaskImage: "radial-gradient(circle, #000 0%, transparent 66%)",
-                    maskImage: "radial-gradient(circle, #000 0%, transparent 66%)",
-                    animation: "gachaRays 3s linear infinite",
-                  }} />
-                  {[0, 0.35, 0.7].map((d, i) => (
-                    <div key={i} className="absolute top-1/2 left-1/2 rounded-full pointer-events-none" style={{
-                      width: 120, height: 120, border: `2px solid ${rareColor}`, transform: "translate(-50%,-50%)",
-                      animation: `gachaRing 1.15s ease-out ${d}s infinite`,
-                    }} />
-                  ))}
-                </>
-              )}
-              {/* 中央発光 */}
-              <div
-                className="absolute top-1/2 left-1/2 rounded-full pointer-events-none"
-                style={{
-                  width: 200, height: 200, transform: "translate(-50%,-50%)",
-                  background: `radial-gradient(circle, ${phase === "charge" ? rareColor : "#ffffff"} 0%, transparent 70%)`,
-                  animation: phase === "charge" ? "gachaCharge 0.9s ease-in forwards" : "gachaGlow 1.1s ease-in-out infinite",
-                }}
-              />
-              {phase === "spin" ? (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/rpg/gacha-machine.png" alt="" draggable={false}
-                    className="relative h-44 w-auto select-none drop-shadow-[0_6px_16px_rgba(0,0,0,0.6)]"
-                    style={{ imageRendering: "pixelated", animation: "gachaShake 0.5s ease-in-out infinite" }}
-                  />
-                </>
-              ) : (
-                <div className="relative flex items-center justify-center" style={{ width: 180, height: 180 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/rpg/gacha-flare.png" alt="" draggable={false} className="absolute pointer-events-none select-none" style={{ width: 300, height: 300, left: "50%", top: "50%", opacity: 0.5, mixBlendMode: "screen", animation: "gachaRays 6s linear infinite" }} />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/rpg/gacha-capsule.png" alt="" draggable={false} className="relative h-40 w-auto select-none" style={{ imageRendering: "pixelated", filter: `drop-shadow(0 0 16px ${rareColor})`, animation: "gachaCapDrop 0.7s ease-out both, gachaCapShake 0.14s linear 0.7s infinite" }} />
-                </div>
-              )}
-              <p className="relative text-amber-300 text-[15px]" style={{ animation: "gachaGlow 1s ease-in-out infinite" }}>
-                {phase === "spin" ? "がしゃがしゃ…" : "✨ なにが でるかな…"}
-              </p>
+              <div className="absolute top-1/2 left-1/2 rounded-full pointer-events-none" style={{ width: 200, height: 200, transform: "translate(-50%,-50%)", background: "radial-gradient(circle, #ffffff 0%, transparent 70%)", animation: "gachaGlow 1.1s ease-in-out infinite" }} />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/rpg/gacha-machine.png" alt="" draggable={false} className="relative h-44 w-auto select-none drop-shadow-[0_6px_16px_rgba(0,0,0,0.6)]" style={{ imageRendering: "pixelated", animation: "gachaShake 0.5s ease-in-out infinite" }} />
+              <p className="relative text-amber-300 text-[15px]" style={{ animation: "gachaGlow 1s ease-in-out infinite" }}>がしゃがしゃ…</p>
+            </div>
+          )}
+
+          {/* 召喚ムービー（全画面・タップでスキップ） */}
+          {phase === "charge" && (
+            <div className="absolute inset-0 bg-black" onClick={() => setPhase("reveal")}>
+              <video autoPlay muted playsInline preload="auto" onEnded={() => setPhase("reveal")} className="w-full h-full object-cover">
+                <source src="/rpg/gacha-summon.mp4" type="video/mp4" />
+              </video>
+              <span className="absolute bottom-7 left-1/2 -translate-x-1/2 text-[12px] text-white/75 bg-black/45 rounded-full px-3.5 py-1">タップで スキップ ▶</span>
             </div>
           )}
 
