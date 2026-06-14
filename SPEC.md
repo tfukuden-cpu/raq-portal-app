@@ -728,7 +728,7 @@ sendEventNotify(
 > **ステータス（2026-06-14）: アバター100体・ガチャUI ともに実装完了。ガチャは一旦 福傳(S001) のみ開放（テスト後に全員へ）。**
 > ①データ設計（`rpg-chars.ts`・`src/lib/gacha.ts`・`src/app/(portal)/gacha/actions.ts`・DB `staff_partners`＋`staffs.active_partner_id`）完了。
 > ②画像100体生成（`char-1..100.png`）＋モンスター退避（`mon-1..72.png`）完了。アバター表示切替 完了（旧 `RPG_CHARS`/`rpgCharFor`/`rpgCharImg` を新100体に差し替え・無改修で切替・`rpg_character` 全件nullリセット済・`sw.js` v4）。
-> **ガチャ画面 `/gacha`（2026-06-14）**: `page.tsx`（`GACHA_ALLOWED=["O002"]`＝福傳のみ・以外は `/dashboard` へ redirect）＋ `GachaClient.tsx`（RPG風・ガチャマシン画像 `public/rpg/gacha-machine.png`・**多段アニメ演出**＝回転(がしゃがしゃ)→レア度色のチャージ発光→白フラッシュ→カードがポップ公開〔phase: spin/charge/reveal・最高レア度でチャージ時間が伸びる〕・単発100/10連1000・★レアリティ枠＋NEWバッジ・所持パートナーグリッド・タップで連れ歩き設定）。ナビ項目「ガチャ」も `layout.tsx` で `staffId==="O002"` のみ表示（`staffMenu`）。**全員開放時は page.tsx の `GACHA_ALLOWED` 撤去＋layout の O002 分岐を撤去**。※福傳の実アカウントは **O002**（executive）。S001は別のテスト用。テスト用に O002 のコインを 99,999,999 に設定済
+> **ガチャ画面 `/gacha`（2026-06-14）**: `page.tsx`（`GACHA_ALLOWED=["O002"]`＝福傳のみ・以外は `/dashboard` へ redirect）＋ `GachaClient.tsx`（RPG風・ガチャマシン画像 `public/rpg/gacha-machine.png`・**カプセル豪華演出（多段アニメ）**＝マシン回転(がしゃがしゃ)→カプセルが落ちて輝き震える(チャージ・レア度色の回転後光＋拡散リング)→割れて光と粒子(`SPARK_DIRS`)が弾け飛ぶ(白フラッシュ＋バースト後光)→カードがポップ公開〔phase: spin/charge/reveal・最高レア度でチャージ時間が伸びる・`Capsule`コンポーネント〕・単発100/10連1000・★レアリティ枠＋NEWバッジ・所持パートナーグリッド・タップで連れ歩き設定）。ナビ項目「ガチャ」も `layout.tsx` で `staffId==="O002"` のみ表示（`staffMenu`）。**全員開放時は page.tsx の `GACHA_ALLOWED` 撤去＋layout の O002 分岐を撤去**。※福傳の実アカウントは **O002**（executive）。S001は別のテスト用。テスト用に O002 のコインを 99,999,999 に設定済
 > **残: 連れ歩きパートナー(`active_partner_id`)をホーム等アバター隣に表示する演出（ガチャ画面での設定は実装済）。**
 > 旧仕様（`rpg-chars.ts` に職業＋モンスター混在の108体フラットリスト）からの全面改訂。
 
