@@ -10,9 +10,13 @@ import {
 import { drawGachaAction, setActivePartnerAction, type GachaState } from "./actions";
 
 const GACHA_KEYFRAMES = `
-@keyframes gachaPop { 0% { transform: scale(0) rotate(-12deg); opacity: 0; } 70% { transform: scale(1.12) rotate(3deg); } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+@keyframes gachaPop { 0% { transform: scale(0) rotate(-12deg); opacity: 0; } 70% { transform: scale(1.14) rotate(3deg); } 100% { transform: scale(1) rotate(0); opacity: 1; } }
 @keyframes gachaShake { 0%,100% { transform: translateX(0) rotate(0); } 20% { transform: translateX(-4px) rotate(-3deg); } 40% { transform: translateX(4px) rotate(3deg); } 60% { transform: translateX(-3px) rotate(-2deg); } 80% { transform: translateX(3px) rotate(2deg); } }
-@keyframes gachaGlow { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+@keyframes gachaSpinShake { 0%,100% { transform: translateX(-3px) rotate(-5deg); } 50% { transform: translateX(3px) rotate(5deg); } }
+@keyframes gachaGlow { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+@keyframes gachaCharge { 0% { transform: translate(-50%,-50%) scale(.25); opacity: .25; } 100% { transform: translate(-50%,-50%) scale(2.6); opacity: .95; } }
+@keyframes gachaFlash { 0% { opacity: 0; } 12% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes gachaTitle { 0% { transform: scale(.4); opacity: 0; } 60% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
 `;
 
 function CoinIcon({ size = 16 }: { size?: number }) {
@@ -31,29 +35,31 @@ export default function GachaClient({ initialState }: { initialState: GachaState
   const [coins, setCoins]       = useState(initialState.coins);
   const [owned, setOwned]       = useState(initialState.owned);
   const [activeId, setActiveId] = useState<number | null>(initialState.activePartnerId);
-  const [drawing, setDrawing]   = useState(false);
+  const [phase, setPhase]       = useState<"idle" | "spin" | "charge" | "reveal">("idle");
+  const [bestRarity, setBestRarity] = useState<MonsterRarity>(1);
   const [result, setResult]     = useState<Monster[] | null>(null);
   const [newIds, setNewIds]     = useState<Set<number>>(new Set());
-  const [revealed, setRevealed] = useState(false);
   const [err, setErr]           = useState<string | null>(null);
   const [, startTransition]     = useTransition();
 
+  const busy = phase !== "idle";
   const totalOwned = owned.reduce((a, o) => a + o.count, 0);
 
   async function draw(mode: "single" | "ten") {
-    if (drawing) return;
+    if (busy) return;
     setErr(null);
     const cost = mode === "single" ? GACHA_COST_SINGLE : GACHA_COST_TEN;
     if (coins < cost) { setErr("コインが たりません"); return; }
 
     const prevIds = new Set(owned.map(o => o.monsterId));
-    setDrawing(true); setResult(null); setRevealed(false); setNewIds(new Set());
+    setResult(null); setNewIds(new Set()); setPhase("spin");
+    const startedAt = Date.now();
 
     const r = await drawGachaAction(mode);
     if (!r.ok) {
       setErr(r.message);
       if (r.coins != null) setCoins(r.coins);
-      setDrawing(false);
+      setPhase("idle");
       return;
     }
     setCoins(r.coins);
@@ -64,14 +70,23 @@ export default function GachaClient({ initialState }: { initialState: GachaState
       return [...m.entries()].map(([monsterId, count]) => ({ monsterId, count })).sort((a, b) => a.monsterId - b.monsterId);
     });
     setNewIds(new Set(r.monsters.filter(mon => !prevIds.has(mon.id)).map(mon => mon.id)));
-    setResult(r.monsters);
-    setTimeout(() => setRevealed(true), 700);
+
+    const best = Math.max(...r.monsters.map(mon => mon.rarity)) as MonsterRarity;
+    // 演出タイミング：回転を最低0.9秒見せ→レア度で長さが変わるチャージ→公開
+    const chargeMs = best >= 4 ? 1500 : best >= 3 ? 1100 : 750;
+    const goCharge = () => {
+      setBestRarity(best);
+      setResult(r.monsters);
+      setPhase("charge");
+      setTimeout(() => setPhase("reveal"), chargeMs);
+    };
+    const remain = 900 - (Date.now() - startedAt);
+    if (remain > 0) setTimeout(goCharge, remain); else goCharge();
   }
 
   function closeResult() {
-    setDrawing(false);
+    setPhase("idle");
     setResult(null);
-    setRevealed(false);
   }
 
   function toggleActive(monsterId: number) {
@@ -118,7 +133,7 @@ export default function GachaClient({ initialState }: { initialState: GachaState
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => draw("single")}
-                disabled={drawing || coins < GACHA_COST_SINGLE}
+                disabled={busy || coins< GACHA_COST_SINGLE}
                 className="flex flex-col items-center gap-1 rounded-lg border-2 border-white/70 bg-white/5 py-3 hover:bg-white/10 active:scale-95 transition disabled:opacity-40"
               >
                 <span className="text-[15px] text-white">たんぱつ</span>
@@ -126,7 +141,7 @@ export default function GachaClient({ initialState }: { initialState: GachaState
               </button>
               <button
                 onClick={() => draw("ten")}
-                disabled={drawing || coins < GACHA_COST_TEN}
+                disabled={busy || coins< GACHA_COST_TEN}
                 className="relative flex flex-col items-center gap-1 rounded-lg border-2 border-amber-300 bg-amber-400/10 py-3 hover:bg-amber-400/20 active:scale-95 transition disabled:opacity-40"
               >
                 <span className="absolute -top-2 right-2 text-[9px] text-[#000846] bg-amber-300 rounded px-1.5 py-0.5">★3かくてい</span>
@@ -186,21 +201,41 @@ export default function GachaClient({ initialState }: { initialState: GachaState
         </RpgWindow>
       </div>
 
-      {/* ── 結果オーバーレイ ── */}
-      {drawing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(2,4,15,0.92)" }}>
-          {!result ? (
-            // 演出中
-            <div className="flex flex-col items-center gap-4">
-              <div style={{ animation: "gachaShake 0.5s ease-in-out infinite" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/rpg/gacha-machine.png" alt="" draggable={false} className="h-44 w-auto select-none" style={{ imageRendering: "pixelated" }} />
-              </div>
-              <p className="text-amber-300 text-[15px]" style={{ animation: "gachaGlow 1s ease-in-out infinite" }}>がしゃがしゃ…</p>
+      {/* ── ガチャ演出オーバーレイ（回転→チャージ→フラッシュ→公開） ── */}
+      {busy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-hidden" style={{ background: "rgba(2,4,15,0.94)" }}>
+
+          {/* 公開時の白フラッシュ */}
+          {phase === "reveal" && (
+            <div className="absolute inset-0 pointer-events-none" style={{ background: "#fff", animation: "gachaFlash 0.5s ease-out forwards" }} />
+          )}
+
+          {(phase === "spin" || phase === "charge") && (
+            <div className="relative flex flex-col items-center gap-5">
+              {/* レアリティ色のチャージ発光 */}
+              <div
+                className="absolute top-1/2 left-1/2 rounded-full pointer-events-none"
+                style={{
+                  width: 200, height: 200, transform: "translate(-50%,-50%)",
+                  background: `radial-gradient(circle, ${phase === "charge" ? RARITY_INFO[bestRarity].color : "#ffffff"} 0%, transparent 70%)`,
+                  animation: phase === "charge" ? "gachaCharge 0.9s ease-in forwards" : "gachaGlow 1.1s ease-in-out infinite",
+                }}
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/rpg/gacha-machine.png" alt="" draggable={false}
+                className="relative h-44 w-auto select-none drop-shadow-[0_6px_16px_rgba(0,0,0,0.6)]"
+                style={{ imageRendering: "pixelated", animation: phase === "charge" ? "gachaSpinShake 0.16s linear infinite" : "gachaShake 0.5s ease-in-out infinite" }}
+              />
+              <p className="relative text-amber-300 text-[15px]" style={{ animation: "gachaGlow 1s ease-in-out infinite" }}>
+                {phase === "spin" ? "がしゃがしゃ…" : "✨ なにが でるかな…"}
+              </p>
             </div>
-          ) : (
-            <div className="w-full max-w-md">
-              <p className="text-center text-white text-[15px] mb-3">★ けっか ★</p>
+          )}
+
+          {phase === "reveal" && result && (
+            <div className="relative w-full max-w-md">
+              <p className="text-center text-white text-[16px] mb-3" style={{ animation: "gachaTitle 0.4s ease-out both" }}>★ けっか ★</p>
               <div className={`grid gap-2 ${result.length > 1 ? "grid-cols-5" : "grid-cols-1 justify-items-center"}`}>
                 {result.map((mon, i) => (
                   <div
@@ -209,9 +244,9 @@ export default function GachaClient({ initialState }: { initialState: GachaState
                     style={{
                       borderColor: RARITY_INFO[mon.rarity].color,
                       background: "rgba(0,8,70,0.85)",
-                      animation: revealed ? `gachaPop 0.4s ease-out ${i * 0.06}s both` : "none",
-                      opacity: revealed ? undefined : 0,
-                      width: result.length === 1 ? "9rem" : undefined,
+                      boxShadow: mon.rarity >= 3 ? `0 0 10px ${RARITY_INFO[mon.rarity].color}` : undefined,
+                      animation: `gachaPop 0.4s ease-out ${i * 0.07}s both`,
+                      width: result.length === 1 ? "9.5rem" : undefined,
                     }}
                   >
                     {newIds.has(mon.id) && (
@@ -224,15 +259,13 @@ export default function GachaClient({ initialState }: { initialState: GachaState
                   </div>
                 ))}
               </div>
-              {revealed && (
-                <div className="mt-4 flex flex-col items-center gap-2">
-                  <span className="flex items-center gap-1.5 text-[13px] text-white/70 tabular-nums"><CoinIcon size={13} />のこり {coins}</span>
-                  <button onClick={closeResult}
-                    className="px-8 py-2.5 rounded-lg border-2 border-white text-white text-[14px] hover:bg-white/10 active:scale-95 transition">
-                    とじる
-                  </button>
-                </div>
-              )}
+              <div className="mt-4 flex flex-col items-center gap-2">
+                <span className="flex items-center gap-1.5 text-[13px] text-white/70 tabular-nums"><CoinIcon size={13} />のこり {coins}</span>
+                <button onClick={closeResult}
+                  className="px-8 py-2.5 rounded-lg border-2 border-white text-white text-[14px] hover:bg-white/10 active:scale-95 transition">
+                  とじる
+                </button>
+              </div>
             </div>
           )}
         </div>
