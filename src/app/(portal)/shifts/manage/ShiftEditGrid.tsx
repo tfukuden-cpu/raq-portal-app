@@ -1538,7 +1538,7 @@ export default function ShiftEditGrid({
   const COL_W = 50;
   const PREV_COL_W = 36; // 前月列幅（当月より狭め）
   const ACCT_W = 92;    // アカウント番号列幅（3桁＋"ASS "が見切れないよう拡大）
-  const NAME_W = 88;    // 名前列幅
+  const NAME_W = 112;   // 名前列幅（名前が見切れないよう拡大）
   const TOT_W = 52;     // 合計列幅
   const SUM_ROW_H = 22; // 22px (充足サマリー行の高さ)
   const GRAND_TOTAL_EXCLUDE = ["SV", "ローン", "リメイク", "H MOTA"]; // 全体合計から除外（SVは早+遅合計行で別表示）
@@ -1744,7 +1744,7 @@ export default function ShiftEditGrid({
                     : "bg-white dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50",
                 ].join(" ")}
               >
-                {sec}
+                {sec === "販売" ? "販売／インフォ" : sec}
               </button>
             ))}
           </div>
@@ -2359,7 +2359,7 @@ export default function ShiftEditGrid({
                               <td className={["sticky left-0 z-10 px-2 py-0.5 border-b", headerBg].join(" ")}>
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tracking-wide uppercase">
-                                    {secName ?? "セクション未設定"}
+                                    {secName === "販売" ? "販売／インフォ" : (secName ?? "セクション未設定")}
                                   </span>
                                   {isSecLocked && (
                                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">

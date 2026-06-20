@@ -10,6 +10,8 @@ export type MotaRow = {
   accountNumber: string;
   name: string;
   isFixed: boolean;
+  /** 当日に他セクションで出勤中（=スロットに本人名を自動表示） */
+  isWorking: boolean;
 };
 
 export type HMotaPanelRef = {
@@ -259,6 +261,11 @@ function MotaTableRow({
                     ×
                   </button>
                 </div>
+              ) : row.isWorking ? (
+                /* 当日他セクションで出勤中＝本人名を自動表示（割当が無い場合のデフォルト） */
+                <span className="w-full mx-0.5 text-[10px] font-semibold text-purple-600/80 dark:text-purple-300/80 truncate text-center">
+                  {row.name}
+                </span>
               ) : (
                 <span className={[
                   "text-[8px]",

@@ -476,6 +476,12 @@ export default async function AttendancePage({
       })
       .map(s => s.staff_id),
   );
+  // 当日に出勤シフト（公休等以外）がある人＝他セクションで出勤しているMOTA在籍者の判定用
+  const workingTodayIds = new Set(
+    (todayShifts ?? [])
+      .filter(s => !OFF_SHIFT_NAMES.includes((s.shift_name ?? "") as string))
+      .map(s => s.staff_id),
+  );
 
   const hMotaRows: MotaRow[] = [
     ...(memberRows ?? [])
@@ -486,11 +492,11 @@ export default async function AttendancePage({
       .map(m => {
         const info = memberMap.get(m.staff_id);
         return info?.accountNumber
-          ? { accountNumber: info.accountNumber, name: info.name, isFixed: false }
+          ? { accountNumber: info.accountNumber, name: info.name, isFixed: false, isWorking: workingTodayIds.has(m.staff_id) }
           : null;
       })
       .filter((r): r is MotaRow => r !== null),
-    ...FIXED_MOTA_NUMBERS.map(n => ({ accountNumber: n, name: n, isFixed: true })),
+    ...FIXED_MOTA_NUMBERS.map(n => ({ accountNumber: n, name: n, isFixed: true, isWorking: false })),
   ];
 
   const initialMotaAssignments: MotaAssignment[] = (motaAssignmentRows ?? []).map(r => ({
