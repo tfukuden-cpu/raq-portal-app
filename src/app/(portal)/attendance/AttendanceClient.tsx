@@ -787,7 +787,7 @@ export default function AttendanceClient({
 
                         {/* セクション名行：出勤数/規定（充足）遅刻 欠勤 未出勤 */}
                         <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 tabular-nums">
-                          <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100 shrink-0">{section === "販売" ? "販売／インフォ" : section}</span>
+                          <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100 shrink-0">{section}</span>
                           <span className={`text-xs font-bold ${totalClockedIn > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>{totalClockedIn}</span>
                           {totalRequired > 0 && (
                             <>
