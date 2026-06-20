@@ -331,8 +331,8 @@ export default async function AttendanceEditPage({
     };
   });
 
-  type TabKey = "corrections" | "requests" | "records" | "compliance";
-  const resolvedTab: TabKey = (["corrections", "requests", "records", "compliance"] as string[]).includes(initialTab ?? "")
+  type TabKey = "corrections" | "requests" | "records" | "absentees";
+  const resolvedTab: TabKey = (["corrections", "requests", "records", "absentees"] as string[]).includes(initialTab ?? "")
     ? (initialTab as TabKey)
     : "corrections";
 

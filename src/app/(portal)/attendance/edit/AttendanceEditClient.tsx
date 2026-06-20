@@ -9,7 +9,7 @@ import {
   reviewCorrectionAction,
   reapplyCorrectionAction,
 } from "./actions";
-import WorkRecordsClient from "@/app/(portal)/admin/work-records/WorkRecordsClient";
+import AbsenteeReportClient from "./AbsenteeReportClient";
 import type { StaffEntry } from "@/app/(portal)/admin/work-records/WorkRecordsClient";
 import ExportModal from "./ExportModal";
 
@@ -73,7 +73,7 @@ export type ExceptionRow = {
   accountNumber: string | null;
 };
 
-type TabKey = "corrections" | "requests" | "records" | "compliance";
+type TabKey = "corrections" | "requests" | "records" | "absentees";
 
 type CalEntry = { date: string; row: AttendanceRow | null; shiftName: string | null };
 
@@ -397,7 +397,7 @@ export default function AttendanceEditClient({
     { key: "corrections", label: "勤怠修正",  badge: corrPendingCount > 0 ? corrPendingCount : undefined },
     { key: "requests",    label: "申請一覧" },
     { key: "records",     label: "勤怠実績" },
-    { key: "compliance",  label: "遵守率" },
+    { key: "absentees",   label: "欠勤者レポート" },
   ];
 
   // ── レンダリング ─────────────────────────────────────────────────────────
@@ -844,11 +844,9 @@ export default function AttendanceEditClient({
         </div>
       )}
 
-      {/* ── 遵守率タブ ──────────────────────────────────────────── */}
-      {activeTab === "compliance" && (
-        <div className="pt-4">
-          <WorkRecordsClient projectId={projectId} staffs={staffs} fixedTab="compliance" />
-        </div>
+      {/* ── 欠勤者レポートタブ ──────────────────────────────────── */}
+      {activeTab === "absentees" && (
+        <AbsenteeReportClient projectId={projectId} />
       )}
 
       {/* ── 勤怠修正 承認/却下モーダル ───────────────────────────── */}
