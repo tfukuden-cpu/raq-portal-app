@@ -24,7 +24,7 @@ import {
   type BulkDeleteItem,
   type GridDraftEntry,
 } from "../actions";
-import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction, acquireEditLockAction, heartbeatEditLockAction, releaseEditLockAction, toggleShiftPublishedAction } from "./actions";
+import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction, acquireEditLockAction, heartbeatEditLockAction, releaseEditLockAction, toggleShiftPublishedAction, setSvOrderAction } from "./actions";
 import StaffInfoPanel from "./StaffInfoPanel";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ type Member = {
   max_consecutive_days?: number | null; shift_note?: string | null;
   accountNumber?: string | null; churn_risk?: boolean; churn_risk_since?: string | null;
   company_name?: string | null; role?: string | null; start_date?: string | null;
-  shift_published?: boolean | null;
+  shift_published?: boolean | null; svOrder?: number | null;
 };
 type Pattern = {
   name: string;
@@ -665,19 +665,36 @@ export default function ShiftEditGrid({
   const [pendingNotify, setPendingNotify] = useState<PendingNotify | null>(null);
   // 充足サマリー行の表示/非表示
   const [showSummaryRows, setShowSummaryRows] = useState(true);
-  // 並び順：番号順 or セクション順（props の初期値を引き継ぐ）
-  const [sortByAccountLocal, setSortByAccountLocal] = useState(sortByAccount ?? false);
-  // 全スタッフ並び替えオーバーライド（staffId[]）- localStorage に永続化
-  const rowOrderKey = `shift-row-order-${projectId}-${targetMonth}`;
-  const [rowOrderOverride, setRowOrderOverride] = useState<string[]>(() => {
-    try { const s = localStorage.getItem(rowOrderKey); return s ? JSON.parse(s) : []; } catch { return []; }
-  });
-  useEffect(() => {
-    try {
-      if (rowOrderOverride.length > 0) localStorage.setItem(rowOrderKey, JSON.stringify(rowOrderOverride));
-      else localStorage.removeItem(rowOrderKey);
-    } catch {}
-  }, [rowOrderOverride, rowOrderKey]);
+  // 並び順：既定はアカウント番号順（基本1）。トグルでセクション順にも切替可
+  const [sortByAccountLocal, setSortByAccountLocal] = useState(sortByAccount ?? true);
+  // SV のみ手動並び替え可（DB project_members.sort_order に永続化・楽観更新）
+  const [svOrderLocal, setSvOrderLocal] = useState<string[]>(() =>
+    [...activeMembers]
+      .filter(m => m.section === "SV")
+      .sort((a, b) => {
+        const oa = a.svOrder ?? Infinity;
+        const ob = b.svOrder ?? Infinity;
+        return oa !== ob ? oa - ob : a.name.localeCompare(b.name, "ja");
+      })
+      .map(m => m.id)
+  );
+  const svRankMap = useMemo(() => {
+    const m = new Map<string, number>();
+    svOrderLocal.forEach((id, i) => m.set(id, i));
+    return m;
+  }, [svOrderLocal]);
+  // SV を一つ上/下へ移動して並び順を保存
+  const moveSv = (staffId: string, dir: -1 | 1) => {
+    setSvOrderLocal(prev => {
+      const list = prev.includes(staffId) ? [...prev] : [...prev, staffId];
+      const i = list.indexOf(staffId);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= list.length) return prev;
+      [list[i], list[j]] = [list[j], list[i]];
+      void setSvOrderAction(projectId, list);
+      return list;
+    });
+  };
   // セクションフィルタ（"" = 全員表示）
   const [filterSection, setFilterSection] = useState<string>("");
   // 個別シフト公開フラグ（staffId → published）- 楽観的更新
@@ -1261,29 +1278,27 @@ export default function ShiftEditGrid({
   // SV グループ表示順: 早番 → 遅番 → 中番
   const SV_SUB_ORDER: Record<string, number> = { "早番": 0, "遅番": 1, "中番": 2, "その他": 3 };
 
+  // SV を手動並び順（svRankMap）で比較。未設定は末尾→名前順
+  const compareSv = (a: Member, b: Member) => {
+    const ra = svRankMap.has(a.id) ? svRankMap.get(a.id)! : Infinity;
+    const rb = svRankMap.has(b.id) ? svRankMap.get(b.id)! : Infinity;
+    return ra !== rb ? ra - rb : a.name.localeCompare(b.name, "ja");
+  };
+
   const sortedMembersBySection = useMemo(() => {
-    // 手動並び替えが設定されている場合は最優先
-    if (rowOrderOverride.length > 0) {
-      const orderMap = new Map(rowOrderOverride.map((id, i) => [id, i]));
-      return [...activeMembers].sort((a, b) => {
-        const ia = orderMap.has(a.id) ? orderMap.get(a.id)! : 9999;
-        const ib = orderMap.has(b.id) ? orderMap.get(b.id)! : 9999;
-        return ia !== ib ? ia - ib : a.name.localeCompare(b.name, "ja");
-      });
-    }
     if (sortByAccountLocal) {
-      // 番号順モード：SV を上部固定（名前順）、SV以外をアカウント番号昇順
+      // 番号順モード（基本）：SV を上部固定（手動並び順）、SV以外をアカウント番号昇順
       return [...activeMembers].sort((a, b) => {
         const aIsSV = a.section === "SV";
         const bIsSV = b.section === "SV";
         if (aIsSV !== bIsSV) return aIsSV ? -1 : 1;
-        if (aIsSV) return a.name.localeCompare(b.name, "ja");
+        if (aIsSV) return compareSv(a, b);
         const na = getAccNumGrid(a.accountNumber);
         const nb = getAccNumGrid(b.accountNumber);
         return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");
       });
     }
-    // デフォルト：セクション順 → SVはsvSubType順・その他はアカウント番号順
+    // セクション順モード：SVはsvSubType順・その他はアカウント番号順
     return [...activeMembers].sort((a, b) => {
       const ra = sectionRank(a.section);
       const rb = sectionRank(b.section);
@@ -1291,9 +1306,9 @@ export default function ShiftEditGrid({
       const aIsSV = a.section === "SV";
       const bIsSV = b.section === "SV";
       if (aIsSV && bIsSV) {
-        const ra = SV_SUB_ORDER[svSubType(a)] ?? 3;
-        const rb = SV_SUB_ORDER[svSubType(b)] ?? 3;
-        if (ra !== rb) return ra - rb;
+        const sa = SV_SUB_ORDER[svSubType(a)] ?? 3;
+        const sb = SV_SUB_ORDER[svSubType(b)] ?? 3;
+        if (sa !== sb) return sa - sb;
         return a.name.localeCompare(b.name, "ja");
       }
       if (a.section !== "SV") {
@@ -1303,7 +1318,8 @@ export default function ShiftEditGrid({
       }
       return a.name.localeCompare(b.name, "ja");
     });
-  }, [activeMembers, sortByAccountLocal, rowOrderOverride]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMembers, sortByAccountLocal, svRankMap]);
 
   // セクションフィルタ適用済みリスト
   const displayMembers = useMemo(() => {
@@ -1521,7 +1537,7 @@ export default function ShiftEditGrid({
   } as const;
   const COL_W = 50;
   const PREV_COL_W = 36; // 前月列幅（当月より狭め）
-  const ACCT_W = 68;    // アカウント番号列幅
+  const ACCT_W = 92;    // アカウント番号列幅（3桁＋"ASS "が見切れないよう拡大）
   const NAME_W = 88;    // 名前列幅
   const TOT_W = 52;     // 合計列幅
   const SUM_ROW_H = 22; // 22px (充足サマリー行の高さ)
@@ -2393,10 +2409,13 @@ export default function ShiftEditGrid({
                                 <span className={["text-[10px] tabular-nums truncate flex-1", isFocusedRow ? "text-blue-700 dark:text-blue-300 font-semibold" : "text-zinc-500 dark:text-zinc-400"].join(" ")}>
                                   {member.accountNumber ?? "—"}
                                 </span>
-                                <div className="flex flex-col gap-0 shrink-0">
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); setRowOrderOverride(prev => { const list = prev.length ? prev : displayMembers.map(m => m.id); const i = list.indexOf(member.id); if (i <= 0) return list; const next = [...list]; [next[i-1], next[i]] = [next[i], next[i-1]]; return next; }); }} className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none">▲</button>
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); setRowOrderOverride(prev => { const list = prev.length ? prev : displayMembers.map(m => m.id); const i = list.indexOf(member.id); if (i < 0 || i >= list.length - 1) return list; const next = [...list]; [next[i], next[i+1]] = [next[i+1], next[i]]; return next; }); }} className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none">▼</button>
-                                </div>
+                                {/* 並び替えは SV のみ・番号順モード時のみ（DBに永続化） */}
+                                {member.section === "SV" && sortByAccountLocal && (
+                                  <div className="flex flex-col gap-0 shrink-0">
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); moveSv(member.id, -1); }} className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none">▲</button>
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); moveSv(member.id, 1); }} className="w-4 h-3.5 flex items-center justify-center text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-[8px] leading-none">▼</button>
+                                  </div>
+                                )}
                               </div>
                             </td>
                             {/* 名前セル（クリックでスタッフ情報パネルを開く） */}

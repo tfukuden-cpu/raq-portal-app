@@ -190,6 +190,8 @@ export async function submitAbsenceAction(
   const recoveryStatus  = String(fd.get("recoveryStatus") ?? "").trim() || null;
   const hasConsultation = fd.get("hasConsultation") === "true";
   const nextDayHasShift = fd.get("nextDayHasShift") === "true";
+  const rawSubDate      = String(fd.get("substituteWorkDate") ?? "").trim();
+  const substituteWorkDate = /^\d{4}-\d{2}-\d{2}$/.test(rawSubDate) ? rawSubDate : null;
 
   if (!reason) return { success: false, message: "理由を入力してください" };
 
@@ -214,6 +216,7 @@ export async function submitAbsenceAction(
     symptoms,
     recovery_status:  recoveryStatus,
     has_consultation: hasConsultation,
+    substitute_work_date: substituteWorkDate,
     status:           "pending",
   });
 
@@ -247,6 +250,11 @@ export async function submitAbsenceAction(
   if (s.other)    symptomLines.push(`その他：${s.other_detail || "有"}`);
   const symptomText = symptomLines.length > 0 ? symptomLines.join("、") : "なし";
 
+  // 振替出勤可能日のラベル（M/D）
+  const subDateLabel = substituteWorkDate
+    ? `${parseInt(substituteWorkDate.slice(5, 7))}/${parseInt(substituteWorkDate.slice(8, 10))}`
+    : "-";
+
   // スプレッドシートへ追記
   try {
     const { data: settings } = await supabase
@@ -264,6 +272,7 @@ export async function submitAbsenceAction(
         recoveryStatus ?? "-",
         hasConsultation ? "有" : "無",
         nextDayHasShift ? "有" : "無",
+        subDateLabel,
       ]);
     }
   } catch (e) {
@@ -295,6 +304,7 @@ export async function submitAbsenceAction(
     `□当日受診予定：${hasConsultation ? "有" : "無"}`,
     `□翌日出勤予定：${nextDayHasShift ? "有" : "無"}`,
     `□翌日出勤可否報告予定：17:00`,
+    `□振替出勤可能日：${subDateLabel}`,
   ];
   const message = lines.join("\n");
 

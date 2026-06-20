@@ -18,6 +18,7 @@ export function AbsenceModal({
     symptoms: Symptoms;
     recoveryStatus: string | null;
     hasConsultation: boolean;
+    substituteWorkDate: string | null;
   }) => void;
   isPending: boolean;
   hasPrevAbsence: boolean;
@@ -30,6 +31,7 @@ export function AbsenceModal({
   const [recoveryStatus, setRecoveryStatus] = useState<"改善" | "横ばい" | "悪化" | null>(null);
   const [symptoms, setSymptoms] = useState<Symptoms>(initSymptoms);
   const [hasConsultation, setHasConsultation] = useState<boolean | null>(null);
+  const [substituteWorkDate, setSubstituteWorkDate] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const setSym = <K extends keyof Symptoms>(k: K, v: Symptoms[K]) =>
@@ -44,7 +46,7 @@ export function AbsenceModal({
   const handleSubmit = () => {
     if (hasConsultation === null) { setError("当日受診予定を選択してください"); return; }
     setError(null);
-    onSubmit({ reason, symptoms, recoveryStatus, hasConsultation });
+    onSubmit({ reason, symptoms, recoveryStatus, hasConsultation, substituteWorkDate: substituteWorkDate || null });
   };
 
   return (
@@ -186,6 +188,18 @@ export function AbsenceModal({
                     >{v ? "有" : "無"}</button>
                   ))}
                 </div>
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
+                  振替出勤可能日 <span className="text-zinc-400 font-normal">（任意）</span>
+                </p>
+                <input
+                  type="date"
+                  value={substituteWorkDate}
+                  onChange={e => setSubstituteWorkDate(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[15px] tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+                <p className="mt-1 text-[11px] text-zinc-400">欠勤分を振替出勤できる日があれば選択してください</p>
               </div>
               <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl px-4 py-3 space-y-1.5 text-[13px]">
                 <div className="flex gap-3">

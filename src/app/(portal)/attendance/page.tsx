@@ -27,14 +27,19 @@ const HIDDEN_SECTIONS = ["リメイク"]; // カラムとして表示しない�
 const OFF_SHIFT_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
 const STATUS_SORT: StatusKey[] = ["absent", "late", "working", "departed", "clocked_out", "not_departed"];
 
+// インフォは販売に統合（#15）。表記は「販売／インフォ」、人員も販売にカウント
+function mergeInfo(sec: string): string {
+  return sec === "インフォ" ? "販売" : sec;
+}
+
 function resolveSection(shiftName: string, memberSection: string | null, sectionOrder: string[]): string {
   if (shiftName.includes("研修")) return "その他";
   if (HIDDEN_SECTIONS.includes(memberSection ?? "")) return "その他";
   for (const sec of sectionOrder) {
     if (sec === "その他") continue;
-    if (shiftName.startsWith(sec)) return sec;
+    if (shiftName.startsWith(sec)) return mergeInfo(sec);
   }
-  return sectionOrder.includes(memberSection ?? "") ? (memberSection as string) : "その他";
+  return mergeInfo(sectionOrder.includes(memberSection ?? "") ? (memberSection as string) : "その他");
 }
 
 type InternalMember = MemberRow & {
@@ -290,6 +295,8 @@ export default async function AttendancePage({
     ...allSections.filter(s => !BASE_SECTION_ORDER.includes(s) && s !== "その他" && !HIDDEN_SECTIONS.includes(s)),
     "その他",
   ];
+  // 表示用：インフォ列は販売に統合するので独立カラムは出さない（#15）
+  const sectionOrderDisplay = sectionOrderFull.filter(s => s !== "インフォ");
 
   // 離脱リスクフラグ付きスタッフIDセット
   const churnRiskStaffIds = new Set(
@@ -451,7 +458,7 @@ export default async function AttendancePage({
     });
   }
 
-  const grouped = buildGrouped(allInternal, sectionOrderFull);
+  const grouped = buildGrouped(allInternal, sectionOrderDisplay);
 
   // ── H MOTA スロット配置 ────────────────────────────────────
   const FIXED_MOTA_NUMBERS = [
@@ -459,9 +466,14 @@ export default async function AttendancePage({
     "ASS 196", "ASS 197", "ASS 198", "ASS 199", "ASS 200",
   ];
 
-  const todayShiftIds = new Set(
+  // 当日「MOTA系シフト」に入っているスタッフ（H MOTA非出勤リストの除外対象）
+  // ※「当日シフトが無い人」ではなく「当日MOTAにシフトが無い人」を出す（#18）
+  const motaShiftIds = new Set(
     (todayShifts ?? [])
-      .filter(s => !OFF_SHIFT_NAMES.includes((s.shift_name ?? "") as string))
+      .filter(s => {
+        const n = (s.shift_name ?? "") as string;
+        return n.startsWith("MOTA") || n.startsWith("H MOTA");
+      })
       .map(s => s.staff_id),
   );
 
@@ -469,7 +481,7 @@ export default async function AttendancePage({
     ...(memberRows ?? [])
       .filter(m => {
         const sec = (m.section as string | null) ?? "";
-        return (sec === "MOTA" || sec === "H MOTA") && !todayShiftIds.has(m.staff_id);
+        return (sec === "MOTA" || sec === "H MOTA") && !motaShiftIds.has(m.staff_id);
       })
       .map(m => {
         const info = memberMap.get(m.staff_id);
@@ -580,7 +592,7 @@ export default async function AttendancePage({
         id:            m.staff_id,
         name:          info?.name ?? m.staff_id,
         accountNumber: info?.accountNumber ?? null,
-        section:       info?.section ?? null,
+        section:       info?.section ? mergeInfo(info.section) : null,
         shiftName:     seatShiftMap.get(m.staff_id) ?? null,
       };
     });

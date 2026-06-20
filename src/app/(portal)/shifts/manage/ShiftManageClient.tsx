@@ -28,7 +28,7 @@ type Member = {
   max_consecutive_days: number | null; shift_note: string | null;
   accountNumber?: string | null;
   churn_risk?: boolean; churn_risk_since?: string | null;
-  shift_published?: boolean | null;
+  shift_published?: boolean | null; svOrder?: number | null;
 };
 type Pattern = {
   name: string;
@@ -190,7 +190,12 @@ export default function ShiftManageClient({
     const aIsSV = a.section === "SV";
     const bIsSV = b.section === "SV";
     if (aIsSV !== bIsSV) return aIsSV ? -1 : 1;
-    if (aIsSV) return a.name.localeCompare(b.name, "ja");
+    if (aIsSV) {
+      // SV は手動並び順（sort_order）優先・未設定は末尾→名前順
+      const oa = a.svOrder ?? Infinity;
+      const ob = b.svOrder ?? Infinity;
+      return oa !== ob ? oa - ob : a.name.localeCompare(b.name, "ja");
+    }
     const na = getAccNum(a.accountNumber);
     const nb = getAccNum(b.accountNumber);
     return na !== nb ? na - nb : a.name.localeCompare(b.name, "ja");

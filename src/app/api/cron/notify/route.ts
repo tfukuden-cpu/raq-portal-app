@@ -430,29 +430,95 @@ export async function GET(req: NextRequest) {
           ? `${y}-${String(m).padStart(2, "0")}-${String(deadlineDay).padStart(2, "0")}`
           : "（設定なし）";
 
-        // 全プロジェクトメンバーのLINE IDを取得
+        // 全プロジェクトメンバーのLINE IDを取得（セクションも取得してレポート用に使う）
         const { data: members } = await admin
           .from("project_members")
-          .select("staff_id")
+          .select("staff_id, section")
           .eq("project_id", projectId);
         const memberIds = (members ?? []).map(m => m.staff_id as string);
+        const sectionMap2: Record<string, string> = {};
+        for (const m of members ?? []) {
+          sectionMap2[m.staff_id as string] = (m.section as string | null) ?? "セクション設定なし";
+        }
 
         if (memberIds.length > 0) {
           const { data: staffRows } = await admin
             .from("staffs")
-            .select("id, display_name, name, line_user_id")
+            .select("id, display_name, name, account_number, line_user_id")
             .in("id", memberIds) as { data: StaffRow[] | null };
 
+          // 個別通知 → 結果を集計し、管理者グループへはまとめレポート1通
+          type OpenResult = { name: string; accountNumber: string; section: string; success: boolean; failReason: string | null };
+          const openResults: OpenResult[] = [];
+
           for (const staff of staffRows ?? []) {
-            if (!staff.line_user_id) continue;
             const name    = staff.display_name ?? staff.name ?? staff.id;
+            const acct    = staff.account_number ?? staff.id;
+            const section = sectionMap2[staff.id] ?? "セクション設定なし";
+
+            if (!staff.line_user_id) {
+              openResults.push({ name, accountNumber: acct, section, success: false, failReason: "LINE未登録" });
+              continue;
+            }
+
             const message = resolveMessage(
               cfg.message ?? DEFAULT_NOTIFY_MESSAGES.holiday_open_notify,
               { "名前": name, "対象月": targetMonth, "締切日": deadlineStr }
             );
-            await pushLine(staff.line_user_id, message);
-            if (groupId) await pushLine(groupId, message);
-            void logNotify({ projectId, notifyType: "holiday_open_notify", recipientType: "staff", recipientId: staff.id, recipientName: name, message });
+
+            let success = true;
+            let failReason: string | null = null;
+            try {
+              await pushLine(staff.line_user_id, message);
+              void logNotify({ projectId, notifyType: "holiday_open_notify", recipientType: "staff", recipientId: staff.id, recipientName: name, message });
+              sent++;
+            } catch {
+              success = false;
+              failReason = "送信エラー";
+            }
+            openResults.push({ name, accountNumber: acct, section, success, failReason });
+          }
+
+          // ── 管理者グループへまとめレポート1通 ──────────────────
+          if (groupId && openResults.length > 0) {
+            const bySection = new Map<string, OpenResult[]>();
+            for (const r of openResults) {
+              if (!bySection.has(r.section)) bySection.set(r.section, []);
+              bySection.get(r.section)!.push(r);
+            }
+            const sectionOrder = [...bySection.keys()].sort((a, b) => sectionRank(a) - sectionRank(b));
+            const successCount = openResults.filter(r => r.success).length;
+            const failures = openResults.filter(r => !r.success);
+
+            const lines: string[] = [
+              `【希望休 受付開始レポート（${targetMonth}）】`,
+              "",
+              `締切日：${deadlineStr}`,
+              `通知 ${successCount}名 / 対象 ${openResults.length}名`,
+            ];
+
+            if (failures.length > 0) {
+              lines.push("");
+              lines.push(`⚠️ 未通知 ${failures.length}名`);
+              for (const r of failures) {
+                lines.push(`・${r.accountNumber} ${r.name}`);
+                lines.push(`　→ ${r.failReason}`);
+              }
+            }
+
+            lines.push("");
+            lines.push("----------");
+            for (let i = 0; i < sectionOrder.length; i++) {
+              if (i > 0) lines.push("");
+              const sec = sectionOrder[i];
+              lines.push(`【${sec}】`);
+              for (const r of bySection.get(sec)!) {
+                lines.push(`・${r.accountNumber} ${r.name}${r.success ? "" : " ✗未通知"}`);
+              }
+            }
+
+            await pushLine(groupId, lines.join("\n"));
+            void logNotify({ projectId, notifyType: "holiday_open_notify", recipientType: "group", message: lines.join("\n") });
             sent++;
           }
         }

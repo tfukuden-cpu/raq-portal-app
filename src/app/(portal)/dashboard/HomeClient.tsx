@@ -312,7 +312,7 @@ export default function HomeClient({
     });
   };
 
-  const handleAbsence = (data: { reason: string; symptoms: Symptoms; recoveryStatus: string | null; hasConsultation: boolean }) => {
+  const handleAbsence = (data: { reason: string; symptoms: Symptoms; recoveryStatus: string | null; hasConsultation: boolean; substituteWorkDate: string | null }) => {
     closeModal();
     startTransition(async () => {
       const fd = new FormData();
@@ -321,6 +321,7 @@ export default function HomeClient({
       fd.set("hasConsultation", String(data.hasConsultation));
       fd.set("nextDayHasShift", String(nextDayHasShift));
       if (data.recoveryStatus) fd.set("recoveryStatus", data.recoveryStatus);
+      if (data.substituteWorkDate) fd.set("substituteWorkDate", data.substituteWorkDate);
       const r = await submitAbsenceAction(fd);
       setFeedback({ ok: r.success, msg: r.message ?? "欠勤報告しました" });
     });

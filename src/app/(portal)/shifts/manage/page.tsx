@@ -355,7 +355,7 @@ export default async function ManageShiftsPage(props: {
     { data: declinesRaw },
   ] = await Promise.all([
     admin.from("project_members")
-      .select("staff_id, role, section, sections, end_date, start_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, churn_risk, churn_risk_since, shift_published, staffs(id, name, display_name, account_number, company_name)")
+      .select("staff_id, role, section, sections, end_date, start_date, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, shift_note, churn_risk, churn_risk_since, shift_published, sort_order, staffs(id, name, display_name, account_number, company_name)")
       .eq("project_id", selectedProjectId),
     admin.from("shift_patterns")
       .select("name, required_count, required_weekday, required_weekend, section, start_time, end_time")
@@ -466,6 +466,7 @@ export default async function ManageShiftsPage(props: {
         churn_risk:           (m as { churn_risk?: boolean | null }).churn_risk ?? false,
         churn_risk_since:     (m as { churn_risk_since?: string | null }).churn_risk_since ?? null,
         shift_published:      (m as { shift_published?: boolean | null }).shift_published ?? true,
+        svOrder:              (m as { sort_order?: number | null }).sort_order ?? null,
         accountNumber:        s?.account_number ?? null,
         company_name:         s?.company_name ?? null,
         start_date:           (m as { start_date?: string | null }).start_date ?? null,
@@ -480,7 +481,7 @@ export default async function ManageShiftsPage(props: {
       preferred_shift: string | null; preferred_section: string | null;
       max_consecutive_days: number | null; shift_note: string | null;
       accountNumber: string | null; company_name: string | null; start_date: string | null;
-      churn_risk: boolean; churn_risk_since: string | null;
+      churn_risk: boolean; churn_risk_since: string | null; svOrder: number | null;
     }[];
 
   const staffNameMap = new Map(activeMembers.map(m => [m.id, m.name]));

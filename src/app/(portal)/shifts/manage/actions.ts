@@ -907,3 +907,40 @@ export async function toggleShiftPublishedAction(
   if (error) return { success: false, message: error.message };
   return { success: true };
 }
+
+/** SV スタッフの手動並び順を保存（project_members.sort_order = 配列の順番） */
+export async function setSvOrderAction(
+  projectId: string,
+  orderedStaffIds: string[],
+): Promise<{ success: boolean; message?: string }> {
+  // 管理者専用：UIで隠すだけでなくサーバー側でもガード
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const me = user?.email?.split("@")[0]?.toUpperCase() ?? "";
+  if (!me) return { success: false, message: "ログインしてください" };
+
+  const admin = createAdminClient();
+  const { data: staff } = await admin
+    .from("staffs").select("global_role").eq("id", me).maybeSingle();
+  const gRole = (staff as { global_role?: string } | null)?.global_role;
+  let authorized = gRole === "admin" || gRole === "executive";
+  if (!authorized) {
+    const { data: mem } = await admin
+      .from("project_members").select("role")
+      .eq("staff_id", me).eq("project_id", projectId).maybeSingle();
+    authorized = (mem as { role?: string } | null)?.role === "project_admin";
+  }
+  if (!authorized) return { success: false, message: "この操作は管理者のみ可能です" };
+
+  // 配列順に sort_order を採番（10刻み＝将来の差し込み余地）
+  for (let i = 0; i < orderedStaffIds.length; i++) {
+    const { error } = await admin
+      .from("project_members")
+      .update({ sort_order: (i + 1) * 10 })
+      .eq("project_id", projectId)
+      .eq("staff_id", orderedStaffIds[i]);
+    if (error) return { success: false, message: error.message };
+  }
+  revalidatePath("/shifts/manage");
+  return { success: true };
+}
