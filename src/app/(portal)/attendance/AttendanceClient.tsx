@@ -34,6 +34,7 @@ export type MemberRow = {
   expectedArrival: string | null;
   churnRisk?: boolean;
   sections?: string[];
+  infoToday?: boolean;   // 当日のシフトが「販売／インフォ」（インフォ対応）か
 };
 
 export type ChurnRiskAlert = {
@@ -904,10 +905,16 @@ export default function AttendanceClient({
                                     {m.name}
                                   </span>
                                 </button>
-                                {(m.sections && m.sections.length > 0
-                                  ? [...new Set(m.sections)]
-                                  : [m.section]
-                                ).map(sec => (
+                                {(() => {
+                                  // セクションバッジ：インフォはスキル(sections)では出さず、
+                                  // 当日シフトが「販売／インフォ」の人だけ「インフォ」を表示（#15）
+                                  const base = (m.sections && m.sections.length > 0
+                                    ? [...new Set(m.sections)]
+                                    : [m.section]
+                                  ).filter(sec => sec !== "インフォ");
+                                  if (m.infoToday) base.push("インフォ");
+                                  return base;
+                                })().map(sec => (
                                   <span key={sec} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shrink-0 ${SECTION_BADGE_COLOR[sec] ?? SECTION_BADGE_FALLBACK}`}>
                                     {sec}
                                   </span>

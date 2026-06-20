@@ -100,6 +100,7 @@ function buildGrouped(members: InternalMember[], sectionOrder: string[]): Sectio
         lateReportedAt:    m.lateReportedAt,
         expectedArrival:   m.expectedArrival,
         sections:          m.sections ?? [],
+        infoToday:         (m.shiftName ?? "").includes("インフォ"),
       })),
     }));
 
