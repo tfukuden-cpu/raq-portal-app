@@ -906,19 +906,26 @@ export default function AttendanceClient({
                                   </span>
                                 </button>
                                 {(() => {
-                                  // セクションバッジ：インフォはスキル(sections)では出さず、
-                                  // 当日シフトが「販売／インフォ」の人だけ「インフォ」を表示（#15）
+                                  // インフォバッジ(スキル)は従来通り表示。さらに当日シフトが
+                                  // 「販売／インフォ」の人はインフォを強調色＋「★」で区別（#15）
                                   const base = (m.sections && m.sections.length > 0
                                     ? [...new Set(m.sections)]
                                     : [m.section]
-                                  ).filter(sec => sec !== "インフォ");
-                                  if (m.infoToday) base.push("インフォ");
+                                  );
+                                  if (m.infoToday && !base.includes("インフォ")) base.push("インフォ");
                                   return base;
-                                })().map(sec => (
-                                  <span key={sec} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shrink-0 ${SECTION_BADGE_COLOR[sec] ?? SECTION_BADGE_FALLBACK}`}>
-                                    {sec}
-                                  </span>
-                                ))}
+                                })().map(sec => {
+                                  const infoToday = sec === "インフォ" && m.infoToday;
+                                  return (
+                                    <span key={sec} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shrink-0 ${
+                                      infoToday
+                                        ? "bg-amber-500 text-white ring-1 ring-amber-300"
+                                        : (SECTION_BADGE_COLOR[sec] ?? SECTION_BADGE_FALLBACK)
+                                    }`}>
+                                      {infoToday ? "★インフォ" : sec}
+                                    </span>
+                                  );
+                                })}
                               </div>
 
                               {/* Row 2 Col 1: spacer */}
