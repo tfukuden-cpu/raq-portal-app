@@ -447,20 +447,15 @@ export default async function ManageShiftsPage(props: {
     .map((m) => {
       const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
         { id: string | null; name: string | null; display_name: string | null; account_number?: string | null; company_name?: string | null } | null;
-      // インフォは販売に統合（#15）
-      const mergeInfo = (x: string) => (x === "インフォ" ? "販売" : x);
-      const rawSections = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean) as string[];
-      const sections = [...new Set(rawSections.map(mergeInfo))];
-      const rawSection = m.section ?? null;
-      const mergedSection = rawSection ? mergeInfo(rawSection) : null;
+      const sections = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
       const endDate = (m as { end_date?: string | null }).end_date ?? null;
       const staffId = s?.id ?? m.staff_id;
       return {
         id:                   staffId,
         name:                 s?.display_name ?? s?.name ?? m.staff_id,
         role:                 m.role ?? "staff",
-        section:              mergedSection,
-        sections:             sections.length > 0 ? sections : (mergedSection ? [mergedSection] : []),
+        section:              m.section ?? null,
+        sections:             sections.length > 0 ? sections : (m.section ? [m.section] : []),
         endDate,
         work_days_type:       (m as { work_days_type?: string | null }).work_days_type ?? null,
         work_days_count:      (m as { work_days_count?: number | null }).work_days_count ?? null,
@@ -510,14 +505,13 @@ export default async function ManageShiftsPage(props: {
     required_count:   Math.max(0, p.required_count ?? 0),
     required_weekday: (p as { required_weekday?: number | null }).required_weekday ?? null,
     required_weekend: (p as { required_weekend?: number | null }).required_weekend ?? null,
-    // インフォは販売に統合（#15）。インフォ単体セクションは出さず販売に合算
-    section:          (() => { const s = (p as { section?: string | null }).section ?? null; return s === "インフォ" ? "販売" : s; })(),
+    section:          (p as { section?: string | null }).section ?? null,
     start_time:       (p.start_time  ?? null) as string | null,
     end_time:         (p.end_time    ?? null) as string | null,
   }));
 
   const slotRequirements = (slotRequirementsRaw ?? []).map(r => ({
-    section:        (r.section === "インフォ" ? "販売" : r.section) as string,
+    section:        r.section as string,
     pattern_name:   r.pattern_name as string,
     shift_date:     r.shift_date as string,
     required_count: r.required_count as number,

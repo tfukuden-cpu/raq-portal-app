@@ -1744,7 +1744,7 @@ export default function ShiftEditGrid({
                     : "bg-white dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50",
                 ].join(" ")}
               >
-                {sec === "販売" ? "販売／インフォ" : sec}
+                {sec}
               </button>
             ))}
           </div>
@@ -2359,7 +2359,7 @@ export default function ShiftEditGrid({
                               <td className={["sticky left-0 z-10 px-2 py-0.5 border-b", headerBg].join(" ")}>
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tracking-wide uppercase">
-                                    {secName === "販売" ? "販売／インフォ" : (secName ?? "セクション未設定")}
+                                    {secName ?? "セクション未設定"}
                                   </span>
                                   {isSecLocked && (
                                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
