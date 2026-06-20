@@ -8,6 +8,8 @@ import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "@/a
 import HMotaPanel, { type MotaRow, type HMotaPanelRef } from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
 import BreakManagementTab from "./BreakManagementTab";
+import DailyReportTab, { type DailyReportRow } from "./DailyReportTab";
+export type { DailyReportRow };
 import type { BreakSlotSetting, BreakSlotAssignment, BreakShortSetting, BreakRecord } from "@/app/(portal)/seating/break-actions";
 
 // ── 型定義 ────────────────────────────────────────────────
@@ -203,6 +205,7 @@ interface Props {
   breakRecords?: BreakRecord[];
   punchTimelines?: StaffTimeline[];
   initialDeclinedIds?: string[];
+  dailyReportRows?: DailyReportRow[];
 }
 
 type SelectionMode = "reminder" | "request" | "followup";
@@ -221,8 +224,9 @@ export default function AttendanceClient({
   breakShortSettings = [], breakRecords = [],
   punchTimelines = [],
   initialDeclinedIds = [],
+  dailyReportRows = [],
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating" | "break">("today");
+  const [activeTab, setActiveTab] = useState<"today" | "changes" | "seating" | "break" | "report">("today");
 
   // 休憩スロット割り当てマップ（staffId → slotNumber）
   const breakAssignmentMap: Record<string, number> = {};
@@ -585,6 +589,16 @@ export default function AttendanceClient({
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab("report")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+              activeTab === "report"
+                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            }`}
+          >
+            日次報告
+          </button>
         </div>
         {/* 日付ナビ + タブ別アクション */}
         <div className="max-w-6xl mx-auto px-4 pb-2 flex items-center gap-2">
@@ -652,6 +666,11 @@ export default function AttendanceClient({
               grouped={grouped}
             />
           </div>
+        )}
+
+        {/* ── 日次報告タブ ── */}
+        {activeTab === "report" && (
+          <DailyReportTab rows={dailyReportRows} dateLabel={dateLabel} />
         )}
 
         {/* ── 休憩スロット凡例 ── */}

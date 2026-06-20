@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceClient from "./AttendanceClient";
-import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry, ChurnRiskAlert, StaffTimeline, PunchSegment } from "./AttendanceClient";
+import type { StatusKey, MemberRow, ShiftGroup, SectionGroup, OffMember, ShiftChangeEntry, ChurnRiskAlert, StaffTimeline, PunchSegment, DailyReportRow } from "./AttendanceClient";
 import type { SeatData, WallData, StaffInfo } from "../seating/SeatingClient";
 import type { MotaRow } from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
@@ -460,6 +460,19 @@ export default async function AttendancePage({
 
   const grouped = buildGrouped(allInternal, sectionOrderDisplay);
 
+  // ── 日次報告（#16）：優先セクションが販売/査定のスタッフを当日シフトベースで一覧 ──
+  const DAILY_PRIORITY_SECTIONS = ["販売", "査定"];
+  const dailyReportRows: DailyReportRow[] = allInternal
+    .map(m => ({
+      staffId:         m.staffId,
+      name:            m.name,
+      accountNumber:   m.accountNumber,
+      prioritySection: mergeInfo(memberMap.get(m.staffId)?.section ?? ""),
+      todaySection:    m.section,
+      isAbsent:        m.status === "absent",
+    }))
+    .filter(r => DAILY_PRIORITY_SECTIONS.includes(r.prioritySection));
+
   // ── H MOTA スロット配置 ────────────────────────────────────
   const FIXED_MOTA_NUMBERS = [
     "ASS 130", "ASS 131", "ASS 132", "ASS 133", "ASS 134",
@@ -735,6 +748,7 @@ export default async function AttendancePage({
       breakRecords={breakRecords}
       punchTimelines={punchTimelines}
       initialDeclinedIds={initialDeclinedIds}
+      dailyReportRows={dailyReportRows}
     />
   );
 }
