@@ -17,7 +17,8 @@
 | `/api/admin/import-shift-off-requests` | POST | 希望休リクエストインポート |
 | `/api/admin/send-group-line` | POST | グループLINE送信 |
 | `/api/admin/work-records/export` | GET | 勤怠レコードエクスポート |
-| `/api/admin/work-records/compliance` | GET | コンプライアンス集計 |
+| `/api/admin/work-records/compliance` | GET | コンプライアンス集計（遵守率・現在はタブからは未使用） |
+| `/api/admin/work-records/absentees` | GET | 欠勤者レポート（当月の欠勤者を日毎/人別＋人別の過去1年出勤率/出勤数/欠勤数）。query: projectId, month=YYYY-MM（2026-06-20追加・#14） |
 | `/api/rankings/template` | GET | ランキング画像テンプレート |
 
 全Cronエンドポイントは `Authorization: Bearer <CRON_SECRET>` ヘッダー必須。

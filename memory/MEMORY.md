@@ -13,7 +13,22 @@
 
 ---
 
-## 現在の開発状態（2026-06-14更新）
+## 現在の開発状態（2026-06-20更新）
+
+### 改修依頼8件（#12〜#19）対応（2026-06-20・本番反映済・案件=IDOM）
+スプレッドシートの改修依頼8件を対応。コミット `fd45c50`(6件)〜`d7a20f8`(FB)〜`7d3700e`(撤回)〜`316019e`(#14)〜`7ec27b9`(#16)〜`88d78a4`(#15最終)。
+
+- **#12 希望休受付開始のLINE（春原）**: `api/cron/notify/route.ts` の `holiday_open_notify` で、ループ内のグループ個別送信を廃止し**末尾で1通のレポート**（締切日・通知人数・セクション別一覧・未通知者）に集約。`rest_day_remind` と同パターン
+- **#13 欠勤報告に振替出勤可能日（滝沢）**: `AbsenceModal.tsx` Step3 に日付入力(任意)追加→`submitAbsenceAction` で `absence_reports.substitute_work_date`(新カラム)に保存・スプシ追記・LINE文にも反映
+- **#14 欠勤者レポートタブ（長尾）**: 勤怠管理(`/attendance/edit`)の**遵守率タブを廃止**し「欠勤者レポート」タブ(`absentees`)を新設。`AbsenteeReportClient.tsx` ＋API `GET /api/admin/work-records/absentees?projectId&month`。当月の欠勤者を日毎/人別で一覧、人別タップで過去1年の出勤率/出勤数/欠勤数。`WorkRecordsClient`(遵守率)はAttendanceEditClientから外したが他所では残置
+- **#15 インフォ＝販売／インフォ（安積）**: **出勤簿(`attendance/page.tsx`)では `mergeInfo()` でインフォ→販売に統合**(列廃止`sectionOrderDisplay`・人数も販売にカウント・`moveSectionAction`は`shifts`のみ更新で安全)。インフォは**スキルとして`project_members.sections`に保持**。出勤簿カードのバッジは、インフォ(スキル)は従来通り表示しつつ、**当日シフト名が「販売／インフォ」の人(`MemberRow.infoToday`=`shift_name.includes("インフォ")`)はアンバー強調＋「★インフォ」**で区別。⚠️**シフト管理側のセクション表示マージは撤回**(StaffInfoPanel保存でインフォが消える事故＝地雷参照)
+- **#16 日次報告タブ（安積）**: 当日状況に「日次報告」タブ(`report`)新設。`DailyReportTab.tsx`。優先セクション(=`project_members.section`、販売/査定)ごとにアカウント番号順で一覧。列= ASS○○(=ASS+優先) | アカウント番号 | シフト(7.5固定) | 商材(=優先セクション) | 欠勤(チェックボックス・欠勤報告から自動チェック・手動可) | 追加(優先≠当日セクションで✓) | 当日セクション。exceljsでExcel出力(スプシ貼付用)。`page.tsx`が`dailyReportRows`算出
+- **#17/#19 並び順・列幅（滝沢/瀬貫）**: シフト編集の**手動順がlocalStorage保存で番号順より優先され直らなかった**のが#19の真因。`ShiftEditGrid.tsx` の `rowOrderOverride`(localStorage)を廃止→**基本アカウント番号順、SVのみ▲▼で手動並び替え→DB `project_members.sort_order`(新カラム)に保存**(`setSvOrderAction`)。`ACCT_W`68→92・`NAME_W`88→112で3桁/名前の見切れ解消
+- **#18 H MOTA誤表示（矢野）**: `attendance/page.tsx` の hMotaRows を「当日シフト無し」→**「当日MOTAシフト無し」(`motaShiftIds`=shift_nameがMOTA/H MOTAで始まる)基準**に修正。他セクション出勤中の人(`isWorking`)はH MOTAの両スロットに本人名を自動表示(`HMotaPanel` MotaTableRow)
+- **DBマイグレーション(本番適用済)**: `add_project_members_sort_order`(`project_members.sort_order int`) / `add_absence_substitute_work_date`(`absence_reports.substitute_work_date date`)。どちらもnullable追加
+- **データ事故と復旧**: #15のシフト管理マージで `project_members.sections` のインフォが保存時に消失。S019は`["販売","インフォ"]`に手動復元・S125は無傷。**他の複数名も消えた可能性あり＝ユーザーからインフォ担当者リストをもらい次第一括復元(残作業)**。変更履歴テーブルが無く自動復元不可
+- **改修報告書**: `docs/改修報告/改修内容報告書.html`＋`.pdf`(Edgeヘッドレス印刷)。スクショ枠あり(拡張のスクショはファイル保存不可のため未埋め込み)
+- 残: インフォ担当者リスト復元 / #16の「優先セクション」がsection(基本)でよいか確認 / 報告書のスクショ差し込み
 
 ### デバッグ/Lint整備＆デッドコード掃除（2026-06-14・本番反映済）
 - **現状**: TypeScript 0エラー / ESLint **0エラー**（warning 73）。コミット `9a64f20`〜`213f538`

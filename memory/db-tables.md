@@ -8,7 +8,7 @@
 |---------|-------------------|
 | `staffs` | スタッフマスタ（name, display_name, global_role, line_user_id, line_friend, avatar_config） |
 | `projects` | 案件マスタ（name, is_active） |
-| `project_members` | 案件所属（staff_id, project_id, role, section, work_days_type, account_number, churn_risk） |
+| `project_members` | 案件所属（staff_id, project_id, role, section, sections[], work_days_type, account_number, churn_risk, shift_published, **sort_order**=SV手動並び順(2026-06-20追加・#17/#19)） |
 | `project_settings` | 案件設定（line_group_id, notification_settings JSONB, enable_departure_report） |
 
 ## シフト関連
@@ -31,7 +31,7 @@
 |---------|-----|
 | `punch_logs` | 打刻ログ（punch_type: clock_in/clock_out, recorded_at） |
 | `departure_reports` | 出発報告（reported_at, eta_minutes） |
-| `absence_reports` | 欠勤報告（absence_date, reason, status, followup_symptoms, followup_recovery_status 等） |
+| `absence_reports` | 欠勤報告（absence_date, reason, status, **substitute_work_date**=振替出勤可能日(2026-06-20追加・#13), followup_symptoms, followup_recovery_status 等） |
 | `late_reports` | 遅刻報告（late_date, reason, expected_arrival） |
 
 ## 周知・コミュニケーション

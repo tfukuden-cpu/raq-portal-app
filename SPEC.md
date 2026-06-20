@@ -274,10 +274,15 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ### 4-1. 当日状況 (`/attendance`)
 
+**タブ:** 出勤簿 / 確定後変更 / 座席表 / 打刻記録 / **日次報告**（2026-06-20追加・#16）
+
 **機能:**
 - 案件内全スタッフの当日出勤状況をリアルタイム表示
 - **日付ナビゲーション**（`?date=YYYY-MM-DD`）: 前日・翌日ボタンで任意の日付の状況を閲覧可能。各タブ内にナビバーを配置。
 - セクション別グループ表示: `shift_patterns.section` + `project_members.section` の全セクションを表示（スタッフが配置されていない空セクションも表示）
+- **インフォの扱い（#15・2026-06-20）**: 出勤簿ではインフォを**販売列に統合**して表示・カウント（`resolveSection` の `mergeInfo`）。インフォはスキルとして `project_members.sections` に保持。カードのバッジはインフォ(スキル)を従来通り表示しつつ、**当日シフト名が「販売／インフォ」の人は「★インフォ」(アンバー)で強調**。
+- **H MOTA（#18・2026-06-20）**: 「MOTA非出勤」候補は「当日シフトが無い人」ではなく**「当日MOTAシフトが無いMOTA/H MOTA在籍者」**。他セクションで出勤中の人は両スロットに本人名を自動表示。
+- **日次報告タブ（#16・2026-06-20）**: 優先セクション(`project_members.section`の販売/査定)ごとにアカウント番号順で一覧。列= ASS○○ / アカウント番号 / シフト(7.5固定) / 商材(=優先セクション) / 欠勤(チェックボックス・欠勤報告から自動) / 追加(優先≠当日で✓) / 当日セクション。Excel出力(exceljs・スプシ貼付用)。
 - ステータス別表示:
 
 | ステータス | 説明 |
@@ -453,7 +458,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 | 勤怠修正 | `punch_corrections`（staff申請の打刻補正）一覧。フィルタ: 審査中/すべて/承認済/却下。承認/却下モーダル（承認時は punch_logs を正しい時刻で上書き＋LINE通知）。承認済みに「再適用」ボタン（タイムスタンプバグ救済用）。SV承認者列（work_exception_requests とクロス参照） |
 | 申請一覧 | `work_exception_requests`（早退・残業申請）一覧。フィルタ: すべて/早退/残業。SV署名・ステータス表示（現状 view-only） |
 | 勤怠実績 | 月ナビ＋名前検索 → スタッフ一覧（月次サマリー）→ クリックで当月全日カレンダー詳細。公休・希望休含む全シフトを表示。打刻修正モーダル・確定ボタン・月計フッター。管理者修正は備考欄に修正者名を表示。出力ボタン（ExportModal）。詳細ビューでも月移動可（URLにstaffId保持） |
-| 遵守率 | WorkRecordsClient（fixedTab="compliance"）既存の遵守率ビュー |
+| 欠勤者レポート | （2026-06-20・#14で遵守率タブを置換）`AbsenteeReportClient` ＋ API `GET /api/admin/work-records/absentees?projectId&month`。月ナビ／当月の欠勤者数・延べ欠勤日数／当月の欠勤者一覧（タップで過去1年の出勤率・出勤数・欠勤数を展開）／日毎の欠勤者一覧。※旧遵守率(WorkRecordsClient fixedTab="compliance")は当タブからは撤去（コンポーネント自体は残置） |
 
 **関連テーブル:**
 `punch_logs`, `shifts`, `punch_corrections`, `work_exception_requests`, `absence_reports`, `late_reports`, `attendance_confirmations`, `staff_break_overrides`, `shift_patterns`
