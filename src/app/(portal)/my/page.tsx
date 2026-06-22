@@ -198,6 +198,22 @@ export default async function MyPage({
         </div>
       </div>
 
+      {/* ── 公式LINE 友達追加（大きく目立つボタン） ── */}
+      <a
+        href={lineAddFriendUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex items-center justify-center gap-3 w-full bg-[#06C755] hover:bg-[#05b34c] active:bg-[#049a41] text-white font-bold text-[16px] py-4 px-6 rounded-2xl shadow-md hover:shadow-lg transition-all mb-6"
+      >
+        <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 shrink-0">
+          <path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/>
+        </svg>
+        公式LINEを友達追加する
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 shrink-0 transition-transform group-hover:translate-x-0.5">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </a>
+
       {/* ── アカウント設定 ── */}
       <div>
         <h2 className="text-[16px] font-bold text-[#0d1b35] dark:text-white mb-3">アカウント設定</h2>
@@ -258,21 +274,6 @@ export default async function MyPage({
               <ChevronRightIcon />
             </a>
           )}
-
-          {/* LINE公式アカウントを友達追加（ワンクリックで公式LINEへ） */}
-          <a href={lineAddFriendUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-            <div className="w-10 h-10 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#06C755]">
-                <path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/>
-              </svg>
-            </div>
-            <div className="flex-1">
-              <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウントを友達追加</p>
-              <p className="text-[12px] text-zinc-400 mt-0.5">タップで公式LINEを開きます</p>
-            </div>
-            <ChevronRightIcon />
-          </a>
 
           {/* ログアウト */}
           <form action={logoutAction}>
