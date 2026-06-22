@@ -123,6 +123,22 @@ export default async function MyPage({
 
       <h1 className="text-[22px] font-bold text-[#0d1b35] dark:text-white mb-5">My</h1>
 
+      {/* ── 公式LINE（大きく目立つボタン・最上部） ── */}
+      <a
+        href={lineAddFriendUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex items-center justify-center gap-3 w-full bg-[#06C755] hover:bg-[#05b34c] active:bg-[#049a41] text-white font-bold text-[16px] py-4 px-6 rounded-2xl shadow-md hover:shadow-lg transition-all mb-5"
+      >
+        <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 shrink-0">
+          <path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/>
+        </svg>
+        公式LINE
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 shrink-0 transition-transform group-hover:translate-x-0.5">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </a>
+
       {lineFlash && (
         <div className={`mb-4 px-4 py-3 rounded-xl text-[13px] font-medium ${
           sp.success ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-600 border border-red-200"
@@ -197,22 +213,6 @@ export default async function MyPage({
 
         </div>
       </div>
-
-      {/* ── 公式LINE 友達追加（大きく目立つボタン） ── */}
-      <a
-        href={lineAddFriendUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group flex items-center justify-center gap-3 w-full bg-[#06C755] hover:bg-[#05b34c] active:bg-[#049a41] text-white font-bold text-[16px] py-4 px-6 rounded-2xl shadow-md hover:shadow-lg transition-all mb-6"
-      >
-        <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 shrink-0">
-          <path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/>
-        </svg>
-        公式LINEを友達追加する
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 shrink-0 transition-transform group-hover:translate-x-0.5">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
-      </a>
 
       {/* ── アカウント設定 ── */}
       <div>
