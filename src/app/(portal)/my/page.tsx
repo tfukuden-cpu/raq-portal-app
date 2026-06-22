@@ -270,57 +270,40 @@ export default async function MyPage({
             </a>
           )}
 
-          {/* LINE公式を友達追加 */}
+          {/* LINE公式アカウントを友達追加（OAuth連携の有無に関わらず常に公式LINEを開ける） */}
           {(() => {
             const lineIcon = (
               <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#06C755]">
                 <path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/>
               </svg>
             );
-            if (!lineLinked) {
+            // 友達追加URLが取得できない場合のみ非リンク表示
+            if (!lineAddFriendUrl) {
               return (
-                <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 opacity-50">
+                <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 opacity-60">
                   <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">{lineIcon}</div>
                   <div className="flex-1">
-                    <p className="text-[14px] font-semibold text-zinc-500">LINE公式アカウントを友達追加</p>
-                    <p className="text-[12px] text-zinc-400 mt-0.5">先にLINE連携が必要です</p>
+                    <p className="text-[14px] font-semibold text-zinc-500">LINE公式アカウント</p>
+                    <p className="text-[12px] text-zinc-400 mt-0.5">友達追加URLが未設定です（管理者にお問い合わせください）</p>
                   </div>
                 </div>
               );
             }
-            if (lineFriend) {
-              return (
-                <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
-                  <div className="w-10 h-10 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center">{lineIcon}</div>
-                  <div className="flex-1">
-                    <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウント</p>
-                    <p className="text-[12px] text-[#06C755] font-medium mt-0.5">● 友達追加済み</p>
-                  </div>
-                </div>
-              );
-            }
-            // 未追加 → リンクあれば遷移、なければボタン表示
-            if (lineAddFriendUrl) {
-              return (
-                <a href={lineAddFriendUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">{lineIcon}</div>
-                  <div className="flex-1">
-                    <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウントを友達追加</p>
-                    <p className="text-[12px] text-amber-500 font-medium mt-0.5">⚠ タップして友達追加してください</p>
-                  </div>
-                  <ChevronRightIcon />
-                </a>
-              );
-            }
+            // 連携状況に関わらず常に公式LINEへのリンクにする
             return (
-              <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800">
-                <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">{lineIcon}</div>
+              <a href={lineAddFriendUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${lineFriend ? "bg-green-50 dark:bg-green-900/20" : "bg-amber-50 dark:bg-amber-900/20"}`}>{lineIcon}</div>
                 <div className="flex-1">
-                  <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウント</p>
-                  <p className="text-[12px] text-amber-500 font-medium mt-0.5">⚠ まだ友達追加されていません</p>
+                  <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウントを友達追加</p>
+                  {lineFriend ? (
+                    <p className="text-[12px] text-[#06C755] font-medium mt-0.5">● 友達追加済み（タップで公式LINEを開く）</p>
+                  ) : (
+                    <p className="text-[12px] text-amber-500 font-medium mt-0.5">タップして公式LINEを友達追加</p>
+                  )}
                 </div>
-              </div>
+                <ChevronRightIcon />
+              </a>
             );
           })()}
 
