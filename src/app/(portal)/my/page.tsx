@@ -83,20 +83,9 @@ export default async function MyPage({
   const lineFriend   = !!(staff as { line_friend?: boolean | null } | null)?.line_friend;
   const rpgCharId    = (staff as { rpg_character?: number | null } | null)?.rpg_character ?? null;
 
-  // LINE公式アカウントの友達追加URL（env優先、なければAPI取得）
-  let lineAddFriendUrl = process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL ?? "";
-  if (!lineAddFriendUrl) {
-    try {
-      const botRes = await fetch("https://api.line.me/v2/bot/info", {
-        headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
-        next: { revalidate: 3600 },
-      });
-      if (botRes.ok) {
-        const botInfo = await botRes.json() as { basicId?: string };
-        if (botInfo.basicId) lineAddFriendUrl = `https://line.me/R/ti/p/${botInfo.basicId}`;
-      }
-    } catch { /* ignore */ }
-  }
+  // LINE公式アカウントの友達追加URL（env優先・なければ固定URL）
+  const lineAddFriendUrl =
+    process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL || "https://line.me/R/ti/p/@014icizf";
   const projectName  = projectData?.name ?? "未所属";
 
   const isExecutiveOrAdmin = staff?.global_role === "admin" || staff?.global_role === "executive";
@@ -270,42 +259,20 @@ export default async function MyPage({
             </a>
           )}
 
-          {/* LINE公式アカウントを友達追加（OAuth連携の有無に関わらず常に公式LINEを開ける） */}
-          {(() => {
-            const lineIcon = (
+          {/* LINE公式アカウントを友達追加（ワンクリックで公式LINEへ） */}
+          <a href={lineAddFriendUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+            <div className="w-10 h-10 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
               <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#06C755]">
                 <path d="M12 2C6.48 2 2 6.03 2 11c0 3.07 1.65 5.78 4.17 7.5-.2.73-.74 2.65-.85 3.08 0 0-.01.05.02.07s.06.01.08 0c.43-.25 2.72-1.8 3.72-2.47.9.16 1.85.25 2.86.25 5.52 0 10-4.03 10-9S17.52 2 12 2z"/>
               </svg>
-            );
-            // 友達追加URLが取得できない場合のみ非リンク表示
-            if (!lineAddFriendUrl) {
-              return (
-                <div className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 opacity-60">
-                  <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">{lineIcon}</div>
-                  <div className="flex-1">
-                    <p className="text-[14px] font-semibold text-zinc-500">LINE公式アカウント</p>
-                    <p className="text-[12px] text-zinc-400 mt-0.5">友達追加URLが未設定です（管理者にお問い合わせください）</p>
-                  </div>
-                </div>
-              );
-            }
-            // 連携状況に関わらず常に公式LINEへのリンクにする
-            return (
-              <a href={lineAddFriendUrl} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-4 px-5 py-4 border-b border-zinc-50 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${lineFriend ? "bg-green-50 dark:bg-green-900/20" : "bg-amber-50 dark:bg-amber-900/20"}`}>{lineIcon}</div>
-                <div className="flex-1">
-                  <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウントを友達追加</p>
-                  {lineFriend ? (
-                    <p className="text-[12px] text-[#06C755] font-medium mt-0.5">● 友達追加済み（タップで公式LINEを開く）</p>
-                  ) : (
-                    <p className="text-[12px] text-amber-500 font-medium mt-0.5">タップして公式LINEを友達追加</p>
-                  )}
-                </div>
-                <ChevronRightIcon />
-              </a>
-            );
-          })()}
+            </div>
+            <div className="flex-1">
+              <p className="text-[14px] font-semibold text-zinc-800 dark:text-zinc-100">LINE公式アカウントを友達追加</p>
+              <p className="text-[12px] text-zinc-400 mt-0.5">タップで公式LINEを開きます</p>
+            </div>
+            <ChevronRightIcon />
+          </a>
 
           {/* ログアウト */}
           <form action={logoutAction}>
