@@ -87,6 +87,40 @@ export default function ShiftDraftSection({
     });
   }
 
+  // Excel / スプレッドシートからの貼り付け（TSV）を起点セルから展開
+  function handlePaste(
+    e: React.ClipboardEvent<HTMLInputElement>,
+    startPi: number,
+    startDi: number,
+  ) {
+    const text = e.clipboardData.getData("text");
+    // 単一セル（タブも改行も無い）は通常の入力に任せる
+    if (!text || (!text.includes("\t") && !text.includes("\n"))) return;
+    e.preventDefault();
+    const grid = text
+      .replace(/\r/g, "")
+      .replace(/\n+$/, "")
+      .split("\n")
+      .map(row => row.split("\t"));
+    setSaveDone(false);
+    setCounts(prev => {
+      const next = new Map(prev);
+      grid.forEach((cols, r) => {
+        const pi = startPi + r;
+        if (pi >= patterns.length) return;
+        cols.forEach((raw, c) => {
+          const di = startDi + c;
+          if (di >= allDates.length) return;
+          const cleaned = raw.replace(/[^0-9]/g, "");
+          const k = `${patterns[pi].name}__${allDates[di]}`;
+          if (!cleaned || cleaned === "0") next.delete(k);
+          else next.set(k, cleaned);
+        });
+      });
+      return next;
+    });
+  }
+
   function buildChanges() {
     return patterns.flatMap(p =>
       allDates.map(date => {
@@ -276,7 +310,7 @@ export default function ShiftDraftSection({
                     <div className="text-[10px] text-zinc-400">{pattern.section}</div>
                   )}
                 </td>
-                {allDates.map(date => {
+                {allDates.map((date, di) => {
                   const val = counts.get(`${pattern.name}__${date}`) ?? "";
                   const dow = new Date(date + "T00:00:00Z").getUTCDay();
                   const isWkend = dow === 0 || dow === 6;
@@ -292,6 +326,7 @@ export default function ShiftDraftSection({
                         maxLength={2}
                         value={val}
                         onChange={e => setCount(pattern.name, date, e.target.value)}
+                        onPaste={e => handlePaste(e, pi, di)}
                         onFocus={e => e.target.select()}
                         placeholder="0"
                         className={[
@@ -312,6 +347,7 @@ export default function ShiftDraftSection({
       </div>
 
       <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+        Excel・スプレッドシートからコピーした表は、貼り付け開始セルをクリックして Ctrl+V（Mac は ⌘+V）でまとめて入力できます。
         「仮組を作成」を押すと必要数を保存してシフトを自動生成し、シフト管理の下書きに反映します。
       </p>
     </div>
