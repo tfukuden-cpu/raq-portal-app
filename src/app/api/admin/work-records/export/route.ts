@@ -313,7 +313,7 @@ export async function GET(req: NextRequest) {
   const targetIds = staffIds.length > 0 ? staffIds : [...memberMap.keys()];
 
   // データ並列取得
-  const OFF_SHIFT_NAMES = ["公休","有休","休暇","振替休日","特別休暇","代休","欠勤"];
+  const OFF_SHIFT_NAMES = ["公休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤"];
 
   // shifts：ページネーション付きフェッチ（PostgREST 1000行上限対策）
   const shifts: { staff_id: string; shift_date: string; shift_name: string; shift_start: string | null; shift_end: string | null }[] = [];
