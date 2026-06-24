@@ -42,6 +42,7 @@ export async function fetchAttendanceSummaryAction(
     const admin    = createAdminClient();
     const startISO = `${startDate}T00:00:00+09:00`;
     const endISO   = `${endDate}T23:59:59+09:00`;
+    const today    = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
     // ── ページネーション付きフェッチ（Supabase の PostgREST は1回最大1000行） ──
     async function fetchAllShifts() {
@@ -186,8 +187,12 @@ export async function fetchAttendanceSummaryAction(
         isEarlyLeave = outDt.getTime() < endDt.getTime() - 10 * 60000;
       }
 
+      // 未来日（今日より後）の未打刻は「打刻漏れ」にしない
+      const isFuture = shift.shift_date > today;
+
       let status: DayRecord["status"] = "ok";
       if (isAbsent)               status = "absent";
+      else if (isFuture)          status = "ok";
       else if (!punch?.clockIn)   status = "no_clockin";
       else if (!punch?.clockOut)  status = "no_clockout";
       else if (isLate)            status = "late";
@@ -198,7 +203,8 @@ export async function fetchAttendanceSummaryAction(
       else if (status === "no_clockin" || status === "no_clockout")    entry.missingDays++;
       else if (status === "late")                                       entry.lateDays++;
       else if (status === "early")                                      entry.earlyDays++;
-      else                                                              entry.workDays++;
+      else if (punch?.clockIn)                                          entry.workDays++;
+      // 未来日の未打刻（status=ok・出勤打刻なし）は totalDays にのみ計上し出勤数に含めない
 
       entry.days.push({
         date:          shift.shift_date,

@@ -259,8 +259,12 @@ export default async function AttendanceEditPage({
       overtimeMinutes = Math.max(0, workingMinutes - 480);
     }
 
+    // 未来日（今日より後）の未打刻は「打刻漏れ」にしない＝まだ出勤していなくて当然
+    const isFuture = shift.shift_date > today;
+
     let status: AttendanceRow["status"] = "ok";
-    if (isAbsent)            status = "absent";
+    if (isAbsent)              status = "absent";
+    else if (isFuture)         status = "ok";
     else if (!punch?.clockIn)  status = "no_clockin";
     else if (!punch?.clockOut) status = "no_clockout";
     else if (isLate)           status = "late";
