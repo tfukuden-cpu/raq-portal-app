@@ -265,7 +265,8 @@ export default function AttendanceEditClient({
       if (!r.isAbsent && r.clockIn) s.workingDays++;
       s.totalWorkingMinutes  += r.workingMinutes;
       s.totalOvertimeMinutes += r.overtimeMinutes;
-      if (r.status !== "ok") s.errorCount++;
+      // 問題件数＝打刻漏れ・欠勤のみ。遅刻・早退は正しく記録された通常勤務なので除外
+      if (r.status === "no_clockin" || r.status === "no_clockout" || r.status === "absent") s.errorCount++;
     }
     return [...map.values()].sort((a, b) => (a.accountNumber ?? a.staffId).localeCompare(b.accountNumber ?? b.staffId));
   }, [localRows]);

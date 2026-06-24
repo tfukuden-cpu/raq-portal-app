@@ -90,7 +90,8 @@ function StaffDetailModal({
   endDate: string;
   onClose: () => void;
 }) {
-  const hasIssue = s.absentDays + s.lateDays + s.earlyDays + s.missingDays > 0;
+  // 問題＝欠勤・打刻漏れのみ。遅刻・早退は正しく記録された通常勤務なので除外
+  const hasIssue = s.absentDays + s.missingDays > 0;
 
   return (
     <div
@@ -213,7 +214,8 @@ function Chip({ label, value, color }: { label: string; value: string; color: st
 
 // ── スタッフ行（クリックでモーダル） ────────────────────────────────────────
 function StaffRow({ s, onOpen }: { s: StaffSummary; onOpen: () => void }) {
-  const hasIssue = s.absentDays + s.lateDays + s.earlyDays + s.missingDays > 0;
+  // 問題＝欠勤・打刻漏れのみ。遅刻・早退は除外
+  const hasIssue = s.absentDays + s.missingDays > 0;
 
   return (
     <button
@@ -318,7 +320,7 @@ export default function AttendanceSummarySection({
   );
 
   const issueCount = (staffList ?? []).filter(
-    s => s.absentDays + s.lateDays + s.earlyDays + s.missingDays > 0,
+    s => s.absentDays + s.missingDays > 0,
   ).length;
 
   return (
