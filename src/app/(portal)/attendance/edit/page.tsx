@@ -52,10 +52,55 @@ export default async function AttendanceEditPage({
 
   const admin = createAdminClient();
 
+  // ── ページネーション付きフェッチ ─────────────────────────────────────
+  // PostgREST は .limit(N) を指定しても1回あたり最大1000行しか返さない。
+  // shifts(数千件)/punch_logs(数千件) は1000行で切られ「8日までしか出ない／
+  // 後半スタッフの打刻が欠落」する。1000行ずつ全件取得する。
+  async function fetchAllShifts() {
+    const PAGE = 1000;
+    const all: { staff_id: string; shift_date: string; shift_name: string; shift_start: string | null; shift_end: string | null }[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await admin
+        .from("shifts")
+        .select("staff_id, shift_date, shift_name, shift_start, shift_end")
+        .eq("project_id", projectId)
+        .gte("shift_date", startDate).lte("shift_date", endDate)
+        .order("shift_date").order("staff_id")
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return all;
+  }
+
+  async function fetchAllPunches() {
+    const PAGE = 1000;
+    const all: { staff_id: string; punch_type: string; recorded_at: string; note: string | null }[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await admin
+        .from("punch_logs")
+        .select("staff_id, punch_type, recorded_at, note")
+        .eq("project_id", projectId)
+        .in("punch_type", ["clock_in", "clock_out"])
+        .gte("recorded_at", startISO).lte("recorded_at", endISO)
+        .order("recorded_at")
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return all;
+  }
+
   const [
     { data: members },
-    { data: shifts },
-    { data: punches },
+    shifts,
+    punches,
     { data: absences },
     { data: lates },
     { data: patterns },
@@ -69,17 +114,8 @@ export default async function AttendanceEditPage({
     admin.from("project_members")
       .select("staff_id, section, staffs(id, name, display_name, account_number)")
       .eq("project_id", projectId).limit(5000),
-    admin.from("shifts")
-      .select("staff_id, shift_date, shift_name, shift_start, shift_end")
-      .eq("project_id", projectId)
-      .gte("shift_date", startDate).lte("shift_date", endDate)
-      .order("shift_date").order("staff_id").limit(20000),
-    admin.from("punch_logs")
-      .select("staff_id, punch_type, recorded_at, note")
-      .eq("project_id", projectId)
-      .in("punch_type", ["clock_in", "clock_out"])
-      .gte("recorded_at", startISO).lte("recorded_at", endISO)
-      .order("recorded_at").limit(20000),
+    fetchAllShifts(),
+    fetchAllPunches(),
     admin.from("absence_reports")
       .select("staff_id, absence_date, reason")
       .eq("project_id", projectId)
