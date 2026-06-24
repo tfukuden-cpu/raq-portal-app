@@ -13,7 +13,17 @@
 
 ---
 
-## 現在の開発状態（2026-06-20更新）
+## 現在の開発状態（2026-06-25更新）
+
+### 勤怠管理「勤怠実績」タブの修正5件（2026-06-25・本番反映済・案件=IDOM）
+ユーザー報告を順次対応。コミット `e020621`(全件取得)〜`8f6079d`(未来日)〜`dc039ca`(希望休)〜`1b629d1`(遅刻早退除外)〜`eb932d7`(欠勤除外)。対象は `/attendance/edit` の勤怠実績タブ＝`page.tsx`（行データ算出）/`AttendanceEditClient.tsx`（明細＋サマリー）/`AttendanceSummarySection.tsx`（実績出力モーダル）/`work-record-actions.ts`（実績サマリー集計）。
+
+- **「8日までしか表示されない」＋「一部スタッフの打刻が無い」＝同一原因**: `page.tsx` が `shifts`(月3669件)/`punch_logs`(月4138件)を `.limit(20000)` の単発クエリで取得していたが、**PostgRESTのdb-max-rows=1000で先頭1000行に切られる**（`.limit`では超えられない）。shiftsは日付昇順1000行＝6/8(累積968行)・6/9(1090行)でちょうど切れ「8日まで」、punch_logsは時刻昇順1000行で後半スタッフの打刻欠落。→ `work-record-actions.ts` と同じ **1000行ずつ `.range()` ループの `fetchAllShifts`/`fetchAllPunches`** に置換。地雷表に追記済。**他に1000超えするテーブルは無い**(absence109/late42/corrections129/members144 等は上限以下)
+- **未来日の未打刻を打刻漏れにしない**: `shift.shift_date > today(JST)` の日は status を `ok` に（まだ出勤前なので当然）。`page.tsx`＋`work-record-actions.ts` 両方。集計側は未来日を出勤数に含めず totalDays のみ計上
+- **希望休がOFF_SHIFT_NAMESに無く打刻漏れ化**: 「希望休」が休日リストに入っておらず勤務日扱い＝打刻漏れになっていた(6月313件)。`OFF_SHIFT_NAMES` に「希望休」を追加した箇所＝`edit/page.tsx`・`edit/work-record-actions.ts`・`api/admin/work-records/export/route.ts`・`api/admin/work-records/compliance/route.ts`(他の`attendance/page.tsx`等は既に希望休入り)。研修/導入研修は稼働日なので除外しない
+- **問題件数(errorCount)＝打刻漏れのみに**: 当初 `status !== "ok"` で遅刻・早退・欠勤も問題に算入していた。**遅刻・早退・欠勤は理由/承認付きで正しく記録された状態なので除外**し、`no_clockin`/`no_clockout`(打刻漏れ)のみカウントに変更。`AttendanceEditClient` の errorCount＋`AttendanceSummarySection` の hasIssue/issueCount を揃えた
+- **ステータスは1日1つ・優先順位判定**(`page.tsx` 265-271): 欠勤→(未来日→ok)→出勤未→退勤未→遅刻→早退。**打刻漏れが遅刻/早退より先**なので、遅刻/早退の日に打刻漏れが重なると status は no_clockin/no_clockout になり**問題件数に入る**（「ちゃんと打刻が揃った遅刻/早退」だけが除外される）
+- 残課題: 「欠勤報告なし・勤務シフトあり・打刻なし」の無断欠勤(6月58件)は記録が無いため打刻漏れ表示のまま（仕様判断保留）。早朝(9時前)打刻のUTC日付ズレ(`recorded_at.slice(0,10)`)は潜在バグだがIDOM6月は該当0件
 
 ### 改修依頼8件（#12〜#19）対応（2026-06-20・本番反映済・案件=IDOM）
 スプレッドシートの改修依頼8件を対応。コミット `fd45c50`(6件)〜`d7a20f8`(FB)〜`7d3700e`(撤回)〜`316019e`(#14)〜`7ec27b9`(#16)〜`88d78a4`(#15最終)。
