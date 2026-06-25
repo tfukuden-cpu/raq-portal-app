@@ -8,6 +8,7 @@ import {
   type SlotReqRow,
 } from "./draft-actions";
 import { upsertSlotRequirementsAction } from "@/app/(portal)/shifts/manage/actions";
+import { isManualDraftSection } from "@/lib/shift-draft-config";
 
 const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -33,11 +34,16 @@ function buildAllDates(year: number, month: number): string[] {
 
 export default function ShiftDraftSection({
   projectId,
-  patterns,
+  patterns: allPatterns,
 }: {
   projectId: string;
   patterns: Pattern[];
 }) {
+  // 手動編集セクション（販売・インフォ・H MOTA）は仮組対象外のため必要人数グリッドからも除外
+  const patterns = useMemo(
+    () => allPatterns.filter(p => !isManualDraftSection(p.section)),
+    [allPatterns],
+  );
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);

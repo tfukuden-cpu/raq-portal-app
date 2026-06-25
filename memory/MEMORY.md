@@ -15,6 +15,13 @@
 
 ## 現在の開発状態（2026-06-25更新）
 
+### 仮組から「販売・インフォ・H MOTA」を除外（2026-06-25・本番反映済・案件=IDOM）
+**ユーザー指示「販売インフォとヘルプモーター(=H MOTA)は手動編集するので仮組アルゴリズムに組み込まない」。MOTAは従来どおり仮組対象（ヘルプモーター=H MOTAのみ除外）。**
+- **共有定数 `src/lib/shift-draft-config.ts`（plain・"use server"なし）**: `MANUAL_DRAFT_SECTIONS=["販売","インフォ","H MOTA"]` / `isManualDraftSection(section)`。P001のセクションは `H MOTA/MOTA/SV/インフォ/ローン/未アポ/未成約後追い/査定/販売`
+- **サーバー `generateShiftDraftAction`（draft-actions.ts）**: `allPatternDefs=[...patterns]`（全パターン）を確保した**後**に `patterns` から除外セクションをフィルタ→ラウンドロビン・余剰配置の対象外に。`validShiftNames` は `allPatternDefs` 由来なので**既存の手動エントリは有効扱いで保持**（stale化しない）。`targetSection` が除外セクションなら明示メッセージで弾く。**全呼び出し経路（設定ページの仮組／グリッドの全体・セクション再仮組み）を1か所でカバー**
+- **UI除外**: 再仮組みモーダルのセクション選択肢(`ShiftEditGrid.tsx` sectionOptions に `isManualDraftSection` フィルタ)＋設定ページ必要人数グリッド(`ShiftDraftSection.tsx` は prop を `allPatterns`→`useMemo` で除外して `patterns`)
+- **挙動の注意**: 「全セクションを再仮組み」と設定ページの仮組はドラフト全体を作り直すため、その時点で手動入力済みの3セクションのドラフトも消える（従来から全体再仮組みは全手動編集を破棄）。**特定セクションの再仮組みでは3セクションは保持**。確定済み `shifts` テーブルは再仮組みで一切触らない。tsc 0エラー
+
 ### 仮組生成が希望休を読むテーブルを修正（2026-06-25・本番反映済・案件=IDOM）
 **ユーザー報告「7月の仮組作成時に7月希望休が反映されていない」の原因を特定し修正。**
 - **原因＝希望休テーブルが2系統で、仮組が間違った方を読んでいた**: スタッフの希望休申請は `shift_off_requests`(第1〜第4希望priority付・実運用で使う方／`staff-off-request-actions.ts` が保存)に入るが、仮組生成 `draft-actions.ts` は別系統の `holiday_requests`(status付・ほぼ未使用)を読んでいた。7月P001は `shift_off_requests`=325件／`holiday_requests`=3件で、実質希望休が除外されず希望休日にも自動配置されていた

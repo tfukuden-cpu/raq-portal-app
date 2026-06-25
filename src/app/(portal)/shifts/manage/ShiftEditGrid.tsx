@@ -26,6 +26,7 @@ import {
 } from "../actions";
 import { upsertSlotRequirementsAction, notifyShiftChangesAction, regenerateShiftDraftAction, setSectionLockedAction, acquireEditLockAction, heartbeatEditLockAction, releaseEditLockAction, toggleShiftPublishedAction, setSvOrderAction } from "./actions";
 import StaffInfoPanel from "./StaffInfoPanel";
+import { isManualDraftSection } from "@/lib/shift-draft-config";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -1755,7 +1756,7 @@ export default function ShiftEditGrid({
       {showRegenConfirm && (() => {
         const sectionOptions = [...new Set(
           shiftPatterns.map(p => p.section).filter((s): s is string => !!s)
-        )].sort();
+        )].filter(s => !isManualDraftSection(s)).sort();
         return (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center"
             onClick={() => { if (!isRegenerating && !isLocking) { setShowRegenConfirm(false); setRegenSection(""); } }}>

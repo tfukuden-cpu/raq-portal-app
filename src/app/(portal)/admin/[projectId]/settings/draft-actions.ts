@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isManualDraftSection } from "@/lib/shift-draft-config";
 
 export type SlotReqRow = {
   pattern_name: string;
@@ -231,6 +232,14 @@ export async function generateShiftDraftAction(
 
   // 全パターン定義を保存（仮確定セクション判定で後から参照するため）
   const allPatternDefs = [...patterns];
+
+  // ── 手動編集セクション（販売・インフォ・H MOTA）は仮組アルゴリズムから除外 ──
+  // これらは手動入力運用のため自動割当しない。allPatternDefs（全パターン）は
+  // フィルタ前に確保済みなので、validShiftNames には残り既存の手動エントリは保持される。
+  if (targetSection && isManualDraftSection(targetSection)) {
+    return { success: false, message: `「${targetSection}」は手動編集のため仮組の対象外です。` };
+  }
+  patterns = patterns.filter(p => !isManualDraftSection(p.section));
 
   // 現在有効なシフト名セット（削除済みパターン名のシフトを上書き可能にするため早期に定義）
   // ※ allPatternDefs はセクションフィルタ前の全パターンを含む
