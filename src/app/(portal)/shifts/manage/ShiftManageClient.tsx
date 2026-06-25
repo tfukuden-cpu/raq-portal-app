@@ -83,7 +83,7 @@ function ShiftEditGridOverlay({
   slotRequirements, changeLogs, activeDraft, draftSavedBy, draftSavedAt,
   offRequests, isPublished, lockedSections, slotLockedSections, initialEditLock,
   prevMonthShifts, sortByAccount, initialDeclinedIds,
-  onSaved, onCancel,
+  onSaved, onCancel, onDraftSaved,
 }: {
   projectId: string; targetMonthStr: string; allDates: string[];
   shifts: Props["shifts"]; activeMembers: Props["activeMembers"];
@@ -96,6 +96,7 @@ function ShiftEditGridOverlay({
   prevMonthShifts?: Props["prevMonthShifts"];
   initialDeclinedIds?: string[];
   onSaved: () => void; onCancel: () => void;
+  onDraftSaved?: (entries: GridDraftEntry[]) => void;
 }) {
   useEffect(() => {
     const header = document.getElementById("shift-manage-header");
@@ -138,6 +139,7 @@ function ShiftEditGridOverlay({
         initialDeclinedIds={initialDeclinedIds}
         onSaved={onSaved}
         onCancel={onCancel}
+        onDraftSaved={onDraftSaved}
       />
     </div>
   );
@@ -209,7 +211,10 @@ export default function ShiftManageClient({
       prev.includes(section) ? prev.filter(s => s !== section) : [...prev, section]
     );
   }
-  // 実際にグリッドへ渡すドラフト（新規 = null、続きから = initialDraft）
+  // 最新の仮保存ドラフト（仮保存成功時に更新。閉じて再度「続きから編集」したとき保存内容を反映するため
+  // props の initialDraft はページ読込時の値で固定なので、これを真の参照源にする）
+  const [latestDraft, setLatestDraft] = useState<GridDraftEntry[] | null>(initialDraft);
+  // 実際にグリッドへ渡すドラフト（新規 = null、続きから = latestDraft）
   const [activeDraft, setActiveDraft] = useState<GridDraftEntry[] | null>(null);
   const [isClearing, startClear] = useTransition();
   const [isRegenerating, startRegen] = useTransition();
@@ -217,7 +222,7 @@ export default function ShiftManageClient({
   const router = useRouter();
 
   const targetMonthStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
-  const hasDraft = !!(initialDraft && initialDraft.length > 0);
+  const hasDraft = !!(latestDraft && latestDraft.length > 0);
 
   function handleSetKyukyu(staffId: string, date: string) {
     startSetKyukyu(async () => {
@@ -243,15 +248,22 @@ export default function ShiftManageClient({
 
   // 「続きから編集」
   function handleChooseContinue() {
-    setActiveDraft(initialDraft);
+    setActiveDraft(latestDraft);
     setShowDraftModal(false);
     setMode("edit");
+  }
+
+  // 仮保存成功時：最新ドラフトを保持し、保存者・保存時刻の表示も更新するためリフレッシュ
+  function handleDraftSaved(entries: GridDraftEntry[]) {
+    setLatestDraft(entries);
+    router.refresh();
   }
 
   // 「新規から始める」= 下書きを削除してから開始
   function handleChooseNew() {
     startClear(async () => {
       await clearGridDraftAction(projectId, targetMonthStr);
+      setLatestDraft(null);
       setActiveDraft(null);
       setShowDraftModal(false);
       setMode("edit");
@@ -282,8 +294,8 @@ export default function ShiftManageClient({
       if (!effectiveMap.has(s.staff_id)) effectiveMap.set(s.staff_id, new Map());
       effectiveMap.get(s.staff_id)!.set(s.shift_date, s.shift_name);
     }
-    if (initialDraft && !isPublished) {
-      for (const entry of initialDraft) {
+    if (latestDraft && !isPublished) {
+      for (const entry of latestDraft) {
         const [staffId, date] = entry.k.split("__");
         if (!effectiveMap.has(staffId)) effectiveMap.set(staffId, new Map());
         effectiveMap.get(staffId)!.set(date, entry.d ? null : entry.n);
@@ -403,6 +415,7 @@ export default function ShiftManageClient({
       initialDeclinedIds={initialDeclinedIds}
       onSaved={handleSaved}
       onCancel={() => setMode("list")}
+      onDraftSaved={handleDraftSaved}
     />;
   }
 

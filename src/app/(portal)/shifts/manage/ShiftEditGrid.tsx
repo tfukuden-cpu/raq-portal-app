@@ -105,6 +105,8 @@ interface Props {
   initialDeclinedIds?: string[];
   onSaved: () => void;
   onCancel: () => void;
+  /** 仮保存が成功したとき、保存したエントリを親へ通知（親の initialDraft を最新化する） */
+  onDraftSaved?: (entries: GridDraftEntry[]) => void;
 }
 
 // ── Section compatibility ──────────────────────────────────────
@@ -584,7 +586,7 @@ export default function ShiftEditGrid({
   initialEditLock,
   prevMonthShifts, sortByAccount,
   initialDeclinedIds = [],
-  onSaved, onCancel,
+  onSaved, onCancel, onDraftSaved,
 }: Props) {
   // 追加不可フラグ
   const [declinedIds, setDeclinedIds] = useState<Set<string>>(() => new Set(initialDeclinedIds));
@@ -1139,6 +1141,8 @@ export default function ShiftEditGrid({
         const now = new Date().toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
         setDraftMsg(`仮保存しました（${now}）`);
         setTimeout(() => setDraftMsg(null), 3000);
+        // 親に最新ドラフトを通知（閉じて再度「続きから編集」したとき保存内容が反映されるように）
+        onDraftSaved?.(entries);
       } else {
         setSaveError(r.message ?? "仮保存に失敗しました");
       }
