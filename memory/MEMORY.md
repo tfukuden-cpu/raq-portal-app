@@ -15,6 +15,12 @@
 
 ## 現在の開発状態（2026-06-25更新）
 
+### 仮組生成が希望休を読むテーブルを修正（2026-06-25・本番反映済・案件=IDOM）
+**ユーザー報告「7月の仮組作成時に7月希望休が反映されていない」の原因を特定し修正。**
+- **原因＝希望休テーブルが2系統で、仮組が間違った方を読んでいた**: スタッフの希望休申請は `shift_off_requests`(第1〜第4希望priority付・実運用で使う方／`staff-off-request-actions.ts` が保存)に入るが、仮組生成 `draft-actions.ts` は別系統の `holiday_requests`(status付・ほぼ未使用)を読んでいた。7月P001は `shift_off_requests`=325件／`holiday_requests`=3件で、実質希望休が除外されず希望休日にも自動配置されていた
+- **修正**: `draft-actions.ts` のデータ取得を `holiday_requests`→`shift_off_requests` に変更（カラム `staff_id`/`request_date` は両テーブル共通なので1クエリの差し替えのみ。`holidayRows`/`holidaySet` の変数名はそのまま）。tsc 0エラー
+- ユーザー補足: 販売/インフォは手入力するので仮組の自動反映は不要（が、希望休除外は全セクションに効く独立の修正なので適用）
+
 ### 勤怠管理「勤怠実績」タブの修正5件（2026-06-25・本番反映済・案件=IDOM）
 ユーザー報告を順次対応。コミット `e020621`(全件取得)〜`8f6079d`(未来日)〜`dc039ca`(希望休)〜`1b629d1`(遅刻早退除外)〜`eb932d7`(欠勤除外)。対象は `/attendance/edit` の勤怠実績タブ＝`page.tsx`（行データ算出）/`AttendanceEditClient.tsx`（明細＋サマリー）/`AttendanceSummarySection.tsx`（実績出力モーダル）/`work-record-actions.ts`（実績サマリー集計）。
 
@@ -477,6 +483,7 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | ダーク背景の固定ページは `h-dvh` だと白帯が出る | AppNavのコンテンツラッパーは下部に `pb-safe`/`pb-safe-xl`(9rem)の余白を持ち、その背景はレイアウト由来の `#f4f6fa`。`h-dvh` 固定だとこの余白を覆えず白帯が露出。モバイルは `min-h-[100dvh]`＋ボトムナビ分の `pb-36` でダーク背景を確保し、PCだけ `md:h-dvh md:overflow-hidden` でフル表示にする（/shifts で対応済み） |
 | 共有RPG部品は `src/components/rpg-ui.tsx` | `RpgWindow`/`BlinkCursor`/`dotGothic`/`RPG_PAGE_BG`/`RPG_KEYFRAMES`/`RpgStarfield`。新規RPG画面はここから import する。HomeClient・TerminalPunchClient には同名の重複定義が残っている（未統合・触らない限り問題なし） |
 | public/ の画像を同一URLで差し替えたら `sw.js` の CACHE_VERSION を上げる | Service Worker が画像をキャッシュしており旧画像が表示され続ける（RPGキャラ画像差し替えで発生済み）。v2 から画像は Stale While Revalidate（次回表示で更新）だが、即時反映したい場合はバージョンを上げて全キャッシュ破棄させる |
+| 希望休のテーブルは2系統＝実運用は `shift_off_requests` | スタッフ申請の希望休は `shift_off_requests`(priority=第1〜第4希望・`staff-off-request-actions.ts`／管理者一覧も同テーブル)。`holiday_requests`(status付)は別系統でほぼ未使用。**希望休を参照する処理は `shift_off_requests` を読むこと**。仮組生成 `draft-actions.ts` が `holiday_requests` を読んでいて希望休が反映されないバグがあった（2026-06-25修正） |
 | **セクションの「表示マージ」を `project_members.section/sections` に適用してはいけない** | `StaffInfoPanel`(`shifts/manage/StaffInfoPanel.tsx`) は `member.sections` を初期値→`updateShiftSettingsAction` で**そのまま保存**する。表示用に props 段階で「インフォ→販売」等とマージすると、スタッフ設定保存時に**実データが上書きされ消える**（2026-06-20 #15対応でインフォが消失＝S019復元）。表示マージは①保存パスに乗らない画面のみ（当日状況の出勤簿＝`moveSectionAction` は `shifts` のみ更新で安全）か、②表示ラベルの差し替えだけに留める。シフト管理側の section マージは撤回済み。`project_members` のセクション変更履歴は残らない＝壊すと復元はリスト手動指定のみ |
 
 ---

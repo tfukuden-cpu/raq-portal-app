@@ -195,7 +195,8 @@ export async function generateShiftDraftAction(
       .eq("project_id", projectId)
       .gte("shift_date", dateFrom)
       .lte("shift_date", dateTo),
-    admin.from("holiday_requests")
+    // スタッフが申請する希望休は shift_off_requests に入る（holiday_requests は別系統・ほぼ未使用）
+    admin.from("shift_off_requests")
       .select("staff_id, request_date")
       .eq("project_id", projectId)
       .gte("request_date", dateFrom)
