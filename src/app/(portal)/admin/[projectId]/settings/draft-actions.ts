@@ -81,6 +81,13 @@ function prevDate(dateStr: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** YYYY-MM-DD の翌日を返す */
+function nextDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /** date が属する ISO 週キー (YYYY-Www) */
 function isoWeekKey(dateStr: string): string {
   const d = new Date(dateStr);
@@ -505,6 +512,29 @@ export async function generateShiftDraftAction(
     return count;
   }
 
+  /** 指定日より後の連続出勤日数を返す */
+  function consecutiveDaysAfter(staffId: string, date: string): number {
+    const dDraft    = draftDates.get(staffId) ?? new Set<string>();
+    const dExisting = existingDateSet.get(staffId) ?? new Set<string>();
+    let count = 0;
+    let check = nextDate(date);
+    while (dDraft.has(check) || dExisting.has(check)) {
+      count++;
+      check = nextDate(check);
+    }
+    return count;
+  }
+
+  /**
+   * date に勤務を入れたとき、その日を含む連続出勤区間（前＋当日＋後）が
+   * 連勤上限を超えるか判定する。
+   * ※ 仮組は日付を飛び飛びの順序で割り当てるため、「前」だけ見ると
+   *   後から間を埋める割当で連勤区間が連結し上限超過する。前後両方を見る。
+   */
+  function wouldExceedConsecutive(staffId: string, date: string, maxConsec: number): boolean {
+    return consecutiveDaysBefore(staffId, date) + 1 + consecutiveDaysAfter(staffId, date) > maxConsec;
+  }
+
   // ── 仮組グリッド生成 ────────────────────────────────────────
   const draft = new Map<string, { shiftName: string; shiftStart: string | null; shiftEnd: string | null }>();
 
@@ -661,9 +691,9 @@ export async function generateShiftDraftAction(
               .filter(d => isoWeekKey(d) === weekKey && d >= dateFrom).length;
             if (draftWeekCount + existWeekCount >= wdCount) return false;
           }
-          // 連勤上限
+          // 連勤上限（前後の連勤区間が連結して上限超過しないかを判定）
           const maxConsec = (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? 5;
-          if (consecutiveDaysBefore(m.staff_id, date) >= maxConsec) return false;
+          if (wouldExceedConsecutive(m.staff_id, date, maxConsec)) return false;
           // 勤務間インターバル
           const prevPattern = getPrevDayPattern(m.staff_id, date);
           if (!hasAdequateInterval(prevPattern?.end_time, pattern.start_time)) return false;
@@ -773,9 +803,9 @@ export async function generateShiftDraftAction(
       if (holidaySet.has(`${m.staff_id}__${date}`)) continue;
       if (trainingSet.has(`${m.staff_id}__${date}`)) continue;
 
-      // 連勤上限
+      // 連勤上限（前後の連勤区間が連結して上限超過しないかを判定）
       const maxConsec = (m as { max_consecutive_days?: number | null }).max_consecutive_days ?? 5;
-      if (consecutiveDaysBefore(m.staff_id, date) >= maxConsec) continue;
+      if (wouldExceedConsecutive(m.staff_id, date, maxConsec)) continue;
 
       // インターバルを満たし、かつ遅番翌日の早番でないパターンを選ぶ
       // 必要数に未達のパターン（不足パターン）を優先する：

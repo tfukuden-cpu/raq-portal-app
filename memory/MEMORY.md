@@ -15,6 +15,11 @@
 
 ## 現在の開発状態（2026-06-25更新）
 
+### 自動仮組の連勤上限バグ修正（6連勤以上が出る）（2026-06-25・本番反映済・案件=IDOM）
+**ユーザー報告「自動仮組で6連勤以上で組まれる人がいる、やめてほしい」。P001は全144名が `max_consecutive_days`=null＝デフォルト5連勤のはずなのに6連勤以上が発生。**
+- **原因＝連勤判定が「前」だけ見ていた**: `draft-actions.ts` の `consecutiveDaysBefore` は当日より前の連続日数のみ数えていたが、仮組はラウンドロビン(round毎にstride=11で開始日ずらし)＋余剰配置で**日付を飛び飛びの順に割り当てる**ため、後から間を埋める割当で前後の連勤区間が連結し上限超過。例(上限5): 先に6日を割当→後で1〜4日→5日を割当時に「前」だけ見ると1〜4=4連勤でOK判定→結果1〜6日の6連勤成立
+- **修正**: `consecutiveDaysAfter`（当日より後の連続日数）と `wouldExceedConsecutive(staffId,date,max)=before+1+after>max` を追加し、候補フィルタ(ラウンドロビン)・余剰配置の両方の連勤チェックを `>= maxConsec`(前のみ)→`wouldExceedConsecutive`(前後)に置換。`existingDateSet` は前月末＋当月確定シフトを含むので確定シフトとの連結も防げる。`consecutiveDaysBefore` はソート用キャッシュ・診断で引き続き使用。tsc 0エラー
+
 ### 仮組から「販売・インフォ・H MOTA」を除外（2026-06-25・本番反映済・案件=IDOM）
 **ユーザー指示「販売インフォとヘルプモーター(=H MOTA)は手動編集するので仮組アルゴリズムに組み込まない」。MOTAは従来どおり仮組対象（ヘルプモーター=H MOTAのみ除外）。**
 - **共有定数 `src/lib/shift-draft-config.ts`（plain・"use server"なし）**: `MANUAL_DRAFT_SECTIONS=["販売","インフォ","H MOTA"]` / `isManualDraftSection(section)`。P001のセクションは `H MOTA/MOTA/SV/インフォ/ローン/未アポ/未成約後追い/査定/販売`
@@ -490,6 +495,7 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | ダーク背景の固定ページは `h-dvh` だと白帯が出る | AppNavのコンテンツラッパーは下部に `pb-safe`/`pb-safe-xl`(9rem)の余白を持ち、その背景はレイアウト由来の `#f4f6fa`。`h-dvh` 固定だとこの余白を覆えず白帯が露出。モバイルは `min-h-[100dvh]`＋ボトムナビ分の `pb-36` でダーク背景を確保し、PCだけ `md:h-dvh md:overflow-hidden` でフル表示にする（/shifts で対応済み） |
 | 共有RPG部品は `src/components/rpg-ui.tsx` | `RpgWindow`/`BlinkCursor`/`dotGothic`/`RPG_PAGE_BG`/`RPG_KEYFRAMES`/`RpgStarfield`。新規RPG画面はここから import する。HomeClient・TerminalPunchClient には同名の重複定義が残っている（未統合・触らない限り問題なし） |
 | public/ の画像を同一URLで差し替えたら `sw.js` の CACHE_VERSION を上げる | Service Worker が画像をキャッシュしており旧画像が表示され続ける（RPGキャラ画像差し替えで発生済み）。v2 から画像は Stale While Revalidate（次回表示で更新）だが、即時反映したい場合はバージョンを上げて全キャッシュ破棄させる |
+| 仮組の連勤上限チェックは「前後」両方を見る | `draft-actions.ts` は日付を飛び飛びの順(ラウンドロビンstride=11＋余剰配置)に割り当てるため、連勤判定を「前」だけで行うと後から間を埋める割当で連勤区間が連結し上限超過(6連勤以上)が起きる。`wouldExceedConsecutive`=`before+1+after>max` で前後を見ること（2026-06-25修正）。新しい割当ロジックを追加するときも同関数を使う |
 | 希望休のテーブルは2系統＝実運用は `shift_off_requests` | スタッフ申請の希望休は `shift_off_requests`(priority=第1〜第4希望・`staff-off-request-actions.ts`／管理者一覧も同テーブル)。`holiday_requests`(status付)は別系統でほぼ未使用。**希望休を参照する処理は `shift_off_requests` を読むこと**。仮組生成 `draft-actions.ts` が `holiday_requests` を読んでいて希望休が反映されないバグがあった（2026-06-25修正） |
 | **セクションの「表示マージ」を `project_members.section/sections` に適用してはいけない** | `StaffInfoPanel`(`shifts/manage/StaffInfoPanel.tsx`) は `member.sections` を初期値→`updateShiftSettingsAction` で**そのまま保存**する。表示用に props 段階で「インフォ→販売」等とマージすると、スタッフ設定保存時に**実データが上書きされ消える**（2026-06-20 #15対応でインフォが消失＝S019復元）。表示マージは①保存パスに乗らない画面のみ（当日状況の出勤簿＝`moveSectionAction` は `shifts` のみ更新で安全）か、②表示ラベルの差し替えだけに留める。シフト管理側の section マージは撤回済み。`project_members` のセクション変更履歴は残らない＝壊すと復元はリスト手動指定のみ |
 
