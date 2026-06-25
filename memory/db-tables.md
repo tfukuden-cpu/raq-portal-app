@@ -20,9 +20,9 @@
 | `shift_patterns` | シフト区分マスタ（name, section, sort_order） |
 | `shift_openings` | シフト募集 |
 | `shift_requests` | 追加申請（opening_id, status） |
-| `shift_off_requests` | 希望休申請・優先度付き（priority: 第一〜第四希望休, source） |
+| `shift_off_requests` | 希望休申請・優先度付き（priority: 第一〜第四希望休, source）。**実運用で使う希望休はこちら**（スタッフ申請・管理者一覧・仮組生成が参照） |
 | `shift_slot_requirements` | セクション別必要枠数（日付別オーバーライド対応） |
-| `holiday_requests` | 希望休申請・承認制（request_date, status） |
+| `holiday_requests` | 希望休申請・承認制（request_date, status）。**別系統でほぼ未使用**。希望休を参照する処理は `shift_off_requests` を使うこと |
 | `holiday_rules` | 希望休ルール（rule_type, value） 6種類: open_day / deadline_day / monthly_limit_per_person / weekend_limit / daily_limit_count / consecutive_limit |
 
 ## 勤怠関連

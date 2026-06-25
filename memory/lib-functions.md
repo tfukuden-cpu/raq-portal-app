@@ -85,6 +85,14 @@ Cookie名: `rqp_project_id`、30日有効
 
 型: `DailyRecord`, `StaffMonthlySummary`（勤怠計算ロジック）
 
+## src/lib/shift-draft-config.ts — 仮組設定（plain・"use server"なし）
+
+シフト仮組（自動生成）から除外する「手動編集セクション」の定義。`draft-actions.ts`（サーバー）と `ShiftEditGrid.tsx`／`ShiftDraftSection.tsx`（UI）で共有。
+| 関数/定数 | 用途 |
+|------|------|
+| `MANUAL_DRAFT_SECTIONS` | 仮組から除外するセクション配列 `["インフォ","H MOTA"]`（インフォ=パターン「販売/インフォ」、H MOTA=ヘルプMOTA。販売は除外しない） |
+| `isManualDraftSection(section)` | そのセクションが除外対象か判定 |
+
 ## src/lib/rpg-chars.ts — RPGキャラクター定義
 
 旧シグネチャ（互換維持・中身は新100体システムに差し替え済）: `RPG_CHARS`(=100体・label="種族の職業")／`rpgCharImg(id)`(=`/rpg/char-${id}.png`)／`rpgCharFor(staffId, overrideId?)`(→1-100の`{id,label}`)。My・AppNav・ホーム・打刻端末・休憩室はこの旧シグネチャ経由で新アバターを表示中。
