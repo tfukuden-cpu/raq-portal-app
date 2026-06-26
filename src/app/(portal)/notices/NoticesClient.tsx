@@ -2,7 +2,20 @@
 
 import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { markNoticeReadAction, createNoticeAction, deleteNoticeAction } from "./actions";
+import {
+  markNoticeReadAction,
+  createNoticeAction,
+  deleteNoticeAction,
+  addNoticeCommentAction,
+  deleteNoticeCommentAction,
+} from "./actions";
+import {
+  dotGothic,
+  RPG_PAGE_BG,
+  RPG_KEYFRAMES,
+  RpgWindow,
+  RpgStarfield,
+} from "@/components/rpg-ui";
 
 type Notice = {
   id: string;
@@ -15,17 +28,28 @@ type Notice = {
   attachment_name: string | null;
 };
 
+type Comment = {
+  id: string;
+  noticeId: string;
+  staffId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+};
+
 type Props = {
   notices: Notice[];
   readIds: string[];
+  comments: Comment[];
+  myStaffId: string;
   isAdmin: boolean;
   initialOpenId?: string | null;
 };
 
-type TabKey = "all" | "notice";
+type TabKey = "all" | "unread";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "all",    label: "すべて" },
-  { key: "notice", label: "全体へのお知らせ" },
+  { key: "unread", label: "みかくにん" },
 ];
 
 function fmtDateTime(iso: string): string {
@@ -36,38 +60,20 @@ function fmtDateTime(iso: string): string {
   }).format(d);
 }
 
-function getInitial(name: string): string { return name.charAt(0).toUpperCase(); }
-
-function AvatarCircle({ name }: { name: string }) {
-  const colors = ["bg-blue-500","bg-indigo-500","bg-violet-500","bg-emerald-500","bg-orange-500","bg-teal-500"];
-  const color  = colors[name.charCodeAt(0) % colors.length];
-  return (
-    <div className={`w-10 h-10 ${color} rounded-full flex items-center justify-center text-white text-[15px] font-bold flex-shrink-0`}>
-      {getInitial(name)}
-    </div>
-  );
-}
-
-function ChevronRightIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="9 18 15 12 9 6"/></svg>;
-}
-
-function SearchIcon() {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
-}
-
 const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif"]);
 function isImageFile(name: string | null): boolean {
   if (!name) return false;
   return IMAGE_EXTS.has(name.split(".").pop()?.toLowerCase() ?? "");
 }
 
-export default function NoticesClient({ notices, readIds, isAdmin, initialOpenId }: Props) {
+export default function NoticesClient({
+  notices, readIds, comments, myStaffId, isAdmin, initialOpenId,
+}: Props) {
   const router = useRouter();
-  const [confirmed, setConfirmed]   = useState<Set<string>>(() => new Set(readIds));
-  const [activeTab, setActiveTab]   = useState<TabKey>("all");
-  const [search, setSearch]         = useState("");
-  const [expanded, setExpanded]     = useState<string | null>(initialOpenId ?? null);
+  const [confirmed, setConfirmed] = useState<Set<string>>(() => new Set(readIds));
+  const [activeTab, setActiveTab] = useState<TabKey>("all");
+  const [search, setSearch]       = useState("");
+  const [expanded, setExpanded]   = useState<string | null>(initialOpenId ?? null);
 
   // initialOpenId のカードに自動スクロール
   const articleRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -83,13 +89,57 @@ export default function NoticesClient({ notices, readIds, isAdmin, initialOpenId
     startReadTrans(async () => { await markNoticeReadAction(id); });
   };
 
-  // 追加モーダル
-  const [showAdd, setShowAdd]       = useState(false);
-  const [addTitle, setAddTitle]     = useState("");
-  const [addBody, setAddBody]       = useState("");
-  const [addPinned, setAddPinned]   = useState(false);
-  const [addError, setAddError]     = useState<string | null>(null);
-  const [isAdding, startAddTrans]   = useTransition();
+  // ── コメント ──────────────────────────────────────────
+  const [commentText, setCommentText] = useState<Record<string, string>>({});
+  const [commentMsg, setCommentMsg]   = useState<{ ok: boolean; text: string } | null>(null);
+  const [postingId, setPostingId]     = useState<string | null>(null);
+  const [, startCommentTrans]         = useTransition();
+
+  const commentsByNotice = (id: string) => comments.filter(c => c.noticeId === id);
+
+  const handleAddComment = (noticeId: string) => {
+    const text = (commentText[noticeId] ?? "").trim();
+    if (!text) return;
+    setPostingId(noticeId);
+    const fd = new FormData();
+    fd.set("noticeId", noticeId);
+    fd.set("body", text);
+    startCommentTrans(async () => {
+      const r = await addNoticeCommentAction(fd);
+      setPostingId(null);
+      if (r.success) {
+        setCommentText(prev => ({ ...prev, [noticeId]: "" }));
+        setCommentMsg({ ok: true, text: "コメントを送信しました（管理者へ通知）" });
+        router.refresh();
+      } else {
+        setCommentMsg({ ok: false, text: r.message ?? "送信に失敗しました" });
+      }
+    });
+  };
+
+  const handleDeleteComment = (id: string) => {
+    if (!window.confirm("このコメントを削除しますか？")) return;
+    const fd = new FormData();
+    fd.set("id", id);
+    startCommentTrans(async () => {
+      await deleteNoticeCommentAction(fd);
+      router.refresh();
+    });
+  };
+
+  useEffect(() => {
+    if (!commentMsg) return;
+    const t = setTimeout(() => setCommentMsg(null), 4000);
+    return () => clearTimeout(t);
+  }, [commentMsg]);
+
+  // ── 追加モーダル（管理者） ──────────────────────────────
+  const [showAdd, setShowAdd]     = useState(false);
+  const [addTitle, setAddTitle]   = useState("");
+  const [addBody, setAddBody]     = useState("");
+  const [addPinned, setAddPinned] = useState(false);
+  const [addError, setAddError]   = useState<string | null>(null);
+  const [isAdding, startAddTrans] = useTransition();
 
   const openAdd = () => { setAddTitle(""); setAddBody(""); setAddPinned(false); setAddError(null); setShowAdd(true); };
 
@@ -114,51 +164,51 @@ export default function NoticesClient({ notices, readIds, isAdmin, initialOpenId
     startDeleteTrans(async () => { await deleteNoticeAction(fd); setDeletingId(null); router.refresh(); });
   };
 
-  // フィルタリング
+  // ── フィルタリング ─────────────────────────────────────
   const filtered = notices.filter(n => {
     const matchSearch = !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.body.toLowerCase().includes(search.toLowerCase());
-    return matchSearch;
+    const matchTab    = activeTab === "all" || !confirmed.has(n.id);
+    return matchSearch && matchTab;
   });
 
   const unreadCount = notices.filter(n => !confirmed.has(n.id)).length;
-  const pinnedCount = notices.filter(n => n.is_pinned).length;
-  const popularTop3 = [...notices].slice(0, 3);
 
   return (
     <>
-      <main className="flex-1 flex flex-col bg-[#f4f6fa] dark:bg-zinc-950 md:overflow-hidden min-h-0">
+      <main
+        className={`min-h-[100dvh] md:h-dvh md:overflow-hidden flex flex-col ${dotGothic.className}`}
+        style={{ background: RPG_PAGE_BG, backgroundAttachment: "fixed" }}
+      >
+        <style>{RPG_KEYFRAMES}</style>
 
         {/* ── 固定ヘッダー ── */}
-        <div className="flex-shrink-0 w-full px-4 md:px-8 pt-5 pb-3">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-4">
-              <h1 className="text-[22px] font-bold text-[#0d1b35] dark:text-white">周知事項</h1>
+        <div className="relative shrink-0 w-full px-4 md:px-8 pt-5 pb-3 overflow-hidden">
+          <RpgStarfield />
+          <div className="relative flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-[20px] md:text-[22px] text-white">★ おしらせ</h1>
               {/* タブ */}
-              <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 p-1">
+              <div className="flex items-center gap-1 rounded-lg border border-white/40 bg-[#000846]/80 p-1">
                 {TABS.map(({ key, label }) => (
                   <button key={key} type="button" onClick={() => setActiveTab(key)}
-                    className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors whitespace-nowrap ${
-                      activeTab === key ? "bg-[#0d1b35] text-white shadow-sm" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200"
+                    className={`px-3 py-1 rounded-md text-[12px] transition-colors whitespace-nowrap ${
+                      activeTab === key ? "bg-white text-[#000846] font-bold" : "text-white/70 hover:text-white"
                     }`}>
                     {label}
-                    {key === "all" && unreadCount > 0 && (
-                      <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-blue-500 text-white text-[9px] font-bold">{unreadCount}</span>
+                    {key === "unread" && unreadCount > 0 && (
+                      <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold tabular-nums">{unreadCount}</span>
                     )}
                   </button>
                 ))}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {/* 検索 */}
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none"><SearchIcon /></span>
-                <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="検索"
-                  className="w-44 pl-9 pr-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#0d1b35]/20" />
-              </div>
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="けんさく"
+                className="w-36 md:w-44 px-3 py-2 rounded-lg border border-white/40 bg-[#000846]/80 text-[13px] text-white placeholder-white/40 focus:outline-none focus:border-white" />
               {isAdmin && (
                 <button type="button" onClick={openAdd}
-                  className="px-4 py-2 rounded-xl bg-[#0d1b35] text-white text-[13px] font-semibold hover:bg-[#162b50] transition-colors">
-                  ＋ 追加
+                  className="px-3 md:px-4 py-2 rounded-lg border-2 border-white text-white text-[13px] hover:bg-white/10 active:scale-95 transition">
+                  ＋ ついか
                 </button>
               )}
             </div>
@@ -166,192 +216,191 @@ export default function NoticesClient({ notices, readIds, isAdmin, initialOpenId
         </div>
 
         {/* ── スクロールエリア ── */}
-        <div className="flex-1 md:min-h-0 overflow-y-auto px-4 md:px-8 pb-6">
-          <div className="flex gap-5 items-start">
-
-            {/* ── メインフィード ── */}
-            <div className="flex-1 min-w-0 space-y-3">
-              {filtered.length === 0 ? (
-                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-12 text-center">
-                  <p className="text-[13px] text-zinc-400">お知らせはありません</p>
+        <div className="flex-1 md:min-h-0 md:overflow-y-auto px-4 md:px-8 pb-32 md:pb-8">
+          <div className="max-w-3xl mx-auto space-y-4 pt-2">
+            {filtered.length === 0 ? (
+              <RpgWindow>
+                <div className="px-5 py-10 text-center">
+                  <p className="text-[14px] text-white/60">
+                    {activeTab === "unread" ? "みかくにんの おしらせは ない" : "おしらせは ない"}
+                  </p>
                 </div>
-              ) : filtered.map(n => {
-                const isRead = confirmed.has(n.id);
-                const isOpen = expanded === n.id;
+              </RpgWindow>
+            ) : filtered.map(n => {
+              const isRead = confirmed.has(n.id);
+              const isOpen = expanded === n.id;
+              const cmts   = commentsByNotice(n.id);
 
-                return (
-                  <article
-                    key={n.id}
-                    ref={el => { articleRefs.current[n.id] = el; }}
-                    className={`bg-white dark:bg-zinc-900 rounded-2xl border shadow-sm transition-all ${
-                      n.is_pinned ? "border-blue-200 dark:border-blue-800" : "border-zinc-100 dark:border-zinc-800"
-                    }`}>
+              return (
+                <article key={n.id} ref={el => { articleRefs.current[n.id] = el; }}>
+                  <RpgWindow
+                    title={n.is_pinned ? "じゅうよう" : undefined}
+                    className={n.is_pinned ? "drop-shadow-[0_0_6px_rgba(252,211,77,0.35)]" : ""}
+                  >
                     {/* カードヘッダー */}
-                    <button type="button" className="w-full text-left p-5"
+                    <button type="button" className="w-full text-left px-4 py-4 md:px-5"
                       onClick={() => { setExpanded(isOpen ? null : n.id); if (!isRead) handleConfirm(n.id); }}>
                       <div className="flex items-start gap-3">
-                        <AvatarCircle name={n.posterName} />
                         <div className="flex-1 min-w-0">
-                          {/* 投稿者 + タグ + 日時 */}
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="text-[13px] font-bold text-zinc-800 dark:text-zinc-100">{n.posterName}</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                              n.is_pinned ? "bg-blue-100 text-blue-700" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
-                            }`}>
-                              {n.is_pinned ? "📌 重要" : "全体へのお知らせ"}
-                            </span>
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            {n.is_pinned && <span className="text-amber-300 text-[12px]">★</span>}
+                            <span className="text-[12px] text-amber-300">{n.posterName}</span>
                             {n.attachment_url && (
-                              <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
-                                  strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
-                                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                                </svg>
-                                添付あり
-                              </span>
+                              <span className="text-[10px] text-cyan-300 border border-cyan-300/50 rounded px-1.5 py-0.5">📎 そえつけ</span>
                             )}
-                            <span className="text-[11px] text-zinc-400 tabular-nums">{fmtDateTime(n.created_at)}</span>
+                            {cmts.length > 0 && (
+                              <span className="text-[10px] text-white/70 border border-white/30 rounded px-1.5 py-0.5 tabular-nums">💬 {cmts.length}</span>
+                            )}
+                            <span className="text-[11px] text-white/40 tabular-nums">{fmtDateTime(n.created_at)}</span>
                           </div>
-                          {/* タイトル */}
-                          <p className="text-[15px] font-bold text-zinc-800 dark:text-zinc-100 leading-snug mb-1">{n.title}</p>
-                          {/* プレビュー（折りたたみ時） */}
+                          <p className="text-[15px] md:text-[16px] text-white leading-snug">{n.title}</p>
                           {!isOpen && (
-                            <p className="text-[12px] text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">{n.body}</p>
+                            <p className="text-[12px] text-white/50 line-clamp-2 leading-relaxed mt-1">{n.body}</p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                          {!isRead && (
-                            <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          {!isRead ? (
+                            <span className="text-[10px] text-red-300 border border-red-400/60 rounded px-1.5 py-0.5">みかくにん</span>
+                          ) : (
+                            <span className="text-[10px] text-emerald-300">かくにんずみ</span>
                           )}
-                          {isRead && (
-                            <span className="text-[10px] text-zinc-400 font-medium">確認済</span>
-                          )}
-                          <ChevronRightIcon />
+                          <span className="text-white/60 text-[13px]">{isOpen ? "▲" : "▼"}</span>
                         </div>
                       </div>
                     </button>
 
                     {/* 展開コンテンツ */}
                     {isOpen && (
-                      <div className="px-5 pb-5 border-t border-zinc-50 dark:border-zinc-800">
-                        <p className="text-[13px] text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed pt-4">{n.body}</p>
+                      <div className="px-4 pb-4 md:px-5 border-t border-white/15">
+                        <p className="text-[13px] text-white/85 whitespace-pre-wrap leading-relaxed pt-4">{n.body}</p>
 
                         {/* 添付ファイル */}
                         {n.attachment_url && (
                           <div className="mt-4">
                             {isImageFile(n.attachment_name) ? (
                               <a href={n.attachment_url} target="_blank" rel="noopener noreferrer">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={n.attachment_url} alt={n.attachment_name ?? "添付画像"}
-                                  className="max-h-72 rounded-xl border border-zinc-100 dark:border-zinc-800 object-cover cursor-pointer hover:opacity-95 transition-opacity" />
+                                  className="max-h-72 rounded-lg border border-white/20 object-cover cursor-pointer hover:opacity-90 transition-opacity" />
                               </a>
                             ) : (
                               <a href={n.attachment_url} target="_blank" rel="noopener noreferrer"
                                 download={n.attachment_name ?? undefined}
-                                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
-                                  strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 flex-shrink-0">
-                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                  <polyline points="7 10 12 15 17 10"/>
-                                  <line x1="12" y1="15" x2="12" y2="3"/>
-                                </svg>
-                                {n.attachment_name ?? "添付ファイルをダウンロード"}
+                                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/40 text-[12px] text-white hover:bg-white/10 transition-colors">
+                                ▶ {n.attachment_name ?? "そえつけファイルを ダウンロード"}
                               </a>
                             )}
                           </div>
                         )}
 
+                        {/* ── コメント欄 ── */}
+                        <div className="mt-5 pt-4 border-t border-white/15">
+                          <p className="text-[12px] text-cyan-300 mb-2.5">💬 コメント（{cmts.length}）</p>
+
+                          {cmts.length > 0 && (
+                            <div className="space-y-2 mb-3">
+                              {cmts.map(c => {
+                                const canDelete = isAdmin || c.staffId === myStaffId;
+                                return (
+                                  <div key={c.id} className="rounded-lg border border-white/15 bg-[#02061c]/60 px-3 py-2">
+                                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                                      <span className="text-[11px] text-amber-300">{c.authorName}</span>
+                                      <span className="flex items-center gap-2">
+                                        <span className="text-[10px] text-white/40 tabular-nums">{fmtDateTime(c.createdAt)}</span>
+                                        {canDelete && (
+                                          <button type="button" onClick={() => handleDeleteComment(c.id)}
+                                            className="text-[10px] text-red-300/80 hover:text-red-300 transition-colors">✕</button>
+                                        )}
+                                      </span>
+                                    </div>
+                                    <p className="text-[12.5px] text-white/85 whitespace-pre-wrap leading-relaxed">{c.body}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* 入力 */}
+                          <div className="flex items-end gap-2">
+                            <textarea
+                              value={commentText[n.id] ?? ""}
+                              onChange={e => setCommentText(prev => ({ ...prev, [n.id]: e.target.value }))}
+                              placeholder="コメントを かく…（送信すると管理者へ通知されます）"
+                              rows={2}
+                              className="flex-1 px-3 py-2 rounded-lg border border-white/30 bg-[#000846]/80 text-[12.5px] text-white placeholder-white/40 resize-none focus:outline-none focus:border-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleAddComment(n.id)}
+                              disabled={postingId === n.id || !(commentText[n.id] ?? "").trim()}
+                              className="shrink-0 h-[42px] px-3 rounded-lg border-2 border-white text-[12px] text-white hover:bg-white/10 active:scale-95 transition disabled:opacity-40"
+                            >
+                              {postingId === n.id ? "送信中…" : "▶ そうしん"}
+                            </button>
+                          </div>
+                        </div>
+
                         {isAdmin && (
                           <div className="flex justify-end mt-4">
                             <button type="button" onClick={() => handleDelete(n.id)} disabled={deletingId === n.id}
-                              className="text-[11px] text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors">
-                              {deletingId === n.id ? "削除中…" : "削除する"}
+                              className="text-[11px] text-red-300/80 hover:text-red-300 disabled:opacity-40 transition-colors">
+                              {deletingId === n.id ? "さくじょ中…" : "▶ このおしらせを さくじょ"}
                             </button>
                           </div>
                         )}
                       </div>
                     )}
-                  </article>
-                );
-              })}
-            </div>
-
-            {/* ── サイドバー ── */}
-            <div className="hidden lg:flex flex-col gap-4 w-64 flex-shrink-0">
-
-              {/* お知らせサマリー */}
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-4 shadow-sm">
-                <h3 className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200 mb-3">お知らせサマリー</h3>
-                <div className="space-y-0">
-                  {[
-                    { label: "未読のお知らせ", count: unreadCount, color: "bg-blue-500" },
-                    { label: "全体へのお知らせ", count: notices.length, color: "bg-zinc-400" },
-                    { label: "重要なお知らせ", count: pinnedCount, color: "bg-red-500" },
-                  ].map(({ label, count, color }) => (
-                    <div key={label} className="flex items-center justify-between py-2.5 border-b border-zinc-50 dark:border-zinc-800 last:border-0">
-                      <div className="flex items-center gap-2 text-[13px] text-zinc-500 dark:text-zinc-400">
-                        <span className={`w-1.5 h-1.5 rounded-full ${color} flex-shrink-0`} />
-                        {label}
-                      </div>
-                      <span className={`text-[14px] font-bold tabular-nums ${count > 0 ? "text-[#0d1b35] dark:text-white" : "text-zinc-300"}`}>
-                        {count}件
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 人気のお知らせ */}
-              {popularTop3.length > 0 && (
-                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-4 shadow-sm">
-                  <h3 className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200 mb-3">人気のお知らせ</h3>
-                  <div className="space-y-3">
-                    {popularTop3.map((n, i) => (
-                      <div key={n.id} className="flex items-start gap-2.5">
-                        <span className="w-5 h-5 rounded-full bg-[#0d1b35] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] text-zinc-700 dark:text-zinc-200 leading-snug font-medium line-clamp-2">{n.title}</p>
-                          <p className="text-[10px] text-zinc-400 mt-0.5">{fmtDateTime(n.created_at)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            </div>
+                  </RpgWindow>
+                </article>
+              );
+            })}
           </div>
         </div>
       </main>
 
-      {/* 追加モーダル（管理者簡易版） */}
+      {/* ── コメント送信トースト ── */}
+      {commentMsg && (
+        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[60] whitespace-nowrap px-5 py-3 rounded-lg border-2 text-[13px] shadow-2xl ${dotGothic.className} ${
+          commentMsg.ok ? "bg-[#000846] border-white text-white" : "bg-red-700 border-white text-white"
+        }`}>
+          {commentMsg.text}
+        </div>
+      )}
+
+      {/* ── 追加モーダル（管理者） ── */}
       {showAdd && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setShowAdd(false)}>
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-            <h2 className="text-[15px] font-bold text-zinc-900 dark:text-zinc-50">周知事項を追加</h2>
-            <div>
-              <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">タイトル <span className="text-red-500">*</span></label>
-              <input type="text" value={addTitle} onChange={e => setAddTitle(e.target.value)} placeholder="タイトルを入力"
-                className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]" />
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">本文 <span className="text-red-500">*</span></label>
-              <textarea value={addBody} onChange={e => setAddBody(e.target.value)} placeholder="内容を入力してください" rows={5}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] resize-none" />
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" checked={addPinned} onChange={e => setAddPinned(e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
-              <span className="text-[13px] text-zinc-700 dark:text-zinc-300">重要（常に上部に固定）</span>
-            </label>
-            {addError && <p className="text-[12px] text-red-600 dark:text-red-400">{addError}</p>}
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setShowAdd(false)}
-                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-[13px] text-zinc-600 hover:bg-zinc-50 transition-colors">
-                キャンセル
-              </button>
-              <button type="button" onClick={handleCreate} disabled={isAdding}
-                className="flex-1 py-2.5 rounded-xl bg-[#0d1b35] hover:bg-[#162b50] disabled:opacity-50 text-white text-[13px] font-semibold transition-colors">
-                {isAdding ? "投稿中..." : "投稿する"}
-              </button>
-            </div>
+        <div className={`fixed inset-0 bg-black/75 z-50 flex items-end sm:items-center justify-center p-4 ${dotGothic.className}`} onClick={() => setShowAdd(false)}>
+          <div className="w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <RpgWindow>
+              <div className="px-5 py-4 space-y-4">
+                <h2 className="text-[15px] text-white">★ おしらせを ついか</h2>
+                <div>
+                  <label className="block text-[11px] text-white/60 mb-1">タイトル <span className="text-red-400">*</span></label>
+                  <input type="text" value={addTitle} onChange={e => setAddTitle(e.target.value)} placeholder="タイトルを にゅうりょく"
+                    className="w-full px-3 py-2 rounded-lg border border-white/30 bg-[#000846]/80 text-[13px] text-white placeholder-white/40 focus:outline-none focus:border-white" />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-white/60 mb-1">本文 <span className="text-red-400">*</span></label>
+                  <textarea value={addBody} onChange={e => setAddBody(e.target.value)} placeholder="ないようを にゅうりょく" rows={5}
+                    className="w-full px-3 py-2 rounded-lg border border-white/30 bg-[#000846]/80 text-[13px] text-white placeholder-white/40 resize-none focus:outline-none focus:border-white" />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={addPinned} onChange={e => setAddPinned(e.target.checked)} className="w-4 h-4 rounded accent-amber-400" />
+                  <span className="text-[13px] text-white/80">じゅうよう（じょうぶに こていする）</span>
+                </label>
+                {addError && <p className="text-[12px] text-red-300">{addError}</p>}
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setShowAdd(false)}
+                    className="flex-1 py-2.5 rounded-lg border border-white/40 text-[13px] text-white/80 hover:bg-white/10 transition-colors">
+                    やめる
+                  </button>
+                  <button type="button" onClick={handleCreate} disabled={isAdding}
+                    className="flex-1 py-2.5 rounded-lg border-2 border-white bg-white/5 hover:bg-white/15 disabled:opacity-50 text-white text-[13px] transition-colors">
+                    {isAdding ? "とうこう中..." : "▶ とうこうする"}
+                  </button>
+                </div>
+              </div>
+            </RpgWindow>
           </div>
         </div>
       )}

@@ -521,6 +521,26 @@ export default function HomeClient({
 
           <div className="space-y-5 relative z-0 pt-1">
 
+          {/* ── みかくにんの おしらせ アラート（大きく目立たせる） ── */}
+          {noticeCount > 0 && (
+            <a href="/notices" className="block active:scale-[0.99] transition-transform">
+              <div className="relative rounded-lg border-2 border-red-400 bg-[#1a0408] p-[3px] shadow-[0_0_18px_rgba(248,113,113,0.45)]">
+                <div className="rounded-md border border-red-300/70 bg-[#1a0408] px-4 py-3.5 md:px-5 flex items-center gap-3">
+                  <span className="text-[26px] md:text-[30px] leading-none shrink-0" style={{ animation: "rpgCursor 1.4s steps(1) infinite" }}>⚠️</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] md:text-[17px] text-red-200 leading-snug">
+                      みかくにんの おしらせが <span className="text-amber-300 font-bold tabular-nums">{noticeCount}</span>けん あります！
+                    </p>
+                    <p className="text-[11px] md:text-[12px] text-white/60 mt-0.5">タップして ないようを かくにんしよう</p>
+                  </div>
+                  <span className="shrink-0 text-[13px] text-white border-2 border-red-300/70 rounded-lg px-3 py-1.5 whitespace-nowrap">
+                    ▶ みる
+                  </span>
+                </div>
+              </div>
+            </a>
+          )}
+
           {/* ── メッセージウィンドウ（挨拶） ── */}
           <RpgWindow>
             <div className="px-4 py-3.5 md:px-5">

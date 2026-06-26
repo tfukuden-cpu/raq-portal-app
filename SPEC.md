@@ -174,9 +174,12 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 個人宛お知らせにも対応（`target_staff_id`）
 - 既読管理（`notice_reads` テーブル）
 - 未読数はホーム画面のバッジに反映
+- **王道RPG風デザイン**（2026-06-26）。夜空グラデ＋白二重枠ウィンドウ＋DotGothic16。共有部品 `src/components/rpg-ui.tsx` を使用
+- **コメント機能（2026-06-26）**: 各周知を展開するとコメント欄。スタッフが書き込むと `notice_comments` に保存し、**管理者グループLINE**（`project_settings.line_group_id`）へ「コメント内容＋『コメントを見る』ボタン（`/notices?open={id}`）」を通知（`addNoticeCommentAction`・`pushLineWithButton`）。コメント削除は本人/管理者のみ（`deleteNoticeCommentAction`・RLSでも保護）
+- **未確認アラート（2026-06-26）**: 未読の周知がある場合、ホーム画面（`HomeClient`）の上部に大きな赤枠アラート（「みかくにんの おしらせが N件あります！」→ `/notices`）を表示。件数は `noticeCount`（dashboard/page.tsx 算出）
 
 **関連テーブル:**
-`notices`, `notice_reads`
+`notices`, `notice_reads`, `notice_comments`
 
 ---
 

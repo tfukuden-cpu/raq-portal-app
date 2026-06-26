@@ -13,7 +13,15 @@
 
 ---
 
-## 現在の開発状態（2026-06-25更新）
+## 現在の開発状態（2026-06-26更新）
+
+### 周知事項（/notices）をRPG風化＋コメント機能＋未確認アラート（2026-06-26・未デプロイ）
+**ユーザー指示「スタッフメニューの周知事項を王道RPG風に統一。各周知にコメントを書けるようにし、コメントが付いたら内容＋当該ページへのボタンを管理者グループLINEへ通知。未確認の周知があれば当人の画面に大きくアラート」。3点すべて実装。tsc 0エラー・新規lint 0。**
+- **①RPG風化**: `NoticesClient.tsx` を全面書き換え。共有部品 `src/components/rpg-ui.tsx`（`dotGothic`/`RPG_PAGE_BG`/`RPG_KEYFRAMES`/`RpgWindow`/`RpgStarfield`）を使用し、夜空グラデ＋白二重枠ウィンドウ＋ひらがなUI（★おしらせ/みかくにん/かくにんずみ/ついか等）に。タブは「すべて／みかくにん（=未読フィルタ）」。白帯対策で `main` は `min-h-[100dvh] md:h-dvh md:overflow-hidden`＋`pb-32`。旧サイドバー（サマリー/人気）は廃止し1カラム`max-w-3xl`に集約
+- **②コメント機能**: 新テーブル `notice_comments`（本番Supabase適用済・マイグレーション `create_notice_comments`）。`id/project_id/notice_id(FK→notices, on delete cascade)/staff_id/body/created_at`。RLS=案件メンバーselect・本人insert・本人/admin delete。周知カード展開時にコメント一覧＋入力欄。`addNoticeCommentAction`(actions.ts)が insert→**管理者グループLINE**（`project_settings.line_group_id`）へ `pushLineWithButton(groupId, 「💬周知へのコメント…」, "コメントを見る", /notices?open={id})` で通知（通知失敗してもコメント自体は成功扱い・try/catch保護）。`deleteNoticeCommentAction` は本人/管理者のみ。page.tsx が `notice_comments` を `.in("notice_id", ...)` で取得しコメント者名を解決して `comments`/`myStaffId` propで渡す
+- **③未確認アラート**: `HomeClient.tsx` の本文先頭（ヒーロー直下・挨拶の上）に `noticeCount > 0` のとき大きな赤枠アラート（⚠️点滅＋「みかくにんの おしらせが N件あります！」＋「▶みる」→`/notices`）。`noticeCount` は既存の dashboard/page.tsx 算出値をそのまま使用（AdminHomeWrapper も素通しなので管理者も表示）
+- **「管理者グループLINE」= 案件のグループLINE**（`project_settings.line_group_id`）。専用の管理者専用グループIDはスキーマに無く、既存の周知送信も同グループに送るため一貫。グループ未設定なら通知スキップ
+- 残: 本番反映は未（`git push origin master`でVercel自動デプロイ・ユーザー承認必要）。周知管理側(`/notices/manage`)のRPG化は対象外（今回はスタッフ`/notices`のみ）
 
 ### 仮保存が「続きから編集」で反映されないバグ修正（2026-06-25・本番反映済・案件=IDOM）
 **ユーザー報告「仮保存しても、閉じて再度『続きから編集』すると保存した続きになっていない（保存されていない）」。DBには保存されている（O002の7月ドラフト2315件が保存済を確認）が、画面に出ない。**

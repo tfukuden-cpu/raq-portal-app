@@ -40,6 +40,7 @@
 |---------|-----|
 | `notices` | 周知事項（title, body, is_pinned, target_staff_id） |
 | `notice_reads` | お知らせ既読（staff_id, notice_id） |
+| `notice_comments` | 周知へのコメント（id, project_id, notice_id, staff_id, body, created_at）。RLS=案件メンバーselect・本人insert・本人/管理者delete。投稿で管理者グループLINEへ通知 |
 | `inquiries` | 問い合わせ |
 | `notification_logs` | 通知送信ログ（LINE設定の通知履歴で確認可） |
 

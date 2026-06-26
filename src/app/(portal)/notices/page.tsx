@@ -58,6 +58,37 @@ export default async function NoticesPage({
     .from("notice_reads").select("notice_id").eq("staff_id", staffId);
   const readIds = (reads ?? []).map((r) => r.notice_id as string);
 
+  // コメント一覧（当該案件の全周知ぶん）
+  const noticeIds = (rawNotices ?? []).map((n) => n.id as string);
+  const { data: rawComments } = noticeIds.length > 0
+    ? await supabase
+        .from("notice_comments")
+        .select("id, notice_id, staff_id, body, created_at")
+        .in("notice_id", noticeIds)
+        .order("created_at", { ascending: true })
+    : { data: [] };
+
+  // コメント者名を解決（投稿者マップに無いIDを追加取得）
+  const commenterIds = [...new Set((rawComments ?? []).map((c) => c.staff_id).filter(Boolean))];
+  const missingIds = commenterIds.filter((id) => !posterMap.has(id));
+  const { data: commenterStaffs } = missingIds.length > 0
+    ? await supabase.from("staffs").select("id, display_name, name").in("id", missingIds)
+    : { data: [] };
+  const nameMap = new Map(posterMap);
+  for (const s of commenterStaffs ?? []) nameMap.set(s.id, s);
+
+  const comments = (rawComments ?? []).map((c) => {
+    const who = nameMap.get(c.staff_id);
+    return {
+      id:         c.id as string,
+      noticeId:   c.notice_id as string,
+      staffId:    c.staff_id as string,
+      authorName: who?.display_name ?? who?.name ?? c.staff_id,
+      body:       c.body as string,
+      createdAt:  c.created_at as string,
+    };
+  });
+
   const notices = (rawNotices ?? []).map((n) => {
     const poster = posterMap.get(n.posted_by ?? "");
     return {
@@ -76,6 +107,8 @@ export default async function NoticesPage({
     <NoticesClient
       notices={notices}
       readIds={readIds}
+      comments={comments}
+      myStaffId={staffId}
       isAdmin={isAdmin}
       initialOpenId={open ?? null}
     />

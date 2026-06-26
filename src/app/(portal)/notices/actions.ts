@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
 import { sendEventNotify } from "@/lib/notify";
+import { pushLineWithButton } from "@/lib/line";
 
 /** お知らせを「確認済」にする */
 export async function markNoticeReadAction(noticeId: string): Promise<void> {
@@ -167,6 +168,98 @@ async function _createNoticeAction(
 
   return { success: true };
 } // end _createNoticeAction
+
+/**
+ * 周知事項にコメントを投稿する。
+ * 投稿が成功したら、コメント内容＋該当周知へのリンクボタンを
+ * 管理者グループLINE（案件のグループLINE）へ通知する。
+ */
+export async function addNoticeCommentAction(
+  formData: FormData
+): Promise<NoticeResult> {
+  try {
+    return await _addNoticeCommentAction(formData);
+  } catch (e) {
+    console.error("[addNoticeCommentAction] unhandled error:", e);
+    return { success: false, message: "サーバーエラーが発生しました: " + String(e) };
+  }
+}
+
+async function _addNoticeCommentAction(
+  formData: FormData
+): Promise<NoticeResult> {
+  const noticeId = String(formData.get("noticeId") ?? "").trim();
+  const body     = String(formData.get("body")     ?? "").trim();
+
+  if (!noticeId || !body) {
+    return { success: false, message: "コメントを入力してください" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+  const projectId = await getCurrentProjectId();
+  if (!projectId) return { success: false, message: "案件が選択されていません" };
+
+  const { error } = await supabase
+    .from("notice_comments")
+    .insert({ project_id: projectId, notice_id: noticeId, staff_id: staffId, body });
+
+  if (error) return { success: false, message: "コメント投稿失敗：" + error.message };
+
+  revalidatePath("/notices");
+
+  // ── 管理者グループLINEへ通知（コメント内容＋該当ページへのボタン） ──
+  try {
+    const admin = createAdminClient();
+
+    // 周知タイトル・コメント者名・グループIDを並列取得
+    const [{ data: noticeRow }, { data: senderRow }, { data: psRow }] = await Promise.all([
+      admin.from("notices").select("title").eq("id", noticeId).maybeSingle(),
+      admin.from("staffs").select("display_name, name").eq("id", staffId).maybeSingle(),
+      admin.from("project_settings").select("line_group_id").eq("project_id", projectId).maybeSingle(),
+    ]);
+
+    const groupId    = (psRow?.line_group_id as string | null) ?? null;
+    const senderName = senderRow?.display_name ?? senderRow?.name ?? staffId;
+    const title      = (noticeRow?.title as string | undefined) ?? "周知事項";
+
+    if (groupId) {
+      const appUrl    = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+      const noticeUrl = `${appUrl}/notices?open=${noticeId}`;
+      const sep = "─────────────────";
+      const message =
+        `💬 周知へのコメント\n` +
+        `投稿者：${senderName}\n` +
+        `周知：${title}\n` +
+        `${sep}\n${body}\n${sep}`;
+
+      await pushLineWithButton(groupId, message, "コメントを見る", noticeUrl);
+    }
+  } catch (e) {
+    console.error("[addNoticeCommentAction] notify failed:", e);
+    // 通知失敗してもコメント投稿自体は成功扱い
+  }
+
+  return { success: true };
+}
+
+/** コメントを削除する（本人 or 管理者のみ。RLSでも保護済み） */
+export async function deleteNoticeCommentAction(
+  formData: FormData
+): Promise<NoticeResult> {
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { success: false, message: "IDが必要です" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("notice_comments").delete().eq("id", id);
+  if (error) return { success: false, message: "削除失敗：" + error.message };
+
+  revalidatePath("/notices");
+  return { success: true };
+}
 
 export async function updateNoticeAction(
   formData: FormData
