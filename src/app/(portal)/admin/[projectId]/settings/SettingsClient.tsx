@@ -89,8 +89,6 @@ function Divider() {
 export function SettingsContainer({
   projectId,
   projectName,
-  currentUrl,
-  isGSheetsConfigured: gsheetsOk,
   members,
   shiftPatterns,
   notificationSettings,
@@ -103,8 +101,6 @@ export function SettingsContainer({
 }: {
   projectId: string;
   projectName: string;
-  currentUrl: string | null;
-  isGSheetsConfigured: boolean;
   members: Member[];
   shiftPatterns: ShiftPattern[];
   notificationSettings: Partial<NotificationSettings>;
@@ -171,16 +167,6 @@ export function SettingsContainer({
           <section className="space-y-3">
             <SectionHeading title="出発報告" sub="スタッフダッシュボードの「出発報告」ボタンを表示するかどうか" />
             <DepartureToggle projectId={projectId} initialEnabled={enableDeparture} />
-          </section>
-          <Divider />
-          <section className="space-y-3">
-            <SectionHeading title="スプレッドシート" sub="シフト・勤怠データのGoogle Sheets連携設定" />
-            <SpreadsheetForm
-              projectId={projectId}
-              projectName={projectName}
-              currentUrl={currentUrl}
-              isGSheetsConfigured={gsheetsOk}
-            />
           </section>
         </div>
       )}

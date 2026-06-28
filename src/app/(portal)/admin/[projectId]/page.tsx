@@ -1,7 +1,6 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
-import { isGSheetsConfigured } from "@/lib/gsheets";
 import { archiveProjectAction } from "./settings/actions";
 import { SettingsContainer } from "./settings/SettingsClient";
 import { type SeatItem, type WallItem } from "./settings/SeatLayoutEditor";
@@ -210,8 +209,6 @@ export default async function ProjectDetailPage(props: {
           <SettingsContainer
             projectId={projectId}
             projectName={project.name}
-            currentUrl={settings?.sheet_url ?? null}
-            isGSheetsConfigured={isGSheetsConfigured()}
             members={memberList}
             shiftPatterns={patternList}
             notificationSettings={
