@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllPaged } from "@/lib/supabase/fetch-all";
 
 async function requireAccess(projectId: string): Promise<boolean> {
   const supabase = await createClient();
@@ -81,19 +82,23 @@ export async function GET(req: NextRequest) {
 
   const targetIds = staffIds.length > 0 ? staffIds : [...memberMap.keys()];
 
-  let shiftsQ = admin.from("shifts")
-    .select("staff_id, shift_date, shift_name, shift_start, shift_end")
-    .eq("project_id", projectId)
-    .gte("shift_date", startDate).lte("shift_date", endDate);
-  if (targetIds.length > 0) shiftsQ = shiftsQ.in("staff_id", targetIds);
+  // shifts は全スタッフ×期間で1000行を超えるため全件ページング取得（1000行制限対策）
+  const shifts = await fetchAllPaged<{ staff_id: string; shift_date: string; shift_name: string | null; shift_start: string | null; shift_end: string | null }>(
+    (from, to) => {
+      let q = admin.from("shifts")
+        .select("staff_id, shift_date, shift_name, shift_start, shift_end")
+        .eq("project_id", projectId)
+        .gte("shift_date", startDate).lte("shift_date", endDate)
+        .order("shift_date");
+      if (targetIds.length > 0) q = q.in("staff_id", targetIds);
+      return q.range(from, to);
+    });
 
   const [
-    { data: shifts },
     { data: absences },
     { data: lates },
     { data: patterns },
   ] = await Promise.all([
-    shiftsQ,
     admin.from("absence_reports")
       .select("staff_id, absence_date")
       .eq("project_id", projectId)
@@ -107,12 +112,13 @@ export async function GET(req: NextRequest) {
       .eq("project_id", projectId),
   ]);
 
-  // 早退判定に必要な打刻
-  const { data: punches } = await admin.from("punch_logs")
-    .select("staff_id, punch_type, recorded_at")
-    .eq("project_id", projectId)
-    .gte("recorded_at", startISO).lte("recorded_at", endISO)
-    .order("recorded_at");
+  // 早退判定に必要な打刻（punch_logs は月4000行超のため全件ページング取得）
+  const punches = await fetchAllPaged<{ staff_id: string; punch_type: string; recorded_at: string }>(
+    (from, to) => admin.from("punch_logs")
+      .select("staff_id, punch_type, recorded_at")
+      .eq("project_id", projectId)
+      .gte("recorded_at", startISO).lte("recorded_at", endISO)
+      .order("recorded_at").range(from, to));
 
   const punchMap = new Map<string, { clockOut: string | null }>();
   for (const p of punches ?? []) {

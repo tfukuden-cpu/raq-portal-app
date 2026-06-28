@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isManualDraftSection } from "@/lib/shift-draft-config";
+import { fetchAllPaged } from "@/lib/supabase/fetch-all";
 
 export type SlotReqRow = {
   pattern_name: string;
@@ -191,8 +192,6 @@ export async function generateShiftDraftAction(
     { data: memberRows },
     { data: slotReqRows },
     { data: holidayRows },
-    { data: existingShiftRows },
-    { data: prevMonthShiftRows },
     { data: trainingRows },
   ] = await Promise.all([
     admin.from("project_members")
@@ -209,23 +208,28 @@ export async function generateShiftDraftAction(
       .eq("project_id", projectId)
       .gte("request_date", dateFrom)
       .lte("request_date", dateTo),
-    admin.from("shifts")
-      .select("staff_id, shift_date, shift_name")
-      .eq("project_id", projectId)
-      .gte("shift_date", dateFrom)
-      .lte("shift_date", dateTo),
-    // 前月末7日間（連勤引き継ぎ・インターバル計算用）
-    admin.from("shifts")
-      .select("staff_id, shift_date, shift_name")
-      .eq("project_id", projectId)
-      .gte("shift_date", prevMonthDateFrom)
-      .lte("shift_date", prevMonthDateTo),
     // 研修日（当月分）：研修日はシフト仮組みから除外
     admin.from("staff_trainings")
       .select("staff_id, training_date, training_name, start_time, end_time")
       .gte("training_date", dateFrom)
       .lte("training_date", dateTo),
   ]);
+
+  // shifts は1案件1ヶ月で約3700行＝1000行制限を超えるため全件ページング取得
+  // （単発クエリだと後半スタッフの既存シフトが欠落し、仮組の連勤判定・重複配置が崩れる）
+  const existingShiftRows = await fetchAllPaged<{ staff_id: string; shift_date: string; shift_name: string | null }>(
+    (from, to) => admin.from("shifts")
+      .select("staff_id, shift_date, shift_name")
+      .eq("project_id", projectId)
+      .gte("shift_date", dateFrom).lte("shift_date", dateTo)
+      .order("shift_date").range(from, to));
+  // 前月末7日間（連勤引き継ぎ・インターバル計算用）
+  const prevMonthShiftRows = await fetchAllPaged<{ staff_id: string; shift_date: string; shift_name: string | null }>(
+    (from, to) => admin.from("shifts")
+      .select("staff_id, shift_date, shift_name")
+      .eq("project_id", projectId)
+      .gte("shift_date", prevMonthDateFrom).lte("shift_date", prevMonthDateTo)
+      .order("shift_date").range(from, to));
 
   if (!memberRows || memberRows.length === 0) {
     return { success: false, message: "メンバーが登録されていません" };

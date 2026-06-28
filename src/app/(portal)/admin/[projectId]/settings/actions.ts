@@ -17,6 +17,7 @@ import {
   syncHolidaySheet,
 } from "@/lib/gsheets";
 import { getRuleConfig } from "../../holiday-rule-config";
+import { fetchAllPaged } from "@/lib/supabase/fetch-all";
 import {
   buildDefaultNotificationSettings,
   DEFAULT_NOTIFY_MESSAGES,
@@ -129,12 +130,13 @@ async function syncProjectMembersToSheet(projectId: string): Promise<void> {
     const dateTo    = `${year}-${monthStr}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
 
     // 当該月のDBシフトをpresetShiftsとして渡す
-    const { data: shifts } = await supa
-      .from("shifts")
-      .select("staff_id, shift_date, shift_name")
-      .eq("project_id", projectId)
-      .gte("shift_date", dateFrom)
-      .lte("shift_date", dateTo);
+    // shifts は全スタッフ×1ヶ月で1000行超になるため全件ページング取得（1000行制限対策）
+    const shifts = await fetchAllPaged<{ staff_id: string; shift_date: string; shift_name: string | null }>(
+      (from, to) => supa.from("shifts")
+        .select("staff_id, shift_date, shift_name")
+        .eq("project_id", projectId)
+        .gte("shift_date", dateFrom).lte("shift_date", dateTo)
+        .order("shift_date").range(from, to));
 
     const presetShifts = new Map<string, Map<string, string>>();
     for (const s of (shifts ?? [])) {
