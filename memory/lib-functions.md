@@ -65,6 +65,7 @@ Cookie名: `rqp_project_id`、30日有効
 | `server.ts` | サーバーコンポーネント・Server Actions用 |
 | `admin.ts` | `createAdminClient()` — RLS完全バイパス（サーバーのみ） |
 | `middleware.ts` | 認証ミドルウェア |
+| `fetch-all.ts` | `fetchAllPaged<T>(page)` — 1000行制限対策の全件ページング取得。`page(from,to)`に`.range(from,to)`まで付けたクエリを返す関数を渡す（`.order()`必須）。shifts/punch_logs等の数千行テーブルで使う |
 
 ## src/lib/gsheets.ts — Google Sheets
 

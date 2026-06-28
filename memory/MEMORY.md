@@ -15,7 +15,14 @@
 
 ## 現在の開発状態（2026-06-28更新）
 
-### 欠勤者レポートに当月のみ出勤率＋勤怠の曜日ずれ修正（2026-06-28・未デプロイ・案件=IDOM）
+### 1000行制限の地雷を予防的に一掃＋共有ヘルパー新設（2026-06-28・デプロイ済 82c2319）
+**ユーザー指示「アプリをブラッシュアップ・1000行制限バグなど事前に解消」。Exploreエージェントで全`shifts`/`punch_logs`クエリを監査し、未修正の地雷を全件ページング化。tsc 0・新規lint 0。**
+- **新ヘルパー `src/lib/supabase/fetch-all.ts` の `fetchAllPaged<T>(page)`**: `page(from,to)`に「`.range(from,to)`まで付けたクエリ」を返す関数を渡すと1000行ずつ全件取得。`.order()`必須。型付き/未型付きどちらのクライアントでも可（`page`の戻り値で`T`推論）。今後数千行テーブルを取るときは必ずこれを使う
+- **修正した地雷5クエリ**: ①②`draft-actions.ts`の仮組生成＝当月shifts＋前月末7日shifts（**後半スタッフの既存シフトが欠落→連勤判定・重複配置が崩れていた**・最重要）／③④`compliance/route.ts`遵守率APIの`shifts`と`punch_logs`（エージェントは punch_logs を見落とし・人手で追加検出）／⑤`settings/actions.ts`のスプシ同期`syncProjectMembersToSheet`の月次shifts
+- **安全と確認済み（修正不要）**: `record/page.tsx`・`dashboard/page.tsx`(単一スタッフや7日以内)、`attendance/page.tsx`(当日`.in`)、`statuses/route.ts`(当日のみ)。既に修正済の`attendance/edit/page.tsx`(fetchAllShifts/Punches)・`work-record-actions.ts`・`export/route.ts`・`absentees/route.ts`(fetchAllRows)・`shifts/manage/page.tsx`(5バッチ手書き)はそのまま（将来`fetchAllPaged`へ寄せてもよいが今回は触らず）
+- 残: メニュー（ナビ）の不要項目整理はユーザー確認待ち
+
+### 欠勤者レポートに当月のみ出勤率＋勤怠の曜日ずれ修正（2026-06-28・デプロイ済・案件=IDOM）
 **改修依頼2件。①欠勤者レポートの出勤率が累計のみ→当月のみの出勤率も表示／②個人ページ(勤怠実績/勤怠管理)の日付と曜日がずれる。tsc 0エラー・新規lint 0（既存のset-state-in-effect warnのみ）。**
 - **①当月のみの出勤率（欠勤者レポート）**: 勤怠管理`/attendance/edit`の欠勤者レポートタブ＝`AbsenteeReportClient.tsx`＋API `GET /api/admin/work-records/absentees`。人別タップの実績が「過去13ヶ月の累計」1つだけだった→**「当月のみの実績」を追加**（上=当月／下=過去1年累計の2段）。出勤率は **小数2桁**化（例 出勤2/14日=14.29%。従来`Math.round`は整数だった）。**出勤予定は本日(JST)まで**しかカウントしない（`todayJST`で未来日除外＝当月途中でも正しい母数に・累計側にも同cutoff適用）。API: `AbsenteeStaff`に`monthShiftDays/monthAttendedDays/monthAbsentDays/monthRate`追加、`pct(attended,total)=Math.round(a/t*10000)/100`。当月の欠勤数は出勤予定日のみ（`monthAbsentDays`）でカウント＝率の母数と一致（ヘッダーの`当月N回`は報告ベースの`monthAbsences`のまま）。UI: `rateColor()`ヘルパー新設で当月/累計共用
 - **②日付と曜日のずれ**: `new Date(ds+"T00:00:00+09:00")`＋`getDay()`の地雷パターン。**サーバー実行(UTC)の`record/page.tsx`(スタッフ勤怠実績)が確実に1日ずれていた**（JST真夜中=UTC前日15時→getDay()が前日の曜日）。`new Date(ds+"T00:00:00Z")`＋`getUTCDay()`に修正。管理者側`/attendance/edit`の同パターン3箇所も予防的に統一（`AttendanceEditClient.tsx`の`fmtDate`/詳細カレンダーdow、`AttendanceSummarySection.tsx`のCSV出力`fmtDate`＋行生成）。クライアントはJSTブラウザなら偶然正しく出ていたがTZ非依存に
