@@ -108,11 +108,9 @@ export default function AbsenteeReportClient({ projectId }: { projectId: string 
                     <span className="text-[11px] tabular-nums text-zinc-400 w-16 shrink-0">{s.accountNumber ?? "—"}</span>
                     <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 flex-1 truncate">{s.name}</span>
                     {s.section && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 shrink-0">{s.section}</span>}
-                    <span className="flex flex-col items-end leading-tight shrink-0 w-20">
-                      <span className="text-sm font-bold text-red-600 dark:text-red-300 tabular-nums">
-                        {s.monthAbsentRate === null ? "—" : `欠勤${s.monthAbsentRate}%`}
-                      </span>
-                      <span className="text-[10px] font-semibold text-zinc-400 tabular-nums">当月{s.monthAbsences}回</span>
+                    <span className="text-xs font-bold text-red-600 dark:text-red-300 tabular-nums shrink-0">
+                      {s.monthAbsentRate === null ? "—" : `欠勤${s.monthAbsentRate}%`}
+                      <span className="font-semibold text-zinc-400 ml-1">{s.monthAbsences}回</span>
                     </span>
                     <span className={`text-zinc-300 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
                   </button>
