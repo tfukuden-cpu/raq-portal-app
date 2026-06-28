@@ -42,6 +42,7 @@ export type AbsenteeStaff = {
   monthAttendedDays: number;      // 当月の出勤数
   monthAbsentDays: number;        // 当月の欠勤数（出勤予定日のみ）
   monthRate: number | null;       // 当月のみの出勤率（%・小数2桁）
+  monthAbsentRate: number | null; // 当月のみの欠勤率（%・小数2桁）
   // 過去13ヶ月の累計実績
   histShiftDays: number;          // 過去分の出勤予定日数（公休等除く）
   histAttendedDays: number;       // 過去分の出勤数
@@ -168,6 +169,7 @@ export async function GET(req: NextRequest) {
       monthAttendedDays: monthAttended,
       monthAbsentDays:   ms.absentDays,
       monthRate:         pct(monthAttended, ms.shiftDays),
+      monthAbsentRate:   pct(ms.absentDays, ms.shiftDays),
       histShiftDays:     hs.shiftDays,
       histAttendedDays:  histAttended,
       histAbsentDays:    hs.absentDays,
