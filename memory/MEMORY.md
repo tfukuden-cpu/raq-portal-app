@@ -19,7 +19,9 @@
 **改修依頼2件。①欠勤者レポートの出勤率が累計のみ→当月のみの出勤率も表示／②個人ページ(勤怠実績/勤怠管理)の日付と曜日がずれる。tsc 0エラー・新規lint 0（既存のset-state-in-effect warnのみ）。**
 - **①当月のみの出勤率（欠勤者レポート）**: 勤怠管理`/attendance/edit`の欠勤者レポートタブ＝`AbsenteeReportClient.tsx`＋API `GET /api/admin/work-records/absentees`。人別タップの実績が「過去13ヶ月の累計」1つだけだった→**「当月のみの実績」を追加**（上=当月／下=過去1年累計の2段）。出勤率は **小数2桁**化（例 出勤2/14日=14.29%。従来`Math.round`は整数だった）。**出勤予定は本日(JST)まで**しかカウントしない（`todayJST`で未来日除外＝当月途中でも正しい母数に・累計側にも同cutoff適用）。API: `AbsenteeStaff`に`monthShiftDays/monthAttendedDays/monthAbsentDays/monthRate`追加、`pct(attended,total)=Math.round(a/t*10000)/100`。当月の欠勤数は出勤予定日のみ（`monthAbsentDays`）でカウント＝率の母数と一致（ヘッダーの`当月N回`は報告ベースの`monthAbsences`のまま）。UI: `rateColor()`ヘルパー新設で当月/累計共用
 - **②日付と曜日のずれ**: `new Date(ds+"T00:00:00+09:00")`＋`getDay()`の地雷パターン。**サーバー実行(UTC)の`record/page.tsx`(スタッフ勤怠実績)が確実に1日ずれていた**（JST真夜中=UTC前日15時→getDay()が前日の曜日）。`new Date(ds+"T00:00:00Z")`＋`getUTCDay()`に修正。管理者側`/attendance/edit`の同パターン3箇所も予防的に統一（`AttendanceEditClient.tsx`の`fmtDate`/詳細カレンダーdow、`AttendanceSummarySection.tsx`のCSV出力`fmtDate`＋行生成）。クライアントはJSTブラウザなら偶然正しく出ていたがTZ非依存に
-- 残: 本番反映は未（`git push origin master`でVercel自動デプロイ・ユーザー承認必要）
+- **追補1（デプロイ済 cba4e1e）**: リスト行に当月の欠勤率を表示（`monthAbsentRate`追加）。当初2段→ユーザー要望で「欠勤89% 17回」の1行コンパクト表示に。**基本コンパクト方針**
+- **追補2＝1000行制限バグ（デプロイ済 9a222f8）**: ユーザー報告「回数に乖離」（行17回 vs パネル欠勤6日）。原因＝absentees APIが `shifts` を13ヶ月×全スタッフ（P001で**7222行**）を単発クエリで取得→**PostgREST 1000行制限でtruncate**され出勤予定数が過少（川島6/19日中6日）。`.range()`ループの `fetchAllRows<T>(table,dateCol,select)` ヘルパーで全件取得に修正（absence_reports131件は元々1000未満だが同ヘルパー経由に統一）。**この種の集計APIで数千行テーブルを取るときは必ずページネーション**（地雷表の既出項目の再発）
+- 残: 全件デプロイ済
 
 ### 周知事項（/notices）をRPG風化＋コメント機能＋未確認アラート（2026-06-26・デプロイ済）
 **ユーザー指示「スタッフメニューの周知事項を王道RPG風に統一。各周知にコメントを書けるようにし、コメントが付いたら内容＋当該ページへのボタンを管理者グループLINEへ通知。未確認の周知があれば当人の画面に大きくアラート」。3点すべて実装。tsc 0エラー・新規lint 0。**
