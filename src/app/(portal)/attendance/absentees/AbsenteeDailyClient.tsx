@@ -17,6 +17,12 @@ function shiftMonth(month: string, delta: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+function dowColor(dow: number): string {
+  return dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-zinc-700 dark:text-zinc-200";
+}
+
+type ViewMode = "daily" | "monthly";
+
 export default function AbsenteeDailyClient({
   projectId,
   initialMonth,
@@ -25,6 +31,7 @@ export default function AbsenteeDailyClient({
   initialMonth: string | null;
 }) {
   const [month, setMonth] = useState<string>(initialMonth ?? "");
+  const [view, setView] = useState<ViewMode>("daily");
   const [loading, setLoading] = useState(false);
   const [byDate, setByDate] = useState<AbsenteeByDate[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -95,54 +102,32 @@ export default function AbsenteeDailyClient({
         ← 欠勤者レポートに戻る
       </Link>
 
-      <h2 className="text-lg font-bold text-zinc-800 dark:text-zinc-100 mb-3">日毎の欠勤者</h2>
+      <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-4">欠勤者</h2>
+
+      {/* 日毎／月毎 切替 */}
+      <div className="flex p-1 rounded-2xl bg-zinc-100 dark:bg-zinc-800/80 mb-4">
+        {([["daily", "日毎"], ["monthly", "月毎"]] as [ViewMode, string][]).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setView(key)}
+            className={`flex-1 py-2 rounded-xl text-sm font-bold transition-colors ${
+              view === key
+                ? "bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 shadow-sm"
+                : "text-zinc-500 dark:text-zinc-400"
+            }`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* 月ナビ */}
-      <div className="flex items-center justify-center gap-3 mb-4">
+      <div className="flex items-center justify-center gap-3 mb-3">
         <button type="button" onClick={() => setMonth(prev => shiftMonth(prev, -1))}
           className="w-9 h-9 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700">◀</button>
         <span className="text-lg font-bold text-zinc-800 dark:text-zinc-100 tabular-nums min-w-[7rem] text-center">{monthLabel}</span>
         <button type="button" onClick={() => setMonth(prev => shiftMonth(prev, 1))}
           className="w-9 h-9 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700">▶</button>
-      </div>
-
-      {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
-
-      {/* カレンダー */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 mb-4">
-        {/* 曜日ヘッダー */}
-        <div className="grid grid-cols-7 mb-1">
-          {WEEK.map((w, i) => (
-            <div key={w} className={`text-center text-[11px] font-bold py-1 ${i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-zinc-400"}`}>{w}</div>
-          ))}
-        </div>
-        {/* 日セル */}
-        <div className="grid grid-cols-7 gap-1">
-          {cells.map((ds, idx) => {
-            if (!ds) return <div key={`b${idx}`} />;
-            const dow = dowOf(ds);
-            const count = itemsByDate.get(ds)?.length ?? 0;
-            const selected = ds === selectedDate;
-            const dayNum = parseInt(ds.slice(8), 10);
-            return (
-              <button
-                key={ds}
-                type="button"
-                onClick={() => setSelectedDate(ds)}
-                className={`relative aspect-square rounded-xl flex flex-col items-center justify-center transition-colors
-                  ${selected ? "ring-2 ring-zinc-800 dark:ring-zinc-100" : ""}
-                  ${count > 0
-                    ? "bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/40"
-                    : "hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
-              >
-                <span className={`text-sm font-semibold tabular-nums ${dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-zinc-700 dark:text-zinc-200"}`}>{dayNum}</span>
-                {count > 0 && (
-                  <span className="mt-0.5 text-[10px] font-bold text-white bg-red-500 rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center tabular-nums leading-none">{count}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* サマリー */}
@@ -151,34 +136,102 @@ export default function AbsenteeDailyClient({
         <span>延べ <span className="font-bold text-red-500 tabular-nums">{totalAbsences}</span> 名</span>
       </div>
 
+      {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
       {loading && <p className="text-sm text-zinc-400 text-center py-6">読み込み中…</p>}
 
       {!loading && totalDays === 0 && (
-        <p className="text-sm text-zinc-400 text-center py-8">この月の欠勤者はいません</p>
+        <p className="text-sm text-zinc-400 text-center py-10">この月の欠勤者はいません</p>
       )}
 
-      {/* 選択した日の欠勤者 */}
-      {!loading && selectedDate && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-800">
-            <span className="text-base font-bold text-zinc-800 dark:text-zinc-100 tabular-nums">
-              {m}/{parseInt(selectedDate.slice(8), 10)}（{WEEK[dowOf(selectedDate)]}）
-            </span>
-            <span className="text-sm font-bold text-red-500 tabular-nums">欠勤 {selectedItems.length} 名</span>
-          </div>
-          {selectedItems.length === 0 ? (
-            <p className="text-sm text-zinc-400 text-center py-8">この日の欠勤者はいません</p>
-          ) : (
-            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {selectedItems.map(it => (
-                <li key={it.staffId} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="text-[11px] tabular-nums text-zinc-400 w-14 shrink-0">{it.accountNumber ?? "—"}</span>
-                  <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 flex-1 truncate">{it.name}</span>
-                  {it.reason && <span className="text-xs text-red-400 truncate max-w-[45%]">{it.reason}</span>}
-                </li>
+      {/* ── 日毎ビュー（カレンダー＋選択日） ── */}
+      {!loading && view === "daily" && totalDays > 0 && (
+        <>
+          {/* カレンダー */}
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 mb-4">
+            <div className="grid grid-cols-7 mb-1">
+              {WEEK.map((w, i) => (
+                <div key={w} className={`text-center text-[11px] font-bold py-1 ${i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-zinc-400"}`}>{w}</div>
               ))}
-            </ul>
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {cells.map((ds, idx) => {
+                if (!ds) return <div key={`b${idx}`} />;
+                const dow = dowOf(ds);
+                const count = itemsByDate.get(ds)?.length ?? 0;
+                const selected = ds === selectedDate;
+                const dayNum = parseInt(ds.slice(8), 10);
+                return (
+                  <button
+                    key={ds}
+                    type="button"
+                    onClick={() => setSelectedDate(ds)}
+                    className={`relative aspect-square rounded-xl flex flex-col items-center justify-center transition-colors
+                      ${selected ? "ring-2 ring-zinc-800 dark:ring-zinc-100" : ""}
+                      ${count > 0
+                        ? "bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/40"
+                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}>
+                    <span className={`text-sm font-semibold tabular-nums ${dowColor(dow)}`}>{dayNum}</span>
+                    {count > 0 && (
+                      <span className="mt-0.5 text-[10px] font-bold text-white bg-red-500 rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center tabular-nums leading-none">{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 選択した日の欠勤者 */}
+          {selectedDate && (
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-800">
+                <span className="text-base font-bold text-zinc-800 dark:text-zinc-100 tabular-nums">
+                  {m}/{parseInt(selectedDate.slice(8), 10)}（{WEEK[dowOf(selectedDate)]}）
+                </span>
+                <span className="text-sm font-bold text-red-500 tabular-nums">欠勤 {selectedItems.length} 名</span>
+              </div>
+              {selectedItems.length === 0 ? (
+                <p className="text-sm text-zinc-400 text-center py-8">この日の欠勤者はいません</p>
+              ) : (
+                <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {selectedItems.map(it => (
+                    <li key={it.staffId} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="text-[11px] tabular-nums text-zinc-400 w-14 shrink-0">{it.accountNumber ?? "—"}</span>
+                      <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 flex-1 truncate">{it.name}</span>
+                      {it.reason && <span className="text-xs text-red-400 truncate max-w-[45%]">{it.reason}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
+        </>
+      )}
+
+      {/* ── 月毎ビュー（その月の欠勤日を一覧） ── */}
+      {!loading && view === "monthly" && totalDays > 0 && (
+        <div className="space-y-3">
+          {byDate.map(d => {
+            const dow = dowOf(d.date);
+            return (
+              <div key={d.date} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-800">
+                  <span className={`text-sm font-bold tabular-nums ${dowColor(dow)}`}>
+                    {m}/{parseInt(d.date.slice(8), 10)}（{WEEK[dow]}）
+                  </span>
+                  <span className="ml-auto text-xs font-bold text-white bg-red-500 rounded-full px-2 py-0.5 tabular-nums">{d.items.length}名</span>
+                </div>
+                <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {d.items.map(it => (
+                    <li key={it.staffId} className="flex items-center gap-3 px-4 py-2">
+                      <span className="text-[11px] tabular-nums text-zinc-400 w-14 shrink-0">{it.accountNumber ?? "—"}</span>
+                      <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 flex-1 truncate">{it.name}</span>
+                      {it.reason && <span className="text-xs text-red-400 truncate max-w-[45%]">{it.reason}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

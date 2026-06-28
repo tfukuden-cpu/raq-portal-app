@@ -76,12 +76,16 @@ export default function AbsenteeReportClient({ projectId }: { projectId: string 
         </div>
       </div>
 
-      {/* 日毎の欠勤者を表で見る（別ページ） */}
+      {/* 日毎・月毎の欠勤者（別ページ） */}
       <Link
         href={`/attendance/absentees${month ? `?month=${month}` : ""}`}
-        className="flex items-center justify-center gap-2 w-full mb-5 px-4 py-3 rounded-2xl bg-zinc-800 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-bold hover:bg-zinc-700 dark:hover:bg-white transition-colors">
-        📅 日毎の欠勤者を表で見る
-        <span className="text-base">›</span>
+        className="flex items-center gap-3 w-full mb-5 px-4 py-3.5 rounded-2xl bg-zinc-800 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-white transition-colors">
+        <span className="text-xl">📅</span>
+        <span className="flex-1 text-left">
+          <span className="block text-sm font-bold">日毎の欠勤者</span>
+          <span className="block text-[11px] opacity-70">カレンダー・月毎一覧で確認</span>
+        </span>
+        <span className="text-lg">›</span>
       </Link>
 
       {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
