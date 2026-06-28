@@ -21,6 +21,7 @@
 - **②日付と曜日のずれ**: `new Date(ds+"T00:00:00+09:00")`＋`getDay()`の地雷パターン。**サーバー実行(UTC)の`record/page.tsx`(スタッフ勤怠実績)が確実に1日ずれていた**（JST真夜中=UTC前日15時→getDay()が前日の曜日）。`new Date(ds+"T00:00:00Z")`＋`getUTCDay()`に修正。管理者側`/attendance/edit`の同パターン3箇所も予防的に統一（`AttendanceEditClient.tsx`の`fmtDate`/詳細カレンダーdow、`AttendanceSummarySection.tsx`のCSV出力`fmtDate`＋行生成）。クライアントはJSTブラウザなら偶然正しく出ていたがTZ非依存に
 - **追補1（デプロイ済 cba4e1e）**: リスト行に当月の欠勤率を表示（`monthAbsentRate`追加）。当初2段→ユーザー要望で「欠勤89% 17回」の1行コンパクト表示に。**基本コンパクト方針**
 - **追補2＝1000行制限バグ（デプロイ済 9a222f8）**: ユーザー報告「回数に乖離」（行17回 vs パネル欠勤6日）。原因＝absentees APIが `shifts` を13ヶ月×全スタッフ（P001で**7222行**）を単発クエリで取得→**PostgREST 1000行制限でtruncate**され出勤予定数が過少（川島6/19日中6日）。`.range()`ループの `fetchAllRows<T>(table,dateCol,select)` ヘルパーで全件取得に修正（absence_reports131件は元々1000未満だが同ヘルパー経由に統一）。**この種の集計APIで数千行テーブルを取るときは必ずページネーション**（地雷表の既出項目の再発）
+- **追補3＝日毎の欠勤者を専用ページ化（デプロイ済 ad417d7→28b9155）**: ユーザー要望「日毎の欠勤者を別ページに・表は名前羅列でデザイン性に欠ける→日ごとに選ぶ形に」。欠勤者レポートのインライン日毎リストを廃止→「📅日毎の欠勤者を表で見る」ボタンで新ページ `/attendance/absentees`（`page.tsx`管理者ガード＋`AbsenteeDailyClient.tsx`）へ。当初テーブル版→**カレンダー＋日選択UIに刷新**（月カレンダーの各日に欠勤人数バッジ・日タップでその日の欠勤者一覧を下に表示・最終欠勤日を初期選択）。同じ `/api/admin/work-records/absentees`(byDate)を再利用。戻るリンク`/attendance/edit?tab=absentees`
 - 残: 全件デプロイ済
 
 ### 周知事項（/notices）をRPG風化＋コメント機能＋未確認アラート（2026-06-26・デプロイ済）
