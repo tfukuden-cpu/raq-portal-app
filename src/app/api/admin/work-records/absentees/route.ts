@@ -89,15 +89,31 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const [{ data: histAbsences }, { data: histShifts }] = await Promise.all([
-    admin.from("absence_reports")
-      .select("staff_id, absence_date, reason")
-      .eq("project_id", projectId)
-      .gte("absence_date", histStart).lte("absence_date", monthEnd),
-    admin.from("shifts")
-      .select("staff_id, shift_date, shift_name")
-      .eq("project_id", projectId)
-      .gte("shift_date", histStart).lte("shift_date", monthEnd),
+  // PostgREST は1クエリ最大1000行しか返さないため、.range() で全件取得する。
+  // shifts は13ヶ月×全スタッフで数千行に達する（1000行で切れると出勤予定数が過少になる）。
+  async function fetchAllRows<T>(table: string, dateCol: string, selectCols: string): Promise<T[]> {
+    const all: T[] = [];
+    const SIZE = 1000;
+    for (let offset = 0; ; offset += SIZE) {
+      const { data, error } = await admin
+        .from(table)
+        .select(selectCols)
+        .eq("project_id", projectId)
+        .gte(dateCol, histStart).lte(dateCol, monthEnd)
+        .order(dateCol, { ascending: true })
+        .range(offset, offset + SIZE - 1);
+      if (error || !data || data.length === 0) break;
+      all.push(...(data as unknown as T[]));
+      if (data.length < SIZE) break;
+    }
+    return all;
+  }
+
+  const [histAbsences, histShifts] = await Promise.all([
+    fetchAllRows<{ staff_id: string; absence_date: string; reason: string | null }>(
+      "absence_reports", "absence_date", "staff_id, absence_date, reason"),
+    fetchAllRows<{ staff_id: string; shift_date: string; shift_name: string | null }>(
+      "shifts", "shift_date", "staff_id, shift_date, shift_name"),
   ]);
 
   // 当月の欠勤（日毎）
