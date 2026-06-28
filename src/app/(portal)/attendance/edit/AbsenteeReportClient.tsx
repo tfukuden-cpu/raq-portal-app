@@ -1,16 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { AbsenteeByDate, AbsenteeStaff } from "@/app/api/admin/work-records/absentees/route";
-
-const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
-
-function mdLabel(ds: string): string {
-  // "YYYY-MM-DD" → "M/D(曜)"。曜日はTZ非依存に算出
-  const [, mm, dd] = ds.split("-");
-  const dow = new Date(`${ds}T00:00:00Z`).getUTCDay();
-  return `${parseInt(mm)}/${parseInt(dd)}（${WEEK[dow]}）`;
-}
+import Link from "next/link";
+import type { AbsenteeStaff } from "@/app/api/admin/work-records/absentees/route";
 
 function rateColor(rate: number | null): string {
   if (rate === null) return "text-zinc-400";
@@ -28,7 +20,6 @@ function shiftMonth(month: string, delta: number): string {
 export default function AbsenteeReportClient({ projectId }: { projectId: string }) {
   const [month, setMonth] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [byDate, setByDate] = useState<AbsenteeByDate[]>([]);
   const [staff, setStaff] = useState<AbsenteeStaff[]>([]);
   const [openStaffId, setOpenStaffId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,12 +36,11 @@ export default function AbsenteeReportClient({ projectId }: { projectId: string 
     try {
       const res = await fetch(`/api/admin/work-records/absentees?projectId=${encodeURIComponent(projectId)}&month=${mon}`);
       if (!res.ok) throw new Error(`(${res.status})`);
-      const data = await res.json() as { byDate: AbsenteeByDate[]; staff: AbsenteeStaff[] };
-      setByDate(data.byDate ?? []);
+      const data = await res.json() as { staff: AbsenteeStaff[] };
       setStaff(data.staff ?? []);
     } catch (e) {
       setError("読み込みに失敗しました " + (e instanceof Error ? e.message : ""));
-      setByDate([]); setStaff([]);
+      setStaff([]);
     } finally {
       setLoading(false);
     }
@@ -85,6 +75,14 @@ export default function AbsenteeReportClient({ projectId }: { projectId: string 
           <p className="text-2xl font-bold text-zinc-700 dark:text-zinc-200 tabular-nums">{totalAbsenceDays}<span className="text-sm font-semibold ml-0.5">日</span></p>
         </div>
       </div>
+
+      {/* 日毎の欠勤者を表で見る（別ページ） */}
+      <Link
+        href={`/attendance/absentees${month ? `?month=${month}` : ""}`}
+        className="flex items-center justify-center gap-2 w-full mb-5 px-4 py-3 rounded-2xl bg-zinc-800 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-bold hover:bg-zinc-700 dark:hover:bg-white transition-colors">
+        📅 日毎の欠勤者を表で見る
+        <span className="text-base">›</span>
+      </Link>
 
       {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
       {loading && <p className="text-sm text-zinc-400 text-center py-8">読み込み中…</p>}
@@ -164,27 +162,6 @@ export default function AbsenteeReportClient({ projectId }: { projectId: string 
                 </div>
               );
             })}
-          </div>
-
-          {/* 日毎の欠勤者 */}
-          <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-2">日毎の欠勤者</h3>
-          <div className="space-y-2">
-            {byDate.map(d => (
-              <div key={d.date} className="rounded-2xl border border-zinc-100 dark:border-zinc-800 px-4 py-2.5">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-bold text-zinc-700 dark:text-zinc-200 tabular-nums">{mdLabel(d.date)}</span>
-                  <span className="text-[11px] font-semibold text-red-500 tabular-nums">{d.items.length}名</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {d.items.map(it => (
-                    <span key={it.staffId} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-100 dark:border-red-900/50">
-                      <span className="font-semibold">{it.name}</span>
-                      {it.reason && <span className="text-red-400 truncate max-w-[140px]">{it.reason}</span>}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
           </div>
         </>
       )}
