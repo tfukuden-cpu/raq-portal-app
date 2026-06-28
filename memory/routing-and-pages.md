@@ -37,6 +37,7 @@
 |------|------|
 | `/attendance` | 当日状況（タブ: 出勤簿 / 確定後変更 / 座席表 / 打刻記録 / **日次報告**(2026-06-20追加・#16・優先セクション販売/査定の一覧＋欠勤チェック＋Excel出力)） |
 | `/attendance/edit` | 勤怠管理（4タブ: 勤怠修正・申請一覧・勤怠実績・**欠勤者レポート**）URLパラメータ: `?tab=corrections\|requests\|records\|absentees&month=YYYY-MM&staffId=S001`。※遵守率(compliance)タブは2026-06-20に欠勤者レポート(absentees)へ置換(#14) |
+| `/attendance/absentees` | **日毎の欠勤者**（2026-06-28追加・管理者ガード）。欠勤者レポートタブの「📅 日毎の欠勤者」ボタンから遷移。選択月の日毎の表（日付\|人数\|欠勤者）＋月ナビ。`AbsenteeDailyClient`・`?month=YYYY-MM`・同API(byDate)再利用 |
 | `/shifts/manage` | シフト管理・インポート |
 | `/members` | メンバー管理・番付 |
 | `/seating` | 座席配置 |

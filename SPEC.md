@@ -461,7 +461,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 | 勤怠修正 | `punch_corrections`（staff申請の打刻補正）一覧。フィルタ: 審査中/すべて/承認済/却下。承認/却下モーダル（承認時は punch_logs を正しい時刻で上書き＋LINE通知）。承認済みに「再適用」ボタン（タイムスタンプバグ救済用）。SV承認者列（work_exception_requests とクロス参照） |
 | 申請一覧 | `work_exception_requests`（早退・残業申請）一覧。フィルタ: すべて/早退/残業。SV署名・ステータス表示（現状 view-only） |
 | 勤怠実績 | 月ナビ＋名前検索 → スタッフ一覧（月次サマリー）→ クリックで当月全日カレンダー詳細。公休・希望休含む全シフトを表示。打刻修正モーダル・確定ボタン・月計フッター。管理者修正は備考欄に修正者名を表示。出力ボタン（ExportModal）。詳細ビューでも月移動可（URLにstaffId保持） |
-| 欠勤者レポート | （2026-06-20・#14で遵守率タブを置換）`AbsenteeReportClient` ＋ API `GET /api/admin/work-records/absentees?projectId&month`。月ナビ／当月の欠勤者数・延べ欠勤日数／当月の欠勤者一覧（タップで過去1年の出勤率・出勤数・欠勤数を展開）／日毎の欠勤者一覧。※旧遵守率(WorkRecordsClient fixedTab="compliance")は当タブからは撤去（コンポーネント自体は残置） |
+| 欠勤者レポート | （2026-06-20・#14で遵守率タブを置換／2026-06-28拡張）`AbsenteeReportClient` ＋ API `GET /api/admin/work-records/absentees?projectId&month`。月ナビ／当月の欠勤者数・延べ欠勤日数／当月の欠勤者一覧（各行に**当月の欠勤率%＋回数**を表示・タップで**当月のみ**と**過去1年累計**の出勤率/出勤数/欠勤数を2段で展開）。**出勤率は小数2桁・出勤予定は本日(JST)まででカウント**。日毎の欠勤者は別ページ `/attendance/absentees`（「📅 日毎の欠勤者」ボタン→選択月の日毎の表）に分離。※旧遵守率(WorkRecordsClient fixedTab="compliance")は当タブからは撤去（コンポーネント自体は残置）。※API は shifts を `.range()` で全件取得（1000行制限対策） |
 
 **関連テーブル:**
 `punch_logs`, `shifts`, `punch_corrections`, `work_exception_requests`, `absence_reports`, `late_reports`, `attendance_confirmations`, `staff_break_overrides`, `shift_patterns`
