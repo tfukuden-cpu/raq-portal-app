@@ -13,9 +13,15 @@
 
 ---
 
-## 現在の開発状態（2026-06-26更新）
+## 現在の開発状態（2026-06-28更新）
 
-### 周知事項（/notices）をRPG風化＋コメント機能＋未確認アラート（2026-06-26・未デプロイ）
+### 欠勤者レポートに当月のみ出勤率＋勤怠の曜日ずれ修正（2026-06-28・未デプロイ・案件=IDOM）
+**改修依頼2件。①欠勤者レポートの出勤率が累計のみ→当月のみの出勤率も表示／②個人ページ(勤怠実績/勤怠管理)の日付と曜日がずれる。tsc 0エラー・新規lint 0（既存のset-state-in-effect warnのみ）。**
+- **①当月のみの出勤率（欠勤者レポート）**: 勤怠管理`/attendance/edit`の欠勤者レポートタブ＝`AbsenteeReportClient.tsx`＋API `GET /api/admin/work-records/absentees`。人別タップの実績が「過去13ヶ月の累計」1つだけだった→**「当月のみの実績」を追加**（上=当月／下=過去1年累計の2段）。出勤率は **小数2桁**化（例 出勤2/14日=14.29%。従来`Math.round`は整数だった）。**出勤予定は本日(JST)まで**しかカウントしない（`todayJST`で未来日除外＝当月途中でも正しい母数に・累計側にも同cutoff適用）。API: `AbsenteeStaff`に`monthShiftDays/monthAttendedDays/monthAbsentDays/monthRate`追加、`pct(attended,total)=Math.round(a/t*10000)/100`。当月の欠勤数は出勤予定日のみ（`monthAbsentDays`）でカウント＝率の母数と一致（ヘッダーの`当月N回`は報告ベースの`monthAbsences`のまま）。UI: `rateColor()`ヘルパー新設で当月/累計共用
+- **②日付と曜日のずれ**: `new Date(ds+"T00:00:00+09:00")`＋`getDay()`の地雷パターン。**サーバー実行(UTC)の`record/page.tsx`(スタッフ勤怠実績)が確実に1日ずれていた**（JST真夜中=UTC前日15時→getDay()が前日の曜日）。`new Date(ds+"T00:00:00Z")`＋`getUTCDay()`に修正。管理者側`/attendance/edit`の同パターン3箇所も予防的に統一（`AttendanceEditClient.tsx`の`fmtDate`/詳細カレンダーdow、`AttendanceSummarySection.tsx`のCSV出力`fmtDate`＋行生成）。クライアントはJSTブラウザなら偶然正しく出ていたがTZ非依存に
+- 残: 本番反映は未（`git push origin master`でVercel自動デプロイ・ユーザー承認必要）
+
+### 周知事項（/notices）をRPG風化＋コメント機能＋未確認アラート（2026-06-26・デプロイ済）
 **ユーザー指示「スタッフメニューの周知事項を王道RPG風に統一。各周知にコメントを書けるようにし、コメントが付いたら内容＋当該ページへのボタンを管理者グループLINEへ通知。未確認の周知があれば当人の画面に大きくアラート」。3点すべて実装。tsc 0エラー・新規lint 0。**
 - **①RPG風化**: `NoticesClient.tsx` を全面書き換え。共有部品 `src/components/rpg-ui.tsx`（`dotGothic`/`RPG_PAGE_BG`/`RPG_KEYFRAMES`/`RpgWindow`/`RpgStarfield`）を使用し、夜空グラデ＋白二重枠ウィンドウ＋ひらがなUI（★おしらせ/みかくにん/かくにんずみ/ついか等）に。タブは「すべて／みかくにん（=未読フィルタ）」。白帯対策で `main` は `min-h-[100dvh] md:h-dvh md:overflow-hidden`＋`pb-32`。旧サイドバー（サマリー/人気）は廃止し1カラム`max-w-3xl`に集約
 - **②コメント機能**: 新テーブル `notice_comments`（本番Supabase適用済・マイグレーション `create_notice_comments`）。`id/project_id/notice_id(FK→notices, on delete cascade)/staff_id/body/created_at`。RLS=案件メンバーselect・本人insert・本人/admin delete。周知カード展開時にコメント一覧＋入力欄。`addNoticeCommentAction`(actions.ts)が insert→**管理者グループLINE**（`project_settings.line_group_id`）へ `pushLineWithButton(groupId, 「💬周知へのコメント…」, "コメントを見る", /notices?open={id})` で通知（通知失敗してもコメント自体は成功扱い・try/catch保護）。`deleteNoticeCommentAction` は本人/管理者のみ。page.tsx が `notice_comments` を `.in("notice_id", ...)` で取得しコメント者名を解決して `comments`/`myStaffId` propで渡す

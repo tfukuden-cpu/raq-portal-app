@@ -12,6 +12,13 @@ function mdLabel(ds: string): string {
   return `${parseInt(mm)}/${parseInt(dd)}（${WEEK[dow]}）`;
 }
 
+function rateColor(rate: number | null): string {
+  if (rate === null) return "text-zinc-400";
+  if (rate >= 95) return "text-emerald-600 dark:text-emerald-400";
+  if (rate >= 80) return "text-amber-500";
+  return "text-red-500";
+}
+
 function shiftMonth(month: string, delta: number): string {
   const [y, m] = month.split("-").map(Number);
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
@@ -89,7 +96,7 @@ export default function AbsenteeReportClient({ projectId }: { projectId: string 
       {!loading && totalAbsentees > 0 && (
         <>
           {/* 当月の欠勤者一覧（OP選択で過去分） */}
-          <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-2">当月の欠勤者（タップで過去分の出勤率）</h3>
+          <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-2">当月の欠勤者（タップで当月＋過去の出勤率）</h3>
           <div className="space-y-1.5 mb-7">
             {staff.map(s => {
               const open = openStaffId === s.staffId;
@@ -105,25 +112,50 @@ export default function AbsenteeReportClient({ projectId }: { projectId: string 
                     <span className={`text-zinc-300 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
                   </button>
                   {open && (
-                    <div className="px-4 py-3 bg-zinc-50 dark:bg-zinc-900/60 border-t border-zinc-100 dark:border-zinc-800">
-                      <p className="text-[11px] text-zinc-400 mb-2">過去1年の実績</p>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <p className="text-[10px] text-zinc-400">出勤率</p>
-                          <p className={`text-lg font-bold tabular-nums ${s.histRate === null ? "text-zinc-400" : s.histRate >= 95 ? "text-emerald-600 dark:text-emerald-400" : s.histRate >= 80 ? "text-amber-500" : "text-red-500"}`}>
-                            {s.histRate === null ? "—" : `${s.histRate}%`}
-                          </p>
+                    <div className="px-4 py-3 bg-zinc-50 dark:bg-zinc-900/60 border-t border-zinc-100 dark:border-zinc-800 space-y-4">
+                      {/* 当月のみの実績 */}
+                      <div>
+                        <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-300 mb-2">{m}月のみの出勤率</p>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div>
+                            <p className="text-[10px] text-zinc-400">出勤率</p>
+                            <p className={`text-lg font-bold tabular-nums ${rateColor(s.monthRate)}`}>
+                              {s.monthRate === null ? "—" : `${s.monthRate}%`}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-zinc-400">出勤数</p>
+                            <p className="text-lg font-bold text-zinc-700 dark:text-zinc-200 tabular-nums">{s.monthAttendedDays}<span className="text-[10px] font-semibold">日</span></p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-zinc-400">欠勤数</p>
+                            <p className="text-lg font-bold text-red-600 dark:text-red-300 tabular-nums">{s.monthAbsentDays}<span className="text-[10px] font-semibold">日</span></p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[10px] text-zinc-400">出勤数</p>
-                          <p className="text-lg font-bold text-zinc-700 dark:text-zinc-200 tabular-nums">{s.histAttendedDays}<span className="text-[10px] font-semibold">日</span></p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-zinc-400">欠勤数</p>
-                          <p className="text-lg font-bold text-red-600 dark:text-red-300 tabular-nums">{s.histAbsentDays}<span className="text-[10px] font-semibold">日</span></p>
-                        </div>
+                        <p className="text-[10px] text-zinc-400 mt-1 text-right">出勤予定 {s.monthShiftDays}日中（本日まで）</p>
                       </div>
-                      <p className="text-[10px] text-zinc-400 mt-2 text-right">出勤予定 {s.histShiftDays}日中</p>
+
+                      {/* 過去1年の累計実績 */}
+                      <div className="pt-3 border-t border-zinc-200/70 dark:border-zinc-700/50">
+                        <p className="text-[11px] text-zinc-400 mb-2">過去1年の実績（累計）</p>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div>
+                            <p className="text-[10px] text-zinc-400">出勤率</p>
+                            <p className={`text-lg font-bold tabular-nums ${rateColor(s.histRate)}`}>
+                              {s.histRate === null ? "—" : `${s.histRate}%`}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-zinc-400">出勤数</p>
+                            <p className="text-lg font-bold text-zinc-700 dark:text-zinc-200 tabular-nums">{s.histAttendedDays}<span className="text-[10px] font-semibold">日</span></p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-zinc-400">欠勤数</p>
+                            <p className="text-lg font-bold text-red-600 dark:text-red-300 tabular-nums">{s.histAbsentDays}<span className="text-[10px] font-semibold">日</span></p>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 mt-1 text-right">出勤予定 {s.histShiftDays}日中</p>
+                      </div>
                     </div>
                   )}
                 </div>

@@ -36,11 +36,17 @@ export type AbsenteeStaff = {
   name: string;
   accountNumber: string | null;
   section: string | null;
-  monthAbsences: number;          // 当月の欠勤数
+  monthAbsences: number;          // 当月の欠勤数（報告ベース）
+  // 当月のみの実績（出勤予定は本日まで・公休等除く）
+  monthShiftDays: number;         // 当月の出勤予定日数
+  monthAttendedDays: number;      // 当月の出勤数
+  monthAbsentDays: number;        // 当月の欠勤数（出勤予定日のみ）
+  monthRate: number | null;       // 当月のみの出勤率（%・小数2桁）
+  // 過去13ヶ月の累計実績
   histShiftDays: number;          // 過去分の出勤予定日数（公休等除く）
   histAttendedDays: number;       // 過去分の出勤数
   histAbsentDays: number;         // 過去分の欠勤数
-  histRate: number | null;        // 過去分の出勤率（%）
+  histRate: number | null;        // 過去分の出勤率（%・小数2桁）
 };
 
 export async function GET(req: NextRequest) {
@@ -59,6 +65,8 @@ export async function GET(req: NextRequest) {
   const monthEnd   = `${month}-${String(lastDay).padStart(2, "0")}`;
   // 過去分は当月末までの直近13ヶ月（プロジェクト開始以降を概ねカバー）
   const histStart = `${y - 1}-${String(m).padStart(2, "0")}-01`;
+  // 本日(JST)。出勤予定は本日までしかカウントしない（未来日は実績に含めない）
+  const todayJST = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
   const admin = createAdminClient();
 
@@ -119,29 +127,51 @@ export async function GET(req: NextRequest) {
   const absentStaffIds = [...monthAbsenceCount.keys()];
   const histAbsenceSet = new Set((histAbsences ?? []).map(a => `${a.staff_id}_${a.absence_date}`));
 
-  const histStats = new Map<string, { shiftDays: number; absentDays: number }>();
+  // 出勤率（%・小数2桁）
+  const pct = (attended: number, total: number): number | null =>
+    total > 0 ? Math.round((attended / total) * 10000) / 100 : null;
+
+  const histStats  = new Map<string, { shiftDays: number; absentDays: number }>();
+  const monthStats = new Map<string, { shiftDays: number; absentDays: number }>();
   for (const sh of histShifts ?? []) {
     if (OFF_SHIFT_NAMES.includes((sh.shift_name ?? "") as string)) continue;
+    const date = sh.shift_date as string;
+    if (date > todayJST) continue; // 未来の出勤予定は実績に含めない
+    const isAbsent = histAbsenceSet.has(`${sh.staff_id}_${date}`);
+    // 過去13ヶ月の累計
     if (!histStats.has(sh.staff_id)) histStats.set(sh.staff_id, { shiftDays: 0, absentDays: 0 });
     const st = histStats.get(sh.staff_id)!;
     st.shiftDays++;
-    if (histAbsenceSet.has(`${sh.staff_id}_${sh.shift_date}`)) st.absentDays++;
+    if (isAbsent) st.absentDays++;
+    // 当月のみ
+    if (date >= monthStart && date <= monthEnd) {
+      if (!monthStats.has(sh.staff_id)) monthStats.set(sh.staff_id, { shiftDays: 0, absentDays: 0 });
+      const ms = monthStats.get(sh.staff_id)!;
+      ms.shiftDays++;
+      if (isAbsent) ms.absentDays++;
+    }
   }
 
   const staff: AbsenteeStaff[] = absentStaffIds.map(id => {
     const info = memberMap.get(id);
-    const hs = histStats.get(id) ?? { shiftDays: 0, absentDays: 0 };
-    const attended = Math.max(0, hs.shiftDays - hs.absentDays);
+    const hs = histStats.get(id)  ?? { shiftDays: 0, absentDays: 0 };
+    const ms = monthStats.get(id) ?? { shiftDays: 0, absentDays: 0 };
+    const histAttended  = Math.max(0, hs.shiftDays - hs.absentDays);
+    const monthAttended = Math.max(0, ms.shiftDays - ms.absentDays);
     return {
-      staffId:          id,
-      name:             info?.name ?? id,
-      accountNumber:    info?.accountNumber ?? null,
-      section:          info?.section ?? null,
-      monthAbsences:    monthAbsenceCount.get(id) ?? 0,
-      histShiftDays:    hs.shiftDays,
-      histAttendedDays: attended,
-      histAbsentDays:   hs.absentDays,
-      histRate:         hs.shiftDays > 0 ? Math.round((attended / hs.shiftDays) * 100) : null,
+      staffId:           id,
+      name:              info?.name ?? id,
+      accountNumber:     info?.accountNumber ?? null,
+      section:           info?.section ?? null,
+      monthAbsences:     monthAbsenceCount.get(id) ?? 0,
+      monthShiftDays:    ms.shiftDays,
+      monthAttendedDays: monthAttended,
+      monthAbsentDays:   ms.absentDays,
+      monthRate:         pct(monthAttended, ms.shiftDays),
+      histShiftDays:     hs.shiftDays,
+      histAttendedDays:  histAttended,
+      histAbsentDays:    hs.absentDays,
+      histRate:          pct(histAttended, hs.shiftDays),
     };
   }).sort((a, b) =>
     b.monthAbsences - a.monthAbsences ||

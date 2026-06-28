@@ -137,12 +137,13 @@ export default async function RecordPage({
   const records: DayRecord[] = Array.from({ length: daysInMonth }, (_, i) => {
     const d  = i + 1;
     const ds = `${targetMonth}-${String(d).padStart(2, "0")}`;
-    const dt = new Date(`${ds}T00:00:00+09:00`);
+    // 曜日はTZ非依存に算出（サーバーはUTC実行のため +09:00 + getDay() だと1日ずれる）
+    const dt = new Date(`${ds}T00:00:00Z`);
     const s  = shiftMap.get(ds);
     const p  = punchByDate.get(ds);
     return {
       date:       ds,
-      dow:        dt.getDay(),
+      dow:        dt.getUTCDay(),
       shiftName:  s?.shift_name  ?? null,
       shiftStart: s?.shift_start ?? null,
       shiftEnd:   s?.shift_end   ?? null,

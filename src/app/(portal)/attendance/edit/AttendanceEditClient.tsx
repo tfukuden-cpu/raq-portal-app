@@ -107,8 +107,9 @@ function fmtHours(mins: number): string {
 }
 
 function fmtDate(d: string): string {
-  const dt = new Date(d + "T00:00:00+09:00");
-  return `${dt.getMonth() + 1}/${dt.getDate()}（${WEEKDAY_JP[dt.getDay()]}）`;
+  // 曜日・日付はTZ非依存に算出（SSR=UTC とブラウザ=JST のズレ／hydration不一致を防ぐ）
+  const dt = new Date(d + "T00:00:00Z");
+  return `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}（${WEEKDAY_JP[dt.getUTCDay()]}）`;
 }
 
 function fmtTime(t: string | null): string {
@@ -750,8 +751,8 @@ export default function AttendanceEditClient({
                 </thead>
                 <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
                   {detailCalendar.map(({ date, row, shiftName }) => {
-                    const dt  = new Date(date + "T00:00:00+09:00");
-                    const dow = dt.getDay();
+                    const dt  = new Date(date + "T00:00:00Z");
+                    const dow = dt.getUTCDay();
 
                     // シフト無し日 or 公休・希望休など
                     if (!row) {

@@ -14,8 +14,9 @@ function toHHMM(iso: string | null): string {
 }
 
 function fmtDate(d: string) {
-  const dt = new Date(d + "T00:00:00+09:00");
-  return `${dt.getMonth() + 1}/${dt.getDate()}（${WEEKDAY_JP[dt.getDay()]}）`;
+  // 曜日・日付はTZ非依存に算出（UTC実行環境で +09:00 + getDay() だと1日ずれる）
+  const dt = new Date(d + "T00:00:00Z");
+  return `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}（${WEEKDAY_JP[dt.getUTCDay()]}）`;
 }
 
 function lastMonth() {
@@ -52,9 +53,9 @@ function exportStaffCsv(s: StaffSummary, startDate: string, endDate: string) {
   const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
   const header = ["日付", "曜日", "シフト", "出勤予定", "退勤予定", "出勤打刻", "退勤打刻", "ステータス", "備考"];
   const rows = s.days.map(d => {
-    const dt = new Date(d.date + "T00:00:00+09:00");
-    const dow = WEEKDAY_JP[dt.getDay()];
-    const dateStr = `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
+    const dt = new Date(d.date + "T00:00:00Z");
+    const dow = WEEKDAY_JP[dt.getUTCDay()];
+    const dateStr = `${dt.getUTCFullYear()}/${dt.getUTCMonth()+1}/${dt.getUTCDate()}`;
     const note = d.absenceReason || d.lateReason || "";
     return [
       dateStr, dow, d.shiftName,
