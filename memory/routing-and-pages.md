@@ -23,7 +23,7 @@
 | `/record` | 勤怠実績（王道RPG風） |
 | `/gacha` | モンスターガチャ（**2026-06-14・一旦 福傳(O002) 限定**。`GACHA_ALLOWED`＋layout の `staffMenu` でゲート） |
 | ~~`/post`~~ | 投稿（社内掲示板）＝**2026-06-13 廃止・削除済み**（ナビ・ページとも削除） |
-| `/messages` | **統合メッセージ**（2026-06-29新設・周知+個別連絡+問い合わせを統合）。viewMode cookieで管理者UI(送信＋受信者別スレッド)/スタッフUI(受信箱＋管理者へ送る)を出し分け。`?open=ID`で該当スレッド展開 |
+| `/messages` | **統合メッセージ・スタッフ受信箱**（2026-06-29新設）。自分宛の受信＋「管理者へ送る」。管理者も一スタッフとして自分の受信をここで見る。`?open=ID`で展開 |
 | `/notices` | 周知事項（**`/messages`へ移行予定→廃止**・現在は残置） |
 | `/inquiries` | 問い合わせ（**`/messages`へ移行予定→廃止**・現在は残置） |
 | `/corrections` | 勤怠補正申請 |
@@ -42,8 +42,9 @@
 | `/shifts/manage` | シフト管理・インポート |
 | `/members` | メンバー管理・番付 |
 | `/seating` | 座席配置 |
-| `/notices/manage` | 周知管理 |
-| `/inquiries/manage` | 問合せ管理 |
+| `/messages/manage` | **統合メッセージ・管理者専用**（2026-06-29新設）。送信(全員/セクション/個別)＋全受信者スレッド管理。管理者ガード(非管理者は`/messages`へredirect) |
+| `/notices/manage` | 周知管理（**`/messages/manage`へ移行予定→廃止**） |
+| `/inquiries/manage` | 問合せ管理（**`/messages/manage`へ移行予定→廃止**） |
 | `/holidays/manage` | 希望休承認 |
 | `/line-settings` | LINE設定・通知設定 |
 | `/tasks` | タスク一覧 |

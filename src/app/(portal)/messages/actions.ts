@@ -192,6 +192,7 @@ async function _sendMessageAction(formData: FormData): Promise<MessageResult> {
   }
 
   revalidatePath("/messages");
+  revalidatePath("/messages/manage");
   revalidatePath("/dashboard");
   return { success: true, messageId };
 }
@@ -248,6 +249,7 @@ async function _staffStartMessageAction(formData: FormData): Promise<MessageResu
   }
 
   revalidatePath("/messages");
+  revalidatePath("/messages/manage");
   return { success: true, messageId };
 }
 
@@ -299,6 +301,7 @@ async function _replyMessageAction(formData: FormData): Promise<MessageResult> {
     .eq("message_id", messageId).eq("staff_id", threadStaffId);
 
   revalidatePath("/messages");
+  revalidatePath("/messages/manage");
   revalidatePath("/dashboard");
   return { success: true };
 }
@@ -323,6 +326,7 @@ export async function markThreadReadAction(
     .eq("message_id", messageId).eq("staff_id", targetStaff);
 
   revalidatePath("/messages");
+  revalidatePath("/messages/manage");
   revalidatePath("/dashboard");
 }
 
@@ -338,6 +342,7 @@ export async function deleteMessageAction(formData: FormData): Promise<MessageRe
   if (error) return { success: false, message: "削除失敗: " + error.message };
 
   revalidatePath("/messages");
+  revalidatePath("/messages/manage");
   revalidatePath("/dashboard");
   return { success: true };
 }
