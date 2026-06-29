@@ -6,6 +6,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import MessagesClient from "./MessagesClient";
 import type { StaffMessage, MessageReply, AudienceType } from "@/lib/messages";
 
@@ -31,6 +32,21 @@ export default async function MessagesPage({
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
   if (!projectId) redirect("/select-project");
+
+  // 管理者は管理画面へ（staff モード中は受信箱のまま）
+  const viewMode = (await cookies()).get("rqp-view-mode")?.value ?? "staff";
+  if (viewMode !== "staff") {
+    const [{ data: staffData }, { data: memberData }] = await Promise.all([
+      supabase.from("staffs").select("global_role").eq("id", staffId).maybeSingle(),
+      supabase.from("project_members").select("role")
+        .eq("project_id", projectId).eq("staff_id", staffId).maybeSingle(),
+    ]);
+    const isAdmin =
+      staffData?.global_role === "admin" ||
+      staffData?.global_role === "executive" ||
+      memberData?.role === "project_admin";
+    if (isAdmin) redirect("/messages/manage");
+  }
 
   // 自分宛のスレッド（RLS で自分のぶんのみ取得される）
   const { data: rawTargets } = await supabase

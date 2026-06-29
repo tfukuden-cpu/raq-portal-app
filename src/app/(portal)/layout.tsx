@@ -36,7 +36,6 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
   { href: "/attendance",      icon: "Users",           label: "当日状況" },   // 座席表統合
   { href: "/shifts/manage",   icon: "CalendarSettings", label: "シフト管理" },
   { href: "/members",         icon: "IdCard",          label: "メンバー管理" },
-  { href: "/messages/manage",   icon: "MessageSquare",   label: "メッセージ" },
   { href: "/notices/manage",    icon: "Megaphone",       label: "周知管理" },
   { href: "/inquiries/manage",  icon: "MessageSquare",   label: "問合せ管理" },
   { href: "/attendance/edit",        icon: "ClipboardCheck", label: "勤怠管理" },
