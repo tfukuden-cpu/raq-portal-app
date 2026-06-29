@@ -268,8 +268,16 @@ async function _replyMessageAction(formData: FormData): Promise<MessageResult> {
   const messageId     = String(formData.get("messageId") ?? "").trim();
   const threadStaffId = String(formData.get("threadStaffId") ?? "").trim();
   const body          = String(formData.get("body") ?? "").trim();
-  if (!messageId || !threadStaffId || !body) {
+  if (!messageId || !threadStaffId) {
+    return { success: false, message: "返信先が不正です" };
+  }
+
+  const attachFile = formData.get("attachment") as File | null;
+  if (!body && !(attachFile && attachFile.size > 0)) {
     return { success: false, message: "返信内容を入力してください" };
+  }
+  if (attachFile && attachFile.size > MAX_FILE_SIZE) {
+    return { success: false, message: "ファイルが大きすぎます（最大10MB）" };
   }
 
   const supabase = await createClient();
@@ -284,6 +292,9 @@ async function _replyMessageAction(formData: FormData): Promise<MessageResult> {
     return { success: false, message: "このスレッドには返信できません" };
   }
 
+  const { url: attachmentUrl, name: attachmentName } =
+    attachFile && attachFile.size > 0 ? await uploadAttachment(attachFile, projectId, staffId) : { url: null, name: null };
+
   // RLS: insert_message_replies（author=自分 かつ 自分のスレッド or 管理者）
   const { error } = await supabase.from("message_replies").insert({
     message_id:      messageId,
@@ -291,6 +302,8 @@ async function _replyMessageAction(formData: FormData): Promise<MessageResult> {
     thread_staff_id: threadStaffId,
     author_staff_id: staffId,
     body,
+    attachment_url:  attachmentUrl,
+    attachment_name: attachmentName,
   });
   if (error) return { success: false, message: "返信失敗: " + error.message };
 
@@ -346,7 +359,11 @@ export async function sendDirectMessageAction(formData: FormData): Promise<Messa
 async function _sendDirectMessageAction(formData: FormData): Promise<MessageResult> {
   const targetStaffId = String(formData.get("staffId") ?? "").trim();
   const body          = String(formData.get("body") ?? "").trim();
-  if (!targetStaffId || !body) return { success: false, message: "送信内容を入力してください" };
+  const attachFile    = formData.get("attachment") as File | null;
+  const hasAttach     = !!(attachFile && attachFile.size > 0);
+  if (!targetStaffId || (!body && !hasAttach)) {
+    return { success: false, message: "送信内容を入力してください" };
+  }
 
   const supabase = await createClient();
   const staffId = await getAuthStaffId(supabase);
@@ -356,6 +373,12 @@ async function _sendDirectMessageAction(formData: FormData): Promise<MessageResu
   if (!(await isProjectAdmin(staffId, projectId))) {
     return { success: false, message: "送信権限がありません" };
   }
+  if (attachFile && attachFile.size > MAX_FILE_SIZE) {
+    return { success: false, message: "ファイルが大きすぎます（最大10MB）" };
+  }
+
+  const { url: attachmentUrl, name: attachmentName } =
+    hasAttach ? await uploadAttachment(attachFile!, projectId, staffId) : { url: null, name: null };
 
   const admin = createAdminClient();
   const nowIso = new Date().toISOString();
@@ -384,6 +407,8 @@ async function _sendDirectMessageAction(formData: FormData): Promise<MessageResu
         is_direct:       true,
         is_pinned:       false,
         allow_reply:     true,
+        attachment_url:  attachmentUrl,
+        attachment_name: attachmentName,
       })
       .select("id")
       .single();
@@ -398,6 +423,7 @@ async function _sendDirectMessageAction(formData: FormData): Promise<MessageResu
     const { error: rErr } = await admin.from("message_replies").insert({
       message_id: anchorId, project_id: projectId,
       thread_staff_id: targetStaffId, author_staff_id: staffId, body,
+      attachment_url: attachmentUrl, attachment_name: attachmentName,
     });
     if (rErr) return { success: false, message: "送信失敗: " + rErr.message };
     await admin.from("message_targets").update({ admin_read_at: nowIso })

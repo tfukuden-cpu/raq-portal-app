@@ -57,7 +57,7 @@ export default async function MessagesPage({
         .order("is_pinned", { ascending: false })
         .order("created_at", { ascending: false }),
       supabase.from("message_replies")
-        .select("id, message_id, thread_staff_id, author_staff_id, body, created_at")
+        .select("id, message_id, thread_staff_id, author_staff_id, body, created_at, attachment_url, attachment_name")
         .in("message_id", myMsgIds)
         .eq("thread_staff_id", staffId)
         .order("created_at", { ascending: true }),
@@ -84,6 +84,8 @@ export default async function MessagesPage({
         authorName: nameOf(nameMap, r.author_staff_id as string),
         body: r.body as string,
         createdAt: r.created_at as string,
+        attachmentUrl: (r.attachment_url ?? null) as string | null,
+        attachmentName: (r.attachment_name ?? null) as string | null,
       });
       repliesByMsg.set(r.message_id as string, arr);
     }

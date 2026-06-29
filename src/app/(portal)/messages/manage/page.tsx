@@ -63,7 +63,7 @@ export default async function MessagesManagePage({
           .select("message_id, staff_id, staff_read_at, admin_read_at")
           .in("message_id", msgIds),
         admin.from("message_replies")
-          .select("id, message_id, thread_staff_id, author_staff_id, body, created_at")
+          .select("id, message_id, thread_staff_id, author_staff_id, body, created_at, attachment_url, attachment_name")
           .in("message_id", msgIds)
           .order("created_at", { ascending: true }),
       ])
@@ -76,6 +76,7 @@ export default async function MessagesManagePage({
   const replies = (rRes.data ?? []) as {
     id: string; message_id: string; thread_staff_id: string;
     author_staff_id: string; body: string; created_at: string;
+    attachment_url: string | null; attachment_name: string | null;
   }[];
 
   // 名前マップ
@@ -109,6 +110,7 @@ export default async function MessagesManagePage({
       id: r.id, authorStaffId: r.author_staff_id,
       authorName: nameOf(nameMap, r.author_staff_id),
       body: r.body, createdAt: r.created_at,
+      attachmentUrl: r.attachment_url, attachmentName: r.attachment_name,
     });
     repliesByThread.set(key, arr);
   }
@@ -199,7 +201,7 @@ export default async function MessagesManagePage({
           body: r.body,
           createdAt: r.createdAt,
           isBroadcast: false,
-          attachmentUrl: null, attachmentName: null,
+          attachmentUrl: r.attachmentUrl, attachmentName: r.attachmentName,
         });
         if (staffSide && (!adminRead || r.createdAt > adminRead)) unread++;
       }

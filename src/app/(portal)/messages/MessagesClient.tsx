@@ -58,6 +58,31 @@ function Attachment({ url, name }: { url: string; name: string | null }) {
 }
 
 // ── 返信スレッド表示＋入力 ─────────────────────────────────
+// 添付ピッカー（選択中ファイルのチップ＋クリップボタン）。共通利用。
+function AttachPicker({ file, onPick, onClear }: {
+  file: File | null; onPick: (f: File | null) => void; onClear: () => void;
+}) {
+  return (
+    <>
+      {file && (
+        <div className="flex items-center gap-2 px-2.5 py-1.5 mb-1 bg-zinc-50 dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700">
+          <Clip /><span className="text-xs flex-1 truncate text-zinc-700 dark:text-zinc-300">{file.name}</span>
+          <button type="button" onClick={onClear} className="text-zinc-400 hover:text-red-500 text-xs">✕</button>
+        </div>
+      )}
+      <label className="p-2 rounded-xl text-zinc-400 hover:text-blue-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer flex-shrink-0" title="ファイルを添付">
+        <Clip />
+        <input type="file" className="hidden"
+          onChange={e => {
+            const f = e.target.files?.[0] ?? null;
+            if (f && f.size > MAX_FILE_SIZE) { alert("ファイルが大きすぎます（最大10MB）"); e.target.value = ""; return; }
+            onPick(f); e.target.value = "";
+          }} />
+      </label>
+    </>
+  );
+}
+
 function ReplyThread({
   messageId, threadStaffId, replies, myStaffId, canReply,
 }: {
@@ -65,20 +90,22 @@ function ReplyThread({
   myStaffId: string; canReply: boolean;
 }) {
   const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   function submit() {
-    if (!text.trim()) return;
+    if (!text.trim() && !file) return;
     setError(null);
     const fd = new FormData();
     fd.set("messageId", messageId);
     fd.set("threadStaffId", threadStaffId);
     fd.set("body", text.trim());
+    if (file) fd.set("attachment", file);
     startTransition(async () => {
       const r = await replyMessageAction(fd);
       if (!r.success) setError(r.message ?? "失敗しました");
-      else setText("");
+      else { setText(""); setFile(null); }
     });
   }
 
@@ -92,21 +119,25 @@ function ReplyThread({
               mine ? "bg-blue-600 text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100"
             }`}>
               {!mine && <p className="text-[10px] font-semibold opacity-70 mb-0.5">{r.authorName}</p>}
-              <p className="text-sm whitespace-pre-wrap break-words">{r.body}</p>
+              {r.body && <p className="text-sm whitespace-pre-wrap break-words">{r.body}</p>}
+              {r.attachmentUrl && <Attachment url={r.attachmentUrl} name={r.attachmentName} />}
               <p className={`text-[10px] mt-0.5 tabular-nums ${mine ? "text-blue-100" : "text-zinc-400"}`}>{fmt(r.createdAt)}</p>
             </div>
           </div>
         );
       })}
       {canReply && (
-        <div className="flex items-end gap-2 pt-1">
-          <textarea value={text} onChange={e => setText(e.target.value)}
-            placeholder="返信を入力…" rows={1}
-            className="flex-1 px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm resize-none" />
-          <button type="button" onClick={submit} disabled={isPending || !text.trim()}
-            className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-medium flex-shrink-0">
-            {isPending ? "…" : "送信"}
-          </button>
+        <div>
+          <AttachPicker file={file} onPick={setFile} onClear={() => setFile(null)} />
+          <div className="flex items-end gap-2 pt-1">
+            <textarea value={text} onChange={e => setText(e.target.value)}
+              placeholder="返信を入力…" rows={1}
+              className="flex-1 px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm resize-none" />
+            <button type="button" onClick={submit} disabled={isPending || (!text.trim() && !file)}
+              className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-medium flex-shrink-0">
+              {isPending ? "…" : "送信"}
+            </button>
+          </div>
         </div>
       )}
       {error && <p className="text-xs text-red-600">{error}</p>}
@@ -489,6 +520,7 @@ function StaffMessageCard({ m, myStaffId, defaultOpen }: { m: StaffMessage; mySt
 // ════════════════════════════════════════════════════════════
 function RoomView({ room, onBack }: { room: StaffRoom; onBack: () => void }) {
   const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -501,15 +533,16 @@ function RoomView({ room, onBack }: { room: StaffRoom; onBack: () => void }) {
   }, [room.staffId]);
 
   function send() {
-    if (!text.trim()) return;
+    if (!text.trim() && !file) return;
     setError(null);
     const fd = new FormData();
     fd.set("staffId", room.staffId);
     fd.set("body", text.trim());
+    if (file) fd.set("attachment", file);
     startTransition(async () => {
       const r = await sendDirectMessageAction(fd);
       if (!r.success) setError(r.message ?? "失敗しました");
-      else setText("");
+      else { setText(""); setFile(null); }
     });
   }
 
@@ -555,11 +588,26 @@ function RoomView({ room, onBack }: { room: StaffRoom; onBack: () => void }) {
       {/* 入力 */}
       <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
         {error && <p className="text-xs text-red-600 mb-1">{error}</p>}
-        <div className="flex items-end gap-2">
+        {file && (
+          <div className="flex items-center gap-2 px-2.5 py-1.5 mb-1 bg-zinc-50 dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <Clip /><span className="text-xs flex-1 truncate text-zinc-700 dark:text-zinc-300">{file.name}</span>
+            <button type="button" onClick={() => setFile(null)} className="text-zinc-400 hover:text-red-500 text-xs">✕</button>
+          </div>
+        )}
+        <div className="flex items-end gap-1">
+          <label className="p-2 rounded-xl text-zinc-400 hover:text-blue-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer flex-shrink-0" title="ファイルを添付">
+            <Clip />
+            <input type="file" className="hidden"
+              onChange={e => {
+                const f = e.target.files?.[0] ?? null;
+                if (f && f.size > MAX_FILE_SIZE) { alert("ファイルが大きすぎます（最大10MB）"); e.target.value = ""; return; }
+                setFile(f); e.target.value = "";
+              }} />
+          </label>
           <textarea value={text} onChange={e => setText(e.target.value)}
             placeholder={`${room.staffName} さんへ送信…`} rows={1}
             className="flex-1 px-3 py-2 rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm resize-none max-h-32" />
-          <button type="button" onClick={send} disabled={isPending || !text.trim()}
+          <button type="button" onClick={send} disabled={isPending || (!text.trim() && !file)}
             className="px-4 py-2 rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold flex-shrink-0">
             送信
           </button>

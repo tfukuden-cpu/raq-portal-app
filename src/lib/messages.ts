@@ -30,6 +30,8 @@ export type MessageReply = {
   authorName: string;
   body: string;
   createdAt: string;
+  attachmentUrl: string | null;
+  attachmentName: string | null;
 };
 
 /** 管理者ビュー：1通＋受信者ごとのスレッド束 */
