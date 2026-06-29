@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { isAdminView } from "@/lib/admin-view";
 import MessagesClient from "../MessagesClient";
 import type {
   AdminMessage, AdminThread, MessageReply, AudienceType,
@@ -35,19 +35,10 @@ export default async function MessagesManagePage({
   const projectId = await getCurrentProjectId();
   if (!projectId) redirect("/select-project");
 
-  // 管理者ガード（staff モード中は管理画面を出さない）
-  const viewMode = (await cookies()).get("rqp-view-mode")?.value ?? "staff";
-  const [{ data: staffData }, { data: memberData }] = await Promise.all([
-    supabase.from("staffs").select("global_role").eq("id", staffId).maybeSingle(),
-    supabase.from("project_members").select("role")
-      .eq("project_id", projectId).eq("staff_id", staffId).maybeSingle(),
-  ]);
-  const isAdmin = viewMode !== "staff" && (
-    staffData?.global_role === "admin" ||
-    staffData?.global_role === "executive" ||
-    memberData?.role === "project_admin"
-  );
-  if (!isAdmin) redirect("/messages");
+  // 管理者ガード（staff モード中・一般スタッフは受信箱へ）
+  if (!(await isAdminView(supabase, staffId, projectId))) {
+    redirect("/messages");
+  }
 
   const admin = createAdminClient();
 
