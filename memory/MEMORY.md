@@ -13,7 +13,19 @@
 
 ---
 
-## 現在の開発状態（2026-06-28更新）
+## 現在の開発状態（2026-06-29更新）
+
+### 統合『メッセージ』機能を新設＝周知+個別連絡+問い合わせを1つに（2026-06-29・実装済・未デプロイ・テスト前）
+**ユーザー指示「個別に出した周知が全員に飛ぶ。問い合わせを回収し、周知と一緒に『メッセージ』機能を作る。全員/セクション/複数/個人の絞り込み配信＋個別の双方向やり取りを統合」。設計方針はユーザーが「1つの『メッセージ』に完全統合」を選択。tsc 0・新規lint 0（既存と同じimg warn 1のみ）。**
+- **旧バグの正体**: `notices` には `target_staff_id`(宛先1名)があり投稿時に保存・LINE通知も個別に飛ぶが、**`notices/page.tsx` が `target_staff_id` で絞り込んでいない**（カラムすら未取得）ため画面上は全員に見える＝「個別周知が全員に飛ぶ」。個別配信が半実装だった
+- **設計の肝＝受信者ごとの個別スレッド**: 1通のメッセージを「宛先ごとに展開」し、各受信者は自分のスレッドだけ見える。返信すると本人↔管理者の1対1会話になる。**全員宛でも返信は荒れない**
+- **新DB（本番適用済・マイグレーション `create_messages_unified`）**: `messages`(本文＋`audience_type`: all/section/staff/admins・`audience_sections text[]`・`is_pinned`/`allow_reply`/添付・`sender_staff_id`) ／ `message_targets`(受信者1人=1行＝スレッド・`staff_read_at`/`admin_read_at`・UNIQUE(message_id,staff_id)) ／ `message_replies`(`thread_staff_id`=どの受信者スレッド・`author_staff_id`=書いた人)。RLS=受信者/発信者/管理者でselect、返信は自分のスレッドor管理者。**受信者展開のinsert（他人の行作成）はadminクライアントで行う**ためtargetsにinsertポリシー無し
+- **`audience_type='admins'`＝スタッフ→管理者（旧・問い合わせ）**: 受信者行は発信スタッフ本人。スレッド＝本人↔管理者の会話。これで問い合わせを吸収
+- **ファイル構成**: `src/lib/messages.ts`(型・`AUDIENCE_LABEL`・`isImageFile`・plain) ／ `src/app/(portal)/messages/actions.ts`(`sendMessageAction`管理者送信＋宛先解決/`staffStartMessageAction`スタッフ→管理者/`replyMessageAction`/`markThreadReadAction`/`deleteMessageAction`・添付は`message-attachments`バケット) ／ `page.tsx`(role-aware・viewMode考慮・管理者はadminクライアント全件/スタッフはRLS自分のみ・未読/needsAttention算出) ／ `MessagesClient.tsx`(管理者=送信モーダル[全員/セクション/個別タブ]＋受信者ごとスレッド・スタッフ=受信箱＋管理者へ送る・LINE風吹き出し返信)
+- **ナビ**: `layout.tsx STAFF_ITEMS` に「メッセージ」(`/messages`・MessageSquare)を追加。**旧「周知事項」「問い合わせ」「周知管理」「問合せ管理」はまだ残置**（フェーズ4で廃止予定）。`/messages` はviewMode cookieで管理者UI/スタッフUIを出し分け
+- **未読の算出**: スタッフ=自分のtargetの`staff_read_at`がnull(受信本文未読) or 自分以外の返信が既読時刻より新しい。管理者=スレッド本人(thread_staff_id)発の返信が`admin_read_at`より新しい or admins宛で未読。展開時に`markThreadReadAction`で既読化
+- **残（フェーズ4・ユーザーテスト後）**: ①LINE通知接続（送信時に受信者へ`pushLineWithButton`で`/messages?open=ID`／スタッフ→管理者はグループLINEへ・スタッフ返信もグループへ）②ホームに未読アラート（周知の既存アラート同様）③旧メニュー(周知/問い合わせ)廃止＋データ移行 ④UIのRPG化（他スタッフ画面と統一・任意）⑤SPEC.md §3/§4への追記。**本番反映は未**（`git push origin master`・ユーザー承認必要）
+
 
 ### 1000行制限の地雷を予防的に一掃＋共有ヘルパー新設（2026-06-28・デプロイ済 82c2319）
 **ユーザー指示「アプリをブラッシュアップ・1000行制限バグなど事前に解消」。Exploreエージェントで全`shifts`/`punch_logs`クエリを監査し、未修正の地雷を全件ページング化。tsc 0・新規lint 0。**

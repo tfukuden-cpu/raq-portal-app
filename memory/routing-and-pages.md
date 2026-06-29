@@ -23,8 +23,9 @@
 | `/record` | 勤怠実績（王道RPG風） |
 | `/gacha` | モンスターガチャ（**2026-06-14・一旦 福傳(O002) 限定**。`GACHA_ALLOWED`＋layout の `staffMenu` でゲート） |
 | ~~`/post`~~ | 投稿（社内掲示板）＝**2026-06-13 廃止・削除済み**（ナビ・ページとも削除） |
-| `/notices` | 周知事項 |
-| `/inquiries` | 問い合わせ |
+| `/messages` | **統合メッセージ**（2026-06-29新設・周知+個別連絡+問い合わせを統合）。viewMode cookieで管理者UI(送信＋受信者別スレッド)/スタッフUI(受信箱＋管理者へ送る)を出し分け。`?open=ID`で該当スレッド展開 |
+| `/notices` | 周知事項（**`/messages`へ移行予定→廃止**・現在は残置） |
+| `/inquiries` | 問い合わせ（**`/messages`へ移行予定→廃止**・現在は残置） |
 | `/corrections` | 勤怠補正申請 |
 | `/holidays` | 希望休申請 |
 | `/absence-followup` | 欠勤経過報告 |

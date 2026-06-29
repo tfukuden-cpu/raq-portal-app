@@ -38,10 +38,13 @@
 
 | テーブル | 用途 |
 |---------|-----|
-| `notices` | 周知事項（title, body, is_pinned, target_staff_id） |
-| `notice_reads` | お知らせ既読（staff_id, notice_id） |
-| `notice_comments` | 周知へのコメント（id, project_id, notice_id, staff_id, body, created_at）。RLS=案件メンバーselect・本人insert・本人/管理者delete。投稿で管理者グループLINEへ通知 |
-| `inquiries` | 問い合わせ |
+| `messages` | **統合メッセージ**（周知+個別連絡+問い合わせを統合・2026-06-29新設）。1通の本文＋宛先定義。`audience_type`: all=全員 / section=セクション指定(audience_sections text[]) / staff=複数or個人 / admins=スタッフ→管理者(問い合わせ相当)。`sender_staff_id, title, body, is_pinned, allow_reply, attachment_url/name`。RLS=受信者/発信者/案件管理者select |
+| `message_targets` | メッセージの受信者1人=1行＝**スレッド単位**。`message_id, project_id, staff_id(受信者・admins宛は発信者本人), staff_read_at, admin_read_at`。UNIQUE(message_id, staff_id)。**受信者展開のinsertはadminクライアントで行う**（他人の行を作るためRLSにinsertポリシー無し）。既読更新は本人/管理者 |
+| `message_replies` | メッセージスレッド内の返信（双方向）。`message_id, project_id, thread_staff_id(どの受信者スレッドか=会話相手), author_staff_id(書いた人), body`。RLS select/insert=自分のスレッド or 案件管理者。**全員宛でも返信はthread_staff_id単位＝本人↔管理者の個別会話**になり荒れない |
+| `notices` | 周知事項（title, body, is_pinned, target_staff_id）。**messagesへ移行予定→廃止（データ残置）** |
+| `notice_reads` | お知らせ既読（staff_id, notice_id）。**廃止予定** |
+| `notice_comments` | 周知へのコメント。**廃止予定** |
+| `inquiries` | 問い合わせ。**messages(audience_type=admins)へ移行予定→廃止** |
 | `notification_logs` | 通知送信ログ（LINE設定の通知履歴で確認可） |
 
 ## 座席・休憩
