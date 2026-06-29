@@ -1,5 +1,7 @@
 /**
- * 統合メッセージ（管理者専用・送信＋全受信者スレッド管理）
+ * 統合メッセージ（管理者専用）
+ * - スタッフ別チャットルーム（LINE風・配信も個別トークも時系列で蓄積）
+ * - 送信履歴（新規配信＝全員/セクション/個別のみ）
  * スタッフ自身の受信箱は /messages。
  */
 import { createClient } from "@/lib/supabase/server";
@@ -9,7 +11,7 @@ import { redirect } from "next/navigation";
 import { isAdminView } from "@/lib/admin-view";
 import MessagesClient from "../MessagesClient";
 import type {
-  AdminMessage, AdminThread, MessageReply, AudienceType,
+  AdminMessage, AdminThread, MessageReply, AudienceType, StaffRoom, RoomItem,
 } from "@/lib/messages";
 
 const EPOCH = "1970-01-01T00:00:00Z";
@@ -35,7 +37,6 @@ export default async function MessagesManagePage({
   const projectId = await getCurrentProjectId();
   if (!projectId) redirect("/select-project");
 
-  // 管理者ガード（staff モード中・一般スタッフは受信箱へ）
   if (!(await isAdminView(supabase, staffId, projectId))) {
     redirect("/messages");
   }
@@ -44,9 +45,8 @@ export default async function MessagesManagePage({
 
   const [{ data: rawMsgs }, { data: rawMembers }] = await Promise.all([
     admin.from("messages")
-      .select("id, title, body, audience_type, audience_sections, is_pinned, allow_reply, attachment_url, attachment_name, sender_staff_id, created_at")
+      .select("id, title, body, audience_type, audience_sections, is_pinned, allow_reply, is_direct, attachment_url, attachment_name, sender_staff_id, created_at")
       .eq("project_id", projectId)
-      .order("is_pinned", { ascending: false })
       .order("created_at", { ascending: false }),
     admin.from("project_members")
       .select("staff_id, section, sections, staffs(display_name, name)")
@@ -95,22 +95,25 @@ export default async function MessagesManagePage({
     for (const s of extra ?? []) nameMap.set(s.id as string, s as StaffName);
   }
 
-  // 返信を (messageId, threadStaffId) でグループ化
+  // メッセージ index
+  type Msg = (typeof msgs)[number];
+  const msgById = new Map<string, Msg>();
+  for (const m of msgs) msgById.set(m.id as string, m);
+
+  // 返信を (messageId|threadStaffId) でグループ化
   const repliesByThread = new Map<string, MessageReply[]>();
   for (const r of replies) {
     const key = `${r.message_id}|${r.thread_staff_id}`;
     const arr = repliesByThread.get(key) ?? [];
     arr.push({
-      id: r.id,
-      authorStaffId: r.author_staff_id,
+      id: r.id, authorStaffId: r.author_staff_id,
       authorName: nameOf(nameMap, r.author_staff_id),
-      body: r.body,
-      createdAt: r.created_at,
+      body: r.body, createdAt: r.created_at,
     });
     repliesByThread.set(key, arr);
   }
 
-  // ターゲットを messageId でグループ化
+  // ── 送信履歴（新規配信のみ＝is_direct=false かつ audience≠admins） ──
   const targetsByMsg = new Map<string, typeof targets>();
   for (const t of targets) {
     const arr = targetsByMsg.get(t.message_id) ?? [];
@@ -118,27 +121,24 @@ export default async function MessagesManagePage({
     targetsByMsg.set(t.message_id, arr);
   }
 
-  const adminMessages: AdminMessage[] = msgs.map(m => {
+  const historyMsgs = msgs.filter(m => !m.is_direct && (m.audience_type as string) !== "admins");
+  const adminMessages: AdminMessage[] = historyMsgs.map(m => {
     const id = m.id as string;
     const audienceType = m.audience_type as AudienceType;
-    const senderId = m.sender_staff_id as string;
     const ts = (targetsByMsg.get(id) ?? []).map((t): AdminThread => {
       const tStaff = t.staff_id;
       const thRies = repliesByThread.get(`${id}|${tStaff}`) ?? [];
-      const adminReadAt = t.admin_read_at;
-      const adminFloor = adminReadAt ?? EPOCH;
+      const adminFloor = t.admin_read_at ?? EPOCH;
       const staffReply = thRies.some(r => r.authorStaffId === tStaff && r.createdAt > adminFloor);
-      const unreadInbound = audienceType === "admins" && adminReadAt === null;
       return {
         staffId: tStaff,
         staffName: nameOf(nameMap, tStaff),
         staffReadAt: t.staff_read_at,
-        adminReadAt,
+        adminReadAt: t.admin_read_at,
         replies: thRies,
-        needsAttention: staffReply || unreadInbound,
+        needsAttention: staffReply,
       };
     }).sort((a, b) => a.staffName.localeCompare(b.staffName, "ja"));
-
     return {
       id,
       title: (m.title ?? null) as string | null,
@@ -149,14 +149,83 @@ export default async function MessagesManagePage({
       allowReply: m.allow_reply as boolean,
       attachmentUrl: (m.attachment_url ?? null) as string | null,
       attachmentName: (m.attachment_name ?? null) as string | null,
-      senderStaffId: senderId,
-      senderName: nameOf(nameMap, senderId),
+      senderStaffId: m.sender_staff_id as string,
+      senderName: nameOf(nameMap, m.sender_staff_id as string),
       createdAt: m.created_at as string,
       threads: ts,
     };
+  }).sort((a, b) =>
+    (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0) || b.createdAt.localeCompare(a.createdAt)
+  );
+
+  // ── スタッフ別チャットルーム（全現役メンバー） ──
+  // staffId -> その人が受信者になっている target 群
+  const targetsByStaff = new Map<string, typeof targets>();
+  for (const t of targets) {
+    const arr = targetsByStaff.get(t.staff_id) ?? [];
+    arr.push(t);
+    targetsByStaff.set(t.staff_id, arr);
+  }
+
+  const memberIds = (rawMembers ?? []).map(m => m.staff_id as string);
+  const staffRooms: StaffRoom[] = memberIds.map(sid => {
+    const items: RoomItem[] = [];
+    let unread = 0;
+    for (const t of targetsByStaff.get(sid) ?? []) {
+      const m = msgById.get(t.message_id);
+      if (!m) continue;
+      const adminRead = t.admin_read_at;
+      const audience = m.audience_type as string;
+      const senderIsStaff = (m.sender_staff_id as string) === sid; // 問い合わせ等
+      // メッセージ本文の吹き出し
+      items.push({
+        id: `m${m.id}`,
+        side: senderIsStaff ? "staff" : "admin",
+        authorName: senderIsStaff ? nameOf(nameMap, sid) : nameOf(nameMap, m.sender_staff_id as string),
+        body: m.body as string,
+        createdAt: m.created_at as string,
+        isBroadcast: audience === "all" || audience === "section",
+        attachmentUrl: (m.attachment_url ?? null) as string | null,
+        attachmentName: (m.attachment_name ?? null) as string | null,
+      });
+      if (senderIsStaff && !adminRead) unread++;
+      // スレッド内の返信
+      for (const r of repliesByThread.get(`${m.id}|${sid}`) ?? []) {
+        const staffSide = r.authorStaffId === sid;
+        items.push({
+          id: `r${r.id}`,
+          side: staffSide ? "staff" : "admin",
+          authorName: r.authorName,
+          body: r.body,
+          createdAt: r.createdAt,
+          isBroadcast: false,
+          attachmentUrl: null, attachmentName: null,
+        });
+        if (staffSide && (!adminRead || r.createdAt > adminRead)) unread++;
+      }
+    }
+    items.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const last = items[items.length - 1] ?? null;
+    return {
+      staffId: sid,
+      staffName: nameOf(nameMap, sid),
+      items,
+      lastActivityAt: last?.createdAt ?? null,
+      lastSnippet: last ? last.body.slice(0, 30) : "",
+      unreadCount: unread,
+    };
+  }).sort((a, b) => {
+    // 未読優先 → 最終活動が新しい順 → 名前順
+    if ((b.unreadCount > 0 ? 1 : 0) !== (a.unreadCount > 0 ? 1 : 0)) {
+      return (b.unreadCount > 0 ? 1 : 0) - (a.unreadCount > 0 ? 1 : 0);
+    }
+    if (a.lastActivityAt && b.lastActivityAt) return b.lastActivityAt.localeCompare(a.lastActivityAt);
+    if (a.lastActivityAt) return -1;
+    if (b.lastActivityAt) return 1;
+    return a.staffName.localeCompare(b.staffName, "ja");
   });
 
-  // 送信先選択用メンバー＋セクション一覧
+  // 新規配信フォーム用
   const members = (rawMembers ?? []).map(m => {
     const s = Array.isArray(m.staffs) ? m.staffs[0] : m.staffs;
     return { id: m.staff_id as string, name: (s as StaffName | null)?.display_name ?? (s as StaffName | null)?.name ?? (m.staff_id as string) };
@@ -175,6 +244,7 @@ export default async function MessagesManagePage({
       myStaffId={staffId}
       adminMessages={adminMessages}
       staffMessages={[]}
+      staffRooms={staffRooms}
       members={members}
       sections={sections}
       initialOpenId={open ?? null}

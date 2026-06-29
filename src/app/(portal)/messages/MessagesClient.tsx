@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useTransition, useMemo, useRef } from "react";
+import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import {
   sendMessageAction, staffStartMessageAction, replyMessageAction,
   markThreadReadAction, deleteMessageAction,
+  sendDirectMessageAction, markStaffRoomReadAction,
 } from "./actions";
 import {
   AUDIENCE_LABEL, isImageFile,
-  type AdminMessage, type AdminThread, type StaffMessage, type MessageReply, type AudienceType,
+  type AdminMessage, type AdminThread, type StaffMessage, type MessageReply,
+  type AudienceType, type StaffRoom,
 } from "@/lib/messages";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -483,15 +485,241 @@ function StaffMessageCard({ m, myStaffId, defaultOpen }: { m: StaffMessage; mySt
 }
 
 // ════════════════════════════════════════════════════════════
+//  管理者：スタッフ別チャットルーム（LINE風）
+// ════════════════════════════════════════════════════════════
+function RoomView({ room, onBack }: { room: StaffRoom; onBack: () => void }) {
+  const [text, setText] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // 開いたら既読化
+  useEffect(() => {
+    if (room.unreadCount > 0) {
+      startTransition(() => { markStaffRoomReadAction(room.staffId); });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.staffId]);
+
+  function send() {
+    if (!text.trim()) return;
+    setError(null);
+    const fd = new FormData();
+    fd.set("staffId", room.staffId);
+    fd.set("body", text.trim());
+    startTransition(async () => {
+      const r = await sendDirectMessageAction(fd);
+      if (!r.success) setError(r.message ?? "失敗しました");
+      else setText("");
+    });
+  }
+
+  return (
+    <div className="flex flex-col h-[calc(100dvh-9rem)]">
+      {/* ルームヘッダー */}
+      <div className="flex items-center gap-2 px-1 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+        <button type="button" onClick={onBack}
+          className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span className="text-base font-bold text-zinc-900 dark:text-zinc-50">{room.staffName}</span>
+      </div>
+
+      {/* タイムライン */}
+      <div className="flex-1 overflow-y-auto py-3 space-y-2">
+        {room.items.length === 0 ? (
+          <p className="text-center text-xs text-zinc-400 py-10">まだやり取りがありません。下から送信できます。</p>
+        ) : room.items.map(it => {
+          const right = it.side === "admin";
+          return (
+            <div key={it.id} className={`flex ${right ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${
+                right ? "bg-blue-600 text-white" : "bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 border border-zinc-100 dark:border-zinc-700"
+              }`}>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  {it.isBroadcast && (
+                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${right ? "bg-blue-500 text-blue-50" : "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"}`}>配信</span>
+                  )}
+                  {!right && <span className="text-[10px] font-semibold opacity-60">{it.authorName}</span>}
+                </div>
+                <p className="text-sm whitespace-pre-wrap break-words">{it.body}</p>
+                {it.attachmentUrl && <Attachment url={it.attachmentUrl} name={it.attachmentName} />}
+                <p className={`text-[10px] mt-0.5 tabular-nums ${right ? "text-blue-100" : "text-zinc-400"}`}>{fmt(it.createdAt)}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 入力 */}
+      <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
+        {error && <p className="text-xs text-red-600 mb-1">{error}</p>}
+        <div className="flex items-end gap-2">
+          <textarea value={text} onChange={e => setText(e.target.value)}
+            placeholder={`${room.staffName} さんへ送信…`} rows={1}
+            className="flex-1 px-3 py-2 rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm resize-none max-h-32" />
+          <button type="button" onClick={send} disabled={isPending || !text.trim()}
+            className="px-4 py-2 rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold flex-shrink-0">
+            送信
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactList({ rooms, onOpen }: { rooms: StaffRoom[]; onOpen: (r: StaffRoom) => void }) {
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const q = search.trim();
+    if (!q) return rooms;
+    return rooms.filter(r => r.staffName.includes(q) || r.lastSnippet.includes(q));
+  }, [rooms, search]);
+
+  return (
+    <>
+      <div className="relative mb-3">
+        <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none"
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="スタッフを検索…"
+          className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      </div>
+      <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+        {filtered.map(r => (
+          <button key={r.staffId} type="button" onClick={() => onOpen(r)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900">
+            <div className="w-9 h-9 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-500 dark:text-zinc-300 flex-shrink-0">
+              {r.staffName.slice(0, 1)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className={`text-sm truncate ${r.unreadCount > 0 ? "font-bold text-zinc-900 dark:text-zinc-50" : "font-semibold text-zinc-700 dark:text-zinc-200"}`}>{r.staffName}</span>
+                {r.lastActivityAt && <span className="text-[10px] text-zinc-400 tabular-nums ml-auto flex-shrink-0">{fmt(r.lastActivityAt)}</span>}
+              </div>
+              <p className="text-xs text-zinc-400 truncate">{r.lastSnippet || "（やり取りなし）"}</p>
+            </div>
+            {r.unreadCount > 0 && (
+              <span className="text-[10px] font-bold text-white bg-red-500 rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center flex-shrink-0">{r.unreadCount}</span>
+            )}
+          </button>
+        ))}
+        {filtered.length === 0 && (
+          <p className="text-sm text-zinc-500 text-center py-10">該当するスタッフがいません</p>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+//  管理者ビュー（スタッフ別チャット / 送信履歴 のタブ）
+// ════════════════════════════════════════════════════════════
+function AdminView({
+  myStaffId, adminMessages, staffRooms, members, sections,
+}: {
+  myStaffId: string;
+  adminMessages: AdminMessage[];
+  staffRooms: StaffRoom[];
+  members: { id: string; name: string }[];
+  sections: string[];
+}) {
+  const [tab, setTab] = useState<"staff" | "history">("staff");
+  const [openRoomId, setOpenRoomId] = useState<string | null>(null);
+  const [compose, setCompose] = useState(false);
+  const [histSearch, setHistSearch] = useState("");
+
+  const openRoom = openRoomId ? staffRooms.find(r => r.staffId === openRoomId) ?? null : null;
+  const totalUnread = staffRooms.reduce((s, r) => s + r.unreadCount, 0);
+
+  const filteredHistory = useMemo(() => {
+    const q = histSearch.trim();
+    if (!q) return adminMessages;
+    return adminMessages.filter(m => (m.title ?? "").includes(q) || m.body.includes(q));
+  }, [adminMessages, histSearch]);
+
+  // ルーム表示中はヘッダー/タブを隠してチャットに集中
+  if (openRoom) {
+    return (
+      <main className="min-h-[100dvh] bg-[#F5F5F7] dark:bg-zinc-950">
+        <div className="max-w-3xl mx-auto px-4 pt-4">
+          <RoomView room={openRoom} onBack={() => setOpenRoomId(null)} />
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
+      <div className="sticky top-0 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="max-w-3xl mx-auto px-4 pt-5 pb-2 flex items-center justify-between gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">メッセージ</h1>
+          {tab === "history" && (
+            <button type="button" onClick={() => setCompose(true)}
+              className="flex-shrink-0 text-sm px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+              ＋ 新規配信
+            </button>
+          )}
+        </div>
+        <div className="max-w-3xl mx-auto px-4 flex gap-1">
+          <button type="button" onClick={() => setTab("staff")}
+            className={`relative px-3 py-2 text-sm font-semibold border-b-2 ${tab === "staff" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-400"}`}>
+            スタッフ
+            {totalUnread > 0 && <span className="ml-1 text-[10px] font-bold text-white bg-red-500 rounded-full px-1.5 py-0.5 align-middle">{totalUnread}</span>}
+          </button>
+          <button type="button" onClick={() => setTab("history")}
+            className={`px-3 py-2 text-sm font-semibold border-b-2 ${tab === "history" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-400"}`}>
+            送信履歴
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-3xl mx-auto px-4 pt-4 pb-24">
+        {tab === "staff" ? (
+          <ContactList rooms={staffRooms} onOpen={r => setOpenRoomId(r.staffId)} />
+        ) : (
+          <>
+            <div className="relative mb-3">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input type="text" value={histSearch} onChange={e => setHistSearch(e.target.value)}
+                placeholder="件名・本文で検索…"
+                className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
+            <div className="space-y-2">
+              {filteredHistory.length > 0 ? (
+                filteredHistory.map(m => <AdminMessageCard key={m.id} m={m} myStaffId={myStaffId} />)
+              ) : (
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-10 text-center">
+                  <p className="text-sm text-zinc-500">{histSearch ? "該当する配信がありません" : "まだ配信がありません"}</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {compose && <ComposeModal members={members} sections={sections} onClose={() => setCompose(false)} />}
+    </main>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
 //  メイン
 // ════════════════════════════════════════════════════════════
 export default function MessagesClient({
-  isAdmin, myStaffId, adminMessages, staffMessages, members, sections, initialOpenId,
+  isAdmin, myStaffId, adminMessages, staffMessages, staffRooms = [], members, sections, initialOpenId,
 }: {
   isAdmin: boolean;
   myStaffId: string;
   adminMessages: AdminMessage[];
   staffMessages: StaffMessage[];
+  staffRooms?: StaffRoom[];
   members: { id: string; name: string }[];
   sections: string[];
   initialOpenId: string | null;
@@ -499,21 +727,26 @@ export default function MessagesClient({
   const [compose, setCompose] = useState(false);
   const [search, setSearch] = useState("");
 
-  const unreadCount = staffMessages.filter(m => m.hasUnread).length;
+  if (isAdmin) {
+    return (
+      <AdminView
+        myStaffId={myStaffId}
+        adminMessages={adminMessages}
+        staffRooms={staffRooms}
+        members={members}
+        sections={sections}
+      />
+    );
+  }
 
-  const filteredStaff = useMemo(() => {
+  // ── スタッフ受信箱 ──
+  const unreadCount = staffMessages.filter(m => m.hasUnread).length;
+  const filteredStaff = (() => {
     const q = search.trim();
     if (!q) return staffMessages;
     return staffMessages.filter(m =>
       (m.title ?? "").includes(q) || m.body.includes(q) || m.senderName.includes(q));
-  }, [staffMessages, search]);
-
-  const filteredAdmin = useMemo(() => {
-    const q = search.trim();
-    if (!q) return adminMessages;
-    return adminMessages.filter(m =>
-      (m.title ?? "").includes(q) || m.body.includes(q) || m.senderName.includes(q));
-  }, [adminMessages, search]);
+  })();
 
   return (
     <main className="min-h-screen bg-[#F5F5F7] dark:bg-zinc-950">
@@ -521,19 +754,18 @@ export default function MessagesClient({
         <div className="max-w-3xl mx-auto px-4 pt-5 pb-4 flex items-center justify-between gap-2">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">メッセージ</h1>
-            {!isAdmin && unreadCount > 0 && (
+            {unreadCount > 0 && (
               <p className="text-sm font-semibold text-red-500 mt-0.5">未読 {unreadCount}件</p>
             )}
           </div>
           <button type="button" onClick={() => setCompose(true)}
             className="flex-shrink-0 text-sm px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold">
-            {isAdmin ? "＋ 新規送信" : "＋ 管理者へ"}
+            ＋ 管理者へ
           </button>
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 pt-4 pb-24">
-        {/* 検索 */}
         <div className="relative mb-3">
           <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none"
             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -545,34 +777,20 @@ export default function MessagesClient({
         </div>
 
         <div className="space-y-2">
-          {isAdmin ? (
-            filteredAdmin.length > 0 ? (
-              filteredAdmin.map(m => <AdminMessageCard key={m.id} m={m} myStaffId={myStaffId} />)
-            ) : (
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-10 text-center">
-                <p className="text-sm text-zinc-500">{search ? "該当するメッセージがありません" : "まだメッセージがありません"}</p>
-              </div>
-            )
+          {filteredStaff.length > 0 ? (
+            filteredStaff.map(m => (
+              <StaffMessageCard key={m.messageId} m={m} myStaffId={myStaffId}
+                defaultOpen={initialOpenId === m.messageId} />
+            ))
           ) : (
-            filteredStaff.length > 0 ? (
-              filteredStaff.map(m => (
-                <StaffMessageCard key={m.messageId} m={m} myStaffId={myStaffId}
-                  defaultOpen={initialOpenId === m.messageId} />
-              ))
-            ) : (
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-10 text-center">
-                <p className="text-sm text-zinc-500">{search ? "該当するメッセージがありません" : "まだメッセージがありません"}</p>
-              </div>
-            )
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-10 text-center">
+              <p className="text-sm text-zinc-500">{search ? "該当するメッセージがありません" : "まだメッセージがありません"}</p>
+            </div>
           )}
         </div>
       </div>
 
-      {compose && (
-        isAdmin
-          ? <ComposeModal members={members} sections={sections} onClose={() => setCompose(false)} />
-          : <StaffComposeModal onClose={() => setCompose(false)} />
-      )}
+      {compose && <StaffComposeModal onClose={() => setCompose(false)} />}
     </main>
   );
 }

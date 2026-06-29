@@ -79,6 +79,31 @@ export type StaffMessage = {
   hasUnread: boolean;
 };
 
+/** スタッフ別チャットルームの1吹き出し */
+export type RoomItem = {
+  id: string;
+  side: "admin" | "staff";
+  authorName: string;
+  body: string;
+  createdAt: string;
+  /** 配信（全員/セクション）由来の吹き出しか */
+  isBroadcast: boolean;
+  /** 添付（個別トーク/配信本文に紐づくもの） */
+  attachmentUrl: string | null;
+  attachmentName: string | null;
+};
+
+/** スタッフ別チャットルーム（LINE風一覧の1人ぶん） */
+export type StaffRoom = {
+  staffId: string;
+  staffName: string;
+  items: RoomItem[];
+  lastActivityAt: string | null;
+  lastSnippet: string;
+  /** 管理者視点で未確認のスタッフ発言数 */
+  unreadCount: number;
+};
+
 const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif"]);
 
 /** 添付が画像か */

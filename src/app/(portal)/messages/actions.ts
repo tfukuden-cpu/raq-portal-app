@@ -330,6 +330,104 @@ export async function markThreadReadAction(
   revalidatePath("/dashboard");
 }
 
+// ── 管理者：スタッフ別チャットルームでの個別トーク送信 ──────
+// 1スタッフにつき is_direct=true のメッセージ（アンカー）を1本だけ作り、
+// 以降の管理者発言はそのスレッドへの返信として積む。送信履歴には出さない。
+
+export async function sendDirectMessageAction(formData: FormData): Promise<MessageResult> {
+  try {
+    return await _sendDirectMessageAction(formData);
+  } catch (e) {
+    console.error("[sendDirectMessageAction] unhandled:", e);
+    return { success: false, message: "サーバーエラー: " + String(e) };
+  }
+}
+
+async function _sendDirectMessageAction(formData: FormData): Promise<MessageResult> {
+  const targetStaffId = String(formData.get("staffId") ?? "").trim();
+  const body          = String(formData.get("body") ?? "").trim();
+  if (!targetStaffId || !body) return { success: false, message: "送信内容を入力してください" };
+
+  const supabase = await createClient();
+  const staffId = await getAuthStaffId(supabase);
+  if (!staffId) return { success: false, message: "ログインしてください" };
+  const projectId = await getCurrentProjectId();
+  if (!projectId) return { success: false, message: "案件が選択されていません" };
+  if (!(await isProjectAdmin(staffId, projectId))) {
+    return { success: false, message: "送信権限がありません" };
+  }
+
+  const admin = createAdminClient();
+  const nowIso = new Date().toISOString();
+
+  // 既存の個別トーク（アンカー）を探す
+  const { data: anchorRows } = await admin
+    .from("message_targets")
+    .select("message_id, messages!inner(id, is_direct)")
+    .eq("project_id", projectId)
+    .eq("staff_id", targetStaffId);
+  let anchorId: string | null = null;
+  for (const row of anchorRows ?? []) {
+    const m = Array.isArray(row.messages) ? row.messages[0] : row.messages;
+    if (m && (m as { is_direct?: boolean }).is_direct) { anchorId = (m as { id: string }).id; break; }
+  }
+
+  if (!anchorId) {
+    // 初回：アンカーとなる個別メッセージを作成（本文＝最初の発言）
+    const { data: inserted, error: insErr } = await admin.from("messages")
+      .insert({
+        project_id:      projectId,
+        sender_staff_id: staffId,
+        title:           null,
+        body,
+        audience_type:   "staff",
+        is_direct:       true,
+        is_pinned:       false,
+        allow_reply:     true,
+      })
+      .select("id")
+      .single();
+    if (insErr || !inserted) return { success: false, message: "送信失敗: " + (insErr?.message ?? "不明") };
+    const { error: tErr } = await admin.from("message_targets").insert({
+      message_id: inserted.id, project_id: projectId, staff_id: targetStaffId,
+      admin_read_at: nowIso,
+    });
+    if (tErr) return { success: false, message: "登録に失敗: " + tErr.message };
+  } else {
+    // 2回目以降：アンカースレッドへ返信として積む
+    const { error: rErr } = await admin.from("message_replies").insert({
+      message_id: anchorId, project_id: projectId,
+      thread_staff_id: targetStaffId, author_staff_id: staffId, body,
+    });
+    if (rErr) return { success: false, message: "送信失敗: " + rErr.message };
+    await admin.from("message_targets").update({ admin_read_at: nowIso })
+      .eq("message_id", anchorId).eq("staff_id", targetStaffId);
+  }
+
+  revalidatePath("/messages");
+  revalidatePath("/messages/manage");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+/** 管理者：あるスタッフのルーム（全スレッド）を既読にする */
+export async function markStaffRoomReadAction(targetStaffId: string): Promise<void> {
+  const supabase = await createClient();
+  const staffId = await getAuthStaffId(supabase);
+  if (!staffId) return;
+  const projectId = await getCurrentProjectId();
+  if (!projectId) return;
+  if (!(await isProjectAdmin(staffId, projectId))) return;
+
+  const admin = createAdminClient();
+  await admin.from("message_targets")
+    .update({ admin_read_at: new Date().toISOString() })
+    .eq("project_id", projectId).eq("staff_id", targetStaffId);
+
+  revalidatePath("/messages/manage");
+  revalidatePath("/dashboard");
+}
+
 // ── 削除（発信者 or 管理者） ──────────────────────────────
 
 export async function deleteMessageAction(formData: FormData): Promise<MessageResult> {
