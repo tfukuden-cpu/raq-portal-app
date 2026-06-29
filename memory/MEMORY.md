@@ -29,7 +29,9 @@
 - **旧データ移行済（本番・2026-06-29）**: 問い合わせ10件→`audience_type='admins'`メッセージ(返信8件も移行)／周知12件→all4件は現役113名に展開・個別8件＋既読(notice_reads)引継ぎ・コメント1件→返信。過去周知は基本既読扱い(未読は作成時刻で埋め)で未読アラート抑制。未返信問い合わせは管理者に新着で残す。**取消は `delete from messages where legacy_ref is not null`**（cascadeでtargets/repliesも消える・新規作成分は残る）
 - **管理者判定は共通ヘルパー `src/lib/admin-view.ts` の `isAdminView(supabase, staffId, projectId)`（重要）**: layoutのviewMode決定ロジックと完全一致させる＝**executive/global adminは視点切替Cookieを持たないので常にtrue**、project_adminのみCookie`rqp-view-mode`従い(既定admin・staffのみfalse)、一般スタッフfalse。⚠️当初ページ側で`cookies().get("rqp-view-mode") ?? "staff"`としたため**運営者(O002=executive)がCookieなしでviewMode=staff扱い→受信箱に落ちる**バグ＋相互redirectループの恐れ。両ページ(`/messages`受信箱と`/messages/manage`管理)で同じ`isAdminView`を使うことでループ防止。**新たに受信箱/管理を分ける画面を作るときもこのヘルパーを使う**。**旧「周知事項」「問い合わせ」「周知管理」「問合せ管理」はまだ残置**（フェーズ4で廃止予定）
 - **未読の算出**: スタッフ=自分のtargetの`staff_read_at`がnull(受信本文未読) or 自分以外の返信が既読時刻より新しい。管理者=スレッド本人(thread_staff_id)発の返信が`admin_read_at`より新しい or admins宛で未読。展開時に`markThreadReadAction`で既読化
-- **残（フェーズ4・ユーザーテスト後）**: ①LINE通知接続（送信時に受信者へ`pushLineWithButton`で`/messages?open=ID`／スタッフ→管理者はグループLINEへ・スタッフ返信もグループへ）②ホームに未読アラート（周知の既存アラート同様）③旧メニュー(周知/問い合わせ)廃止＋データ移行 ④UIのRPG化（他スタッフ画面と統一・任意）⑤SPEC.md §3/§4への追記。**本番反映は未**（`git push origin master`・ユーザー承認必要）
+- **LINE通知 接続済（2026-06-29・デプロイ済）**: `actions.ts`に`notifyRecipientsLine`（受信者のline_user_idへ`pushLineWithButton`「メッセージを見る」→`/messages?open=ID`・40件ずつ`Promise.allSettled`）と`notifyAdminGroupLine`（`project_settings.line_group_id`へ「管理画面で見る」→`/messages/manage`）。配線＝`sendMessageAction`(新規配信→受信者へ)／`sendDirectMessageAction`(個別トーク→当該スタッフへ)／`replyMessageAction`(管理者返信→スタッフ／スタッフ返信→グループ)／`staffStartMessageAction`(問い合わせ→グループ)。全てtry/catchで通知失敗は本体成功扱い。添付のみは「（ファイルが届きました）」。**未連携(line_user_idなし)には飛ばない**
+- **添付対応済（2026-06-29・デプロイ済）**: `message_replies`に`attachment_url`/`attachment_name`追加。個別トークルーム入力＋スレッド返信(`ReplyThread`)の両方でクリップから添付可（最大10MB・`message-attachments`バケット）。`RoomItem`/`MessageReply`に添付フィールド
+- **残（フェーズ4・ユーザーテスト後）**: ①ホームに未読アラート（周知の既存アラート同様）②旧メニュー(周知/問い合わせ)廃止 ③UIのRPG化（他スタッフ画面と統一・任意）④SPEC.md §3/§4への追記
 
 
 ### 1000行制限の地雷を予防的に一掃＋共有ヘルパー新設（2026-06-28・デプロイ済 82c2319）

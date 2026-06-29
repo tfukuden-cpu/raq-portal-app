@@ -4,7 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
+import { pushLineWithButton } from "@/lib/line";
 import type { AudienceType } from "@/lib/messages";
+
+const APP_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+const SEP = "─────────────────";
 
 export type MessageResult = { success: boolean; message?: string; messageId?: string };
 
@@ -81,6 +85,52 @@ async function fetchActiveMembers(projectId: string) {
     section: (m.section ?? null) as string | null,
     sections: (m.sections ?? null) as string[] | null,
   }));
+}
+
+// ── LINE通知ヘルパー（失敗してもメッセージ送信自体は成功扱い） ──
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+async function staffDisplayName(admin: AdminClient, staffId: string): Promise<string> {
+  const { data } = await admin.from("staffs")
+    .select("display_name, name").eq("id", staffId).maybeSingle();
+  return (data?.display_name as string | null) ?? (data?.name as string | null) ?? staffId;
+}
+
+/** 受信スタッフ（LINE連携済み）へボタン付きで通知 */
+async function notifyRecipientsLine(
+  admin: AdminClient, staffIds: string[], text: string, url: string,
+): Promise<void> {
+  try {
+    if (staffIds.length === 0) return;
+    const { data } = await admin.from("staffs")
+      .select("id, line_user_id").in("id", staffIds);
+    const ids = (data ?? [])
+      .map(s => s.line_user_id as string | null)
+      .filter((v): v is string => !!v);
+    for (let i = 0; i < ids.length; i += 40) {
+      const chunk = ids.slice(i, i + 40);
+      await Promise.allSettled(chunk.map(uid =>
+        pushLineWithButton(uid, text, "メッセージを見る", url)));
+    }
+  } catch (e) {
+    console.error("[messages] notifyRecipientsLine failed:", e);
+  }
+}
+
+/** 案件のグループLINEへ通知（スタッフ→管理者・スタッフ返信） */
+async function notifyAdminGroupLine(
+  admin: AdminClient, projectId: string, text: string,
+): Promise<void> {
+  try {
+    const { data } = await admin.from("project_settings")
+      .select("line_group_id").eq("project_id", projectId).maybeSingle();
+    const gid = data?.line_group_id as string | null;
+    if (!gid) return;
+    await pushLineWithButton(gid, text, "管理画面で見る", `${APP_URL}/messages/manage`);
+  } catch (e) {
+    console.error("[messages] notifyAdminGroupLine failed:", e);
+  }
 }
 
 // ── 管理者：メッセージ送信（全員 / セクション / 個別） ──────
@@ -191,6 +241,11 @@ async function _sendMessageAction(formData: FormData): Promise<MessageResult> {
     return { success: false, message: "受信者の登録に失敗: " + tErr.message };
   }
 
+  // LINE通知（受信者へ・ボタンでスレッドを開く）
+  const senderName = await staffDisplayName(admin, staffId);
+  const lineText = `【メッセージ】\n送信者：${senderName}\n${SEP}\n${body || "（ファイルが届きました）"}\n${SEP}`;
+  await notifyRecipientsLine(admin, recipientIds, lineText, `${APP_URL}/messages?open=${messageId}`);
+
   revalidatePath("/messages");
   revalidatePath("/messages/manage");
   revalidatePath("/dashboard");
@@ -247,6 +302,11 @@ async function _staffStartMessageAction(formData: FormData): Promise<MessageResu
     console.error("[staffStartMessageAction] target insert error:", tErr);
     return { success: false, message: "登録に失敗: " + tErr.message };
   }
+
+  // 管理者グループLINEへ通知
+  const senderName = await staffDisplayName(admin, staffId);
+  const lineText = `💬 スタッフからメッセージ\n氏名：${senderName}\n${SEP}\n${body}\n${SEP}`;
+  await notifyAdminGroupLine(admin, projectId, lineText);
 
   revalidatePath("/messages");
   revalidatePath("/messages/manage");
@@ -312,6 +372,20 @@ async function _replyMessageAction(formData: FormData): Promise<MessageResult> {
   const patch = admin ? { admin_read_at: nowIso } : { staff_read_at: nowIso };
   await supabase.from("message_targets").update(patch)
     .eq("message_id", messageId).eq("staff_id", threadStaffId);
+
+  // LINE通知
+  const notifyClient = createAdminClient();
+  const who = await staffDisplayName(notifyClient, staffId);
+  const preview = body || "（ファイルが届きました）";
+  if (admin) {
+    // 管理者→スタッフ：当該スタッフへ
+    const text = `【メッセージ】\n送信者：${who}\n${SEP}\n${preview}\n${SEP}`;
+    await notifyRecipientsLine(notifyClient, [threadStaffId], text, `${APP_URL}/messages?open=${messageId}`);
+  } else {
+    // スタッフ→管理者：グループLINEへ
+    const text = `💬 スタッフからメッセージ\n氏名：${who}\n${SEP}\n${preview}\n${SEP}`;
+    await notifyAdminGroupLine(notifyClient, projectId, text);
+  }
 
   revalidatePath("/messages");
   revalidatePath("/messages/manage");
@@ -395,6 +469,7 @@ async function _sendDirectMessageAction(formData: FormData): Promise<MessageResu
     if (m && (m as { is_direct?: boolean }).is_direct) { anchorId = (m as { id: string }).id; break; }
   }
 
+  let linkMsgId = anchorId;
   if (!anchorId) {
     // 初回：アンカーとなる個別メッセージを作成（本文＝最初の発言）
     const { data: inserted, error: insErr } = await admin.from("messages")
@@ -418,6 +493,7 @@ async function _sendDirectMessageAction(formData: FormData): Promise<MessageResu
       admin_read_at: nowIso,
     });
     if (tErr) return { success: false, message: "登録に失敗: " + tErr.message };
+    linkMsgId = inserted.id as string;
   } else {
     // 2回目以降：アンカースレッドへ返信として積む
     const { error: rErr } = await admin.from("message_replies").insert({
@@ -429,6 +505,11 @@ async function _sendDirectMessageAction(formData: FormData): Promise<MessageResu
     await admin.from("message_targets").update({ admin_read_at: nowIso })
       .eq("message_id", anchorId).eq("staff_id", targetStaffId);
   }
+
+  // LINE通知（当該スタッフへ）
+  const senderName = await staffDisplayName(admin, staffId);
+  const lineText = `【メッセージ】\n送信者：${senderName}\n${SEP}\n${body || "（ファイルが届きました）"}\n${SEP}`;
+  await notifyRecipientsLine(admin, [targetStaffId], lineText, `${APP_URL}/messages?open=${linkMsgId}`);
 
   revalidatePath("/messages");
   revalidatePath("/messages/manage");
