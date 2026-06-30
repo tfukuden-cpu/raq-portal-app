@@ -116,8 +116,6 @@ export default async function DashboardPage() {
     { data: todayDeparture },
     { data: todayAbsence },
     { data: todayLate },
-    { data: allNotices },
-    { data: readNotices },
     { data: upcomingShiftRows },
     { data: weekShiftRows },
     { data: projectSettings },
@@ -170,15 +168,6 @@ export default async function DashboardPage() {
       .eq("project_id", currentProjectId!)
       .eq("late_date", today)
       .maybeSingle(),
-    supabase
-      .from("notices")
-      .select("id, title, created_at")
-      .eq("project_id", currentProjectId!)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("notice_reads")
-      .select("notice_id")
-      .eq("staff_id", staffId),
     supabase
       .from("shifts")
       .select("shift_date, shift_name, shift_start, shift_end")
@@ -262,18 +251,52 @@ export default async function DashboardPage() {
       : Promise.resolve({ data: [] }),
   ]);
 
-  const readIds = new Set((readNotices ?? []).map(r => r.notice_id as string));
-  const unreadCount = (allNotices ?? []).filter(n => !readIds.has(n.id as string)).length;
-
-  // お知らせタイムライン（最新3件）
-  const recentNotices = (allNotices ?? []).slice(0, 3).map(n => ({
-    id:        n.id as string,
-    title:     (n.title as string) ?? "",
-    createdAt: new Date(n.created_at as string).toLocaleString("ja-JP", {
-      timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hour12: false,
-    }),
-  }));
+  // ── メッセージ未読数＋最新（旧:周知を統合） ──
+  const { data: msgTargets } = await supabase
+    .from("message_targets")
+    .select("message_id, staff_read_at")
+    .eq("staff_id", staffId);
+  const msgIds = (msgTargets ?? []).map(t => t.message_id as string);
+  const readAtById = new Map(
+    (msgTargets ?? []).map(t => [t.message_id as string, (t.staff_read_at ?? null) as string | null])
+  );
+  let unreadCount = 0;
+  let recentNotices: { id: string; title: string; createdAt: string }[] = [];
+  if (msgIds.length) {
+    const [{ data: msgRows }, { data: replyRows }] = await Promise.all([
+      supabase.from("messages")
+        .select("id, title, body, sender_staff_id, created_at")
+        .in("id", msgIds)
+        .order("created_at", { ascending: false }),
+      supabase.from("message_replies")
+        .select("message_id, author_staff_id, created_at")
+        .in("message_id", msgIds)
+        .eq("thread_staff_id", staffId),
+    ]);
+    const EPOCH = "1970-01-01T00:00:00Z";
+    const repliesByMsg = new Map<string, { author: string; created: string }[]>();
+    for (const r of replyRows ?? []) {
+      const arr = repliesByMsg.get(r.message_id as string) ?? [];
+      arr.push({ author: r.author_staff_id as string, created: r.created_at as string });
+      repliesByMsg.set(r.message_id as string, arr);
+    }
+    for (const m of msgRows ?? []) {
+      const id = m.id as string;
+      const readAt = readAtById.get(id) ?? null;
+      const iAmSender = (m.sender_staff_id as string) === staffId;
+      const floor = readAt ?? EPOCH;
+      const otherReply = (repliesByMsg.get(id) ?? []).some(r => r.author !== staffId && r.created > floor);
+      if ((!iAmSender && readAt === null) || otherReply) unreadCount++;
+    }
+    recentNotices = (msgRows ?? []).slice(0, 3).map(m => ({
+      id:    m.id as string,
+      title: (m.title as string | null) || (m.body as string).slice(0, 20),
+      createdAt: new Date(m.created_at as string).toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hour12: false,
+      }),
+    }));
+  }
 
   // 7日分スケジュール
   function addDays(base: string, days: number): string {

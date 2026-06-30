@@ -523,13 +523,13 @@ export default function HomeClient({
 
           {/* ── みかくにんの おしらせ アラート（大きく目立たせる） ── */}
           {noticeCount > 0 && (
-            <a href="/notices" className="block active:scale-[0.99] transition-transform">
+            <a href="/messages" className="block active:scale-[0.99] transition-transform">
               <div className="relative rounded-lg border-2 border-red-400 bg-[#1a0408] p-[3px] shadow-[0_0_18px_rgba(248,113,113,0.45)]">
                 <div className="rounded-md border border-red-300/70 bg-[#1a0408] px-4 py-3.5 md:px-5 flex items-center gap-3">
                   <span className="text-[26px] md:text-[30px] leading-none shrink-0" style={{ animation: "rpgCursor 1.4s steps(1) infinite" }}>⚠️</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[15px] md:text-[17px] text-red-200 leading-snug">
-                      みかくにんの おしらせが <span className="text-amber-300 font-bold tabular-nums">{noticeCount}</span>けん あります！
+                      みかくにんの メッセージが <span className="text-amber-300 font-bold tabular-nums">{noticeCount}</span>けん あります！
                     </p>
                     <p className="text-[11px] md:text-[12px] text-white/60 mt-0.5">タップして ないようを かくにんしよう</p>
                   </div>
@@ -860,11 +860,11 @@ export default function HomeClient({
             </div>
           )}
 
-          {/* ── おしらせ（ギルドけいじばん） ── */}
-          <RpgWindow title="おしらせ" className="mt-1.5">
+          {/* ── メッセージ（ぎるどメール） ── */}
+          <RpgWindow title="メッセージ" className="mt-1.5">
             <div className="px-4 pt-4 pb-2 md:px-5 flex items-center justify-between">
-              <span className="text-[12px] text-white/50">ギルドけいじばん</span>
-              <a href="/notices" className="flex items-center gap-1 text-[12px] text-sky-300 hover:text-sky-200 transition-colors">
+              <span className="text-[12px] text-white/50">ぎるどメール</span>
+              <a href="/messages" className="flex items-center gap-1 text-[12px] text-sky-300 hover:text-sky-200 transition-colors">
                 すべて見る ▶
                 {noticeCount > 0 && (
                   <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold tabular-nums">
@@ -878,7 +878,7 @@ export default function HomeClient({
                 {recentNotices.map(n => (
                   <a
                     key={n.id}
-                    href="/notices"
+                    href={`/messages?open=${n.id}`}
                     className="flex items-center gap-3 px-4 md:px-5 py-2.5 border-t border-white/10 hover:bg-white/5 transition-colors"
                   >
                     <span className="text-amber-300 text-[11px] flex-shrink-0">★</span>
@@ -888,7 +888,7 @@ export default function HomeClient({
                 ))}
               </div>
             ) : (
-              <p className="px-4 md:px-5 pb-4 pt-1 text-[13px] text-white/40">おしらせは ない</p>
+              <p className="px-4 md:px-5 pb-4 pt-1 text-[13px] text-white/40">メッセージは ない</p>
             )}
           </RpgWindow>
 

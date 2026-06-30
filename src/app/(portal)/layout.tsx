@@ -26,8 +26,6 @@ const STAFF_ITEMS: NavItem[] = [
   { href: "/shifts",     icon: "Calendar",      label: "シフト" },
   { href: "/record",     icon: "BarChart2",     label: "勤怠実績" },
   { href: "/messages",   icon: "MessageSquare", label: "メッセージ" },
-  { href: "/notices",    icon: "Bell",          label: "周知事項" },
-  { href: "/inquiries",  icon: "MessageSquare", label: "問い合わせ" },
   { href: "/help",       icon: "HelpCircle",    label: "ヘルプ" },
 ];
 
@@ -36,8 +34,6 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
   { href: "/attendance",      icon: "Users",           label: "当日状況" },   // 座席表統合
   { href: "/shifts/manage",   icon: "CalendarSettings", label: "シフト管理" },
   { href: "/members",         icon: "IdCard",          label: "メンバー管理" },
-  { href: "/notices/manage",    icon: "Megaphone",       label: "周知管理" },
-  { href: "/inquiries/manage",  icon: "MessageSquare",   label: "問合せ管理" },
   { href: "/attendance/edit",        icon: "ClipboardCheck", label: "勤怠管理" },
   { href: "/line-settings",   icon: "Smartphone",      label: "LINE連携" },
   { href: "/admin",           icon: "Settings",        label: "案件設定" },

@@ -31,7 +31,8 @@
 - **未読の算出**: スタッフ=自分のtargetの`staff_read_at`がnull(受信本文未読) or 自分以外の返信が既読時刻より新しい。管理者=スレッド本人(thread_staff_id)発の返信が`admin_read_at`より新しい or admins宛で未読。展開時に`markThreadReadAction`で既読化
 - **LINE通知 接続済（2026-06-29・デプロイ済）**: `actions.ts`に`notifyRecipientsLine`（受信者のline_user_idへ`pushLineWithButton`「メッセージを見る」→`/messages?open=ID`・40件ずつ`Promise.allSettled`）と`notifyAdminGroupLine`（`project_settings.line_group_id`へ「管理画面で見る」→`/messages/manage`）。配線＝`sendMessageAction`(新規配信→受信者へ)／`sendDirectMessageAction`(個別トーク→当該スタッフへ)／`replyMessageAction`(管理者返信→スタッフ／スタッフ返信→グループ)／`staffStartMessageAction`(問い合わせ→グループ)。全てtry/catchで通知失敗は本体成功扱い。添付のみは「（ファイルが届きました）」。**未連携(line_user_idなし)には飛ばない**
 - **添付対応済（2026-06-29・デプロイ済）**: `message_replies`に`attachment_url`/`attachment_name`追加。個別トークルーム入力＋スレッド返信(`ReplyThread`)の両方でクリップから添付可（最大10MB・`message-attachments`バケット）。`RoomItem`/`MessageReply`に添付フィールド
-- **残（フェーズ4・ユーザーテスト後）**: ①ホームに未読アラート（周知の既存アラート同様）②旧メニュー(周知/問い合わせ)廃止 ③UIのRPG化（他スタッフ画面と統一・任意）④SPEC.md §3/§4への追記
+- **ホーム未読アラート＋旧メニュー廃止 済（2026-06-29・デプロイ済）**: `dashboard/page.tsx`の周知集計(`notices`/`notice_reads`クエリ)を**メッセージ集計に差し替え**（`message_targets`/`messages`/`message_replies`で未読数＝`unreadCount`と最新3件＝`recentNotices`をprop名そのまま算出）。`HomeClient.tsx`のアラート「みかくにんの メッセージ」→`/messages`、おしらせ窓→「メッセージ/ぎるどメール」→`/messages`、各行→`/messages?open=ID`。`layout.tsx`から**周知事項/問い合わせ(STAFF)・周知管理/問合せ管理(ADMIN)のナビ4項目を削除**。⚠️**`/notices`/`/inquiries`のページ自体は残置**（旧LINE深リンク救済・URL直打ち可）。`notices`/`inquiries`テーブルも残置
+- **残（フェーズ4以降・任意）**: ①UIのRPG化（メッセージ画面・他スタッフ画面と統一）②SPEC.md §3/§4への追記③旧ページ(/notices,/inquiries)とテーブルの完全削除（移行が安定したら）
 
 
 ### 1000行制限の地雷を予防的に一掃＋共有ヘルパー新設（2026-06-28・デプロイ済 82c2319）
