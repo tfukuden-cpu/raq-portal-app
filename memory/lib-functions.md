@@ -16,6 +16,22 @@
 
 **注意:** `LINE_CHANNEL_ACCESS_TOKEN` 未設定時は静かに失敗（エラーなし）
 
+## src/lib/messages.ts — 統合メッセージの型・定数（plain）
+
+| エクスポート | 用途 |
+|------|------|
+| `AudienceType` | `all`/`section`/`staff`/`admins` |
+| `AUDIENCE_LABEL` | 宛先種別の日本語ラベル |
+| `MessageReply` / `AdminThread` / `AdminMessage` / `StaffMessage` | 画面用の型（管理者=AdminMessage+スレッド、スタッフ=StaffMessage） |
+| `StaffRoom` / `RoomItem` | スタッフ別チャットルーム（LINE風一覧の1人・吹き出し1件） |
+| `isImageFile(name)` | 添付が画像か判定 |
+
+## src/lib/admin-view.ts — 管理者ビュー判定
+
+| 関数 | 用途 |
+|------|------|
+| `isAdminView(supabase, staffId, projectId)` | レイアウトの viewMode 決定と一致。executive/global adminは常にtrue、project_adminはCookie`rqp-view-mode`(既定admin)、一般スタッフfalse。`/messages`↔`/messages/manage` のリダイレクト判定に使用（ループ防止） |
+
 ## src/lib/notify.ts — 通知共通ライブラリ
 
 ```typescript

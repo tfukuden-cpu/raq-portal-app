@@ -105,7 +105,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 「すべて見る →」で `/tasks` へ遷移（タブ切り替えなし）
 
 **関連テーブル:**
-`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `notices`, `notice_reads`, `group_tasks`, `project_settings`, `login_bonuses`, `break_room_settings`, `break_room_uses`
+`punch_logs`, `shifts`, `departure_reports`, `absence_reports`, `late_reports`, `messages`, `message_targets`, `message_replies`（未読アラート＝旧 notices から差替）, `group_tasks`, `project_settings`, `login_bonuses`, `break_room_settings`, `break_room_uses`
 
 ---
 
@@ -164,7 +164,30 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ---
 
-### 3-5. お知らせ (`/notices`)
+### 3-5. メッセージ (`/messages`) 〔2026-06-29 新設・周知/個別連絡/問い合わせを統合〕
+
+**対象:** 全スタッフ（管理者は `/messages` を開くと自動で `/messages/manage` へ）
+
+**目的:** 「個別に出した周知が全員に見える」不具合（旧 `notices/page.tsx` が `target_staff_id` で絞っていなかった）を根本解決し、**全体周知・絞り込み配信・個別の双方向やり取り・問い合わせ**を1つに統合。
+
+**設計の肝＝受信者ごとの個別スレッド:** 1通のメッセージを宛先ごとに `message_targets` へ展開。各受信者は自分のスレッドだけを見る。返信すると本人↔管理者の1対1会話になり、**全員宛でも返信は荒れない**。
+
+**スタッフ画面（受信箱）:**
+- 自分宛のメッセージ一覧（未読は赤ドット・ホーム未読アラートと連動）
+- スレッドを開くとLINE風の吹き出しで管理者とやり取り（返信に画像/ファイル添付可・最大10MB）
+- 「＋管理者へ」で管理者宛メッセージを新規作成（＝旧・問い合わせの代替。`audience_type='admins'`）
+- `?open=ID` で該当スレッドを自動展開
+
+**関連テーブル:**
+`messages`, `message_targets`, `message_replies`、Storage: `message-attachments`
+
+**LINE通知:** 配信・個別連絡・管理者返信 → 受信スタッフへ「メッセージを見る」（`/messages?open=ID`）。問い合わせ・スタッフ返信 → 案件グループLINEへ「管理画面で見る」（`/messages/manage`）。未連携(line_user_idなし)には飛ばない。詳細は §4 管理側。
+
+---
+
+### 3-5old. お知らせ (`/notices`) 〔2026-06-29 ナビ廃止・`/messages` へ統合済〕
+
+> **廃止予定。** ナビからは削除済み。過去周知は `messages` へ移行済み。ページ・テーブルは旧LINE深リンク（`/notices?open=…`）救済のため残置。新規利用は `/messages`。
 
 **対象:** 全スタッフ
 
@@ -183,7 +206,9 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ---
 
-### 3-6. 問い合わせ (`/inquiries`)
+### 3-6. 問い合わせ (`/inquiries`) 〔2026-06-29 ナビ廃止・`/messages` へ統合済〕
+
+> **廃止予定。** ナビからは削除済み。過去の問い合わせは `messages`（`audience_type='admins'`）へ移行済み。新規は `/messages` の「＋管理者へ」。ページ・テーブルは残置。
 
 **対象:** 全スタッフ
 
@@ -418,7 +443,27 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ---
 
-### 4-4. 周知管理 (`/notices/manage`)
+### 4-4. メッセージ管理 (`/messages/manage`) 〔2026-06-29 新設・LINE風〕
+
+**対象:** 案件管理者（`isAdminView` = 運営者/全社管理者は常時、案件管理者は視点モードに従う。判定は `src/lib/admin-view.ts`。非管理者は `/messages` へ）。ナビ「メッセージ」1項目から役割で自動切替。
+
+**2タブ構成:**
+
+1. **スタッフ**（LINE風）— 全現役メンバーの一覧（未読数バッジ・最終活動順）。タップで**チャットルーム**を開き、その人に送った配信・個別連絡・本人の返信を**時系列で統合表示**（配信由来は「配信」タグ）。入力欄から直接送信（画像/ファイル添付可）。
+   - ルーム送信は `sendDirectMessageAction`：1スタッフにつき `is_direct=true` のアンカーを1本だけ作り、以降は返信として積む＝**送信履歴には出さない**。開くと `markStaffRoomReadAction` で既読化。
+2. **送信履歴** — `is_direct=false かつ audience_type≠admins` のメッセージ（＝全員/セクション/個別の**新規配信のみ**）。各配信は宛先ごとのスレッドを確認・返信可。「＋新規配信」で送信モーダル（宛先タブ：全員/セクション/個別＋タイトル/本文/添付/固定/「返信を受け付ける」）。
+
+**送信アクション（`messages/actions.ts`）:** `sendMessageAction`（新規配信＝宛先解決して `message_targets` に展開・adminクライアント）／`sendDirectMessageAction`／`replyMessageAction`／`markThreadReadAction`／`markStaffRoomReadAction`／`deleteMessageAction`。スタッフ側は `staffStartMessageAction`。
+
+**LINE通知:** `notifyRecipientsLine`（受信者の `line_user_id` へ `pushLineWithButton`「メッセージを見る」→`/messages?open=ID`・40件ずつ `Promise.allSettled`）／`notifyAdminGroupLine`（`project_settings.line_group_id` へ「管理画面で見る」）。配信→受信者、個別トーク→当該スタッフ、管理者返信→スタッフ、問い合わせ/スタッフ返信→グループ。通知失敗は本体成功扱い（try/catch）。
+
+**関連テーブル:** `messages`, `message_targets`, `message_replies`, `project_members`, `staffs`, `project_settings`、Storage: `message-attachments`
+
+---
+
+### 4-4old. 周知管理 (`/notices/manage`) 〔2026-06-29 ナビ廃止・`/messages/manage` へ統合済〕
+
+> **廃止予定。** ナビ削除済み。新規配信は `/messages/manage`。ページ・テーブルは残置。
 
 **機能:**
 - 周知事項の作成・送信（過去日時投稿も可）
@@ -437,7 +482,9 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ---
 
-### 4-5. 問合せ管理 (`/inquiries/manage`)
+### 4-5. 問合せ管理 (`/inquiries/manage`) 〔2026-06-29 ナビ廃止・`/messages/manage` へ統合済〕
+
+> **廃止予定。** ナビ削除済み。問い合わせは `/messages/manage` の「スタッフ」タブで対応（`audience_type='admins'`）。ページ・テーブルは残置。
 
 **機能:**
 - スタッフからの問い合わせ一覧
@@ -871,9 +918,12 @@ export function monsterImg(id)             // → /rpg/mon-${id}.png
 | `departure_reports` | 出発報告（reported_at, eta_minutes） |
 | `absence_reports` | 欠勤報告（absence_date, reason, status, followup_* カラム） |
 | `late_reports` | 遅刻報告（late_date, reason, status） |
-| `notices` | 周知事項（title, body, is_pinned, target_staff_id, attachment_url, attachment_name） |
-| `notice_reads` | お知らせ既読（staff_id, notice_id） |
-| `inquiries` | 問い合わせ |
+| `messages` | **統合メッセージ**（2026-06-29新設）。body, audience_type(all/section/staff/admins), audience_sections[], is_pinned, allow_reply, is_direct(個別トーク=送信履歴から除外), attachment_*, sender_staff_id, legacy_ref(移行元参照 notice:/inquiry:) |
+| `message_targets` | メッセージ受信者1人=1行＝スレッド（message_id, staff_id, staff_read_at, admin_read_at。UNIQUE(message_id,staff_id)。受信者展開insertはadminクライアント） |
+| `message_replies` | スレッド内の返信（message_id, thread_staff_id, author_staff_id, body, attachment_*） |
+| `notices` | 周知事項（title, body, is_pinned, target_staff_id, attachment_*）。**`messages`へ統合・ナビ廃止／残置** |
+| `notice_reads` | お知らせ既読。**残置** |
+| `inquiries` | 問い合わせ。**`messages`(audience_type=admins)へ統合・残置** |
 | `group_tasks` | LINEグループ抽出タスク（title, assignee_staff_id, status, group_id） |
 | `task_extraction_groups` | タスク抽出グループ設定（group_id, group_label, enabled） |
 | `line_groups` | LINEグループ情報（group_id, joined_at） |
