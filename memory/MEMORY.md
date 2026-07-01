@@ -13,6 +13,22 @@
 
 ---
 
+## 現在の開発状態（2026-07-01更新）
+
+### 勤怠実績の月送りで打刻が全滅＋Excel出力のNaN:NaN修正（2026-07-01・デプロイ済 f52d1bc・案件=IDOM）
+**ユーザー報告「勤怠実績を出力したら一部反映されていない／NaN:NaNになる」。2つの別バグだった。tsc 0・新規lint 0（既存と同じset-state-in-effect warnのみ）。**
+- **①勤怠実績タブ(詳細画面)で出勤・退勤・稼働が全日空欄＝月送りでstateが追従しない（最重要・全スタッフ共通）**: `/attendance/edit` の「勤怠実績」タブでスタッフをクリック→詳細を見ると、シフト名(公休/SV遅番)やヘッダー月表示は正しいのに**出勤・退勤・休憩・稼働・超過が全日空欄**。原因＝`AttendanceEditClient.tsx` の `localRows`/`confirmMap` が `useState(rows)` の初期値固定。月送り(◀▶)は `router.push(?month=...)` でURLだけ変えてサーバー再取得するが、**このクライアントコンポーネントは再マウントされない**ため `useState`初期値が最初の月のまま固定され、新しい月の`rows` propsに追従しない。シフト名等はprops直参照なので正しく出るが、`localRows`由来の打刻・稼働だけが古い月データと日付が噛み合わず全滅する。**修正=`useEffect(()=>{ setLocalRows(rows); setConfirmMap(...) }, [rows])` で rows props 変更に追従**（[AttendanceEditClient.tsx:252](../src/app/(portal)/attendance/edit/AttendanceEditClient.tsx)）。地雷表に追記済
+- **②Excel出力の「内通常時間／内残業時間」がNaN:NaN**: `api/admin/work-records/export/route.ts` の `shiftTimeToDate(dateStr,timeStr)` が `` `${dateStr}T${timeStr}:00+09:00` `` を組み立てるが、`shift_start`/`shift_end` はPostgresの`time`型で`"HH:MM:SS"`で返る（画面上も 11:00:00/20:00:00 と表示）→ `...T20:00:00:00+09:00` という不正文字列→`Invalid Date`→`NaN`。それが `overtimeMinutes`→`normalMinutes(=workMinutes-NaN)` を汚染し `NaN:NaN` 表示に。**修正=`timeStr.slice(0,5)` で `HH:MM` に正規化**してから日時を組む
+- **注意＝データ実体の欠落は別問題**: 安積玄(S005)の6/22以降のように `punch_logs` に打刻自体が無い日は、今回の修正後も出勤・退勤は空欄のまま（実際の打刻漏れ）。集計漏れではないので現場・本人確認が必要
+- 全件デプロイ済（`git push origin master`→Vercel）
+
+### スキル管理ページ新設（2026-07-01・実装済・未デプロイ・テスト前）
+**ユーザー指示「メンバー管理でスキル（対応できるセクション）設定していると思うんだけど、スキル管理のページを作りたい。メインセクション│アカウント番号順│名前│各セクション対応可能(青)/対応不可(赤)」。tsc 0・新規lint 0。**
+- **新ページ `/members/skills`**（`src/app/(portal)/members/skills/` page.tsx＋SkillsMatrixClient.tsx＋actions.ts）: 現役メンバー(`end_date is null`)をアカウント番号昇順（数値優先・文字列フォールバック）で一覧。列＝メインセクション(`project_members.section`・表示のみ)｜アカウント番号｜名前｜`shift_patterns.section`から導出した全セクション（○青=対応可能/×赤=対応不可、タップでトグル）
+- **トグルは新規アクション `toggleStaffSkillAction`（actions.ts）**: `project_members.sections`（配列・スキル）のみを更新し、`section`（メインセクション単体）には触れない。既存の`updateShiftSettingsAction`（admin/[projectId]/settings/actions.ts）は呼ぶと`section`を`sections[0]`で上書きしてしまうため**使わず別アクションを新設**。admin-only（global admin or project_admin、`assertAdmin`ヘルパーで自前実装）
+- **`/members`ページヘッダーに「▶スキル管理」リンクボタン追加**（`SettingsClient.tsx`のMemberListヘッダー部）。新規ナビ項目は追加していない（メニュー追加は最小限にする方針）
+- 残: 本番反映は未（`git push origin master`でVercel自動デプロイ・ユーザー承認必要）。ローカル動作確認はdev環境の env 未読込問題（既知）で未実施、tsc/lintのみ確認済み
+
 ## 現在の開発状態（2026-06-29更新）
 
 ### 統合『メッセージ』機能を新設＝周知+個別連絡+問い合わせを1つに（2026-06-29・実装済・未デプロイ・テスト前）
@@ -550,6 +566,8 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | 仮組の連勤上限チェックは「前後」両方を見る | `draft-actions.ts` は日付を飛び飛びの順(ラウンドロビンstride=11＋余剰配置)に割り当てるため、連勤判定を「前」だけで行うと後から間を埋める割当で連勤区間が連結し上限超過(6連勤以上)が起きる。`wouldExceedConsecutive`=`before+1+after>max` で前後を見ること（2026-06-25修正）。新しい割当ロジックを追加するときも同関数を使う |
 | 希望休のテーブルは2系統＝実運用は `shift_off_requests` | スタッフ申請の希望休は `shift_off_requests`(priority=第1〜第4希望・`staff-off-request-actions.ts`／管理者一覧も同テーブル)。`holiday_requests`(status付)は別系統でほぼ未使用。**希望休を参照する処理は `shift_off_requests` を読むこと**。仮組生成 `draft-actions.ts` が `holiday_requests` を読んでいて希望休が反映されないバグがあった（2026-06-25修正） |
 | **セクションの「表示マージ」を `project_members.section/sections` に適用してはいけない** | `StaffInfoPanel`(`shifts/manage/StaffInfoPanel.tsx`) は `member.sections` を初期値→`updateShiftSettingsAction` で**そのまま保存**する。表示用に props 段階で「インフォ→販売」等とマージすると、スタッフ設定保存時に**実データが上書きされ消える**（2026-06-20 #15対応でインフォが消失＝S019復元）。表示マージは①保存パスに乗らない画面のみ（当日状況の出勤簿＝`moveSectionAction` は `shifts` のみ更新で安全）か、②表示ラベルの差し替えだけに留める。シフト管理側の section マージは撤回済み。`project_members` のセクション変更履歴は残らない＝壊すと復元はリスト手動指定のみ |
+| クライアントの `useState(props)` 初期値は router.push の再取得に追従しない | `router.push(?month=...)` 等でURLパラメータだけ変えてサーバー再取得しても、**同じクライアントコンポーネントは再マウントされない**ため `useState(props)` の初期値は最初の値で固定される。`AttendanceEditClient` の `localRows`/`confirmMap` が該当し、勤怠実績の月送りで**打刻・稼働が全日空欄**になった（シフト名等のprops直参照は正しく出るため気づきにくい）。編集用のローカルstateをpropsから初期化している画面は `useEffect(()=>setState(props),[props])` でprops変更に追従させること（2026-07-01修正）。※`ShiftManageClient` の `latestDraft` も同種で `onDraftSaved`+refresh で対処済 |
+| Postgres `time`型カラム(`shift_start`/`shift_end`)は `"HH:MM:SS"` で返る | `` `${date}T${timeStr}:00+09:00` `` のように`"HH:MM"`前提で秒を足すと `...T20:00:00:00+09:00` の不正文字列→`Invalid Date`→`NaN`。Excel出力(`work-records/export/route.ts`)で内通常/内残業時間が `NaN:NaN` になった。`timeStr.slice(0,5)` で正規化してから日時を組む（2026-07-01修正）。他の勤怠計算箇所は既に `.slice(0,5)` 済み |
 
 ---
 
