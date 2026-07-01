@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   savePunchCorrectionAction,
@@ -248,6 +248,16 @@ export default function AttendanceEditClient({
     return m;
   });
   const [localRows, setLocalRows] = useState<AttendanceRow[]>(rows);
+
+  // 月・スタッフ切替時（router.push）はこのクライアントコンポーネントは再マウントされず
+  // useState初期値のみでは新しい rows props に追従しない＝月をまたぐと表示が全滅する。
+  // rows/初期confirm状態が変わったら state を追従させる。
+  useEffect(() => {
+    setLocalRows(rows);
+    const m = new Map<string, string | null>();
+    for (const r of rows) m.set(`${r.staffId}_${r.date}`, r.isConfirmed ? (r.confirmedBy ?? "") : null);
+    setConfirmMap(m);
+  }, [rows]);
 
   // スタッフ別月次サマリー（一覧ビュー用）
   const staffSummaries = useMemo(() => {

@@ -34,10 +34,10 @@ function toJSTTime(iso: string | null): string {
   });
 }
 
-/** "HH:MM" → その日のJST Dateオブジェクト */
+/** "HH:MM" または "HH:MM:SS" → その日のJST Dateオブジェクト */
 function shiftTimeToDate(dateStr: string, timeStr: string | null): Date | null {
   if (!timeStr) return null;
-  return new Date(`${dateStr}T${timeStr}:00+09:00`);
+  return new Date(`${dateStr}T${timeStr.slice(0, 5)}:00+09:00`);
 }
 
 /** 分 → "H:MM" */
