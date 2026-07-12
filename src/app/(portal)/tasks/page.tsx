@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import TasksClient from "./TasksClient";
-import type { GroupTask, StaffOption, ProjectTask, TaskNote } from "./TasksClient";
+import type { StaffOption, ProjectTask, TaskNote } from "./TasksClient";
 
 export default async function TasksPage() {
   const supabase = await createClient();
@@ -35,8 +35,6 @@ export default async function TasksPage() {
   const [
     { data: project },
     { data: rawTasks },
-    { data: rawCandidates },
-    { data: rawGroups },
     { data: members },
     { data: rawNotes },
   ] = await Promise.all([
@@ -47,15 +45,6 @@ export default async function TasksPage() {
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(500),
-    admin.from("group_tasks")
-      .select("id, title, description, assignee_staff_id, assignee_raw, due_text, due_date, status, group_id, created_at, completed_at, source_messages")
-      .eq("project_id", projectId)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(100),
-    admin.from("task_extraction_groups")
-      .select("group_id, group_label")
-      .eq("project_id", projectId),
     admin.from("project_members")
       .select("staff_id, section, sections, staffs(name, display_name)")
       .eq("project_id", projectId)
@@ -76,9 +65,6 @@ export default async function TasksPage() {
       { name: string | null; display_name: string | null } | null;
     staffNameMap.set(m.staff_id, s?.display_name ?? s?.name ?? m.staff_id);
   }
-
-  const groupLabelMap = new Map<string, string | null>();
-  for (const g of rawGroups ?? []) groupLabelMap.set(g.group_id, g.group_label ?? null);
 
   // メモ著者名の解決（運営者などメンバー外のこともあるので staffs から直接引く）
   const noteRows = (rawNotes ?? []) as {
@@ -123,23 +109,6 @@ export default async function TasksPage() {
     notes:           notesByTask.get(t.id) ?? [],
   }));
 
-  const candidates: GroupTask[] = (rawCandidates ?? []).map(t => ({
-    id:                t.id,
-    title:             t.title,
-    description:       t.description,
-    assignee_staff_id: t.assignee_staff_id,
-    assignee_raw:      t.assignee_raw,
-    due_text:          t.due_text,
-    due_date:          t.due_date,
-    status:            t.status,
-    group_id:          t.group_id,
-    group_label:       groupLabelMap.get(t.group_id) ?? null,
-    created_at:        t.created_at,
-    completed_at:      t.completed_at,
-    assignee_name:     t.assignee_staff_id ? (staffNameMap.get(t.assignee_staff_id) ?? null) : null,
-    source_messages:   (t.source_messages as { sent_at: string; user_id: string; text: string }[] | null) ?? null,
-  }));
-
   // 担当者の選択肢はSVのみ（メインセクション or スキルにSVを持つ現役メンバー）
   const staffOptions: StaffOption[] = (members ?? [])
     .filter(m => {
@@ -163,7 +132,6 @@ export default async function TasksPage() {
           projectName={project.name}
           today={today}
           tasks={tasks}
-          candidates={candidates}
           staffOptions={staffOptions}
         />
       </div>

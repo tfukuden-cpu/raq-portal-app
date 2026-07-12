@@ -2,9 +2,9 @@
 
 /**
  * タスク管理（管理者専用）
- *  - リスト: ステータス別のタスク一覧
+ *  - リスト: 未着手/作業中/完了の3レーンかんばん（モバイルは縦積み）
  *  - タイムライン: 月単位のガントチャート（開始日〜期日のバー・進捗%塗り）
- *  - LINE取込み: LINEグループから自動抽出されたタスク候補を取込み/却下
+ *  - タスク押下=作業メモ履歴（メモでステータス・進捗を自動更新）
  */
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
@@ -12,8 +12,6 @@ import { useRouter } from "next/navigation";
 import {
   saveProjectTaskAction,
   deleteProjectTaskAction,
-  importGroupTaskAction,
-  updateTaskStatusAction,
   addTaskNoteAction,
 } from "./actions";
 
@@ -80,7 +78,7 @@ export type ProjectTask = {
   notes: TaskNote[];
 };
 
-type Tab = "list" | "timeline" | "inbox";
+type Tab = "list" | "timeline";
 
 const STATUS_LABEL: Record<ProjectTask["status"], string> = {
   todo: "未着手", in_progress: "作業中", done: "完了",
@@ -94,9 +92,9 @@ const PRIORITY_LABEL: Record<ProjectTask["priority"], string> = {
   high: "高", normal: "中", low: "低",
 };
 const PRIORITY_CLS: Record<ProjectTask["priority"], string> = {
-  high:   "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400",
-  normal: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-  low:    "bg-sky-50 text-sky-500 dark:bg-sky-950/40 dark:text-sky-400",
+  high:   "bg-red-50 text-red-500 border border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900",
+  normal: "bg-zinc-50 text-zinc-500 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700",
+  low:    "bg-sky-50 text-sky-500 border border-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-900",
 };
 
 function fmtMD(d: string): string {
@@ -123,34 +121,31 @@ function dowOf(dateStr: string): number {
 }
 
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
-const DAY_W = 28;
+const DAY_W = 30;
 
 export default function TasksClient({
   projectId,
   projectName,
   today,
   tasks,
-  candidates,
   staffOptions,
 }: {
   projectId: string;
   projectName?: string;
   today: string; // JST YYYY-MM-DD（サーバー算出・hydration対策）
   tasks: ProjectTask[];
-  candidates: GroupTask[];
   staffOptions: StaffOption[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("list");
   const [month, setMonth] = useState(today.slice(0, 7));
   const [editing, setEditing] = useState<ProjectTask | null | "new">(null);
-  const [prefill, setPrefill] = useState<(Partial<ProjectTask> & { sourceGroupTaskId?: string }) | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const openTasks = tasks.filter(t => t.status !== "done");
+  const dueTodayCount = openTasks.filter(t => t.dueDate === today).length;
   const overdueCount = openTasks.filter(t => t.dueDate && t.dueDate < today).length;
   const detailTask = detailId ? (tasks.find(t => t.id === detailId) ?? null) : null;
 
@@ -166,95 +161,60 @@ export default function TasksClient({
     });
   }
 
-  function handleImport(c: GroupTask) {
-    // 取込み前に内容を編集できるようモーダルを開く
-    setPrefill({
-      title: c.title,
-      description: c.description,
-      assigneeStaffId: c.assignee_staff_id,
-      dueDate: c.due_date,
-      sourceGroupTaskId: c.id,
-    });
-    setEditing("new");
-  }
-
-  function handleQuickImport(c: GroupTask) {
-    setBusyId(c.id);
-    setErrorMsg(null);
-    startTransition(async () => {
-      const res = await importGroupTaskAction(projectId, c.id);
-      if (!res.success) setErrorMsg(res.message ?? "取込みに失敗しました");
-      setBusyId(null);
-      router.refresh();
-    });
-  }
-
-  function handleDismiss(c: GroupTask) {
-    setBusyId(c.id);
-    setErrorMsg(null);
-    startTransition(async () => {
-      await updateTaskStatusAction(c.id, "dismissed");
-      setBusyId(null);
-      router.refresh();
-    });
-  }
-
   return (
-    <div className="space-y-4 py-5">
+    <div className="space-y-5 py-6">
       {/* ヘッダー */}
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">タスク管理</h1>
           {projectName && <p className="text-sm font-semibold text-zinc-400 mt-0.5">{projectName}</p>}
         </div>
         <button
           type="button"
-          onClick={() => { setPrefill(null); setEditing("new"); }}
-          className="shrink-0 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors"
+          onClick={() => setEditing("new")}
+          className="shrink-0 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-sm font-bold shadow-sm shadow-blue-600/20 transition-all"
         >＋ 新規タスク</button>
       </div>
 
-      {/* サマリー */}
-      <div className="grid grid-cols-3 gap-2 sm:max-w-md">
-        <SummaryCard label="未完了" value={openTasks.length} accent="text-zinc-900 dark:text-zinc-100" />
-        <SummaryCard label="本日期日" value={openTasks.filter(t => t.dueDate === today).length} accent="text-blue-600 dark:text-blue-400" />
-        <SummaryCard label="期限超過" value={overdueCount} accent={overdueCount > 0 ? "text-red-500" : "text-zinc-900 dark:text-zinc-100"} />
-      </div>
-
-      {/* タブ */}
-      <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800">
-        {([
-          ["list", "リスト"],
-          ["timeline", "タイムライン"],
-          ["inbox", `LINE取込み${candidates.length > 0 ? ` (${candidates.length})` : ""}`],
-        ] as [Tab, string][]).map(([key, label]) => (
-          <button key={key} type="button" onClick={() => setTab(key)}
-            className={[
-              "px-3.5 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors",
-              tab === key
-                ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300",
-            ].join(" ")}
-          >{label}</button>
-        ))}
+      {/* タブ（セグメント）＋ 統計 */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="inline-flex rounded-xl bg-zinc-200/70 dark:bg-zinc-800 p-1">
+          {([["list", "ボード"], ["timeline", "タイムライン"]] as [Tab, string][]).map(([key, label]) => (
+            <button key={key} type="button" onClick={() => setTab(key)}
+              className={[
+                "px-4 py-1.5 rounded-lg text-[13px] font-bold transition-all",
+                tab === key
+                  ? "bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300",
+              ].join(" ")}
+            >{label}</button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <StatPill dot="bg-zinc-400" label="未完了" value={openTasks.length} />
+          <StatPill dot="bg-blue-500" label="本日期日" value={dueTodayCount} />
+          <StatPill dot={overdueCount > 0 ? "bg-red-500" : "bg-zinc-300 dark:bg-zinc-600"} label="期限超過" value={overdueCount} alert={overdueCount > 0} />
+        </div>
       </div>
 
       {errorMsg && (
         <p className="text-xs font-medium px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-500">✗ {errorMsg}</p>
       )}
 
-      {/* ── リスト（PC=3カラムかんばん / モバイル=縦積み） ── */}
+      {/* ── ボード（PC=3レーン / モバイル=縦積み） ── */}
       {tab === "list" && (
         tasks.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700 py-16 text-center">
-            <p className="text-sm text-zinc-400">タスクがありません</p>
-            <button type="button" onClick={() => { setPrefill(null); setEditing("new"); }}
-              className="mt-3 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors">
+          <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700 py-20 text-center">
+            <p className="text-3xl mb-2">📋</p>
+            <p className="text-sm font-semibold text-zinc-500">まだタスクがありません</p>
+            <p className="text-xs text-zinc-400 mt-1">タスクを作成して、チームの作業を見える化しましょう</p>
+            <button type="button" onClick={() => setEditing("new")}
+              className="mt-4 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors">
               ＋ 最初のタスクを作成
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch">
             {(["todo", "in_progress", "done"] as ProjectTask["status"][]).map(st => {
               const group = tasks.filter(t => t.status === st);
               const dot =
@@ -262,11 +222,12 @@ export default function TasksClient({
                 : st === "in_progress" ? "bg-blue-500"
                 : "bg-emerald-500";
               return (
-                <KanbanColumn key={st} dot={dot} label={STATUS_LABEL[st]} count={group.length}>
+                <KanbanColumn key={st} dot={dot} label={STATUS_LABEL[st]} count={group.length}
+                  hint={st === "todo" ? "メモを記録すると作業中へ" : st === "in_progress" ? "完了メモで完了へ" : undefined}>
                   {group.map(t => (
-                    <TaskRow key={t.id} task={t} today={today}
+                    <TaskCard key={t.id} task={t} today={today}
                       onClick={() => setDetailId(t.id)}
-                      onEdit={() => { setPrefill(null); setEditing(t); }}
+                      onEdit={() => setEditing(t)}
                       onDelete={() => handleDeleteTask(t)} />
                   ))}
                 </KanbanColumn>
@@ -283,57 +244,13 @@ export default function TasksClient({
           onTaskClick={t => setDetailId(t.id)} />
       )}
 
-      {/* ── LINE取込み ── */}
-      {tab === "inbox" && (
-        <div className="space-y-2">
-          <p className="text-xs text-zinc-400">
-            LINEグループの会話から自動抽出されたタスク候補です。「取込む」で内容を確認してタスク管理に追加できます。
-          </p>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-          {candidates.map(c => (
-            <div key={c.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{c.title}</p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">
-                    {c.group_label ?? "グループ"}
-                    {c.assignee_name ? ` ／ 担当候補: ${c.assignee_name}` : c.assignee_raw ? ` ／ 担当候補: ${c.assignee_raw}` : ""}
-                    {c.due_date ? ` ／ 期日候補: ${fmtMD(c.due_date)}` : ""}
-                  </p>
-                  {c.description && <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{c.description}</p>}
-                </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <button type="button" disabled={busyId === c.id || isPending}
-                    onClick={() => handleImport(c)}
-                    className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
-                  >取込む</button>
-                  <button type="button" disabled={busyId === c.id || isPending}
-                    onClick={() => handleQuickImport(c)}
-                    className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors"
-                    title="編集せずそのまま取込む"
-                  >即取込</button>
-                  <button type="button" disabled={busyId === c.id || isPending}
-                    onClick={() => handleDismiss(c)}
-                    className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-red-500 disabled:opacity-50 transition-colors"
-                  >却下</button>
-                </div>
-              </div>
-            </div>
-          ))}
-          </div>
-          {candidates.length === 0 && (
-            <p className="text-sm text-zinc-400 text-center py-12">取込み待ちの候補はありません</p>
-          )}
-        </div>
-      )}
-
       {/* タスク詳細（作業メモ履歴） */}
       {detailTask && (
         <TaskDetailModal
           projectId={projectId}
           task={detailTask}
           onClose={() => setDetailId(null)}
-          onEdit={() => { setPrefill(null); setEditing(detailTask); }}
+          onEdit={() => setEditing(detailTask)}
           onDelete={() => handleDeleteTask(detailTask)}
           onChanged={() => router.refresh()}
         />
@@ -344,111 +261,282 @@ export default function TasksClient({
         <TaskModal
           projectId={projectId}
           task={editing === "new" ? null : editing}
-          prefill={editing === "new" ? prefill : null}
           staffOptions={staffOptions}
-          onClose={() => { setEditing(null); setPrefill(null); }}
-          onSaved={() => { setEditing(null); setPrefill(null); router.refresh(); }}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); router.refresh(); }}
         />
       )}
     </div>
   );
 }
 
-// ── かんばん列 ──────────────────────────────────────────────
-function KanbanColumn({ dot, label, count, children }: {
+// ── 統計ピル ────────────────────────────────────────────────
+function StatPill({ dot, label, value, alert }: { dot: string; label: string; value: number; alert?: boolean }) {
+  return (
+    <span className={[
+      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border",
+      alert
+        ? "bg-red-50 border-red-200 text-red-600 dark:bg-red-950/30 dark:border-red-900 dark:text-red-400"
+        : "bg-white border-zinc-200 text-zinc-500 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400",
+    ].join(" ")}>
+      <span className={`w-2 h-2 rounded-full ${dot}`} />
+      {label}
+      <b className={`tabular-nums text-sm ${alert ? "" : "text-zinc-900 dark:text-zinc-100"}`}>{value}</b>
+    </span>
+  );
+}
+
+// ── かんばんレーン ──────────────────────────────────────────
+function KanbanColumn({ dot, label, count, hint, children }: {
   dot: string;
   label: string;
   count: number;
+  hint?: string;
   children?: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800 p-2.5">
-      <h2 className="flex items-center gap-1.5 px-1 pb-2 text-xs font-bold text-zinc-500 dark:text-zinc-400">
-        <span className={`w-2 h-2 rounded-full ${dot}`} />
-        {label}
-        <span className="text-zinc-400 dark:text-zinc-500 font-semibold tabular-nums">{count}</span>
+    <section className="rounded-2xl bg-zinc-100 dark:bg-zinc-900/70 border border-zinc-200/60 dark:border-zinc-800 p-2.5 flex flex-col md:min-h-[55vh]">
+      <h2 className="flex items-center gap-2 px-1.5 pt-0.5 pb-2.5">
+        <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
+        <span className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200">{label}</span>
+        <span className="min-w-5 h-5 px-1.5 rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[11px] font-bold text-zinc-500 tabular-nums inline-flex items-center justify-center">{count}</span>
       </h2>
-      <div className="space-y-2">
+      <div className="space-y-2 flex-1">
         {children}
         {count === 0 && (
-          <p className="text-[11px] text-zinc-400 text-center py-6">なし</p>
+          <div className="h-full min-h-24 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center">
+            <p className="text-[11px] text-zinc-400 px-3 text-center">{hint ?? "タスクなし"}</p>
+          </div>
         )}
       </div>
     </section>
   );
 }
 
-// ── サマリーカード ──────────────────────────────────────────
-function SummaryCard({ label, value, accent }: { label: string; value: number; accent: string }) {
-  return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2.5">
-      <p className="text-[11px] font-semibold text-zinc-400">{label}</p>
-      <p className={`text-xl font-bold tabular-nums ${accent}`}>{value}<span className="text-xs font-semibold ml-0.5">件</span></p>
-    </div>
-  );
-}
-
-// ── リスト行 ────────────────────────────────────────────────
-function TaskRow({ task, today, onClick, onEdit, onDelete }: {
+// ── タスクカード ────────────────────────────────────────────
+function TaskCard({ task, today, onClick, onEdit, onDelete, showStatus }: {
   task: ProjectTask;
   today: string;
   onClick: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  showStatus?: boolean;
 }) {
   const overdue = task.status !== "done" && !!task.dueDate && task.dueDate < today;
+  const progress = task.status === "done" ? 100 : task.progress;
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-      <button type="button" onClick={onClick} className="w-full text-left px-3.5 sm:px-4 pt-3 pb-1.5">
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-          <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${PRIORITY_CLS[task.priority]}`}>
-            {PRIORITY_LABEL[task.priority]}
-          </span>
-          <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${STATUS_CHIP[task.status]}`}>
-            {STATUS_LABEL[task.status]}
-          </span>
-          <p className={`text-sm font-semibold truncate flex-1 min-w-0 ${task.status === "done" ? "text-zinc-400 line-through" : "text-zinc-800 dark:text-zinc-100"}`}>
-            {task.title}
-          </p>
-          <span className={`shrink-0 text-[11px] font-semibold tabular-nums hidden sm:inline ${overdue ? "text-red-500" : "text-zinc-400"}`}>
-            {task.dueDate ? `${overdue ? "⚠ " : ""}〜${fmtMD(task.dueDate)}` : "期日なし"}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 mt-1.5">
-          <span className="text-[11px] text-zinc-400 shrink-0 max-w-[6rem] truncate">
-            {task.assigneeName ?? "担当未定"}
-          </span>
-          <span className={`shrink-0 text-[11px] font-semibold tabular-nums sm:hidden ${overdue ? "text-red-500" : "text-zinc-400"}`}>
-            {task.dueDate ? `${overdue ? "⚠" : ""}〜${fmtMD(task.dueDate)}` : "期日なし"}
-          </span>
-          <div className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden min-w-[3rem]">
-            <div
-              className={`h-full rounded-full ${task.status === "done" ? "bg-emerald-500" : overdue ? "bg-red-400" : "bg-blue-500"}`}
-              style={{ width: `${task.status === "done" ? 100 : task.progress}%` }}
-            />
-          </div>
-          <span className="text-[11px] font-semibold tabular-nums text-zinc-500 shrink-0 w-9 text-right">
-            {task.status === "done" ? 100 : task.progress}%
-          </span>
-        </div>
-      </button>
-      {(onEdit || onDelete) && (
-        <div className="flex items-center justify-between px-3.5 sm:px-4 pb-2">
-          <button type="button" onClick={onClick}
-            className="text-[11px] font-semibold text-zinc-400 hover:text-blue-500 transition-colors">
-            💬 メモ {task.notes.length}件
-          </button>
-          <div className="flex gap-1">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={e => { if (e.key === "Enter") onClick(); }}
+      className="group rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer p-3"
+    >
+      {/* タイトル + アクション */}
+      <div className="flex items-start gap-1.5">
+        <p className={`text-[13px] font-bold leading-snug flex-1 min-w-0 break-words ${task.status === "done" ? "text-zinc-400 line-through" : "text-zinc-800 dark:text-zinc-100"}`}>
+          {task.title}
+        </p>
+        {(onEdit || onDelete) && (
+          <span className="flex gap-0.5 shrink-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             {onEdit && (
-              <button type="button" onClick={e => { e.stopPropagation(); onEdit(); }}
-                className="px-2 py-1 rounded-lg text-[11px] font-semibold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              >✎ 編集</button>
+              <button type="button" title="編集（担当・期間）"
+                onClick={e => { e.stopPropagation(); onEdit(); }}
+                className="w-6 h-6 rounded-md flex items-center justify-center text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors text-xs"
+              >✎</button>
             )}
             {onDelete && (
-              <button type="button" onClick={e => { e.stopPropagation(); onDelete(); }}
-                className="px-2 py-1 rounded-lg text-[11px] font-semibold text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-              >削除</button>
+              <button type="button" title="削除"
+                onClick={e => { e.stopPropagation(); onDelete(); }}
+                className="w-6 h-6 rounded-md flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors text-xs"
+              >🗑</button>
             )}
+          </span>
+        )}
+      </div>
+
+      {/* チップ列 */}
+      <div className="flex items-center gap-1 flex-wrap mt-1.5">
+        {showStatus && (
+          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${STATUS_CHIP[task.status]}`}>{STATUS_LABEL[task.status]}</span>
+        )}
+        <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${PRIORITY_CLS[task.priority]}`}>
+          {PRIORITY_LABEL[task.priority]}
+        </span>
+        {task.dueDate ? (
+          <span className={[
+            "px-1.5 py-0.5 rounded-md text-[10px] font-bold tabular-nums border",
+            overdue
+              ? "bg-red-50 text-red-500 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900"
+              : task.dueDate === today && task.status !== "done"
+              ? "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900"
+              : "bg-zinc-50 text-zinc-500 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-700",
+          ].join(" ")}>
+            {overdue ? "⚠ " : "📅 "}{task.dueDate === today ? "今日" : fmtMD(task.dueDate)}まで
+          </span>
+        ) : (
+          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-zinc-400 border border-dashed border-zinc-300 dark:border-zinc-700">期日なし</span>
+        )}
+        {task.notes.length > 0 && (
+          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold text-zinc-400 bg-zinc-50 border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-700 tabular-nums">💬 {task.notes.length}</span>
+        )}
+      </div>
+
+      {/* 担当者 + 進捗 */}
+      <div className="flex items-center gap-2 mt-2.5">
+        <span className="shrink-0 flex items-center gap-1 max-w-[45%]">
+          <span className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-[9px] font-bold flex items-center justify-center shrink-0">
+            {task.assigneeName ? task.assigneeName.slice(0, 1) : "？"}
+          </span>
+          <span className="text-[11px] font-semibold text-zinc-500 truncate">{task.assigneeName ?? "担当未定"}</span>
+        </span>
+        <div className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden min-w-8">
+          <div
+            className={`h-full rounded-full transition-all ${task.status === "done" ? "bg-emerald-500" : overdue ? "bg-red-400" : "bg-blue-500"}`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <span className="text-[11px] font-bold tabular-nums text-zinc-500 shrink-0">{progress}%</span>
+      </div>
+    </div>
+  );
+}
+
+// ── タイムライン（ガント） ──────────────────────────────────
+function TimelineView({
+  tasks, month, today, onMonthChange, onTaskClick,
+}: {
+  tasks: ProjectTask[];
+  month: string;
+  today: string;
+  onMonthChange: (m: string) => void;
+  onTaskClick: (t: ProjectTask) => void;
+}) {
+  const days = daysInMonth(month);
+  const dates = useMemo(
+    () => Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`),
+    [month, days],
+  );
+
+  // この月に表示するタスク: 開始日〜期日が月と重なるもの（片方のみの場合は1日バー）
+  const rows = tasks
+    .map(t => {
+      const s = t.startDate ?? t.dueDate;
+      const e = t.dueDate ?? t.startDate;
+      if (!s || !e) return null;
+      const monthStart = dates[0];
+      const monthEnd = dates[days - 1];
+      if (e < monthStart || s > monthEnd) return null;
+      const startIdx = s < monthStart ? 0 : parseInt(s.slice(8), 10) - 1;
+      const endIdx = e > monthEnd ? days - 1 : parseInt(e.slice(8), 10) - 1;
+      return { task: t, startIdx, endIdx, clipL: s < monthStart, clipR: e > monthEnd };
+    })
+    .filter(Boolean) as { task: ProjectTask; startIdx: number; endIdx: number; clipL: boolean; clipR: boolean }[];
+
+  const noDateTasks = tasks.filter(t => !t.startDate && !t.dueDate && t.status !== "done");
+  const LABEL_W = 168;
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
+        {/* 月ナビ */}
+        <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-800">
+          <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100 tabular-nums">
+            {month.replace("-", "年")}月
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button type="button" onClick={() => onMonthChange(addMonth(month, -1))}
+              className="w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">◀</button>
+            <button type="button" onClick={() => onMonthChange(today.slice(0, 7))}
+              className="h-8 px-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">今月</button>
+            <button type="button" onClick={() => onMonthChange(addMonth(month, 1))}
+              className="w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">▶</button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <div style={{ minWidth: LABEL_W + days * DAY_W }}>
+            {/* ヘッダー行 */}
+            <div className="flex border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950">
+              <div className="sticky left-0 z-20 bg-zinc-50 dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-500 shrink-0" style={{ width: LABEL_W }}>
+                タスク
+              </div>
+              {dates.map((d, i) => {
+                const dow = dowOf(d);
+                return (
+                  <div key={d}
+                    className={[
+                      "shrink-0 text-center py-1.5 border-r border-zinc-100 dark:border-zinc-800",
+                      d === today ? "bg-blue-100 dark:bg-blue-900/40" : dow === 0 ? "bg-red-50/60 dark:bg-red-950/20" : dow === 6 ? "bg-sky-50/60 dark:bg-sky-950/20" : "",
+                    ].join(" ")}
+                    style={{ width: DAY_W }}
+                  >
+                    <p className={`text-[10px] font-bold tabular-nums leading-none ${d === today ? "text-blue-600 dark:text-blue-300" : dow === 0 ? "text-red-400" : dow === 6 ? "text-sky-500" : "text-zinc-500"}`}>{i + 1}</p>
+                    <p className={`text-[8px] leading-none mt-0.5 ${dow === 0 ? "text-red-300" : dow === 6 ? "text-sky-300" : "text-zinc-300 dark:text-zinc-600"}`}>{WD[dow]}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* タスク行 */}
+            {rows.map(({ task, startIdx, endIdx, clipL, clipR }) => {
+              const overdue = task.status !== "done" && !!task.dueDate && task.dueDate < today;
+              const barCls =
+                task.status === "done" ? "bg-emerald-500/85"
+                : overdue ? "bg-red-500/85"
+                : task.status === "in_progress" ? "bg-blue-500/85"
+                : "bg-zinc-400/85 dark:bg-zinc-500/85";
+              return (
+                <div key={task.id} className="flex border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
+                  <button type="button" onClick={() => onTaskClick(task)}
+                    className="sticky left-0 z-10 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 px-2.5 py-2 text-left shrink-0"
+                    style={{ width: LABEL_W }}
+                  >
+                    <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 truncate">{task.title}</p>
+                    <p className="text-[10px] text-zinc-400 truncate">{task.assigneeName ?? "担当未定"}</p>
+                  </button>
+                  <div className="relative shrink-0" style={{ width: days * DAY_W, height: 46 }}>
+                    {/* 週末の背景 */}
+                    {dates.map((d, i) => {
+                      const dow = dowOf(d);
+                      if (dow !== 0 && dow !== 6) return null;
+                      return <div key={d} className="absolute top-0 bottom-0 bg-zinc-50/80 dark:bg-zinc-800/30 pointer-events-none" style={{ left: i * DAY_W, width: DAY_W }} />;
+                    })}
+                    {/* 今日の縦帯 */}
+                    {today.slice(0, 7) === month && (
+                      <div className="absolute top-0 bottom-0 bg-blue-300/40 dark:bg-blue-500/20 pointer-events-none"
+                        style={{ left: (parseInt(today.slice(8), 10) - 1) * DAY_W, width: DAY_W }} />
+                    )}
+                    {/* バー */}
+                    <button type="button" onClick={() => onTaskClick(task)}
+                      className={`absolute top-[11px] h-6 ${barCls} ${clipL ? "rounded-l-none" : "rounded-l-lg"} ${clipR ? "rounded-r-none" : "rounded-r-lg"} overflow-hidden shadow-sm`}
+                      style={{ left: startIdx * DAY_W + 1, width: (endIdx - startIdx + 1) * DAY_W - 2 }}
+                      title={`${task.title}（${task.progress}%）`}
+                    >
+                      <span className="absolute inset-y-0 left-0 bg-black/25"
+                        style={{ width: `${task.status === "done" ? 100 : task.progress}%` }} />
+                      <span className="relative z-10 px-1.5 text-[10px] font-bold text-white whitespace-nowrap">
+                        {task.status === "done" ? "✓" : `${task.progress}%`}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {rows.length === 0 && (
+              <p className="text-sm text-zinc-400 text-center py-12">この月に日付が設定されたタスクはありません</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {noDateTasks.length > 0 && (
+        <div>
+          <h3 className="text-xs font-bold text-zinc-400 mb-1.5">日付未設定（タイムライン非表示）</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {noDateTasks.map(t => (
+              <TaskCard key={t.id} task={t} today={today} showStatus onClick={() => onTaskClick(t)} />
+            ))}
           </div>
         </div>
       )}
@@ -514,7 +602,7 @@ function TaskDetailModal({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${STATUS_CHIP[task.status]}`}>{STATUS_LABEL[task.status]}</span>
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${PRIORITY_CLS[task.priority]}`}>優先度{PRIORITY_LABEL[task.priority]}</span>
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${PRIORITY_CLS[task.priority]}`}>優先度{PRIORITY_LABEL[task.priority]}</span>
               </div>
               <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100 mt-1 break-words">{task.title}</h2>
             </div>
@@ -599,154 +687,21 @@ function TaskDetailModal({
   );
 }
 
-// ── タイムライン（ガント） ──────────────────────────────────
-function TimelineView({
-  tasks, month, today, onMonthChange, onTaskClick,
-}: {
-  tasks: ProjectTask[];
-  month: string;
-  today: string;
-  onMonthChange: (m: string) => void;
-  onTaskClick: (t: ProjectTask) => void;
-}) {
-  const days = daysInMonth(month);
-  const dates = useMemo(
-    () => Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`),
-    [month, days],
-  );
-
-  // この月に表示するタスク: 開始日〜期日が月と重なるもの（片方のみの場合は1日バー）
-  const rows = tasks
-    .map(t => {
-      const s = t.startDate ?? t.dueDate;
-      const e = t.dueDate ?? t.startDate;
-      if (!s || !e) return null;
-      const monthStart = dates[0];
-      const monthEnd = dates[days - 1];
-      if (e < monthStart || s > monthEnd) return null;
-      const startIdx = s < monthStart ? 0 : parseInt(s.slice(8), 10) - 1;
-      const endIdx = e > monthEnd ? days - 1 : parseInt(e.slice(8), 10) - 1;
-      return { task: t, startIdx, endIdx, clipL: s < monthStart, clipR: e > monthEnd };
-    })
-    .filter(Boolean) as { task: ProjectTask; startIdx: number; endIdx: number; clipL: boolean; clipR: boolean }[];
-
-  const noDateTasks = tasks.filter(t => !t.startDate && !t.dueDate && t.status !== "done");
-  const LABEL_W = 148;
-
-  return (
-    <div className="space-y-3">
-      {/* 月ナビ */}
-      <div className="flex items-center justify-center gap-3">
-        <button type="button" onClick={() => onMonthChange(addMonth(month, -1))}
-          className="w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">◀</button>
-        <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100 tabular-nums">
-          {month.replace("-", "年")}月
-        </p>
-        <button type="button" onClick={() => onMonthChange(addMonth(month, 1))}
-          className="w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">▶</button>
-      </div>
-
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
-        <div className="overflow-x-auto">
-          <div style={{ minWidth: LABEL_W + days * DAY_W }}>
-            {/* ヘッダー行 */}
-            <div className="flex border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950">
-              <div className="sticky left-0 z-20 bg-zinc-50 dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800 px-2 py-1.5 text-[11px] font-semibold text-zinc-500 shrink-0" style={{ width: LABEL_W }}>
-                タスク
-              </div>
-              {dates.map((d, i) => {
-                const dow = dowOf(d);
-                return (
-                  <div key={d}
-                    className={[
-                      "shrink-0 text-center py-1.5 border-r border-zinc-100 dark:border-zinc-800",
-                      d === today ? "bg-blue-100 dark:bg-blue-900/40" : dow === 0 ? "bg-red-50/60 dark:bg-red-950/20" : dow === 6 ? "bg-sky-50/60 dark:bg-sky-950/20" : "",
-                    ].join(" ")}
-                    style={{ width: DAY_W }}
-                  >
-                    <p className={`text-[10px] font-bold tabular-nums leading-none ${d === today ? "text-blue-600 dark:text-blue-300" : dow === 0 ? "text-red-400" : dow === 6 ? "text-sky-500" : "text-zinc-500"}`}>{i + 1}</p>
-                    <p className={`text-[8px] leading-none mt-0.5 ${dow === 0 ? "text-red-300" : dow === 6 ? "text-sky-300" : "text-zinc-300 dark:text-zinc-600"}`}>{WD[dow]}</p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* タスク行 */}
-            {rows.map(({ task, startIdx, endIdx, clipL, clipR }) => {
-              const overdue = task.status !== "done" && !!task.dueDate && task.dueDate < today;
-              const barCls =
-                task.status === "done" ? "bg-emerald-500/80"
-                : overdue ? "bg-red-500/80"
-                : task.status === "in_progress" ? "bg-blue-500/80"
-                : "bg-zinc-400/80 dark:bg-zinc-500/80";
-              return (
-                <div key={task.id} className="flex border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
-                  <button type="button" onClick={() => onTaskClick(task)}
-                    className="sticky left-0 z-10 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 px-2 py-2 text-left shrink-0"
-                    style={{ width: LABEL_W }}
-                  >
-                    <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 truncate">{task.title}</p>
-                    <p className="text-[10px] text-zinc-400 truncate">{task.assigneeName ?? "担当未定"}</p>
-                  </button>
-                  <div className="relative shrink-0" style={{ width: days * DAY_W, height: 44 }}>
-                    {/* 今日の縦帯 */}
-                    {today.slice(0, 7) === month && (
-                      <div className="absolute top-0 bottom-0 bg-blue-300/40 dark:bg-blue-500/20 pointer-events-none"
-                        style={{ left: (parseInt(today.slice(8), 10) - 1) * DAY_W, width: DAY_W }} />
-                    )}
-                    {/* バー */}
-                    <button type="button" onClick={() => onTaskClick(task)}
-                      className={`absolute top-2.5 h-6 ${barCls} ${clipL ? "rounded-l-none" : "rounded-l-lg"} ${clipR ? "rounded-r-none" : "rounded-r-lg"} overflow-hidden`}
-                      style={{ left: startIdx * DAY_W + 1, width: (endIdx - startIdx + 1) * DAY_W - 2 }}
-                      title={`${task.title}（${task.progress}%）`}
-                    >
-                      <span className="absolute inset-y-0 left-0 bg-black/25"
-                        style={{ width: `${task.status === "done" ? 100 : task.progress}%` }} />
-                      <span className="relative z-10 px-1.5 text-[10px] font-bold text-white whitespace-nowrap">
-                        {task.status === "done" ? "✓" : `${task.progress}%`}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            {rows.length === 0 && (
-              <p className="text-sm text-zinc-400 text-center py-10">この月に日付が設定されたタスクはありません</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {noDateTasks.length > 0 && (
-        <div>
-          <h3 className="text-xs font-bold text-zinc-400 mb-1.5">日付未設定（タイムライン非表示）</h3>
-          <div className="space-y-1.5">
-            {noDateTasks.map(t => (
-              <TaskRow key={t.id} task={t} today={today} onClick={() => onTaskClick(t)} />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── 作成・編集モーダル ──────────────────────────────────────
 function TaskModal({
-  projectId, task, prefill, staffOptions, onClose, onSaved,
+  projectId, task, staffOptions, onClose, onSaved,
 }: {
   projectId: string;
   task: ProjectTask | null;
-  prefill: (Partial<ProjectTask> & { sourceGroupTaskId?: string }) | null;
   staffOptions: StaffOption[];
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [title, setTitle] = useState(task?.title ?? prefill?.title ?? "");
-  const [description, setDescription] = useState(task?.description ?? prefill?.description ?? "");
-  const [assignee, setAssignee] = useState(task?.assigneeStaffId ?? prefill?.assigneeStaffId ?? "");
+  const [title, setTitle] = useState(task?.title ?? "");
+  const [description, setDescription] = useState(task?.description ?? "");
+  const [assignee, setAssignee] = useState(task?.assigneeStaffId ?? "");
   const [startDate, setStartDate] = useState(task?.startDate ?? "");
-  const [dueDate, setDueDate] = useState(task?.dueDate ?? prefill?.dueDate ?? "");
+  const [dueDate, setDueDate] = useState(task?.dueDate ?? "");
   const [priority, setPriority] = useState<ProjectTask["priority"]>(task?.priority ?? "normal");
   const [msg, setMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -764,28 +719,9 @@ function TaskModal({
         startDate: startDate || null,
         dueDate: dueDate || null,
         priority,
-        sourceGroupTaskId: prefill?.sourceGroupTaskId ?? null,
       });
-      if (res.success) {
-        // LINE抽出からの取込みの場合は元候補を完了扱いにして受信箱から消す
-        if (prefill?.sourceGroupTaskId) {
-          await updateTaskStatusAction(prefill.sourceGroupTaskId, "done");
-        }
-        onSaved();
-      } else {
-        setMsg(res.message ?? "保存できませんでした");
-      }
-    });
-  }
-
-  function handleDelete() {
-    if (!task || isPending) return;
-    if (!window.confirm(`タスク「${task.title}」を削除しますか？`)) return;
-    setMsg(null);
-    startTransition(async () => {
-      const res = await deleteProjectTaskAction(projectId, task.id);
       if (res.success) onSaved();
-      else setMsg(res.message ?? "削除できませんでした");
+      else setMsg(res.message ?? "保存できませんでした");
     });
   }
 
@@ -813,7 +749,7 @@ function TaskModal({
             <textarea value={description ?? ""} onChange={e => setDescription(e.target.value)} rows={3} className={inputCls} placeholder="補足・手順など（任意）" />
           </div>
           <div>
-            <label className={labelCls}>担当者</label>
+            <label className={labelCls}>担当者（SV）</label>
             <select value={assignee} onChange={e => setAssignee(e.target.value)} className={inputCls}>
               <option value="">担当未定</option>
               {staffOptions.map(s => <option key={s.staffId} value={s.staffId}>{s.name}</option>)}
@@ -843,13 +779,7 @@ function TaskModal({
           {msg && <p className="text-xs font-medium px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-500">✗ {msg}</p>}
         </div>
 
-        <div className="px-5 py-3.5 border-t border-zinc-100 dark:border-zinc-800 shrink-0 flex items-center gap-2">
-          {task && (
-            <button type="button" onClick={handleDelete} disabled={isPending}
-              className="px-3 py-2 rounded-xl text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50 transition-colors"
-            >削除</button>
-          )}
-          <div className="flex-1" />
+        <div className="px-5 py-3.5 border-t border-zinc-100 dark:border-zinc-800 shrink-0 flex items-center justify-end gap-2">
           <button type="button" onClick={onClose}
             className="px-3.5 py-2 rounded-xl text-sm font-semibold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >キャンセル</button>
