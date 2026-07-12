@@ -14,6 +14,7 @@ import {
   deleteProjectTaskAction,
   importGroupTaskAction,
   updateTaskStatusAction,
+  addTaskNoteAction,
 } from "./actions";
 
 // ── 旧型（dashboard/MyTasksWidget が import しているため維持） ──────────────
@@ -54,6 +55,15 @@ export type NameMapping = {
 };
 
 // ── 新タスク型 ──────────────────────────────────────────────
+export type TaskNote = {
+  id: string;
+  body: string;
+  progress: number | null;
+  markDone: boolean;
+  authorName: string;
+  createdAt: string;
+};
+
 export type ProjectTask = {
   id: string;
   title: string;
@@ -67,12 +77,18 @@ export type ProjectTask = {
   priority: "high" | "normal" | "low";
   createdAt: string;
   completedAt: string | null;
+  notes: TaskNote[];
 };
 
 type Tab = "list" | "timeline" | "inbox";
 
 const STATUS_LABEL: Record<ProjectTask["status"], string> = {
-  todo: "未着手", in_progress: "進行中", done: "完了",
+  todo: "未着手", in_progress: "作業中", done: "完了",
+};
+const STATUS_CHIP: Record<ProjectTask["status"], string> = {
+  todo:        "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  in_progress: "bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400",
+  done:        "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
 };
 const PRIORITY_LABEL: Record<ProjectTask["priority"], string> = {
   high: "高", normal: "中", low: "低",
@@ -129,12 +145,26 @@ export default function TasksClient({
   const [month, setMonth] = useState(today.slice(0, 7));
   const [editing, setEditing] = useState<ProjectTask | null | "new">(null);
   const [prefill, setPrefill] = useState<(Partial<ProjectTask> & { sourceGroupTaskId?: string }) | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const openTasks = tasks.filter(t => t.status !== "done");
   const overdueCount = openTasks.filter(t => t.dueDate && t.dueDate < today).length;
+  const detailTask = detailId ? (tasks.find(t => t.id === detailId) ?? null) : null;
+
+  function handleDeleteTask(t: ProjectTask) {
+    if (isPending) return;
+    if (!window.confirm(`タスク「${t.title}」を削除しますか？\n作業メモも一緒に消えます。`)) return;
+    setErrorMsg(null);
+    startTransition(async () => {
+      const res = await deleteProjectTaskAction(projectId, t.id);
+      if (!res.success) setErrorMsg(res.message ?? "削除できませんでした");
+      setDetailId(null);
+      router.refresh();
+    });
+  }
 
   function handleImport(c: GroupTask) {
     // 取込み前に内容を編集できるようモーダルを開く
@@ -224,7 +254,10 @@ export default function TasksClient({
                 <h2 className="text-xs font-bold text-zinc-400 mb-1.5">{STATUS_LABEL[st]}（{group.length}）</h2>
                 <div className="space-y-1.5">
                   {group.map(t => (
-                    <TaskRow key={t.id} task={t} today={today} onClick={() => { setPrefill(null); setEditing(t); }} />
+                    <TaskRow key={t.id} task={t} today={today}
+                      onClick={() => setDetailId(t.id)}
+                      onEdit={() => { setPrefill(null); setEditing(t); }}
+                      onDelete={() => handleDeleteTask(t)} />
                   ))}
                 </div>
               </section>
@@ -240,7 +273,7 @@ export default function TasksClient({
       {tab === "timeline" && (
         <TimelineView tasks={tasks} month={month} today={today}
           onMonthChange={setMonth}
-          onTaskClick={t => { setPrefill(null); setEditing(t); }} />
+          onTaskClick={t => setDetailId(t.id)} />
       )}
 
       {/* ── LINE取込み ── */}
@@ -285,6 +318,18 @@ export default function TasksClient({
         </div>
       )}
 
+      {/* タスク詳細（作業メモ履歴） */}
+      {detailTask && (
+        <TaskDetailModal
+          projectId={projectId}
+          task={detailTask}
+          onClose={() => setDetailId(null)}
+          onEdit={() => { setPrefill(null); setEditing(detailTask); }}
+          onDelete={() => handleDeleteTask(detailTask)}
+          onChanged={() => router.refresh()}
+        />
+      )}
+
       {/* 作成・編集モーダル */}
       {editing !== null && (
         <TaskModal
@@ -311,38 +356,213 @@ function SummaryCard({ label, value, accent }: { label: string; value: number; a
 }
 
 // ── リスト行 ────────────────────────────────────────────────
-function TaskRow({ task, today, onClick }: { task: ProjectTask; today: string; onClick: () => void }) {
+function TaskRow({ task, today, onClick, onEdit, onDelete }: {
+  task: ProjectTask;
+  today: string;
+  onClick: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
   const overdue = task.status !== "done" && !!task.dueDate && task.dueDate < today;
   return (
-    <button type="button" onClick={onClick}
-      className="w-full text-left rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
-    >
-      <div className="flex items-center gap-2">
-        <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${PRIORITY_CLS[task.priority]}`}>
-          {PRIORITY_LABEL[task.priority]}
-        </span>
-        <p className={`text-sm font-semibold truncate flex-1 ${task.status === "done" ? "text-zinc-400 line-through" : "text-zinc-800 dark:text-zinc-100"}`}>
-          {task.title}
-        </p>
-        <span className={`shrink-0 text-[11px] font-semibold tabular-nums ${overdue ? "text-red-500" : "text-zinc-400"}`}>
-          {task.dueDate ? `${overdue ? "⚠ " : ""}〜${fmtMD(task.dueDate)}` : "期日なし"}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 mt-1.5">
-        <span className="text-[11px] text-zinc-400 shrink-0 w-24 truncate">
-          {task.assigneeName ?? "担当未定"}
-        </span>
-        <div className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-          <div
-            className={`h-full rounded-full ${task.status === "done" ? "bg-emerald-500" : overdue ? "bg-red-400" : "bg-blue-500"}`}
-            style={{ width: `${task.status === "done" ? 100 : task.progress}%` }}
-          />
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+      <button type="button" onClick={onClick} className="w-full text-left px-3.5 sm:px-4 pt-3 pb-1.5">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${PRIORITY_CLS[task.priority]}`}>
+            {PRIORITY_LABEL[task.priority]}
+          </span>
+          <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${STATUS_CHIP[task.status]}`}>
+            {STATUS_LABEL[task.status]}
+          </span>
+          <p className={`text-sm font-semibold truncate flex-1 min-w-0 ${task.status === "done" ? "text-zinc-400 line-through" : "text-zinc-800 dark:text-zinc-100"}`}>
+            {task.title}
+          </p>
+          <span className={`shrink-0 text-[11px] font-semibold tabular-nums hidden sm:inline ${overdue ? "text-red-500" : "text-zinc-400"}`}>
+            {task.dueDate ? `${overdue ? "⚠ " : ""}〜${fmtMD(task.dueDate)}` : "期日なし"}
+          </span>
         </div>
-        <span className="text-[11px] font-semibold tabular-nums text-zinc-500 shrink-0 w-9 text-right">
-          {task.status === "done" ? 100 : task.progress}%
-        </span>
+        <div className="flex items-center gap-2 mt-1.5">
+          <span className="text-[11px] text-zinc-400 shrink-0 max-w-[6rem] truncate">
+            {task.assigneeName ?? "担当未定"}
+          </span>
+          <span className={`shrink-0 text-[11px] font-semibold tabular-nums sm:hidden ${overdue ? "text-red-500" : "text-zinc-400"}`}>
+            {task.dueDate ? `${overdue ? "⚠" : ""}〜${fmtMD(task.dueDate)}` : "期日なし"}
+          </span>
+          <div className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden min-w-[3rem]">
+            <div
+              className={`h-full rounded-full ${task.status === "done" ? "bg-emerald-500" : overdue ? "bg-red-400" : "bg-blue-500"}`}
+              style={{ width: `${task.status === "done" ? 100 : task.progress}%` }}
+            />
+          </div>
+          <span className="text-[11px] font-semibold tabular-nums text-zinc-500 shrink-0 w-9 text-right">
+            {task.status === "done" ? 100 : task.progress}%
+          </span>
+        </div>
+      </button>
+      {(onEdit || onDelete) && (
+        <div className="flex items-center justify-between px-3.5 sm:px-4 pb-2">
+          <button type="button" onClick={onClick}
+            className="text-[11px] font-semibold text-zinc-400 hover:text-blue-500 transition-colors">
+            💬 メモ {task.notes.length}件
+          </button>
+          <div className="flex gap-1">
+            {onEdit && (
+              <button type="button" onClick={e => { e.stopPropagation(); onEdit(); }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >✎ 編集</button>
+            )}
+            {onDelete && (
+              <button type="button" onClick={e => { e.stopPropagation(); onDelete(); }}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+              >削除</button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── タスク詳細（作業メモ履歴） ──────────────────────────────
+function fmtNoteAt(iso: string): string {
+  return new Date(iso).toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function TaskDetailModal({
+  projectId, task, onClose, onEdit, onDelete, onChanged,
+}: {
+  projectId: string;
+  task: ProjectTask;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onChanged: () => void;
+}) {
+  const [body, setBody] = useState("");
+  const [progress, setProgress] = useState(task.progress);
+  const [markDone, setMarkDone] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const notesDesc = [...task.notes].reverse();
+
+  function handleAddNote() {
+    if (isPending || !body.trim()) return;
+    setMsg(null);
+    startTransition(async () => {
+      const res = await addTaskNoteAction({
+        projectId,
+        taskId: task.id,
+        body,
+        progress: markDone ? 100 : (progress !== task.progress ? progress : null),
+        markDone,
+      });
+      if (res.success) {
+        setBody("");
+        setMarkDone(false);
+        onChanged();
+      } else {
+        setMsg(res.message ?? "メモを保存できませんでした");
+      }
+    });
+  }
+
+  const period = [task.startDate ? fmtMD(task.startDate) : null, task.dueDate ? fmtMD(task.dueDate) : null];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[92dvh] flex flex-col"
+        onClick={e => e.stopPropagation()}>
+        {/* ヘッダー */}
+        <div className="px-4 sm:px-5 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${STATUS_CHIP[task.status]}`}>{STATUS_LABEL[task.status]}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${PRIORITY_CLS[task.priority]}`}>優先度{PRIORITY_LABEL[task.priority]}</span>
+              </div>
+              <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100 mt-1 break-words">{task.title}</h2>
+            </div>
+            <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg leading-none shrink-0">✕</button>
+          </div>
+          <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-2 text-[11px] text-zinc-500">
+            <span>担当: <b className="text-zinc-700 dark:text-zinc-200">{task.assigneeName ?? "未定"}</b></span>
+            <span>期間: <b className="text-zinc-700 dark:text-zinc-200 tabular-nums">{period[0] ?? "—"} 〜 {period[1] ?? "—"}</b></span>
+            <span className="flex items-center gap-1.5 flex-1 min-w-[7rem]">
+              <span className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                <span className={`block h-full rounded-full ${task.status === "done" ? "bg-emerald-500" : "bg-blue-500"}`} style={{ width: `${task.progress}%` }} />
+              </span>
+              <b className="tabular-nums text-zinc-700 dark:text-zinc-200">{task.progress}%</b>
+            </span>
+          </div>
+          {task.description && (
+            <p className="text-xs text-zinc-500 mt-2 whitespace-pre-wrap break-words">{task.description}</p>
+          )}
+          <div className="flex gap-1.5 mt-2.5">
+            <button type="button" onClick={onEdit}
+              className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >✎ 編集（担当・期間）</button>
+            <button type="button" onClick={onDelete} disabled={isPending}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50 transition-colors"
+            >削除</button>
+          </div>
+        </div>
+
+        {/* メモ履歴 */}
+        <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-3 space-y-2 min-h-[8rem]">
+          <p className="text-[11px] font-bold text-zinc-400">作業メモ（{task.notes.length}件）</p>
+          {notesDesc.map(n => (
+            <div key={n.id} className="rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800 px-3 py-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-bold text-zinc-600 dark:text-zinc-300">{n.authorName}</span>
+                <span className="text-[10px] text-zinc-400 tabular-nums">{fmtNoteAt(n.createdAt)}</span>
+                {n.progress != null && !n.markDone && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 tabular-nums">進捗 {n.progress}%</span>
+                )}
+                {n.markDone && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">✓ 完了</span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-700 dark:text-zinc-200 mt-1 whitespace-pre-wrap break-words">{n.body}</p>
+            </div>
+          ))}
+          {task.notes.length === 0 && (
+            <p className="text-xs text-zinc-400 text-center py-6">まだメモがありません（メモを残すと「作業中」になります）</p>
+          )}
+        </div>
+
+        {/* メモ入力 */}
+        <div className="px-4 sm:px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 shrink-0 space-y-2">
+          <textarea
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            rows={2}
+            placeholder="何をしたかをメモ（例: 〇〇へ連絡済み・資料半分作成）"
+            className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition"
+          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className={`flex items-center gap-1.5 flex-1 min-w-[9rem] ${markDone ? "opacity-40" : ""}`}>
+              <span className="text-[11px] font-bold text-zinc-400 shrink-0 tabular-nums w-14">進捗 {markDone ? 100 : progress}%</span>
+              <input type="range" min={0} max={100} step={5}
+                value={markDone ? 100 : progress}
+                disabled={markDone}
+                onChange={e => setProgress(Number(e.target.value))}
+                className="flex-1 accent-blue-600" />
+            </label>
+            <label className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 shrink-0 cursor-pointer">
+              <input type="checkbox" checked={markDone} onChange={e => setMarkDone(e.target.checked)} className="accent-emerald-600" />
+              完了にする
+            </label>
+            <button type="button" onClick={handleAddNote} disabled={isPending || !body.trim()}
+              className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold transition-colors shrink-0"
+            >{isPending ? "保存中…" : "メモを記録"}</button>
+          </div>
+          {msg && <p className="text-xs font-medium px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-500">✗ {msg}</p>}
+        </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -495,8 +715,6 @@ function TaskModal({
   const [startDate, setStartDate] = useState(task?.startDate ?? "");
   const [dueDate, setDueDate] = useState(task?.dueDate ?? prefill?.dueDate ?? "");
   const [priority, setPriority] = useState<ProjectTask["priority"]>(task?.priority ?? "normal");
-  const [status, setStatus] = useState<ProjectTask["status"]>(task?.status ?? "todo");
-  const [progress, setProgress] = useState(task?.progress ?? 0);
   const [msg, setMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -504,6 +722,7 @@ function TaskModal({
     if (isPending) return;
     setMsg(null);
     startTransition(async () => {
+      // ステータス・進捗は作業メモから自動更新されるためここでは送らない
       const res = await saveProjectTaskAction({
         projectId,
         id: task?.id ?? null,
@@ -511,7 +730,7 @@ function TaskModal({
         assigneeStaffId: assignee || null,
         startDate: startDate || null,
         dueDate: dueDate || null,
-        priority, status, progress,
+        priority,
         sourceGroupTaskId: prefill?.sourceGroupTaskId ?? null,
       });
       if (res.success) {
@@ -577,32 +796,17 @@ function TaskModal({
               <input type="date" value={dueDate ?? ""} onChange={e => setDueDate(e.target.value)} className={inputCls} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>優先度</label>
-              <select value={priority} onChange={e => setPriority(e.target.value as ProjectTask["priority"])} className={inputCls}>
-                <option value="high">高</option>
-                <option value="normal">中</option>
-                <option value="low">低</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>ステータス</label>
-              <select value={status} onChange={e => setStatus(e.target.value as ProjectTask["status"])} className={inputCls}>
-                <option value="todo">未着手</option>
-                <option value="in_progress">進行中</option>
-                <option value="done">完了</option>
-              </select>
-            </div>
-          </div>
           <div>
-            <label className={labelCls}>進捗 {status === "done" ? 100 : progress}%</label>
-            <input type="range" min={0} max={100} step={5}
-              value={status === "done" ? 100 : progress}
-              disabled={status === "done"}
-              onChange={e => setProgress(Number(e.target.value))}
-              className="w-full accent-blue-600" />
+            <label className={labelCls}>優先度</label>
+            <select value={priority} onChange={e => setPriority(e.target.value as ProjectTask["priority"])} className={inputCls}>
+              <option value="high">高</option>
+              <option value="normal">中</option>
+              <option value="low">低</option>
+            </select>
           </div>
+          <p className="text-[11px] text-zinc-400 leading-relaxed">
+            ステータスと進捗はタスクを開いて「作業メモ」を記録すると自動で更新されます（メモなし=未着手／メモあり=作業中／完了メモ=完了）。
+          </p>
           {msg && <p className="text-xs font-medium px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-500">✗ {msg}</p>}
         </div>
 

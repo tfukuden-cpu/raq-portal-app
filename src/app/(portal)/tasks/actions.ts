@@ -316,22 +316,26 @@ export async function saveProjectTaskAction(
       return { success: false, message: "開始日が期日より後になっています" };
     }
 
-    const status   = input.status ?? "todo";
-    const progress = Math.max(0, Math.min(100, Math.round(input.progress ?? 0)));
     const admin = createAdminClient();
 
-    const payload = {
+    // ステータス・進捗は作業メモ（addTaskNoteAction）から更新するのが基本。
+    // 編集（update）では明示指定が無い限り既存値を保持する
+    const payload: Record<string, unknown> = {
       title,
       description:       (input.description ?? "").trim() || null,
       assignee_staff_id: input.assigneeStaffId || null,
       start_date:        input.startDate || null,
       due_date:          input.dueDate || null,
       priority:          input.priority ?? "normal",
-      status,
-      progress:          status === "done" ? 100 : progress,
-      completed_at:      status === "done" ? new Date().toISOString() : null,
       updated_at:        new Date().toISOString(),
     };
+    if (input.status !== undefined || !input.id) {
+      const status   = input.status ?? "todo";
+      const progress = Math.max(0, Math.min(100, Math.round(input.progress ?? 0)));
+      payload.status       = status;
+      payload.progress     = status === "done" ? 100 : progress;
+      payload.completed_at = status === "done" ? new Date().toISOString() : null;
+    }
 
     let prevAssignee: string | null = null;
     if (input.id) {
@@ -441,5 +445,64 @@ export async function importGroupTaskAction(
   } catch (e) {
     console.error("[tasks] importGroupTaskAction failed:", e);
     return { success: false, message: "取込みに失敗しました" };
+  }
+}
+
+/** 作業メモを追加し、タスクのステータス・進捗を自動更新する
+ *  メモあり=作業中／「完了にする」=完了（進捗100%）。進捗指定があれば反映 */
+export async function addTaskNoteAction(input: {
+  projectId: string;
+  taskId: string;
+  body: string;
+  progress?: number | null;   // 0-100（未指定なら進捗は変えない）
+  markDone?: boolean;
+}): Promise<{ success: boolean; message?: string }> {
+  try {
+    const myStaffId = await assertTaskAdmin(input.projectId);
+    if (!myStaffId) return { success: false, message: "権限がありません" };
+
+    const body = (input.body ?? "").trim();
+    if (!body) return { success: false, message: "メモを入力してください" };
+
+    const admin = createAdminClient();
+    const { data: task } = await admin
+      .from("project_tasks")
+      .select("id, progress, status")
+      .eq("id", input.taskId)
+      .eq("project_id", input.projectId)
+      .maybeSingle();
+    if (!task) return { success: false, message: "タスクが見つかりません" };
+
+    const markDone = !!input.markDone;
+    const progress = markDone
+      ? 100
+      : input.progress != null
+        ? Math.max(0, Math.min(100, Math.round(input.progress)))
+        : (task as { progress: number }).progress;
+
+    const { error: noteError } = await admin.from("project_task_notes").insert({
+      project_id:      input.projectId,
+      task_id:         input.taskId,
+      author_staff_id: myStaffId,
+      body,
+      progress:        input.progress != null || markDone ? progress : null,
+      mark_done:       markDone,
+    });
+    if (noteError) return { success: false, message: noteError.message };
+
+    // メモが付いたら作業中／完了メモで完了
+    const { error: taskError } = await admin.from("project_tasks").update({
+      status:       markDone ? "done" : "in_progress",
+      progress,
+      completed_at: markDone ? new Date().toISOString() : null,
+      updated_at:   new Date().toISOString(),
+    }).eq("id", input.taskId).eq("project_id", input.projectId);
+    if (taskError) return { success: false, message: taskError.message };
+
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (e) {
+    console.error("[tasks] addTaskNoteAction failed:", e);
+    return { success: false, message: "メモの保存に失敗しました" };
   }
 }

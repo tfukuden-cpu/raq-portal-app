@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import TasksClient from "./TasksClient";
-import type { GroupTask, StaffOption, ProjectTask } from "./TasksClient";
+import type { GroupTask, StaffOption, ProjectTask, TaskNote } from "./TasksClient";
 
 export default async function TasksPage() {
   const supabase = await createClient();
@@ -38,6 +38,7 @@ export default async function TasksPage() {
     { data: rawCandidates },
     { data: rawGroups },
     { data: members },
+    { data: rawNotes },
   ] = await Promise.all([
     admin.from("projects").select("name").eq("id", projectId).maybeSingle(),
     admin.from("project_tasks")
@@ -60,6 +61,11 @@ export default async function TasksPage() {
       .eq("project_id", projectId)
       .is("end_date", null)
       .order("staff_id"),
+    admin.from("project_task_notes")
+      .select("id, task_id, author_staff_id, body, progress, mark_done, created_at")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: true })
+      .limit(2000),
   ]);
 
   if (!project) redirect("/dashboard");
@@ -74,6 +80,33 @@ export default async function TasksPage() {
   const groupLabelMap = new Map<string, string | null>();
   for (const g of rawGroups ?? []) groupLabelMap.set(g.group_id, g.group_label ?? null);
 
+  // メモ著者名の解決（運営者などメンバー外のこともあるので staffs から直接引く）
+  const noteRows = (rawNotes ?? []) as {
+    id: string; task_id: string; author_staff_id: string;
+    body: string; progress: number | null; mark_done: boolean; created_at: string;
+  }[];
+  const authorIds = [...new Set(noteRows.map(n => n.author_staff_id))]
+    .filter(id => !staffNameMap.has(id));
+  if (authorIds.length > 0) {
+    const { data: authors } = await admin
+      .from("staffs").select("id, name, display_name").in("id", authorIds);
+    for (const a of authors ?? []) {
+      staffNameMap.set(a.id, (a as { display_name: string | null }).display_name ?? (a as { name: string | null }).name ?? a.id);
+    }
+  }
+  const notesByTask = new Map<string, TaskNote[]>();
+  for (const n of noteRows) {
+    if (!notesByTask.has(n.task_id)) notesByTask.set(n.task_id, []);
+    notesByTask.get(n.task_id)!.push({
+      id:         n.id,
+      body:       n.body,
+      progress:   n.progress,
+      markDone:   n.mark_done,
+      authorName: staffNameMap.get(n.author_staff_id) ?? n.author_staff_id,
+      createdAt:  n.created_at,
+    });
+  }
+
   const tasks: ProjectTask[] = (rawTasks ?? []).map(t => ({
     id:              t.id,
     title:           t.title,
@@ -87,6 +120,7 @@ export default async function TasksPage() {
     priority:        (t.priority ?? "normal") as ProjectTask["priority"],
     createdAt:       t.created_at,
     completedAt:     t.completed_at,
+    notes:           notesByTask.get(t.id) ?? [],
   }));
 
   const candidates: GroupTask[] = (rawCandidates ?? []).map(t => ({
