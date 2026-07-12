@@ -404,6 +404,13 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ---
 
+**シフトステータス「公募」（2026-07-12追加）:**
+- 余剰発生時に帰宅してもらうOP用の「休み」ステータス。欠勤でも公休でもない扱いで出勤状況を正確に記録する
+- 設定はシフト編集グリッドのセルポップオーバー「公募に変更」（公休ボタンの下・ティール色表示）
+- 全画面の休み扱いリスト（OFF_SHIFT_NAMES 等・約20ファイル）に追加済み＝出勤予定・欠勤・出勤率・順守率の集計から除外される
+
+---
+
 ### 4-3. メンバー管理 (`/members`)
 
 **機能:**
@@ -421,9 +428,10 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 研修日程管理
 - **番付タブ**: ASS査定・ASS販売の番付データをExcelインポート。セクション別（査定/販売）に順位表示。休憩スロット割り当てのランク付けに使用。
 - **管理メニューに「番付管理」独立メニューは廃止**（メンバー管理の番付タブに統合）
+- **▶スキル管理 (`/members/skills`・2026-07-01新設／2026-07-12拡張)**: ヘッダーのリンクから遷移。現役メンバー×セクションの対応可否○×マトリクス（○=青/×=赤・タップで切替・`project_members.sections` に即反映＝シフト管理等と互換）。**カスタム項目**（「〇〇研修済み」等・`skill_items`＋`staff_skill_values`・「＋項目追加」で自由に追加/削除）。**Excel出力**（`GET /api/admin/skills/export?projectId`・色付きマトリクスをxlsxでDL）
 
 **関連テーブル:**
-`project_members`, `staffs`, `shift_patterns`, `rankings`
+`project_members`, `staffs`, `shift_patterns`, `rankings`, `skill_items`, `staff_skill_values`
 
 ---
 
@@ -658,6 +666,22 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 ---
 
+### 4-9. タスク管理 (`/tasks`) 〔2026-07-12 全面刷新・管理者専用〕
+
+**機能:**
+- 管理者チーム（SV運用）のタスクボード。旧LINE抽出タスクの簡易ページを置き換え（LINE取込みタブは廃止。`group_tasks`・抽出Cron自体は残置だが画面導線なし）
+- **ボード**: 未着手／作業中／完了の3レーンかんばん（PC=3カラム・モバイル=縦積み）
+- **タイムライン**: 月表示ガント（開始日〜期日のバー・進捗%を濃色塗り・今日ハイライト・週末背景・「今月」ボタン）
+- **作業メモ**: タスク押下で詳細モーダル＝メモ履歴（誰が・いつ・何をしたか）。メモに進捗%更新・「完了にする」を付けられる
+- **ステータスはメモから自動導出**: メモなし=未着手／メモ記録=作業中／完了メモ=完了（進捗100）。作成・編集モーダルにステータス/進捗欄は無い（メモ経由に一本化）
+- **カテゴリ（フラグ）**: `project_tasks.category`（自由入力20字まで）。既存カテゴリはプルダウン選択・新規は「＋新しいカテゴリを入力…」で別枠入力。カード/詳細に🏷色付きチップ（名前ハッシュで8色固定）・タブ下のチップでカテゴリ絞り込み（ボード/タイムライン共通）
+- カードに「✎編集（担当・期間）」「削除」ボタン＋💬メモ件数。担当者の選択肢は**SVのみ**（section または sections に SV を持つ現役メンバー）
+- **毎朝8:00(JST)のLINEリマインド**（通知キー `task_remind`・管理者グループLINEへ「期限超過⚠／本日期日📌／未完了サマリー＋上位リスト」＋「タスクを見る」ボタン。未完了0件の朝は送らない）
+
+**関連テーブル:** `project_tasks`, `project_task_notes`（旧: `group_tasks`＝LINE抽出・残置）
+
+---
+
 ## 5. 運営メニュー
 
 > **アクセス権:** `global_role = "executive"` のみ
@@ -746,6 +770,7 @@ sendEventNotify(
 | `rest_day_remind` | 20:00 | 翌日出勤スタッフ個人リマインド + グループへ1通まとめレポート |
 | `absence_followup_remind` | 17:00 | 当日欠勤スタッフへ経過報告ボタン通知（翌日シフトありのみ） |
 | `holiday_open_notify` | 09:00 | `holiday_rules.open_day` の日に希望休受付開始通知 |
+| `task_remind` | 08:00 | 未完了タスクのサマリーを管理者グループLINEへ（タスク管理・2026-07-12追加。vercel.json の notify cron に 23時UTC=8時JST を追加済み） |
 
 **`rest_day_remind` レポート仕様:**
 - 必要枠数は `shift_slot_requirements` テーブルから取得
@@ -924,7 +949,11 @@ export function monsterImg(id)             // → /rpg/mon-${id}.png
 | `notices` | 周知事項（title, body, is_pinned, target_staff_id, attachment_*）。**`messages`へ統合・ナビ廃止／残置** |
 | `notice_reads` | お知らせ既読。**残置** |
 | `inquiries` | 問い合わせ。**`messages`(audience_type=admins)へ統合・残置** |
-| `group_tasks` | LINEグループ抽出タスク（title, assignee_staff_id, status, group_id） |
+| `group_tasks` | LINEグループ抽出タスク（title, assignee_staff_id, status, group_id）※/tasksの画面導線は廃止 |
+| `project_tasks` | 管理者タスク管理（title, category, assignee_staff_id, start_date, due_date, progress, status, priority）2026-07-12新設 |
+| `project_task_notes` | タスク作業メモ（task_id, author_staff_id, body, progress, mark_done）2026-07-12新設 |
+| `skill_items` | スキル管理カスタム項目（project_id, label, sort_order）2026-07-12新設 |
+| `staff_skill_values` | スタッフ×カスタム項目の○×（staff_id, item_id, value）2026-07-12新設 |
 | `task_extraction_groups` | タスク抽出グループ設定（group_id, group_label, enabled） |
 | `line_groups` | LINEグループ情報（group_id, joined_at） |
 | `line_name_mappings` | LINEユーザー名 → 社員ID マッピング |
