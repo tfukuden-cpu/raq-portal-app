@@ -7,7 +7,7 @@
  *  - LINE取込み: LINEグループから自動抽出されたタスク候補を取込み/却下
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   saveProjectTaskAction,
@@ -215,7 +215,7 @@ export default function TasksClient({
       </div>
 
       {/* サマリー */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2 sm:max-w-md">
         <SummaryCard label="未完了" value={openTasks.length} accent="text-zinc-900 dark:text-zinc-100" />
         <SummaryCard label="本日期日" value={openTasks.filter(t => t.dueDate === today).length} accent="text-blue-600 dark:text-blue-400" />
         <SummaryCard label="期限超過" value={overdueCount} accent={overdueCount > 0 ? "text-red-500" : "text-zinc-900 dark:text-zinc-100"} />
@@ -243,30 +243,37 @@ export default function TasksClient({
         <p className="text-xs font-medium px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-500">✗ {errorMsg}</p>
       )}
 
-      {/* ── リスト ── */}
+      {/* ── リスト（PC=3カラムかんばん / モバイル=縦積み） ── */}
       {tab === "list" && (
-        <div className="space-y-4">
-          {(["in_progress", "todo", "done"] as ProjectTask["status"][]).map(st => {
-            const group = tasks.filter(t => t.status === st);
-            if (group.length === 0) return null;
-            return (
-              <section key={st}>
-                <h2 className="text-xs font-bold text-zinc-400 mb-1.5">{STATUS_LABEL[st]}（{group.length}）</h2>
-                <div className="space-y-1.5">
+        tasks.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700 py-16 text-center">
+            <p className="text-sm text-zinc-400">タスクがありません</p>
+            <button type="button" onClick={() => { setPrefill(null); setEditing("new"); }}
+              className="mt-3 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors">
+              ＋ 最初のタスクを作成
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+            {(["todo", "in_progress", "done"] as ProjectTask["status"][]).map(st => {
+              const group = tasks.filter(t => t.status === st);
+              const dot =
+                st === "todo" ? "bg-zinc-400"
+                : st === "in_progress" ? "bg-blue-500"
+                : "bg-emerald-500";
+              return (
+                <KanbanColumn key={st} dot={dot} label={STATUS_LABEL[st]} count={group.length}>
                   {group.map(t => (
                     <TaskRow key={t.id} task={t} today={today}
                       onClick={() => setDetailId(t.id)}
                       onEdit={() => { setPrefill(null); setEditing(t); }}
                       onDelete={() => handleDeleteTask(t)} />
                   ))}
-                </div>
-              </section>
-            );
-          })}
-          {tasks.length === 0 && (
-            <p className="text-sm text-zinc-400 text-center py-12">タスクがありません。「＋ 新規タスク」から追加してください。</p>
-          )}
-        </div>
+                </KanbanColumn>
+              );
+            })}
+          </div>
+        )
       )}
 
       {/* ── タイムライン ── */}
@@ -278,10 +285,11 @@ export default function TasksClient({
 
       {/* ── LINE取込み ── */}
       {tab === "inbox" && (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <p className="text-xs text-zinc-400">
             LINEグループの会話から自動抽出されたタスク候補です。「取込む」で内容を確認してタスク管理に追加できます。
           </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
           {candidates.map(c => (
             <div key={c.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3">
               <div className="flex items-start justify-between gap-2">
@@ -312,6 +320,7 @@ export default function TasksClient({
               </div>
             </div>
           ))}
+          </div>
           {candidates.length === 0 && (
             <p className="text-sm text-zinc-400 text-center py-12">取込み待ちの候補はありません</p>
           )}
@@ -342,6 +351,30 @@ export default function TasksClient({
         />
       )}
     </div>
+  );
+}
+
+// ── かんばん列 ──────────────────────────────────────────────
+function KanbanColumn({ dot, label, count, children }: {
+  dot: string;
+  label: string;
+  count: number;
+  children?: ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800 p-2.5">
+      <h2 className="flex items-center gap-1.5 px-1 pb-2 text-xs font-bold text-zinc-500 dark:text-zinc-400">
+        <span className={`w-2 h-2 rounded-full ${dot}`} />
+        {label}
+        <span className="text-zinc-400 dark:text-zinc-500 font-semibold tabular-nums">{count}</span>
+      </h2>
+      <div className="space-y-2">
+        {children}
+        {count === 0 && (
+          <p className="text-[11px] text-zinc-400 text-center py-6">なし</p>
+        )}
+      </div>
+    </section>
   );
 }
 
