@@ -56,7 +56,7 @@ export default async function TasksPage() {
       .select("group_id, group_label")
       .eq("project_id", projectId),
     admin.from("project_members")
-      .select("staff_id, staffs(name, display_name)")
+      .select("staff_id, section, sections, staffs(name, display_name)")
       .eq("project_id", projectId)
       .is("end_date", null)
       .order("staff_id"),
@@ -106,11 +106,17 @@ export default async function TasksPage() {
     source_messages:   (t.source_messages as { sent_at: string; user_id: string; text: string }[] | null) ?? null,
   }));
 
-  const staffOptions: StaffOption[] = (members ?? []).map(m => {
-    const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
-      { name: string | null; display_name: string | null } | null;
-    return { staffId: m.staff_id, name: s?.display_name ?? s?.name ?? m.staff_id };
-  });
+  // 担当者の選択肢はSVのみ（メインセクション or スキルにSVを持つ現役メンバー）
+  const staffOptions: StaffOption[] = (members ?? [])
+    .filter(m => {
+      const secs = ((m as { sections?: string[] | null }).sections ?? []).filter(Boolean);
+      return m.section === "SV" || secs.includes("SV");
+    })
+    .map(m => {
+      const s = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
+        { name: string | null; display_name: string | null } | null;
+      return { staffId: m.staff_id, name: s?.display_name ?? s?.name ?? m.staff_id };
+    });
 
   // 当日(JST)はサーバーで算出してpropsで渡す（クライアントで new Date しない・地雷対策）
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
