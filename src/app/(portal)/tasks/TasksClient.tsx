@@ -761,7 +761,16 @@ function TaskModal({
 }) {
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
-  const [category, setCategory] = useState(task?.category ?? "");
+  // カテゴリ: 既存はプルダウン選択・新規は「__new__」を選んで自由入力
+  const [catSelect, setCatSelect] = useState(
+    task?.category ? (categories.includes(task.category) ? task.category : "__new__") : ""
+  );
+  const [catText, setCatText] = useState(
+    task?.category && !categories.includes(task.category) ? task.category : ""
+  );
+  const category = categories.length === 0
+    ? catText
+    : (catSelect === "__new__" ? catText : catSelect);
   const [assignee, setAssignee] = useState(task?.assigneeStaffId ?? "");
   const [startDate, setStartDate] = useState(task?.startDate ?? "");
   const [dueDate, setDueDate] = useState(task?.dueDate ?? "");
@@ -814,20 +823,23 @@ function TaskModal({
           </div>
           <div>
             <label className={labelCls}>カテゴリ（フラグ）</label>
-            <input type="text" value={category} onChange={e => setCategory(e.target.value)}
-              list="task-category-options" maxLength={20}
-              className={inputCls} placeholder="例: シフト / 勤怠 / 採用 / 現場対応（自由入力）" />
-            <datalist id="task-category-options">
-              {categories.map(c => <option key={c} value={c} />)}
-            </datalist>
-            {categories.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap mt-1.5">
-                {categories.map(c => (
-                  <button key={c} type="button" onClick={() => setCategory(c)}
-                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-opacity ${categoryCls(c)} ${category === c ? "" : "opacity-60 hover:opacity-100"}`}
-                  >🏷 {c}</button>
-                ))}
-              </div>
+            {categories.length > 0 ? (
+              <>
+                <select value={catSelect} onChange={e => setCatSelect(e.target.value)} className={inputCls}>
+                  <option value="">カテゴリなし</option>
+                  {categories.map(c => <option key={c} value={c}>🏷 {c}</option>)}
+                  <option value="__new__">＋ 新しいカテゴリを入力…</option>
+                </select>
+                {catSelect === "__new__" && (
+                  <input type="text" value={catText} onChange={e => setCatText(e.target.value)}
+                    maxLength={20} autoFocus
+                    className={`${inputCls} mt-1.5`} placeholder="新しいカテゴリ名（20文字まで）" />
+                )}
+              </>
+            ) : (
+              <input type="text" value={catText} onChange={e => setCatText(e.target.value)}
+                maxLength={20}
+                className={inputCls} placeholder="例: シフト / 勤怠 / 採用（自由入力）" />
             )}
           </div>
           <div>
