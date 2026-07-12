@@ -66,6 +66,7 @@ export type ProjectTask = {
   id: string;
   title: string;
   description: string | null;
+  category: string | null;
   assigneeStaffId: string | null;
   assigneeName: string | null;
   startDate: string | null;
@@ -100,6 +101,30 @@ const PRIORITY_CLS: Record<ProjectTask["priority"], string> = {
 function fmtMD(d: string): string {
   const [, m, day] = d.split("-");
   return `${parseInt(m)}/${parseInt(day)}`;
+}
+
+// カテゴリ名から決定的に色を割り当てる（同じ名前は常に同じ色）
+const CATEGORY_PALETTE = [
+  "bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-900",
+  "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900",
+  "bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-950/40 dark:text-teal-400 dark:border-teal-900",
+  "bg-pink-50 text-pink-600 border-pink-200 dark:bg-pink-950/40 dark:text-pink-400 dark:border-pink-900",
+  "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-900",
+  "bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-900",
+  "bg-cyan-50 text-cyan-600 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-400 dark:border-cyan-900",
+  "bg-lime-50 text-lime-600 border-lime-200 dark:bg-lime-950/40 dark:text-lime-500 dark:border-lime-900",
+];
+function categoryCls(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return CATEGORY_PALETTE[h % CATEGORY_PALETTE.length];
+}
+function CategoryChip({ name }: { name: string }) {
+  return (
+    <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold border ${categoryCls(name)}`}>
+      🏷 {name}
+    </span>
+  );
 }
 
 /** "YYYY-MM" の日数（TZ非依存） */
@@ -141,6 +166,7 @@ export default function TasksClient({
   const [month, setMonth] = useState(today.slice(0, 7));
   const [editing, setEditing] = useState<ProjectTask | null | "new">(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -148,6 +174,15 @@ export default function TasksClient({
   const dueTodayCount = openTasks.filter(t => t.dueDate === today).length;
   const overdueCount = openTasks.filter(t => t.dueDate && t.dueDate < today).length;
   const detailTask = detailId ? (tasks.find(t => t.id === detailId) ?? null) : null;
+
+  // 既存カテゴリ一覧（入力候補・絞り込みチップに使用）
+  const categories = useMemo(
+    () => [...new Set(tasks.map(t => t.category).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, "ja")),
+    [tasks],
+  );
+  const visibleTasks = categoryFilter
+    ? tasks.filter(t => t.category === categoryFilter)
+    : tasks;
 
   function handleDeleteTask(t: ProjectTask) {
     if (isPending) return;
@@ -197,6 +232,29 @@ export default function TasksClient({
         </div>
       </div>
 
+      {/* カテゴリ絞り込み */}
+      {categories.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button type="button" onClick={() => setCategoryFilter(null)}
+            className={[
+              "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+              categoryFilter === null
+                ? "bg-zinc-800 text-white border-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
+                : "bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-700 dark:hover:bg-zinc-800",
+            ].join(" ")}
+          >すべて</button>
+          {categories.map(c => (
+            <button key={c} type="button"
+              onClick={() => setCategoryFilter(categoryFilter === c ? null : c)}
+              className={[
+                "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all",
+                categoryFilter === c ? `${categoryCls(c)} ring-2 ring-blue-400/60` : `${categoryCls(c)} opacity-70 hover:opacity-100`,
+              ].join(" ")}
+            >🏷 {c}</button>
+          ))}
+        </div>
+      )}
+
       {errorMsg && (
         <p className="text-xs font-medium px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-500">✗ {errorMsg}</p>
       )}
@@ -216,7 +274,7 @@ export default function TasksClient({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch">
             {(["todo", "in_progress", "done"] as ProjectTask["status"][]).map(st => {
-              const group = tasks.filter(t => t.status === st);
+              const group = visibleTasks.filter(t => t.status === st);
               const dot =
                 st === "todo" ? "bg-zinc-400"
                 : st === "in_progress" ? "bg-blue-500"
@@ -239,7 +297,7 @@ export default function TasksClient({
 
       {/* ── タイムライン ── */}
       {tab === "timeline" && (
-        <TimelineView tasks={tasks} month={month} today={today}
+        <TimelineView tasks={visibleTasks} month={month} today={today}
           onMonthChange={setMonth}
           onTaskClick={t => setDetailId(t.id)} />
       )}
@@ -262,6 +320,7 @@ export default function TasksClient({
           projectId={projectId}
           task={editing === "new" ? null : editing}
           staffOptions={staffOptions}
+          categories={categories}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); router.refresh(); }}
         />
@@ -360,6 +419,7 @@ function TaskCard({ task, today, onClick, onEdit, onDelete, showStatus }: {
         {showStatus && (
           <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${STATUS_CHIP[task.status]}`}>{STATUS_LABEL[task.status]}</span>
         )}
+        {task.category && <CategoryChip name={task.category} />}
         <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${PRIORITY_CLS[task.priority]}`}>
           {PRIORITY_LABEL[task.priority]}
         </span>
@@ -602,6 +662,7 @@ function TaskDetailModal({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${STATUS_CHIP[task.status]}`}>{STATUS_LABEL[task.status]}</span>
+                {task.category && <CategoryChip name={task.category} />}
                 <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${PRIORITY_CLS[task.priority]}`}>優先度{PRIORITY_LABEL[task.priority]}</span>
               </div>
               <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100 mt-1 break-words">{task.title}</h2>
@@ -689,16 +750,18 @@ function TaskDetailModal({
 
 // ── 作成・編集モーダル ──────────────────────────────────────
 function TaskModal({
-  projectId, task, staffOptions, onClose, onSaved,
+  projectId, task, staffOptions, categories, onClose, onSaved,
 }: {
   projectId: string;
   task: ProjectTask | null;
   staffOptions: StaffOption[];
+  categories: string[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
+  const [category, setCategory] = useState(task?.category ?? "");
   const [assignee, setAssignee] = useState(task?.assigneeStaffId ?? "");
   const [startDate, setStartDate] = useState(task?.startDate ?? "");
   const [dueDate, setDueDate] = useState(task?.dueDate ?? "");
@@ -715,6 +778,7 @@ function TaskModal({
         projectId,
         id: task?.id ?? null,
         title, description,
+        category: category || null,
         assigneeStaffId: assignee || null,
         startDate: startDate || null,
         dueDate: dueDate || null,
@@ -747,6 +811,24 @@ function TaskModal({
           <div>
             <label className={labelCls}>詳細</label>
             <textarea value={description ?? ""} onChange={e => setDescription(e.target.value)} rows={3} className={inputCls} placeholder="補足・手順など（任意）" />
+          </div>
+          <div>
+            <label className={labelCls}>カテゴリ（フラグ）</label>
+            <input type="text" value={category} onChange={e => setCategory(e.target.value)}
+              list="task-category-options" maxLength={20}
+              className={inputCls} placeholder="例: シフト / 勤怠 / 採用 / 現場対応（自由入力）" />
+            <datalist id="task-category-options">
+              {categories.map(c => <option key={c} value={c} />)}
+            </datalist>
+            {categories.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap mt-1.5">
+                {categories.map(c => (
+                  <button key={c} type="button" onClick={() => setCategory(c)}
+                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-opacity ${categoryCls(c)} ${category === c ? "" : "opacity-60 hover:opacity-100"}`}
+                  >🏷 {c}</button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className={labelCls}>担当者（SV）</label>

@@ -40,7 +40,7 @@ export default async function TasksPage() {
   ] = await Promise.all([
     admin.from("projects").select("name").eq("id", projectId).maybeSingle(),
     admin.from("project_tasks")
-      .select("id, title, description, assignee_staff_id, start_date, due_date, progress, status, priority, created_at, completed_at")
+      .select("id, title, description, category, assignee_staff_id, start_date, due_date, progress, status, priority, created_at, completed_at")
       .eq("project_id", projectId)
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -97,6 +97,7 @@ export default async function TasksPage() {
     id:              t.id,
     title:           t.title,
     description:     t.description,
+    category:        t.category ?? null,
     assigneeStaffId: t.assignee_staff_id,
     assigneeName:    t.assignee_staff_id ? (staffNameMap.get(t.assignee_staff_id) ?? t.assignee_staff_id) : null,
     startDate:       t.start_date,

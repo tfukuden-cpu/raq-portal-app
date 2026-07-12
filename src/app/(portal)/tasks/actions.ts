@@ -293,6 +293,7 @@ export type ProjectTaskInput = {
   id?: string | null;           // null=新規
   title: string;
   description?: string | null;
+  category?: string | null;     // カテゴリ（フラグ）自由入力
   assigneeStaffId?: string | null;
   startDate?: string | null;    // YYYY-MM-DD
   dueDate?: string | null;      // YYYY-MM-DD
@@ -323,6 +324,7 @@ export async function saveProjectTaskAction(
     const payload: Record<string, unknown> = {
       title,
       description:       (input.description ?? "").trim() || null,
+      category:          (input.category ?? "").trim().slice(0, 20) || null,
       assignee_staff_id: input.assigneeStaffId || null,
       start_date:        input.startDate || null,
       due_date:          input.dueDate || null,
