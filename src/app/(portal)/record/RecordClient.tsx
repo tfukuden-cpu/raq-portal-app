@@ -78,7 +78,7 @@ function fmtWorked(inIso: string | null, outIso: string | null): string {
 type StatusType = "ok" | "holiday" | "missing" | "pending" | "corrected";
 
 function getRowStatus(r: DayRecord, corr?: CorrectionSummary): { label: string; type: StatusType } {
-  const OFF = ["公休", "休", "公休日", "有休", "希望休", "特別休暇", "代休", "振替休日", "休暇"];
+  const OFF = ["公休", "休", "公休日", "有休", "希望休", "特別休暇", "代休", "振替休日", "休暇", "公募"];
   const isHoliday = OFF.includes(r.shiftName ?? "");
   if (isHoliday || (!r.shiftName && !r.clockIn && !r.clockOut))
     return { label: "おやすみ", type: "holiday" };
@@ -138,7 +138,7 @@ export default function RecordClient({
   const corrMap = new Map(corrections.map(c => [c.target_date, c]));
   const pendingCount   = corrections.filter(c => c.status === "pending").length;
   const missingCount   = records.filter(r => {
-    const OFF = ["公休","休","公休日","有休","希望休","特別休暇","代休","振替休日","休暇"];
+    const OFF = ["公休","休","公休日","有休","希望休","特別休暇","代休","振替休日","休暇","公募"];
     return r.shiftStart && !r.clockIn && !OFF.includes(r.shiftName ?? "") && r.date <= today;
   }).length;
   const alertCount     = pendingCount + missingCount;
@@ -279,7 +279,7 @@ export default function RecordClient({
                         const isSat   = r.dow === 6;
                         const corr    = corrMap.get(r.date);
                         const status  = getRowStatus(r, corr);
-                        const OFF     = ["公休","休","公休日","有休","希望休","特別休暇","代休","振替休日","休暇"];
+                        const OFF     = ["公休","休","公休日","有休","希望休","特別休暇","代休","振替休日","休暇","公募"];
                         const isHoliday = OFF.includes(r.shiftName ?? "");
                         const hasData   = !!(r.clockIn || r.clockOut || r.shiftName);
                         const canApply  = !isHoliday && hasData && !corr;

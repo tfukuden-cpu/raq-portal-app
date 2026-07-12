@@ -108,7 +108,7 @@ export async function autoAssignSeatsAction(
 
   const admin = createAdminClient();
 
-  const OFF_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
+  const OFF_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休", "公募"];
   const KNOWN_SECTIONS = ["SV", "査定", "販売", "MOTA", "ローン", "リメイク"];
 
   /** シフト名の先頭でセクションを解決（"MOTA_遅番_A" → "MOTA"） */

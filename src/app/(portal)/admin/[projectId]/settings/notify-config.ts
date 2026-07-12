@@ -49,6 +49,8 @@ export type NotificationSettings = {
   shift_published:     NotifyItemConfig;
   /** タスクが割り当てられたとき → 担当スタッフへ（UI非表示） */
   task_assigned:       NotifyItemConfig;
+  /** 毎朝のタスクリマインド（8時） → 管理者グループへ */
+  task_remind:         NotifyItemConfig;
 };
 
 // ── デフォルトメッセージ ──────────────────────────────────
@@ -142,6 +144,12 @@ export const DEFAULT_NOTIFY_MESSAGES: Record<keyof NotificationSettings, string>
 【タスク】{タイトル}
 {期限}
 内容はポータルのタスクページでご確認ください。`,
+
+  task_remind:
+`☀ おはようございます。今朝のタスクリマインドです。
+{サマリー}
+
+{タスク一覧}`,
 
 };
 
@@ -250,6 +258,10 @@ export const NOTIFY_VARS: Record<keyof NotificationSettings, { label: string; no
     { label: "{タイトル}", note: "タスクのタイトル" },
     { label: "{期限}", note: "期限日（設定なしの場合は空）" },
   ],
+  task_remind: [
+    { label: "{サマリー}", note: "本日期日・期限超過・進行中の件数" },
+    { label: "{タスク一覧}", note: "期限超過→本日期日→その他の順のタスクリスト" },
+  ],
 };
 
 // ── デフォルト値の構築 ───────────────────────────────────
@@ -283,5 +295,6 @@ export function buildDefaultNotificationSettings(
     absence_followup_remind: get("absence_followup_remind", { enabled: true,  recipient: "staff", time: "17:00", message: DEFAULT_NOTIFY_MESSAGES.absence_followup_remind }),
     shift_published:         get("shift_published",         { enabled: true,  recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.shift_published }),
     task_assigned:           get("task_assigned",           { enabled: false, recipient: "staff", message: DEFAULT_NOTIFY_MESSAGES.task_assigned }),
+    task_remind:             get("task_remind",             { enabled: true,  recipient: "admin", time: "08:00", message: DEFAULT_NOTIFY_MESSAGES.task_remind }),
   };
 }

@@ -32,6 +32,7 @@
 | `/api/cron/notify` | `0 0 * * *` | 09:00 | `holiday_open_notify` |
 | `/api/cron/notify` | `0 8 * * *` | 17:00 | `absence_followup_remind` |
 | `/api/cron/notify` | `0 10 * * *` | 19:00 | `rest_day_remind` |
+| `/api/cron/notify` | `0 23 * * *` | 08:00 | `task_remind`（毎朝タスクリマインド→管理者グループLINE・2026-07-12追加） |
 | `/api/cron/extract-tasks` | `0 8 * * *` | 17:00 | タスク自動抽出 |
 
 ## cron/notify の処理内容

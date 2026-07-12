@@ -306,7 +306,7 @@ export default function ShiftManageClient({
     // ・公休・有休・希望休・特別休暇 → 空白（休日扱い）
     // ・SEAT_SECTION_COLORS 定義済みセクション（販売・査定等）→ セクション（早番/遅番）形式
     // ・未アポ・H MOTA・インフォ等の非カラーセクション → シフト名をそのまま出力
-    const OFF_PATTERNS = ["公休", "希望休", "有休", "特別休暇"];
+    const OFF_PATTERNS = ["公休", "希望休", "有休", "特別休暇", "公募"];
     const KNOWN_SECTIONS = new Set(Object.keys(SEAT_SECTION_COLORS));
     // 選択セクションを既知・未知に分類
     const knownSel = exportSectionsSel.filter(s => KNOWN_SECTIONS.has(s));

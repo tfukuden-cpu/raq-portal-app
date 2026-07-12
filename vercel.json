@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/notify",
-      "schedule": "0 0,8,10 * * *"
+      "schedule": "0 0,8,10,23 * * *"
     },
     {
       "path": "/api/cron/extract-tasks",

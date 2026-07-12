@@ -24,7 +24,7 @@ function tokyoToday(): string {
 // 優先順位付きの固定セクション順（これ以外のセクションはこの後ろに追加される）
 const BASE_SECTION_ORDER = ["SV", "査定", "販売", "MOTA", "H MOTA", "未アポ", "インフォ", "ローン"];
 const HIDDEN_SECTIONS = ["リメイク"]; // カラムとして表示しないセクション（その他に合流）
-const OFF_SHIFT_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
+const OFF_SHIFT_NAMES = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休", "公募"];
 const STATUS_SORT: StatusKey[] = ["absent", "late", "working", "departed", "clocked_out", "not_departed"];
 
 // インフォは販売に統合（#15）。表記は「販売／インフォ」、人員も販売にカウント
@@ -598,7 +598,7 @@ export default async function AttendancePage({
     x2Pct: w.x2_pct as number, y2Pct: w.y2_pct as number,
   }));
 
-  const OFF_NAMES_SEAT = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
+  const OFF_NAMES_SEAT = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休", "公募"];
   const todayShiftStaffIds = new Set(
     (todayShifts ?? [])
       .filter(r => r.shift_name && !OFF_NAMES_SEAT.includes(r.shift_name as string))

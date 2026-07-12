@@ -156,7 +156,7 @@ export default async function PunchPage({
   }
 
   // シフトマップ（公休系除く）
-  const OFF_SHIFTS = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤"];
+  const OFF_SHIFTS = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "公募"];
   const shiftMap = new Map<string, {
     shiftName: string;
     shiftStart: string | null;

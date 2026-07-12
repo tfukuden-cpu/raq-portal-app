@@ -6,6 +6,12 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import RecordClient from "./RecordClient";
 
+// 休み扱いのシフト名（出勤予定・欠勤の集計から除外する）。他ページと同一のリストに揃える
+const OFF_SHIFT_NAMES = ["公休", "休", "希望休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "公募"];
+function isOffShift(name: string | null): boolean {
+  return !name || OFF_SHIFT_NAMES.includes(name);
+}
+
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
@@ -156,7 +162,7 @@ export default async function RecordPage({
 
   // 集計
   const workDays = records.filter(
-    (r) => r.clockIn && r.shiftName !== "公休" && r.shiftName !== "休"
+    (r) => r.clockIn && !isOffShift(r.shiftName)
   ).length;
   const totalMinutes = records.reduce((acc, r) => {
     if (r.clockInIso && r.clockOutIso) {
@@ -182,7 +188,7 @@ export default async function RecordPage({
   let scheduledDays = 0, absentDays = 0, lateDays = 0, earlyDays = 0, compliantDays = 0;
   for (const r of records) {
     if (r.date > today) continue;
-    if (!r.shiftName || r.shiftName === "公休" || r.shiftName === "休") continue;
+    if (isOffShift(r.shiftName)) continue;
     scheduledDays++;
 
     if (!r.clockInIso) {

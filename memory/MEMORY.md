@@ -13,6 +13,66 @@
 
 ---
 
+## ロールの3層モデル（ユーザー明示・2026-07-02・最重要）
+
+**権限の強さの階段ではなく「管理する対象」が違う3層。** 過去のエージェントが「executive ⊃ admin ⊃ staff のピラミッド」と誤解して開発が難航した（例＝`isAdminView` バグ：運営者がスタッフ受信箱に落ちた）。
+
+| レイヤー | 管理する対象 | 仕事 |
+|---|---|---|
+| スタッフ | 自分自身 | 自分の打刻・シフト・希望休・報告・メッセージ受信 |
+| 管理者（project_admin） | **当該案件の中のスタッフ（人）** | シフト作成・勤怠管理・当日状況・メンバー管理・配信 |
+| 運営者（executive） | **案件そのもの（箱）** | 案件の作成/設定/アーカイブ・アカウント管理・全社横断 |
+
+- 機能を作る前に「これは誰の仕事か（自分/人/案件）」を決め、メニュー・パス・サーバーガードをそのレイヤーに揃える
+- ガード対応: スタッフ=本人RLS ／ 管理者=`is_project_admin(projectId)` ／ 運営者=`global_role='executive'`
+- 視点モード（`rqp-view-mode`）は「上位が下位の画面を確認する機能」でありロールではない
+- ⚠️ `global_role="admin"`（グローバル管理者）はこのモデルに居場所がない中間ロール（扱いはユーザー未決・判断が必要なら確認）
+- ⚠️ `/admin/[projectId]/settings` は内容的に管理者の仕事なのに運営者パス配下＝混線の既存例（メニュー再編時の論点）
+
+---
+
+## ⚠️ リニューアル計画（2026-07-02〜・最優先で確認）
+
+**ユーザー決定: 現行(v1)は凍結して触らない。リニューアル版(v2)を机上設計→構築→完成後に差し替え。**
+- 設計の一次情報は **`docs/リニューアル/設計書.md`**（確定事項・未決論点を管理。設計議論の結論は必ずここに追記）
+- v1への機能追加依頼が来たら「現行凍結中・v2設計に反映するか」をユーザーに確認する
+- 骨子: 上記ロール3層の完全対応／管理者・運営者アカウントは別体系／グローバル管理者廃止／スタッフアカウント管理を管理者へ移譲／集計はDB側(ビュー/RPC)で1000行制限バグを根絶／テストを最初から書く
+
+---
+
+## 現在の開発状態（2026-07-12更新）
+
+### 改修3件＝スキル管理拡張／公募ステータス／タスク管理刷新（2026-07-12・実装済・未デプロイ）
+**ユーザー依頼（スキルシート_0712.xlsx添付）。v1適用はユーザー承認済み。tsc 0・新規lint 0。SPEC.md反映は未（残作業）。**
+- **①スキル管理拡張（/members/skills）**: (a)**カスタム項目**＝新テーブル `skill_items`(project_id,label,sort_order・UNIQUE(project_id,label))＋`staff_skill_values`(staff_id,item_id,value bool・UNIQUE(staff_id,item_id))（マイグレーション`create_skill_items`適用済・RLS=メンバーselect/書込はadminクライアント）。ページ上部「＋項目追加」で「〇〇研修済み」等を追加、セクション列の右にアンバー見出しで表示・○×トグル・ヘッダー✕で削除（値もcascade）。アクション=`addSkillItemAction`/`deleteSkillItemAction`/`toggleSkillValueAction`（actions.tsに追加・assertAdmin）。(b)**Excel出力**＝新API `GET /api/admin/skills/export?projectId`（exceljs・メインセクション|アカウント番号|名前|セクション各列|カスタム項目列・対応可能=青/対応不可=赤塗り）。ページに緑「Excel出力」ボタン
+- **①´スキルシート取込み済（本番実行済・2026-07-12）**: ユーザー提供のスキルシート_0712.xlsx（販売メイン114行・査定/販売/MOTA/インフォの対応可否61名分）を**Excelを正として** `project_members.sections` に一括反映（対応可能=付与/対応不可=剥奪/空欄=現状維持）。**現役(end_date null)のみ56名マッチ・32名更新**。安全策=①実行前に `_backup_sections_20260712` テーブルへP001全153行退避（戻す時はここから）②メインセクション(`pm.section`)は剥奪対象でも配列から外さない③Excel対象外セクション(H MOTA/未成約後追い/未アポ等)は保持。6/20事故のインフォ担当も復元された
+- **②シフト「公募」ステータス新設**: 余剰時に帰宅してもらうOP用の休みステータス（欠勤でも公休でもない・出勤率の母数から除外）。**OFF系リスト全箇所に「公募」追加**＝export/compliance/absentees各route・attendance/page(2箇所)・attendance/edit/page・work-record-actions・punch/[projectId]/page・seating/actions・seating/plan・seating/page・draft-actions・record/page・RecordClient(3箇所)・dashboard/page(SQL not-in×2)・absence-followup(SQL)・HomeClient・ShiftsTabs・ShiftCalendar・ShiftDayList(4箇所)・ShiftEditGrid(8箇所)・ShiftManageClient・sheet-actions・gsheets。**シフト編集グリッドのセルポップオーバーに「公募に変更」ボタン**（onKobo/handlePopoverKobo・公休ボタンの下）。表示色=ティール(`bg-teal-600`)でグレーの公休と区別。スタッフ画面では紫系の休みバッジ
+- **③タスク管理を全面刷新（/tasks・管理者専用化）**: 旧LINE抽出タスク簡易ページを**リスト/タイムライン(ガント)/LINE取込みの3タブ**に作り直し。新テーブル `project_tasks`(title/description/assignee_staff_id/start_date/due_date/progress 0-100/status todo|in_progress|done/priority/source_group_task_id・マイグレーション`create_project_tasks`・RLS=メンバーselect/書込はadmin)。**タイムライン＝月表示ガント**（開始日〜期日のバー・進捗%を濃色塗り・今日列ハイライト・バーtapで編集・日付未設定は下に別リスト）。**LINE取込みタブ**＝旧group_tasks(pending)を「取込む(編集して取込)/即取込/却下」で昇格（取込むと元はdone扱い）。アクション=`saveProjectTaskAction`/`deleteProjectTaskAction`/`importGroupTaskAction`（assertTaskAdmin・担当者新規設定時は既存`task_assigned`通知＝デフォルトOFF）。**ナビ=ADMIN_MENU_ITEMSに「タスク管理」(CheckSquare)追加**（勤怠管理とLINE連携の間）。⚠️**TasksClientの旧型export（GroupTask/TaskGroup/StaffOption/NameMapping）はdashboard(AdminHomeWrapper/MyTasksWidget)がimportしているため維持**。⚠️旧ページにあった抽出グループ登録・名前紐付けUIは新ページから省略（抽出cron自体は既存設定で継続動作・actions.tsの旧アクションは残置）
+- **③´毎朝のLINEタスクリマインド**: 通知キー`task_remind`新設（notify-config: type/デフォルト文/vars/build・enabled=true・time="08:00"・recipient=admin）。`api/cron/notify`に task_remind ブロック追加＝毎朝8時(JST)に**管理者グループLINEのみ**へ「期限超過⚠/本日期日📌/その他(上位10件)」サマリー＋「タスクを見る」ボタン(`/tasks`)。未完了タスク0件なら送らない。notification_logsで当日重複防止。**vercel.json の notify cron に 23時UTC(=8時JST)を追加**（`0 0,8,10,23 * * *`）
+- 残: 本番反映は未（`git push origin master`・ユーザー承認必要）／SPEC.md §3/§4への追記
+
+## 現在の開発状態（2026-07-08更新）
+
+### 出発報告を全案件OFF（2026-07-08・DB設定のみ・コード変更なし）
+**ユーザー判断「Raqワークスでは出発報告は不要」。** 出発報告はv1初期(GAS由来・2026-05-31以前)からの機能で、`project_settings.enable_departure_report` のデフォルトがON(`?? true`)のため表示され続けていた（7/3からS141/S145が実際に使用開始し目についた）。対応＝`project_settings` をP001(IDOM)/P002(MUNDO PIXAR)とも `enable_departure_report=false` にSQLで更新（ボタン非表示・`departure_reports` の既存5件は残置）。**再度ONにしない／新案件はデフォルトON扱いになる点に注意**（設定行を作らないとボタンが出る）。v2設計書は変更しない（ユーザー指示「そのまま」＝オプションモジュール棚卸しのまま）
+
+## 現在の開発状態（2026-07-06更新）
+
+### スタッフ勤怠実績(/record)で希望休が欠勤に誤カウント修正（2026-07-06・実装済・未デプロイ・案件=IDOM）
+**ユーザー報告「安達さん(S141)の6月勤怠に欠勤記録があるみたい」。DB調査で absence_reports 0件・シフト名「欠勤」0件・出勤予定日の打刻漏れも無し＝実データに欠勤は存在しなかった。原因は本人画面 `/record` の集計バグ。tsc 0。**
+- **原因＝`record/page.tsx` の欠勤/出勤予定判定が休みを「公休」「休」だけで判定**していた（[record/page.tsx:185](../src/app/(portal)/record/page.tsx)）。そのため**希望休(6/20)が出勤予定(しょてい)に算入され、打刻が無いので欠勤(けっきん)にカウント**＝同じ日が「きゅうか」と「けっきん」に二重計上。安積の6月＝しょてい12/しゅっきん11/けっきん1 の「1」が希望休だった
+- **修正＝共有 `OFF_SHIFT_NAMES`＋`isOffShift(name)` を page.tsx に定義**（公休/休/希望休/有休/休暇/振替休日/特別休暇/代休/欠勤）し、`workDays`(しゅっきん)フィルタと `scheduledDays`/`absentDays`(順守率・欠勤)判定の両方を差し替え。導入研修は稼働日なので除外しない
+- **RecordClient.tsx は元々フルOFFリスト**（日別テーブルのじょうたい表示・きゅうか集計・打刻漏れ抽出）を使っていて正しかった＝**サマリーの absentDays を作る page.tsx だけが直し漏れ**。管理者側(`/attendance/edit`等)は2026-06-25に希望休をOFFに追加済みだったが、本人 `/record` が漏れていた
+- 残: 本番反映は未（`git push origin master`でVercel自動デプロイ・ユーザー承認必要）
+
+### 勤怠出力の休憩時間を拘束時間から自動算出（2026-07-06・実装済・未デプロイ・案件=IDOM）
+**ユーザー指示「勤怠を出力する際、休憩時間も算出されるように。稼働時間6時間未満は休憩0時間でよい」。ユーザー確認で①労基準拠(6〜8h=45/8h超=60)②判定は拘束時間(出勤〜退勤)基準③個別オーバーライド優先、を選択。tsc 0。**
+- **対象＝`api/admin/work-records/export/route.ts`（稼働実績Excel）のみ**。従来は休憩＝`breakOverrideMap.get(key) ?? (clockIn ? 60 : 0)`＝出勤したら一律60分だった
+- **新ヘルパー `autoBreakMinutes(grossMin)`**: 拘束時間(分)→ `>480`=60／`>=360`=45／それ未満=0。境界＝6h(360)ちょうどは45・8h(480)ちょうどは45（「6時間未満=0」に合わせた）
+- **算出は両打刻(clock_in/out)が揃った日のみ**。`grossMin=Math.round((out-in)/60000)`→`breakMinutes = breakOverrideMap.get(key) ?? autoBreakMinutes(grossMin)`→`workMinutes = gross - break`。休憩が減れば稼働・内通常/内残業の集計も連動。片打刻・欠勤日は休憩空欄・稼働null（従来どおり）
+- **⚠️拘束時間基準で算出（実稼働基準ではない）**＝休憩が実稼働に依存する循環を避けるためユーザーが拘束基準を選択。画面側（`AttendanceEditClient`/`work-record-actions.ts`）の休憩は従来のまま（今回は出力Excelのみ変更・整合が必要なら別途）
+- 残: 本番反映は未（`git push origin master`でVercel自動デプロイ・ユーザー承認必要）
+
 ## 現在の開発状態（2026-07-01更新）
 
 ### 勤怠実績の月送りで打刻が全滅＋Excel出力のNaN:NaN修正（2026-07-01・デプロイ済 f52d1bc・案件=IDOM）
@@ -567,6 +627,7 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | 希望休のテーブルは2系統＝実運用は `shift_off_requests` | スタッフ申請の希望休は `shift_off_requests`(priority=第1〜第4希望・`staff-off-request-actions.ts`／管理者一覧も同テーブル)。`holiday_requests`(status付)は別系統でほぼ未使用。**希望休を参照する処理は `shift_off_requests` を読むこと**。仮組生成 `draft-actions.ts` が `holiday_requests` を読んでいて希望休が反映されないバグがあった（2026-06-25修正） |
 | **セクションの「表示マージ」を `project_members.section/sections` に適用してはいけない** | `StaffInfoPanel`(`shifts/manage/StaffInfoPanel.tsx`) は `member.sections` を初期値→`updateShiftSettingsAction` で**そのまま保存**する。表示用に props 段階で「インフォ→販売」等とマージすると、スタッフ設定保存時に**実データが上書きされ消える**（2026-06-20 #15対応でインフォが消失＝S019復元）。表示マージは①保存パスに乗らない画面のみ（当日状況の出勤簿＝`moveSectionAction` は `shifts` のみ更新で安全）か、②表示ラベルの差し替えだけに留める。シフト管理側の section マージは撤回済み。`project_members` のセクション変更履歴は残らない＝壊すと復元はリスト手動指定のみ |
 | クライアントの `useState(props)` 初期値は router.push の再取得に追従しない | `router.push(?month=...)` 等でURLパラメータだけ変えてサーバー再取得しても、**同じクライアントコンポーネントは再マウントされない**ため `useState(props)` の初期値は最初の値で固定される。`AttendanceEditClient` の `localRows`/`confirmMap` が該当し、勤怠実績の月送りで**打刻・稼働が全日空欄**になった（シフト名等のprops直参照は正しく出るため気づきにくい）。編集用のローカルstateをpropsから初期化している画面は `useEffect(()=>setState(props),[props])` でprops変更に追従させること（2026-07-01修正）。※`ShiftManageClient` の `latestDraft` も同種で `onDraftSaved`+refresh で対処済 |
+| 休み扱いシフト名(OFFリスト)はページ間で揃える | 欠勤/出勤予定の集計で休みを「公休」「休」だけで判定すると、希望休/有休/特別休暇などが出勤予定に入り打刻無し→欠勤に誤カウントする。フルリスト＝`["公休","休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤","公募"]`（**公募は2026-07-12追加＝余剰時帰宅の休みステータス**）。本人 `/record` の page.tsx が短縮リストで希望休を欠勤カウントしていた（2026-07-06修正）。管理者側は2026-06-25に修正済だった＝新しく勤怠集計を書くときは必ずフルOFFリストを使う（導入研修は稼働日なので除外しない）。**新しい休みステータスを増やすときは全OFFリスト（約20ファイル・SQL not-in含む）に漏れなく追加すること** |
 | Postgres `time`型カラム(`shift_start`/`shift_end`)は `"HH:MM:SS"` で返る | `` `${date}T${timeStr}:00+09:00` `` のように`"HH:MM"`前提で秒を足すと `...T20:00:00:00+09:00` の不正文字列→`Invalid Date`→`NaN`。Excel出力(`work-records/export/route.ts`)で内通常/内残業時間が `NaN:NaN` になった。`timeStr.slice(0,5)` で正規化してから日時を組む（2026-07-01修正）。他の勤怠計算箇所は既に `.slice(0,5)` 済み |
 
 ---

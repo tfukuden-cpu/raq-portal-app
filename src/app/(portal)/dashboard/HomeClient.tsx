@@ -60,7 +60,7 @@ export interface HomeClientProps {
 
 const NAVY    = "#0d1b35";
 const WD      = ["日","月","火","水","木","金","土"];
-const OFF_NAMES = new Set(["公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休","休暇"]);
+const OFF_NAMES = new Set(["公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休","休暇","公募"]);
 
 // ── RPGテーマ（打刻端末・休憩室と共通の世界観） ───────────────────────────────
 const dotGothic = DotGothic16({ weight: "400", subsets: ["latin"], preload: false });

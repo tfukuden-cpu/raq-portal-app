@@ -146,7 +146,7 @@ function fmtAt(iso: string): string {
 function InlinePatternPicker({
   staffId, date, currentShift, staffMember, patterns,
   logs, consecutiveDays, isDuplicate, projectId,
-  onAssign, onRemove, onClose,
+  onAssign, onRemove, onKobo, onClose,
   anchorRect,
 }: {
   staffId: string; date: string; currentShift: string | null;
@@ -158,6 +158,7 @@ function InlinePatternPicker({
   projectId: string;
   onAssign: (p: string) => void;
   onRemove: () => void;
+  onKobo: () => void;
   onClose: () => void;
   anchorRect: { top: number; left: number; width: number; height: number };
 }) {
@@ -260,6 +261,15 @@ function InlinePatternPicker({
               : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100",
           ].join(" ")}>
           公休に変更
+        </button>
+        <button onClick={onKobo}
+          className={[
+            "w-full py-1.5 rounded-xl text-xs font-semibold transition-colors",
+            currentShift === "公募"
+              ? "bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 border border-teal-300 dark:border-teal-700"
+              : "bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-400 hover:bg-teal-100",
+          ].join(" ")}>
+          公募に変更
         </button>
 
         {/* 変更履歴 */}
@@ -557,7 +567,7 @@ const SECTION_SHIFT_COLORS: Record<string, { early: string; late: string; def: s
 const SECTION_SHIFT_FALLBACK = { early: "bg-sky-100 dark:bg-sky-900/50", late: "bg-sky-300 dark:bg-sky-700/70", def: "bg-sky-200 dark:bg-sky-800/60" };
 
 function getPatternBg(shiftName: string | null, pattern: Pattern | null): string {
-  if (!shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇") return "";
+  if (!shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇" || shiftName === "公募") return "";
   if (!pattern) return "";
   const colors = SECTION_SHIFT_COLORS[pattern.section ?? ""] ?? SECTION_SHIFT_FALLBACK;
   // パターン名で早番/遅番を判定（優先）
@@ -1118,6 +1128,14 @@ export default function ShiftEditGrid({
     applyEdit(next);
     setPopover(null);
   }
+  function handlePopoverKobo() {
+    if (!popover) return;
+    const key = `${popover.staffId}__${popover.date}`;
+    const next = new Map(drafts);
+    next.set(key, { shiftName: "公募", shiftStart: null, shiftEnd: null });
+    applyEdit(next);
+    setPopover(null);
+  }
 
   // ── 仮保存 ────────────────────────────────────────────────────
   function serializeDrafts(): GridDraftEntry[] {
@@ -1576,7 +1594,7 @@ export default function ShiftEditGrid({
     const working = new Map<string, Set<string>>(); // staffId → 出勤日Set
 
     function addWorking(staffId: string, date: string, shiftName: string | null) {
-      if (!shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇") return;
+      if (!shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇" || shiftName === "公募") return;
       if (!patternNameSet.has(shiftName)) return;
       if (!working.has(staffId)) working.set(staffId, new Set());
       working.get(staffId)!.add(date);
@@ -2342,7 +2360,7 @@ export default function ShiftEditGrid({
                 const _rowChurnOv = churnRiskOverrides.get(member.id);
                 const effChurnRisk = _rowChurnOv !== undefined ? _rowChurnOv.churn_risk : (member.churn_risk ?? false);
                 // 月合計（公休・希望休・有休・特別休暇以外を稼働日としてカウント、研修等も含む）
-                const DAYOFF_SET = new Set(["公休", "希望休", "有休", "特別休暇"]);
+                const DAYOFF_SET = new Set(["公休", "希望休", "有休", "特別休暇", "公募"]);
                 const monthTotal = allDates.filter(d => {
                   const cell = resolveCell(member.id, d);
                   return cell !== null && cell.shiftName && !DAYOFF_SET.has(cell.shiftName);
@@ -2476,7 +2494,7 @@ export default function ShiftEditGrid({
                             <div className="h-full flex items-center justify-center overflow-hidden px-0.5">
                               <span className={[
                                 "text-[10px] leading-none truncate",
-                                !shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇"
+                                !shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇" || shiftName === "公募"
                                   ? "text-zinc-300 dark:text-zinc-600"
                                   : isSun ? "text-red-400 dark:text-red-500 font-medium"
                                   : isSat ? "text-blue-400 dark:text-blue-500 font-medium"
@@ -2521,7 +2539,7 @@ export default function ShiftEditGrid({
                           );
                         }
                         // 追加不可（公休・希望休・有休のみ）
-                        const isOffShift = shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇";
+                        const isOffShift = shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇" || shiftName === "公募";
                         const decKey = `${member.id}__${date}`;
                         const isDeclined = declinedIds.has(decKey);
                         const isDeclining = decliningKey === decKey;
@@ -2547,6 +2565,8 @@ export default function ShiftEditGrid({
                                 ? "bg-zinc-700 dark:bg-zinc-700"
                                 : shiftName === "公休"
                                 ? "bg-zinc-500 dark:bg-zinc-600"
+                                : shiftName === "公募"
+                                ? "bg-teal-600 dark:bg-teal-700"
                                 : (offPriority && !shiftName)
                                 ? "bg-zinc-800 dark:bg-zinc-800"
                                 // 6連勤以上 → 赤
@@ -2595,7 +2615,7 @@ export default function ShiftEditGrid({
                                     ? "text-blue-600 dark:text-blue-300"
                                     : isCandidate
                                     ? "text-amber-800 dark:text-amber-200 font-semibold"
-                                    : (shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇" || shiftName === "公休")
+                                    : (shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇" || shiftName === "公休" || shiftName === "公募")
                                     ? "text-white font-semibold"
                                     : isConsecutiveWarning
                                     ? "text-white font-bold"
@@ -3005,6 +3025,7 @@ export default function ShiftEditGrid({
           projectId={projectId}
           onAssign={handlePopoverAssign}
           onRemove={handlePopoverRemove}
+          onKobo={handlePopoverKobo}
           onClose={() => setPopover(null)}
           anchorRect={popover.rect}
         />

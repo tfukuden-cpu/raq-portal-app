@@ -35,6 +35,7 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
   { href: "/shifts/manage",   icon: "CalendarSettings", label: "シフト管理" },
   { href: "/members",         icon: "IdCard",          label: "メンバー管理" },
   { href: "/attendance/edit",        icon: "ClipboardCheck", label: "勤怠管理" },
+  { href: "/tasks",           icon: "CheckSquare",     label: "タスク管理" },
   { href: "/line-settings",   icon: "Smartphone",      label: "LINE連携" },
   { href: "/admin",           icon: "Settings",        label: "案件設定" },
 ];

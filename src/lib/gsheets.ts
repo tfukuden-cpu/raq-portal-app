@@ -1126,7 +1126,7 @@ export async function generateShiftTableSheet(
         } else {
           shiftName = presetShifts.get(m.id)?.get(dateStr) ?? null;
         }
-        if (shiftName && shiftName !== "公休" && shiftName !== "希望休") {
+        if (shiftName && shiftName !== "公休" && shiftName !== "希望休" && shiftName !== "公募") {
           summaryShifts.push({ staffId: m.id, shiftDate: dateStr, shiftName });
         }
       }

@@ -525,6 +525,78 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── task_remind：毎朝のタスクリマインド（管理者グループへ・8時） ─────────────
+    if (settings.task_remind?.enabled && groupId) {
+      const cfg = settings.task_remind;
+      const alreadySent = await (async () => {
+        const { data } = await admin
+          .from("notification_logs")
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("notify_type", "task_remind")
+          .gte("sent_at", `${today}T00:00:00+09:00`)
+          .limit(1)
+          .maybeSingle();
+        return !!data;
+      })();
+      if (isNearTime(cfg.time ?? "08:00", 5) && !alreadySent) {
+        const { data: openTasks } = await admin
+          .from("project_tasks")
+          .select("title, due_date, status, progress, assignee_staff_id")
+          .eq("project_id", projectId)
+          .neq("status", "done")
+          .order("due_date", { ascending: true, nullsFirst: false });
+
+        const tasks = (openTasks ?? []) as {
+          title: string; due_date: string | null; status: string;
+          progress: number; assignee_staff_id: string | null;
+        }[];
+
+        if (tasks.length > 0) {
+          // 担当者名を解決
+          const assigneeIds = [...new Set(tasks.map(t => t.assignee_staff_id).filter(Boolean))] as string[];
+          const { data: assignees } = assigneeIds.length > 0
+            ? await admin.from("staffs").select("id, display_name, name").in("id", assigneeIds)
+            : { data: [] as { id: string; display_name: string | null; name: string | null }[] };
+          const nameMap = new Map(
+            (assignees ?? []).map(s => [s.id as string, (s.display_name ?? s.name ?? s.id) as string])
+          );
+
+          const overdue  = tasks.filter(t => t.due_date && t.due_date < today);
+          const dueToday = tasks.filter(t => t.due_date === today);
+          const inProgressCount = tasks.filter(t => t.status === "in_progress").length;
+
+          const summary = `期限超過 ${overdue.length}件 ／ 本日期日 ${dueToday.length}件 ／ 未完了 ${tasks.length}件（うち進行中 ${inProgressCount}件）`;
+
+          const fmtTask = (t: (typeof tasks)[number], mark: string) => {
+            const due  = t.due_date ? `期日${fmtMD(t.due_date)}` : "期日なし";
+            const who  = t.assignee_staff_id ? (nameMap.get(t.assignee_staff_id) ?? t.assignee_staff_id) : "担当未定";
+            return `${mark} ${t.title}（${due}・${who}・${t.progress}%）`;
+          };
+          const listLines: string[] = [
+            ...overdue.map(t => fmtTask(t, "⚠")),
+            ...dueToday.map(t => fmtTask(t, "📌")),
+            ...tasks.filter(t => !overdue.includes(t) && !dueToday.includes(t)).slice(0, 10).map(t => fmtTask(t, "・")),
+          ];
+          const restCount = tasks.length - overdue.length - dueToday.length - Math.min(10, tasks.length - overdue.length - dueToday.length);
+          if (restCount > 0) listLines.push(`…ほか ${restCount}件`);
+
+          const message = resolveMessage(
+            cfg.message ?? DEFAULT_NOTIFY_MESSAGES.task_remind,
+            { "サマリー": summary, "タスク一覧": listLines.join("\n") }
+          );
+          const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+          try {
+            await pushLineWithButton(groupId, message, "タスクを見る", `${appUrl}/tasks`);
+            void logNotify({ projectId, notifyType: "task_remind", recipientType: "group", recipientId: groupId, message });
+            sent++;
+          } catch (e) {
+            console.error("[cron] task_remind failed:", e);
+          }
+        }
+      }
+    }
+
   }
 
   return NextResponse.json({ ok: true, sent });

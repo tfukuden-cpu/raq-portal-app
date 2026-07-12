@@ -144,7 +144,7 @@ export default async function SeatingPage() {
   }));
 
   // 席替えモード用：当日シフトあり（公休除く）のスタッフ一覧
-  const OFF_NAMES_SEATING = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休"];
+  const OFF_NAMES_SEATING = ["公休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "希望休", "公募"];
   const todayShiftStaffIds = new Set(
     (shiftRows ?? [])
       .filter(r => r.shift_name && !OFF_NAMES_SEATING.includes(r.shift_name as string))

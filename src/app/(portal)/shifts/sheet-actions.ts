@@ -371,7 +371,7 @@ export async function exportAttendanceDetailToSheetAction(fd: FormData): Promise
 // "HH:MM" or "HH:MM:SS" → 分
 const t2m = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
 // 公休・希望休は勤務日としてカウントしない
-const isRestShift = (name: string | null) => !name || name === "公休" || name === "希望休";
+const isRestShift = (name: string | null) => !name || name === "公休" || name === "希望休" || name === "公募";
 
 export async function exportAttendanceSummaryToSheetAction(fd: FormData): Promise<SyncResult> {
   const url   = String(fd.get("url") ?? "").trim();

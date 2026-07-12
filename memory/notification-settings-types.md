@@ -31,6 +31,7 @@ type NotifyItemConfig = {
 | `absence_followup_remind` | 欠勤経過報告リマインド | staff |
 | `shift_published` | シフト展開（UI非表示） | staff |
 | `task_assigned` | タスク割当（UI非表示） | staff |
+| `task_remind` | 毎朝8時のタスクリマインド（2026-07-12新設・enabled既定true） | admin |
 
 ## 廃止済みキー（使用禁止）
 

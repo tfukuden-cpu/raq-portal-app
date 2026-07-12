@@ -267,3 +267,179 @@ export async function addTaskManualAction(fd: FormData) {
   revalidatePath("/tasks");
   return { success: true };
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 新タスク管理（project_tasks）: 管理者専用のチームタスクボード
+// ═══════════════════════════════════════════════════════════════
+
+/** 管理者チェック（project_admin / global admin / executive）。通過時は自分のstaffIdを返す */
+async function assertTaskAdmin(projectId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+
+  const { data: s } = await supabase.from("staffs").select("global_role").eq("id", staffId).maybeSingle();
+  if (s?.global_role === "executive" || s?.global_role === "admin") return staffId;
+
+  const { data: membership } = await supabase
+    .from("project_members").select("role")
+    .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle();
+  return membership?.role === "project_admin" ? staffId : null;
+}
+
+export type ProjectTaskInput = {
+  projectId: string;
+  id?: string | null;           // null=新規
+  title: string;
+  description?: string | null;
+  assigneeStaffId?: string | null;
+  startDate?: string | null;    // YYYY-MM-DD
+  dueDate?: string | null;      // YYYY-MM-DD
+  priority?: "high" | "normal" | "low";
+  status?: "todo" | "in_progress" | "done";
+  progress?: number;            // 0-100
+  sourceGroupTaskId?: string | null;
+};
+
+/** タスクの作成・更新（管理者のみ） */
+export async function saveProjectTaskAction(
+  input: ProjectTaskInput,
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const myStaffId = await assertTaskAdmin(input.projectId);
+    if (!myStaffId) return { success: false, message: "権限がありません" };
+
+    const title = (input.title ?? "").trim();
+    if (!title) return { success: false, message: "タイトルを入力してください" };
+    if (input.startDate && input.dueDate && input.startDate > input.dueDate) {
+      return { success: false, message: "開始日が期日より後になっています" };
+    }
+
+    const status   = input.status ?? "todo";
+    const progress = Math.max(0, Math.min(100, Math.round(input.progress ?? 0)));
+    const admin = createAdminClient();
+
+    const payload = {
+      title,
+      description:       (input.description ?? "").trim() || null,
+      assignee_staff_id: input.assigneeStaffId || null,
+      start_date:        input.startDate || null,
+      due_date:          input.dueDate || null,
+      priority:          input.priority ?? "normal",
+      status,
+      progress:          status === "done" ? 100 : progress,
+      completed_at:      status === "done" ? new Date().toISOString() : null,
+      updated_at:        new Date().toISOString(),
+    };
+
+    let prevAssignee: string | null = null;
+    if (input.id) {
+      const { data: prev } = await admin
+        .from("project_tasks")
+        .select("assignee_staff_id")
+        .eq("id", input.id)
+        .eq("project_id", input.projectId)
+        .maybeSingle();
+      prevAssignee = (prev as { assignee_staff_id?: string | null } | null)?.assignee_staff_id ?? null;
+
+      const { error } = await admin
+        .from("project_tasks")
+        .update(payload)
+        .eq("id", input.id)
+        .eq("project_id", input.projectId);
+      if (error) return { success: false, message: error.message };
+    } else {
+      const { error } = await admin
+        .from("project_tasks")
+        .insert({
+          ...payload,
+          project_id: input.projectId,
+          created_by: myStaffId,
+          source_group_task_id: input.sourceGroupTaskId || null,
+        });
+      if (error) return { success: false, message: error.message };
+    }
+
+    // 担当者が新たに設定・変更されたらLINE通知（task_assigned・設定でON時のみ）
+    const nextAssignee = input.assigneeStaffId || null;
+    if (nextAssignee && nextAssignee !== prevAssignee) {
+      await notifyTaskAssigned(input.projectId, nextAssignee, title, input.dueDate ?? null);
+    }
+
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (e) {
+    console.error("[tasks] saveProjectTaskAction failed:", e);
+    return { success: false, message: "保存に失敗しました" };
+  }
+}
+
+/** タスク削除（管理者のみ） */
+export async function deleteProjectTaskAction(
+  projectId: string,
+  taskId: string,
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const myStaffId = await assertTaskAdmin(projectId);
+    if (!myStaffId) return { success: false, message: "権限がありません" };
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("project_tasks")
+      .delete()
+      .eq("id", taskId)
+      .eq("project_id", projectId);
+    if (error) return { success: false, message: error.message };
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (e) {
+    console.error("[tasks] deleteProjectTaskAction failed:", e);
+    return { success: false, message: "削除に失敗しました" };
+  }
+}
+
+/** LINE抽出タスク（group_tasks）をタスク管理へ取り込む（元は完了扱いに） */
+export async function importGroupTaskAction(
+  projectId: string,
+  groupTaskId: string,
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const myStaffId = await assertTaskAdmin(projectId);
+    if (!myStaffId) return { success: false, message: "権限がありません" };
+    const admin = createAdminClient();
+
+    const { data: gt } = await admin
+      .from("group_tasks")
+      .select("id, title, description, assignee_staff_id, due_date, status")
+      .eq("id", groupTaskId)
+      .eq("project_id", projectId)
+      .maybeSingle();
+    if (!gt) return { success: false, message: "対象が見つかりません" };
+
+    const { error } = await admin.from("project_tasks").insert({
+      project_id:           projectId,
+      title:                (gt as { title: string }).title,
+      description:          (gt as { description: string | null }).description,
+      assignee_staff_id:    (gt as { assignee_staff_id: string | null }).assignee_staff_id,
+      due_date:             (gt as { due_date: string | null }).due_date,
+      status:               "todo",
+      priority:             "normal",
+      created_by:           myStaffId,
+      source_group_task_id: groupTaskId,
+    });
+    if (error) return { success: false, message: error.message };
+
+    // 取込み元は完了扱いにして受信箱から消す
+    await admin.from("group_tasks").update({
+      status: "done",
+      completed_at: new Date().toISOString(),
+      completed_by: myStaffId,
+    }).eq("id", groupTaskId);
+
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (e) {
+    console.error("[tasks] importGroupTaskAction failed:", e);
+    return { success: false, message: "取込みに失敗しました" };
+  }
+}

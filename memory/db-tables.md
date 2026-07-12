@@ -70,7 +70,10 @@
 
 | テーブル | 用途 |
 |---------|-----|
-| `group_tasks` | LINEグループ抽出タスク（title, assignee_staff_id, status, group_id） |
+| `group_tasks` | LINEグループ抽出タスク（title, assignee_staff_id, status, group_id）※/tasksでは取込み候補扱い |
+| `project_tasks` | 管理者タスク管理（title, assignee_staff_id, start_date, due_date, progress, status, priority）2026-07-12新設 |
+| `skill_items` | スキル管理カスタム項目（project_id, label, sort_order）2026-07-12新設 |
+| `staff_skill_values` | スタッフ×カスタム項目の○×（staff_id, item_id, value）2026-07-12新設 |
 | `task_extraction_groups` | タスク抽出グループ設定（group_id, enabled） |
 | `line_groups` | LINEグループ情報 |
 | `line_name_mappings` | LINEユーザー名→社員IDマッピング |

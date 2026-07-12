@@ -47,6 +47,16 @@ function fmtMin(m: number): string {
   return `${h}:${String(min).padStart(2, "0")}`;
 }
 
+/**
+ * 拘束時間(出勤〜退勤の総分)から休憩時間(分)を算出（労基準拠）
+ * 6時間未満=0分 ／ 6〜8時間=45分 ／ 8時間超=60分
+ */
+function autoBreakMinutes(grossMin: number): number {
+  if (grossMin > 480) return 60;   // 8時間超
+  if (grossMin >= 360) return 45;  // 6〜8時間
+  return 0;                        // 6時間未満
+}
+
 // ─── 型定義 ───────────────────────────────────────────────────
 type DailyRecord = {
   date: string;
@@ -55,6 +65,7 @@ type DailyRecord = {
   shiftEnd: string | null;
   clockIn: string | null;
   clockOut: string | null;
+  breakMinutes: number | null;
   workMinutes: number | null;
   overtimeMinutes: number | null;
   isLate: boolean;
@@ -73,6 +84,7 @@ type PersonData = {
   // 集計
   workDays: number;
   workMinutes: number;
+  breakMinutes: number;
   normalMinutes: number;
   overtimeMinutes: number;
   lateCount: number;
@@ -113,6 +125,7 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
     { width: 8  },  // 退勤予定
     { width: 8  },  // 出勤打刻
     { width: 8  },  // 退勤打刻
+    { width: 8  },  // 休憩時間
     { width: 10 },  // 稼働時間
     { width: 10 },  // 　内通常時間
     { width: 10 },  // 　内残業時間
@@ -126,12 +139,12 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
   const label = [person.accountNumber, person.name, person.company, person.section].filter(Boolean).join("　");
   const infoRow = ws.addRow([label]);
   infoRow.font = { bold: true, size: 12 };
-  ws.mergeCells(`A1:M1`);
+  ws.mergeCells(`A1:N1`);
   infoRow.getCell(1).fill = TOTAL_FILL;
   applyBorder(infoRow);
 
   // Row2: ヘッダー
-  const hdr = ws.addRow(["日付","シフト名","出勤予定","退勤予定","出勤打刻","退勤打刻","稼働時間","　内通常時間","　内残業時間","遅刻","早退","欠勤","備考"]);
+  const hdr = ws.addRow(["日付","シフト名","出勤予定","退勤予定","出勤打刻","退勤打刻","休憩時間","稼働時間","　内通常時間","　内残業時間","遅刻","早退","欠勤","備考"]);
   hdr.font = { bold: true };
   hdr.fill = HEADER_FILL;
   hdr.alignment = { horizontal: "center" };
@@ -141,6 +154,7 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
   const totalRow = ws.addRow([
     `合計 (稼働${person.workDays}日)`,
     "", "", "", "", "",
+    fmtMin(person.breakMinutes),
     fmtMin(person.workMinutes),
     fmtMin(person.normalMinutes),
     fmtMin(person.overtimeMinutes),
@@ -166,6 +180,7 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
       r.shiftEnd   ?? "",
       r.clockIn  ? toJSTTime(r.clockIn)  : "",
       r.clockOut ? toJSTTime(r.clockOut) : "",
+      r.breakMinutes    != null ? fmtMin(r.breakMinutes)    : "",
       r.workMinutes     != null ? fmtMin(r.workMinutes)     : "",
       normalMin         != null ? fmtMin(normalMin)          : "",
       r.overtimeMinutes != null ? fmtMin(r.overtimeMinutes) : "",
@@ -176,9 +191,9 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
     ]);
     if (r.isAbsent)    dataRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F0" } };
     else if (r.isLate) dataRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF9F0" } };
-    dataRow.getCell(10).alignment = { horizontal: "center" };
     dataRow.getCell(11).alignment = { horizontal: "center" };
     dataRow.getCell(12).alignment = { horizontal: "center" };
+    dataRow.getCell(13).alignment = { horizontal: "center" };
     applyBorder(dataRow);
   }
 }
@@ -193,6 +208,7 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
     { width: 12 },  // セクション
     { width: 10 },  // 稼働日数
     { width: 10 },  // 稼働時間
+    { width: 10 },  // 休憩時間
     { width: 10 },  // 　内通常時間
     { width: 10 },  // 　内残業時間
     { width: 8  },  // 遅刻数
@@ -203,13 +219,13 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
 
   // タイトル
   const titleRow = ws.addRow([`稼働実績サマリー　${startDate} 〜 ${endDate}`]);
-  ws.mergeCells("A1:K1");
+  ws.mergeCells("A1:L1");
   titleRow.font = { bold: true, size: 13 };
   titleRow.getCell(1).fill = TOTAL_FILL;
   applyBorder(titleRow);
 
   // ヘッダー
-  const hdr = ws.addRow(["会社 / 氏名","アカウント番号","セクション","稼働日数","稼働時間","　内通常時間","　内残業時間","遅刻数","早退数","欠勤数","順守率"]);
+  const hdr = ws.addRow(["会社 / 氏名","アカウント番号","セクション","稼働日数","稼働時間","休憩時間","　内通常時間","　内残業時間","遅刻数","早退数","欠勤数","順守率"]);
   hdr.font = { bold: true };
   hdr.fill = HEADER_FILL;
   hdr.alignment = { horizontal: "center" };
@@ -219,6 +235,7 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
     // 会社合計行
     const totWorkDays  = persons.reduce((s, p) => s + p.workDays, 0);
     const totWorkMin   = persons.reduce((s, p) => s + p.workMinutes, 0);
+    const totBreakMin  = persons.reduce((s, p) => s + p.breakMinutes, 0);
     const totNormalMin = persons.reduce((s, p) => s + p.normalMinutes, 0);
     const totOtMin     = persons.reduce((s, p) => s + p.overtimeMinutes, 0);
     const totLate      = persons.reduce((s, p) => s + p.lateCount, 0);
@@ -234,6 +251,7 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
       "", "",
       `${totWorkDays}日`,
       fmtMin(totWorkMin),
+      fmtMin(totBreakMin),
       fmtMin(totNormalMin),
       fmtMin(totOtMin),
       `${totLate}回`,
@@ -253,6 +271,7 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
         p.section       ?? "",
         `${p.workDays}日`,
         fmtMin(p.workMinutes),
+        fmtMin(p.breakMinutes),
         fmtMin(p.normalMinutes),
         fmtMin(p.overtimeMinutes),
         `${p.lateCount}回`,
@@ -313,7 +332,7 @@ export async function GET(req: NextRequest) {
   const targetIds = staffIds.length > 0 ? staffIds : [...memberMap.keys()];
 
   // データ並列取得
-  const OFF_SHIFT_NAMES = ["公休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤"];
+  const OFF_SHIFT_NAMES = ["公休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤","公募"];
 
   // shifts：ページネーション付きフェッチ（PostgREST 1000行上限対策）
   const shifts: { staff_id: string; shift_date: string; shift_name: string; shift_start: string | null; shift_end: string | null }[] = [];
@@ -359,6 +378,7 @@ export async function GET(req: NextRequest) {
     { data: absences },
     { data: lates },
     { data: shiftPatterns },
+    { data: breakOverrides },
   ] = await Promise.all([
     admin.from("absence_reports")
       .select("staff_id, absence_date, reason")
@@ -371,6 +391,10 @@ export async function GET(req: NextRequest) {
     admin.from("shift_patterns")
       .select("name, start_time, end_time")
       .eq("project_id", projectId),
+    admin.from("staff_break_overrides")
+      .select("staff_id, override_date, regular_minutes")
+      .eq("project_id", projectId)
+      .gte("override_date", startDate).lte("override_date", endDate),
   ]);
 
   // シフトパターンから時刻を補完するマップ (shift_name → {start, end})
@@ -391,6 +415,9 @@ export async function GET(req: NextRequest) {
   }
   const absenceMap = new Map((absences ?? []).map(a => [`${a.staff_id}_${a.absence_date}`, a.reason ?? ""]));
   const lateMap    = new Map((lates    ?? []).map(l => [`${l.staff_id}_${l.late_date}`, l.reason ?? ""]));
+  const breakOverrideMap = new Map(
+    (breakOverrides ?? []).map(b => [`${b.staff_id}_${b.override_date}`, b.regular_minutes as number])
+  );
 
   // PersonData構築
   const personMap = new Map<string, PersonData>();
@@ -404,7 +431,7 @@ export async function GET(req: NextRequest) {
       personMap.set(shift.staff_id, {
         staffId: shift.staff_id, name: m.name,
         accountNumber: m.accountNumber, company: m.company, section: m.section,
-        workDays: 0, workMinutes: 0, normalMinutes: 0, overtimeMinutes: 0,
+        workDays: 0, workMinutes: 0, breakMinutes: 0, normalMinutes: 0, overtimeMinutes: 0,
         lateCount: 0, earlyLeaveCount: 0, absentCount: 0,
         totalShiftDays: 0, complianceRate: null,
         records: [],
@@ -421,15 +448,19 @@ export async function GET(req: NextRequest) {
     const resolvedStart = shift.shift_start ?? pattern?.start ?? null;
     const resolvedEnd   = shift.shift_end   ?? pattern?.end   ?? null;
 
-    // 稼働時間・残業時間・早退
+    // 稼働時間・残業時間・早退・休憩
     let workMinutes:     number | null = null;
     let overtimeMinutes: number | null = null;
+    let breakMinutes = 0;
     let isEarlyLeave = false;
 
     if (punch?.clockIn && punch?.clockOut) {
       const inMs  = new Date(punch.clockIn).getTime();
       const outMs = new Date(punch.clockOut).getTime();
-      workMinutes = Math.max(0, Math.round((outMs - inMs) / 60000) - 60);
+      const grossMin = Math.max(0, Math.round((outMs - inMs) / 60000));
+      // 休憩：個別オーバーライドがあれば優先、無ければ拘束時間から算出（6h未満=0/6〜8h=45/8h超=60）
+      breakMinutes = breakOverrideMap.get(key) ?? autoBreakMinutes(grossMin);
+      workMinutes = Math.max(0, grossMin - breakMinutes);
 
       if (resolvedEnd) {
         const endDt = shiftTimeToDate(shift.shift_date, resolvedEnd);
@@ -448,6 +479,7 @@ export async function GET(req: NextRequest) {
       shiftEnd:   resolvedEnd,
       clockIn:    punch?.clockIn    ?? null,
       clockOut:   punch?.clockOut   ?? null,
+      breakMinutes: (punch?.clockIn && punch?.clockOut) ? breakMinutes : null,
       workMinutes, overtimeMinutes,
       isLate, isEarlyLeave, isAbsent,
       absenceReason: isAbsent ? (absenceMap.get(key) ?? null) : null,
@@ -460,6 +492,7 @@ export async function GET(req: NextRequest) {
     if (workMinutes     != null) {
       const ot     = overtimeMinutes ?? 0;
       person.workMinutes     += workMinutes;
+      person.breakMinutes    += breakMinutes;
       person.normalMinutes   += Math.max(0, workMinutes - ot);
       person.overtimeMinutes += ot;
     }

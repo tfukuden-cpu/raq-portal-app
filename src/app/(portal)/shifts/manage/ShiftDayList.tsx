@@ -74,7 +74,7 @@ const SECTION_SHIFT_COLORS: Record<string, { early: string; late: string; def: s
 const SECTION_SHIFT_FALLBACK = { early: "bg-sky-100 dark:bg-sky-900/50", late: "bg-sky-300 dark:bg-sky-700/70", def: "bg-sky-200 dark:bg-sky-800/60" };
 
 function getPatternBg(shiftName: string | null, pattern: Pattern | null): string {
-  if (!shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇") return "";
+  if (!shiftName || shiftName === "公休" || shiftName === "希望休" || shiftName === "有休" || shiftName === "特別休暇" || shiftName === "公募") return "";
   if (!pattern) return "";
   const colors = SECTION_SHIFT_COLORS[pattern.section ?? ""] ?? SECTION_SHIFT_FALLBACK;
   if (shiftName.includes("早番")) return colors.early;
@@ -1061,10 +1061,11 @@ export default function ShiftDayList({
                             const offBg   =
                               (sName === "希望休" || sName === "有休" || sName === "特別休暇") ? "bg-zinc-700 dark:bg-zinc-700"
                               : sName === "公休" ? "bg-zinc-500 dark:bg-zinc-600"
+                              : sName === "公募" ? "bg-teal-600 dark:bg-teal-700"
                               : "";
                             const cellBg  = absent ? "bg-red-50 dark:bg-red-950/30" : offBg || patBg;
                             // 追加不可フラグ（公休・希望休・有休のみ表示）
-                            const isOffDay = sName === "公休" || sName === "希望休" || sName === "有休" || sName === "特別休暇";
+                            const isOffDay = sName === "公休" || sName === "希望休" || sName === "有休" || sName === "特別休暇" || sName === "公募";
                             const decKey = `${m.id}__${d}`;
                             const isDeclined = declinedIds.has(decKey);
                             const isDeclining = decliningKey === decKey;
@@ -1135,7 +1136,7 @@ export default function ShiftDayList({
                     {filtered.map((m, i) => {
                       const workCount = allDates.filter(d => {
                         const sn = getShift(m.id, d)?.shift_name;
-                        return sn && sn !== "公休" && sn !== "希望休";
+                        return sn && sn !== "公休" && sn !== "希望休" && sn !== "公募";
                       }).length;
                       return (
                         <div key={m.id} className={cx(

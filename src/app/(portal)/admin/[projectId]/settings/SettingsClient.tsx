@@ -762,9 +762,17 @@ export function MemberList({
       }>
         {projectName !== undefined && (
           <>
-            <div className="pt-5 pb-0">
-              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">メンバー管理</h1>
-              <p className="text-sm font-semibold text-zinc-400 mt-0.5">{projectName}</p>
+            <div className="pt-5 pb-0 flex items-start justify-between gap-2">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">メンバー管理</h1>
+                <p className="text-sm font-semibold text-zinc-400 mt-0.5">{projectName}</p>
+              </div>
+              <a
+                href="/members/skills"
+                className="shrink-0 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors mt-1"
+              >
+                ▶スキル管理
+              </a>
             </div>
             {/* タブバー */}
             <div className="flex mt-2 border-b border-zinc-100 dark:border-zinc-800">

@@ -25,7 +25,7 @@ async function requireAccess(projectId: string): Promise<boolean> {
   );
 }
 
-const OFF_SHIFT_NAMES = ["公休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤"];
+const OFF_SHIFT_NAMES = ["公休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤","公募"];
 
 export type ComplianceRow = {
   staffId: string;

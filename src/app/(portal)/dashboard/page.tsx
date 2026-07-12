@@ -175,7 +175,7 @@ export default async function DashboardPage() {
       .eq("project_id", currentProjectId!)
       .gt("shift_date", today)
       .lte("shift_date", sixDaysLater)
-      .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休")')
+      .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休","公募")')
       .order("shift_date")
       .limit(6),
     // 7日分（今日含む・全種別）
@@ -207,7 +207,7 @@ export default async function DashboardPage() {
       .eq("staff_id", staffId)
       .eq("project_id", currentProjectId!)
       .eq("shift_date", tomorrowStr)
-      .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休")')
+      .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休","公募")')
       .maybeSingle(),
     // 休憩室の入室状態（本人・当日）
     adminClient

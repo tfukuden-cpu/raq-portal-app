@@ -41,13 +41,14 @@
 | `/attendance/absentees` | **日毎の欠勤者**（2026-06-28追加・管理者ガード）。欠勤者レポートタブの「📅 日毎の欠勤者」ボタンから遷移。選択月の日毎の表（日付\|人数\|欠勤者）＋月ナビ。`AbsenteeDailyClient`・`?month=YYYY-MM`・同API(byDate)再利用 |
 | `/shifts/manage` | シフト管理・インポート |
 | `/members` | メンバー管理・番付 |
+| `/members/skills` | スキル管理（セクション○×＋カスタム項目・Excel出力） |
 | `/seating` | 座席配置 |
 | `/messages/manage` | **統合メッセージ・管理者専用**（2026-06-29新設）。送信(全員/セクション/個別)＋全受信者スレッド管理。管理者ガード(非管理者は`/messages`へredirect) |
 | `/notices/manage` | 周知管理（**`/messages/manage`へ移行予定→廃止**） |
 | `/inquiries/manage` | 問合せ管理（**`/messages/manage`へ移行予定→廃止**） |
 | `/holidays/manage` | 希望休承認 |
 | `/line-settings` | LINE設定・通知設定 |
-| `/tasks` | タスク一覧 |
+| `/tasks` | タスク管理（管理者専用・リスト/ガント/LINE取込み・2026-07-12刷新） |
 | `/rankings` | ランキング |
 | `/admin/[projectId]` | 案件詳細 |
 | `/admin/[projectId]/settings` | 案件設定（シフトパターン・座席・休憩・希望休ルール等） |

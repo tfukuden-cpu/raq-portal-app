@@ -50,13 +50,13 @@ const JP_HOLIDAYS: Record<string, string> = {
   "2026-11-03":"文化の日","2026-11-23":"勤労感謝の日",
 };
 
-const OFF_NAMES = ["公休","休","公休日","希望休","有休","特別休暇","代休","振替休日","欠勤"];
+const OFF_NAMES = ["公休","休","公休日","希望休","有休","特別休暇","代休","振替休日","欠勤","公募"];
 
 function getShiftBadge(name: string | null) {
   if (!name) return null;
   if (["公休","休","公休日"].includes(name))
     return { bg: "bg-sky-500/20",     text: "text-sky-200",     border: "border border-sky-400/50" };
-  if (["希望休","有休","特別休暇","代休","振替休日"].includes(name))
+  if (["希望休","有休","特別休暇","代休","振替休日","公募"].includes(name))
     return { bg: "bg-purple-500/20",  text: "text-purple-200",  border: "border border-purple-400/50" };
   if (["欠勤"].includes(name))
     return { bg: "bg-red-500/25",     text: "text-red-200",     border: "border border-red-400/50" };

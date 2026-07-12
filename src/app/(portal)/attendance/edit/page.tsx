@@ -6,7 +6,7 @@ import AttendanceEditClient from "./AttendanceEditClient";
 import type { AttendanceRow, CorrectionRow, ExceptionRow } from "./AttendanceEditClient";
 import type { StaffEntry } from "@/app/(portal)/admin/work-records/WorkRecordsClient";
 
-const OFF_SHIFT_NAMES = ["公休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤"];
+const OFF_SHIFT_NAMES = ["公休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤","公募"];
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });

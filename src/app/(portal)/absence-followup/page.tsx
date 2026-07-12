@@ -37,7 +37,7 @@ export default async function AbsenceFollowupPage() {
     .eq("staff_id", staffId)
     .eq("project_id", projectId)
     .eq("shift_date", tomorrowStr)
-    .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休")')
+    .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休","公募")')
     .maybeSingle();
 
   // 既に経過報告済みかどうか（followup_recovery_status が入っていれば提出済み）

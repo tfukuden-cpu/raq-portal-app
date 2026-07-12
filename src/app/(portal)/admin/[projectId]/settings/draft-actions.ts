@@ -261,7 +261,7 @@ export async function generateShiftDraftAction(
       .filter(Boolean) as string[]
   );
   // 休暇系シフト名（仮組みで除外・稼働日数にカウントしない）
-  const OFF_SHIFT_NAMES = ["公休", "有休", "希望休", "休暇", "振替休日", "特別休暇", "代休", "欠勤"];
+  const OFF_SHIFT_NAMES = ["公休", "有休", "希望休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "公募"];
   const validShiftNames = new Set<string>([
     ...allPatternDefs.map(p => p.name),
     ...OFF_SHIFT_NAMES,
