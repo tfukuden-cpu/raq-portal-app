@@ -509,6 +509,10 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 **ナビラベル:** 「勤怠管理」  
 **URLパラメータ:** `?tab=corrections|requests|records|compliance&month=YYYY-MM&staffId=S001`
 
+**2026-07-12追記:**
+- 勤怠修正タブ上部に**遅刻申請（承認待ち）**セクション＝打刻端末発の遅刻申請（`late_reports.status='pending'`）を承認/却下（`reviewLateRequestAction`）。一覧の「SV承認」列は「依頼SV」列に（`punch_corrections.sv_name` 優先・無ければ従来の work_exception_requests クロス参照）
+- 欠勤者レポート「日毎の欠勤者」(`/attendance/absentees`)＝**名前タップで補填回収の済(緑)/未(赤)を切替**（`absence_recovery_marks`・行が存在=済）。**離脱リスクONのスタッフは日毎リストに表示しない**（人別集計には含む）
+
 **4タブ構成:**
 
 | タブ | 機能 |
@@ -789,6 +793,8 @@ sendEventNotify(
 ### 6-5. 打刻（打刻端末）
 - `/punch` — QRコード読み取り or 端末タップで出勤・退勤打刻
 - `punch_logs` テーブルに `punch_type: "clock_in" | "clock_out"` で記録
+- **遅刻打刻は申請制（2026-07-12）**: シフト開始後の出勤打刻は「遅刻申請」画面＝理由＋依頼SV名が必須。打刻自体は即記録（15分切り上げ・従来通り）しつつ `late_reports` に `status='pending'/source='punch'` の申請を自動作成し、管理者グループLINEへ即通知（当日中に勤怠管理で承認/却下）。noteに `遅刻依頼SV: X` を記録
+- **打刻漏れ申請（2026-07-12）**: アクション画面に「⚠打刻漏れを申請する」ボタン。出勤/退勤時刻・理由・依頼SV（全て必須系）を入力→ `punch_corrections` に pending 登録（`sv_name` 付き）＋管理者グループLINEへ即通知。承認で打刻反映（既存の勤怠修正承認フローを再利用）。本人スマホの補正申請（/record）も依頼SV名が必須に
 
 ### 6-5-2. 休憩室（定員制チェックイン）
 打刻端末 `/punch/[projectId]` に「休憩室」タブ（座席表で打刻・名前で打刻に続く3つ目）。

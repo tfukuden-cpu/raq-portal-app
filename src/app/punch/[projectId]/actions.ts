@@ -3,7 +3,27 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { releaseBreakRoomBox } from "@/lib/break-room";
 import { sendEventNotify } from "@/lib/notify";
+import { pushLineWithButton } from "@/lib/line";
 import { revalidatePath } from "next/cache";
+
+const APP_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+
+/** 管理者グループLINEへ申請通知（失敗しても本体は成功扱い） */
+async function notifyAdminGroup(projectId: string, text: string): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { data: ps } = await admin
+      .from("project_settings")
+      .select("line_group_id")
+      .eq("project_id", projectId)
+      .maybeSingle();
+    const groupId = (ps as { line_group_id?: string | null } | null)?.line_group_id;
+    if (!groupId) return;
+    await pushLineWithButton(groupId, text, "承認画面を開く", `${APP_URL}/attendance/edit?tab=corrections`);
+  } catch (e) {
+    console.error("[terminal] notifyAdminGroup failed:", e);
+  }
+}
 
 export type TerminalPunchResult = { ok: boolean; message: string };
 export type PunchKind = "normal" | "late" | "early" | "overtime";
@@ -76,9 +96,15 @@ export async function terminalPunchAction(
   approverName?: string,
   shiftStart?: string | null,
   shiftEnd?:   string | null,
+  reason?: string,
 ): Promise<TerminalPunchResult> {
   if (!projectId || !staffId) {
     return { ok: false, message: "パラメータが不正です" };
+  }
+  // 遅刻打刻は申請制：依頼SVと理由が必須
+  if (punchType === "clock_in" && punchKind === "late") {
+    if (!approverName?.trim()) return { ok: false, message: "依頼SVの名前を入力してください" };
+    if (!reason?.trim())       return { ok: false, message: "遅刻の理由を入力してください" };
   }
 
   const admin = createAdminClient();
@@ -94,6 +120,9 @@ export async function terminalPunchAction(
   if (punchType === "clock_out") {
     if (punchKind === "early" && approverName) parts.push(`早退承認者: ${approverName}`);
     if (punchKind === "overtime" && approverName) parts.push(`残業承認者: ${approverName}`);
+  }
+  if (punchType === "clock_in" && punchKind === "late" && approverName) {
+    parts.push(`遅刻依頼SV: ${approverName}`);
   }
   const note = parts.length > 1 ? parts.join("  ") : parts[0];
 
@@ -113,6 +142,49 @@ export async function terminalPunchAction(
   if (punchType === "clock_out") {
     const todayJST = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
     await releaseBreakRoomBox(admin, projectId, staffId, todayJST);
+  }
+
+  // 遅刻打刻は「遅刻申請」を自動作成（管理者が当日中に承認する運用）
+  if (punchType === "clock_in" && punchKind === "late") {
+    try {
+      const todayJST = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+      const { data: existing } = await admin
+        .from("late_reports")
+        .select("id, status")
+        .eq("project_id", projectId)
+        .eq("staff_id", staffId)
+        .eq("late_date", todayJST)
+        .limit(1);
+      if (existing && existing.length > 0) {
+        // ホームからの遅刻報告が既にある場合は申請情報を追記して承認待ちに
+        await admin.from("late_reports").update({
+          sv_name: approverName?.trim() ?? null,
+          status: "pending",
+          source: "punch",
+          ...(reason?.trim() ? { reason: reason.trim() } : {}),
+        }).eq("id", (existing[0] as { id: string }).id);
+      } else {
+        await admin.from("late_reports").insert({
+          project_id: projectId,
+          staff_id:   staffId,
+          late_date:  todayJST,
+          reason:     reason?.trim() ?? null,
+          sv_name:    approverName?.trim() ?? null,
+          status:     "pending",
+          source:     "punch",
+        });
+      }
+
+      const { data: staffRow } = await admin.from("staffs").select("display_name, name").eq("id", staffId).maybeSingle();
+      const staffName = (staffRow as { display_name?: string | null; name?: string | null } | null)?.display_name
+        ?? (staffRow as { display_name?: string | null; name?: string | null } | null)?.name ?? staffId;
+      await notifyAdminGroup(
+        projectId,
+        `⚠ 遅刻打刻の申請が届きました\n【名前】${staffName}\n【実打刻】${actualTimeJST}\n【理由】${reason?.trim() ?? "－"}\n【依頼SV】${approverName?.trim() ?? "－"}\n当日中の承認をお願いします。`,
+      );
+    } catch (e) {
+      console.error("[terminal] late request create failed:", e);
+    }
   }
 
   revalidatePath(`/attendance`);
@@ -214,4 +286,51 @@ export async function saveConsentAction(
   );
 
   return { ok: !error };
+}
+
+/**
+ * 現場端末用：打刻漏れ申請（punch_corrections に pending で登録・承認で打刻反映）
+ */
+export async function terminalMissedPunchRequestAction(
+  projectId: string,
+  staffId: string,
+  input: {
+    targetDate: string;         // YYYY-MM-DD
+    correctedIn?: string | null;  // HH:MM
+    correctedOut?: string | null; // HH:MM
+    reason: string;
+    svName: string;
+  },
+): Promise<TerminalPunchResult> {
+  if (!projectId || !staffId) return { ok: false, message: "パラメータが不正です" };
+  const reason = (input.reason ?? "").trim();
+  const svName = (input.svName ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.targetDate)) return { ok: false, message: "対象日が不正です" };
+  if (!input.correctedIn && !input.correctedOut) return { ok: false, message: "出勤または退勤の時刻を入力してください" };
+  if (!reason) return { ok: false, message: "理由を入力してください" };
+  if (!svName) return { ok: false, message: "依頼SVの名前を入力してください" };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("punch_corrections").insert({
+    project_id:    projectId,
+    staff_id:      staffId,
+    target_date:   input.targetDate,
+    corrected_in:  input.correctedIn || null,
+    corrected_out: input.correctedOut || null,
+    reason:        `[打刻漏れ] ${reason}`,
+    sv_name:       svName,
+  });
+  if (error) return { ok: false, message: "申請に失敗しました: " + error.message };
+
+  const { data: staffRow } = await admin.from("staffs").select("display_name, name").eq("id", staffId).maybeSingle();
+  const staffName = (staffRow as { display_name?: string | null; name?: string | null } | null)?.display_name
+    ?? (staffRow as { display_name?: string | null; name?: string | null } | null)?.name ?? staffId;
+  const times = [input.correctedIn ? `出勤 ${input.correctedIn}` : null, input.correctedOut ? `退勤 ${input.correctedOut}` : null]
+    .filter(Boolean).join(" / ");
+  await notifyAdminGroup(
+    projectId,
+    `⚠ 打刻漏れ申請が届きました\n【名前】${staffName}\n【対象日】${input.targetDate}\n【申請時刻】${times}\n【理由】${reason}\n【依頼SV】${svName}\n当日中の承認をお願いします（承認すると打刻に反映されます）。`,
+  );
+
+  return { ok: true, message: "打刻漏れ申請を送信しました（管理者の承認後に反映されます）" };
 }

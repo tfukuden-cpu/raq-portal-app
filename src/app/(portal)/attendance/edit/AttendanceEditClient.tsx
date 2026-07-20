@@ -9,6 +9,7 @@ import {
   reviewCorrectionAction,
   reapplyCorrectionAction,
 } from "./actions";
+import { reviewLateRequestAction } from "@/app/(portal)/corrections/actions";
 import AbsenteeReportClient from "./AbsenteeReportClient";
 import type { StaffEntry } from "@/app/(portal)/admin/work-records/WorkRecordsClient";
 import ExportModal from "./ExportModal";
@@ -59,6 +60,18 @@ export type CorrectionRow = {
   accountNumber: string | null;
   shiftName: string | null;
   svSigner: string | null;
+  sv_name: string | null;
+};
+
+export type LateRequestRow = {
+  id: string;
+  staff_id: string;
+  staff_name: string;
+  accountNumber: string | null;
+  late_date: string;
+  reason: string | null;
+  sv_name: string | null;
+  created_at: string;
 };
 
 export type ExceptionRow = {
@@ -169,6 +182,7 @@ export default function AttendanceEditClient({
   projectId,
   rows,
   corrections: initialCorrections,
+  lateRequests = [],
   exceptions,
   currentMonth,
   todayMonth,
@@ -180,6 +194,7 @@ export default function AttendanceEditClient({
   projectId: string;
   rows: AttendanceRow[];
   corrections: CorrectionRow[];
+  lateRequests?: LateRequestRow[];
   exceptions: ExceptionRow[];
   currentMonth: string;
   todayMonth: string;
@@ -542,7 +557,53 @@ export default function AttendanceEditClient({
 
       {/* ── 勤怠修正タブ ─────────────────────────────────────────── */}
       {activeTab === "corrections" && (
-        <div className="pt-4">
+        <div className="pt-4 space-y-4">
+          {/* 遅刻申請（打刻端末発・承認待ち） */}
+          {lateRequests.length > 0 && (
+            <div className="bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-900 rounded-2xl overflow-hidden">
+              <div className="px-4 py-2.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-100 dark:border-amber-900">
+                <p className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                  ⚠ 遅刻申請（承認待ち {lateRequests.length}件）— 当日中に承認してください
+                </p>
+              </div>
+              <div className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                {lateRequests.map(lr => (
+                  <div key={lr.id} className="px-4 py-2.5 flex items-center gap-3 flex-wrap text-xs">
+                    <span className="tabular-nums text-zinc-500 shrink-0">{fmtDate(lr.late_date)}</span>
+                    <span className="font-mono tabular-nums text-zinc-400 shrink-0">{lr.accountNumber ?? "─"}</span>
+                    <span className="font-semibold text-zinc-800 dark:text-zinc-100 shrink-0">{lr.staff_name}</span>
+                    <span className="text-zinc-500 flex-1 min-w-[8rem] truncate" title={lr.reason ?? ""}>
+                      {lr.reason ?? "（理由なし）"}
+                    </span>
+                    <span className="text-zinc-500 shrink-0">依頼SV: <b className="text-zinc-700 dark:text-zinc-200">{lr.sv_name ?? "─"}</b></span>
+                    <span className="flex gap-1 shrink-0">
+                      <button type="button" disabled={isPending}
+                        onClick={() => {
+                          startTransition(async () => {
+                            const fd = new FormData(); fd.set("id", lr.id); fd.set("status", "approved");
+                            const r = await reviewLateRequestAction(fd);
+                            showToast(r.success ? "遅刻申請を承認しました" : `エラー: ${r.message}`);
+                            router.refresh();
+                          });
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-green-600 hover:bg-green-700 text-white text-[11px] font-semibold disabled:opacity-50">承認</button>
+                      <button type="button" disabled={isPending}
+                        onClick={() => {
+                          startTransition(async () => {
+                            const fd = new FormData(); fd.set("id", lr.id); fd.set("status", "rejected");
+                            const r = await reviewLateRequestAction(fd);
+                            showToast(r.success ? "遅刻申請を却下しました" : `エラー: ${r.message}`);
+                            router.refresh();
+                          });
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold disabled:opacity-50">却下</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {filteredCorr.length === 0 ? (
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-12 text-center text-sm text-zinc-400">
               {corrFilter === "pending" ? "審査待ちの申請はありません" : "申請がありません"}
@@ -562,7 +623,7 @@ export default function AttendanceEditClient({
                       <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">シフト</th>
                       <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">修正出勤</th>
                       <th className="px-2 py-2 text-right font-semibold text-zinc-500 whitespace-nowrap">修正退勤</th>
-                      <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">SV承認</th>
+                      <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">依頼SV</th>
                       <th className="px-2 py-2 text-left font-semibold text-zinc-500 min-w-[160px]">申請理由</th>
                     </tr>
                   </thead>
@@ -611,7 +672,7 @@ export default function AttendanceEditClient({
                           {fmtTime(row.corrected_out)}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-zinc-500 dark:text-zinc-400">
-                          {row.svSigner ?? "─"}
+                          {row.sv_name ?? row.svSigner ?? "─"}
                         </td>
                         <td className="px-2 py-1.5 text-zinc-500 dark:text-zinc-400 max-w-[240px]"
                           title={row.reason + (row.review_note ? `\n（${row.review_note}）` : "")}>

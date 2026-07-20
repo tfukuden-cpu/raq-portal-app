@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useTransition, type ReactNode } from "react";
-import { terminalPunchAction, terminalBreakAction, saveConsentAction, type PunchKind } from "./actions";
+import { terminalPunchAction, terminalBreakAction, saveConsentAction, terminalMissedPunchRequestAction, type PunchKind } from "./actions";
 import { enterBreakRoomAction, leaveBreakRoomAction } from "@/app/(portal)/seating/break-room-actions";
 import { getSeatBgClass, resolveShiftSection, formatSectionShift } from "@/lib/seatColors";
 import { RPG_CHARS, rpgCharFor, rpgCharImg } from "@/lib/rpg-chars";
@@ -287,6 +287,7 @@ function isShiftStartPassed(shiftStart: string | null): boolean {
 type Step =
   | { kind: "list" }
   | { kind: "action"; member: TerminalMember }
+  | { kind: "missed"; member: TerminalMember }
   | { kind: "break_menu"; member: TerminalMember }
   | { kind: "consent"; member: TerminalMember }
   | { kind: "clock_kind"; member: TerminalMember; punchType: "clock_in" | "clock_out" }
@@ -457,6 +458,12 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
 
   // 承認者
   const [approverInput, setApproverInput] = useState("");
+  const [lateReasonInput, setLateReasonInput] = useState("");
+  // 打刻漏れ申請フォーム
+  const [missedIn, setMissedIn] = useState("");
+  const [missedOut, setMissedOut] = useState("");
+  const [missedReason, setMissedReason] = useState("");
+  const [missedSv, setMissedSv] = useState("");
   const approverRef = useRef<HTMLInputElement>(null);
 
   // 同意書確認名
@@ -534,11 +541,15 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   useEffect(() => {
     if (step.kind === "approver") {
       setApproverInput("");
+      setLateReasonInput("");
       setTimeout(() => approverRef.current?.focus(), 50);
     }
     if (step.kind === "consent") {
       setConsentName("");
       setTimeout(() => consentNameRef.current?.focus(), 50);
+    }
+    if (step.kind === "missed") {
+      setMissedIn(""); setMissedOut(""); setMissedReason(""); setMissedSv("");
     }
   }, [step.kind]);
 
@@ -612,6 +623,22 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
     });
   }
 
+  // ── 打刻漏れ申請 送信 ───────────────────────────────────────
+  function handleMissedSubmit(member: TerminalMember) {
+    startTransition(async () => {
+      const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+      const res = await terminalMissedPunchRequestAction(projectId, member.staffId, {
+        targetDate:   today,
+        correctedIn:  missedIn || null,
+        correctedOut: missedOut || null,
+        reason:       missedReason,
+        svName:       missedSv,
+      });
+      setStep({ kind: "done", message: res.ok ? res.message : `⚠️ ${res.message}` });
+      setTimeout(() => setStep({ kind: "list" }), 3000);
+    });
+  }
+
   // ── 休憩室 入室（パーティーに加わる） ───────────────────────
   function handleRoomEnter(staffId: string, boxNumber: number) {
     setRoomError(null);
@@ -672,11 +699,11 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   }
 
   // ── 打刻確定 ────────────────────────────────────────────────
-  function handleConfirm(member: TerminalMember, punchType: "clock_in" | "clock_out", punchKind: PunchKind, approverName: string | undefined) {
+  function handleConfirm(member: TerminalMember, punchType: "clock_in" | "clock_out", punchKind: PunchKind, approverName: string | undefined, reason?: string) {
     startTransition(async () => {
       const res = await terminalPunchAction(
         projectId, member.staffId, punchType, punchKind, approverName,
-        member.shiftStart, member.shiftEnd,
+        member.shiftStart, member.shiftEnd, reason,
       );
       if (res.ok) {
         setLocalMembers(prev => prev.map(m => {
@@ -1526,6 +1553,15 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                 <p className="text-zinc-500 text-sm">本日は欠勤として登録されています</p>
               </div>
             )}
+
+            {/* 打刻漏れ申請（常時） */}
+            <button
+              onClick={() => setStep({ kind: "missed", member: latestMember })}
+              disabled={isPending}
+              className="w-full py-3 rounded-2xl border border-purple-700/70 text-purple-300 hover:text-purple-100 hover:bg-purple-900/30 text-sm font-bold transition-colors disabled:opacity-50"
+            >
+              ⚠ 打刻漏れを申請する
+            </button>
           </div>
 
           <button
@@ -1695,26 +1731,42 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
   // ══════════════════════════════════════════════════════════
   if (step.kind === "approver") {
     const { member, punchType, punchKind } = step;
-    const kindLabel = punchKind === "late" ? "遅刻出勤" : punchKind === "early" ? "早退退勤" : "残業退勤";
+    const isLate = punchKind === "late";
+    const kindLabel = isLate ? "遅刻出勤" : punchKind === "early" ? "早退退勤" : "残業退勤";
+    const canSubmit = !!approverInput.trim() && (!isLate || !!lateReasonInput.trim());
 
     return (
       <div className={`min-h-screen flex flex-col items-center justify-center px-6 ${rpgFontClass}`} style={{ background: PAGE_BG }}>
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center">
             <p className="text-zinc-400 text-sm mb-1">{member.name}　{kindLabel}</p>
-            <p className="text-white text-2xl font-bold">承認SVの名前を入力</p>
-            <p className="text-zinc-500 text-sm mt-2">承認を受けたSVの名前を入力してください</p>
+            <p className="text-white text-2xl font-bold">{isLate ? "遅刻申請" : "承認SVの名前を入力"}</p>
+            <p className="text-zinc-500 text-sm mt-2">
+              {isLate
+                ? "理由と依頼SVを明記してください。打刻後、管理者が当日中に承認します。"
+                : "承認を受けたSVの名前を入力してください"}
+            </p>
           </div>
+
+          {isLate && (
+            <textarea
+              placeholder="遅刻の理由（例：電車遅延、寝坊 など）"
+              value={lateReasonInput}
+              onChange={e => setLateReasonInput(e.target.value)}
+              rows={2}
+              className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-5 py-4 text-white text-lg placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+            />
+          )}
 
           <input
             ref={approverRef}
             type="text"
-            placeholder="例：田中SV"
+            placeholder={isLate ? "依頼SVの名前（例：田中SV）" : "例：田中SV"}
             value={approverInput}
             onChange={e => setApproverInput(e.target.value)}
             onKeyDown={e => {
-              if (e.key === "Enter" && approverInput.trim()) {
-                handleConfirm(member, punchType, punchKind, approverInput.trim());
+              if (e.key === "Enter" && canSubmit) {
+                handleConfirm(member, punchType, punchKind, approverInput.trim(), isLate ? lateReasonInput.trim() : undefined);
               }
             }}
             className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-5 py-4 text-white text-xl placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500 text-center"
@@ -1722,11 +1774,11 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
 
           <div className="space-y-3">
             <button
-              onClick={() => handleConfirm(member, punchType, punchKind, approverInput.trim() || undefined)}
-              disabled={isPending || !approverInput.trim()}
+              onClick={() => handleConfirm(member, punchType, punchKind, approverInput.trim() || undefined, isLate ? lateReasonInput.trim() : undefined)}
+              disabled={isPending || !canSubmit}
               className="w-full py-5 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-40"
             >
-              {isPending ? "記録中…" : "打刻を確定する"}
+              {isPending ? "記録中…" : isLate ? "申請して打刻する" : "打刻を確定する"}
             </button>
             <button
               onClick={() =>
@@ -1734,6 +1786,68 @@ export default function TerminalPunchClient({ projectId, projectName, members, s
                   ? setStep({ kind: "clock_kind", member, punchType })
                   : setStep({ kind: "action", member })
               }
+              className="w-full py-3 rounded-2xl border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              ← 戻る
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // ── 打刻漏れ申請 ──────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  if (step.kind === "missed") {
+    const { member } = step;
+    const canSubmit = (!!missedIn || !!missedOut) && !!missedReason.trim() && !!missedSv.trim();
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center px-6 py-10 overflow-y-auto ${rpgFontClass}`} style={{ background: PAGE_BG }}>
+        <div className="w-full max-w-sm space-y-5">
+          <div className="text-center">
+            <p className="text-zinc-400 text-sm mb-1">{member.name}</p>
+            <p className="text-white text-2xl font-bold">打刻漏れ申請</p>
+            <p className="text-zinc-500 text-sm mt-2">本日の打刻漏れを申請します。管理者が当日中に承認すると打刻に反映されます。</p>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <p className="text-zinc-400 text-xs mb-1">出勤時刻（漏れた方だけ入力）</p>
+              <input type="time" value={missedIn} onChange={e => setMissedIn(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-5 py-3.5 text-white text-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-center" />
+            </div>
+            <div>
+              <p className="text-zinc-400 text-xs mb-1">退勤時刻（漏れた方だけ入力）</p>
+              <input type="time" value={missedOut} onChange={e => setMissedOut(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-5 py-3.5 text-white text-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-center" />
+            </div>
+            <textarea
+              placeholder="理由（例：出勤打刻を忘れた、端末不具合 など）"
+              value={missedReason}
+              onChange={e => setMissedReason(e.target.value)}
+              rows={2}
+              className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-5 py-3.5 text-white text-lg placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+            />
+            <input
+              type="text"
+              placeholder="依頼SVの名前（例：田中SV）"
+              value={missedSv}
+              onChange={e => setMissedSv(e.target.value)}
+              className="w-full bg-zinc-800 border border-zinc-600 rounded-2xl px-5 py-3.5 text-white text-xl placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500 text-center"
+            />
+          </div>
+
+          <div className="space-y-3 pb-6">
+            <button
+              onClick={() => handleMissedSubmit(member)}
+              disabled={isPending || !canSubmit}
+              className="w-full py-5 rounded-2xl bg-purple-700 hover:bg-purple-600 text-white text-lg font-bold transition-all active:scale-95 disabled:opacity-40"
+            >
+              {isPending ? "送信中…" : "申請を送信する"}
+            </button>
+            <button
+              onClick={() => setStep({ kind: "action", member })}
               className="w-full py-3 rounded-2xl border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
             >
               ← 戻る

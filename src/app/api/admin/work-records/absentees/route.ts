@@ -28,7 +28,7 @@ const OFF_SHIFT_NAMES = ["公休", "有休", "休暇", "振替休日", "特別�
 
 export type AbsenteeByDate = {
   date: string;
-  items: { staffId: string; name: string; accountNumber: string | null; reason: string | null }[];
+  items: { staffId: string; name: string; accountNumber: string | null; reason: string | null; recovered: boolean }[];
 };
 
 export type AbsenteeStaff = {
@@ -74,10 +74,10 @@ export async function GET(req: NextRequest) {
   // スタッフ情報
   const { data: members } = await admin
     .from("project_members")
-    .select("staff_id, section, staffs(id, name, display_name, account_number)")
+    .select("staff_id, section, churn_risk, staffs(id, name, display_name, account_number)")
     .eq("project_id", projectId);
 
-  const memberMap = new Map<string, { name: string; accountNumber: string | null; section: string | null }>();
+  const memberMap = new Map<string, { name: string; accountNumber: string | null; section: string | null; churnRisk: boolean }>();
   for (const mm of members ?? []) {
     const s = (Array.isArray(mm.staffs) ? mm.staffs[0] : mm.staffs) as {
       display_name?: string | null; name?: string | null; account_number?: string | null;
@@ -86,8 +86,19 @@ export async function GET(req: NextRequest) {
       name:          s?.display_name ?? s?.name ?? mm.staff_id,
       accountNumber: s?.account_number ?? null,
       section:       mm.section ?? null,
+      churnRisk:     !!(mm as { churn_risk?: boolean | null }).churn_risk,
     });
   }
+
+  // 補填回収 済マーク（行が存在=済）
+  const { data: recoveryRows } = await admin
+    .from("absence_recovery_marks")
+    .select("staff_id, absence_date")
+    .eq("project_id", projectId)
+    .gte("absence_date", monthStart).lte("absence_date", monthEnd);
+  const recoveredSet = new Set(
+    (recoveryRows ?? []).map(r => `${r.staff_id}_${r.absence_date}`)
+  );
 
   // PostgREST は1クエリ最大1000行しか返さないため、.range() で全件取得する。
   // shifts は13ヶ月×全スタッフで数千行に達する（1000行で切れると出勤予定数が過少になる）。
@@ -123,13 +134,17 @@ export async function GET(req: NextRequest) {
     const date = a.absence_date as string;
     if (date < monthStart || date > monthEnd) continue;
     const info = memberMap.get(a.staff_id);
-    if (!byDateMap.has(date)) byDateMap.set(date, []);
-    byDateMap.get(date)!.push({
-      staffId:       a.staff_id,
-      name:          info?.name ?? a.staff_id,
-      accountNumber: info?.accountNumber ?? null,
-      reason:        (a.reason as string | null) ?? null,
-    });
+    // 日毎リストは離脱リスクONのスタッフを表示しない（人別集計には含める）
+    if (!info?.churnRisk) {
+      if (!byDateMap.has(date)) byDateMap.set(date, []);
+      byDateMap.get(date)!.push({
+        staffId:       a.staff_id,
+        name:          info?.name ?? a.staff_id,
+        accountNumber: info?.accountNumber ?? null,
+        reason:        (a.reason as string | null) ?? null,
+        recovered:     recoveredSet.has(`${a.staff_id}_${date}`),
+      });
+    }
     monthAbsenceCount.set(a.staff_id, (monthAbsenceCount.get(a.staff_id) ?? 0) + 1);
   }
 

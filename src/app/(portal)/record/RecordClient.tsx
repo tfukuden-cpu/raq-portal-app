@@ -133,6 +133,7 @@ export default function RecordClient({
   const [timeIn, setTimeIn] = useState("");
   const [timeOut, setTimeOut] = useState("");
   const [reason, setReason] = useState("");
+  const [svName, setSvName] = useState("");
   const [error, setError]   = useState<string | null>(null);
 
   const corrMap = new Map(corrections.map(c => [c.target_date, c]));
@@ -148,7 +149,7 @@ export default function RecordClient({
     setModal(r); setKind("定時");
     setTimeIn(r.shiftStart?.slice(0,5) ?? r.clockIn ?? "");
     setTimeOut(r.shiftEnd?.slice(0,5) ?? r.clockOut ?? "");
-    setReason(""); setError(null);
+    setReason(""); setSvName(""); setError(null);
   };
   const closeModal = () => { setModal(null); setError(null); };
 
@@ -164,6 +165,7 @@ export default function RecordClient({
     if (!modal) return;
     setError(null);
     if (!reason.trim()) { setError("修正理由を入力してください"); return; }
+    if (!svName.trim()) { setError("依頼したSVの名前を入力してください"); return; }
     if (kind === "定時" && !timeIn && !timeOut) { setError("出勤または退勤時刻を選択してください"); return; }
     if (kind === "遅刻" && !timeIn)  { setError("出勤時刻を選択してください"); return; }
     if ((kind === "早退" || kind === "残業") && !timeOut) { setError("退勤時刻を選択してください"); return; }
@@ -173,6 +175,7 @@ export default function RecordClient({
     const fd = new FormData();
     fd.set("targetDate", modal.date); fd.set("correctedIn", corrIn);
     fd.set("correctedOut", corrOut);  fd.set("reason", `[${kind}] ${reason}`);
+    fd.set("svName", svName.trim());
     startTransition(async () => {
       const result = await submitCorrectionAction(fd);
       if (!result.success) setError(result.message ?? "申請失敗");
@@ -377,6 +380,12 @@ export default function RecordClient({
                   <textarea value={reason} onChange={e => setReason(e.target.value)}
                     placeholder="れい：だこく わすれ、きき ふぐあい など" rows={3}
                     className="w-full px-3 py-2 rounded border border-white/40 bg-[#02040f] text-white text-[13px] resize-none placeholder:text-white/30" />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-white/70 mb-1">いらいした SVの なまえ <span className="text-red-400">*</span></label>
+                  <input type="text" value={svName} onChange={e => setSvName(e.target.value)}
+                    placeholder="れい：たなかSV"
+                    className="w-full px-3 py-2 rounded border border-white/40 bg-[#02040f] text-white text-[13px] placeholder:text-white/30" />
                 </div>
                 {error && <p className="text-[13px] text-red-400">{error}</p>}
                 <div className="flex gap-2">

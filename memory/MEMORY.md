@@ -40,6 +40,15 @@
 
 ---
 
+## 現在の開発状態（2026-07-12更新・第2弾）
+
+### 改修3件＝タスクタグ改善／打刻の申請制／欠勤補填の済未（2026-07-12・実装済・デプロイ済）
+**ユーザー改修依頼3件。tsc 0・新規lint 0（set-state-in-effect warnは既知の誤検出系）。**
+- **①タスク管理**: (a)タイムライン（ガント）の左ラベルにカテゴリタグの色チップを表示（担当者名の左・max-w-80px）。(b)**カテゴリ削除**＝絞り込みチップの✕ボタン→confirm→`deleteTaskCategoryAction`（該当カテゴリの全タスクを category=null に一括更新・タスク自体は残る）
+- **②打刻の申請制（打刻漏れ＋遅刻・ユーザー選択）**: 目的=不正防止と後追い。**遅刻**＝端末の遅刻出勤時に「遅刻申請」画面（理由＋依頼SV必須・打刻は従来通り即記録）→`late_reports` に `status='pending'/source='punch'/sv_name` で申請自動作成（同日の遅刻報告が既にあれば pending に更新）→管理者グループLINEへ即通知→勤怠管理の勤怠修正タブ上部「遅刻申請」セクションで承認/却下（`reviewLateRequestAction`・corrections/actions.ts・管理者ガードあり）。**打刻漏れ**＝端末アクション画面に「⚠打刻漏れを申請する」（紫ボタン・常時表示）→時刻(出勤/退勤)+理由+依頼SV→`terminalMissedPunchRequestAction`が `punch_corrections` に pending 登録（reasonに`[打刻漏れ]`プレフィクス・`sv_name`新カラム）＋グループLINE通知→既存の承認フローで打刻反映。**本人スマホ(/record)の補正申請にも「いらいしたSVのなまえ」必須欄追加**（submitCorrectionActionでsvName必須化＋申請時グループLINE通知追加）。マイグレーション`add_punch_request_sv_columns`＝punch_corrections.sv_name／late_reports.sv_name+source+approved_by+approved_at（statusカラムは既存・デフォルト'submitted'のまま＝既存の遅刻報告の挙動不変）。勤怠修正タブの「SV承認」列は「依頼SV」列に（sv_name優先・fallback=work_exception_requestsのsigner_name）
+- **③欠勤者レポート**: 日毎の欠勤者(`/attendance/absentees`)で**名前タップ→補填回収の済(緑)/未(赤)トグル**＝新テーブル`absence_recovery_marks`（行が存在=済・UNIQUE(project_id,staff_id,absence_date)・マイグレーション`create_absence_recovery_marks`・RLSポリシー無し=adminクライアントのみ）。`toggleAbsenceRecoveryAction`（attendance/absentees/actions.ts・楽観的更新・23505は済扱い）。absentees APIのbyDateに`recovered`フラグ追加。**離脱リスク(churn_risk)ONのスタッフは日毎リストから除外**（人別集計・レポートタブには含む）
+- ⚠️遅刻申請の承認は記録のみ（打刻は既に記録済み・却下しても打刻は消えない＝必要なら勤怠実績タブで手修正）。打刻漏れ申請の承認は当日打刻を削除して差し替え（既存reviewCorrectionAction）
+
 ## 現在の開発状態（2026-07-12更新）
 
 ### 改修3件＝スキル管理拡張／公募ステータス／タスク管理刷新（2026-07-12・実装済・未デプロイ）

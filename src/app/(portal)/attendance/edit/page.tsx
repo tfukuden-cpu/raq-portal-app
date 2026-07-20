@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import AttendanceEditClient from "./AttendanceEditClient";
-import type { AttendanceRow, CorrectionRow, ExceptionRow } from "./AttendanceEditClient";
+import type { AttendanceRow, CorrectionRow, ExceptionRow, LateRequestRow } from "./AttendanceEditClient";
 import type { StaffEntry } from "@/app/(portal)/admin/work-records/WorkRecordsClient";
 
 const OFF_SHIFT_NAMES = ["公休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤","公募"];
@@ -142,7 +142,7 @@ export default async function AttendanceEditPage({
       .select("staff_id, section, staffs(id, name, display_name, account_number, company_name)")
       .eq("project_id", projectId).order("staff_id"),
     admin.from("punch_corrections")
-      .select("id, target_date, corrected_in, corrected_out, reason, status, review_note, created_at, staff_id")
+      .select("id, target_date, corrected_in, corrected_out, reason, status, review_note, created_at, staff_id, sv_name")
       .eq("project_id", projectId)
       .order("created_at", { ascending: false })
       .limit(2000),
@@ -338,6 +338,29 @@ export default async function AttendanceEditPage({
       accountNumber: m?.accountNumber ?? null,
       shiftName:     corrShiftMap.get(`${c.staff_id}_${c.target_date}`) ?? null,
       svSigner:      signerMap.get(`${c.staff_id}_${c.target_date}`) ?? null,
+      sv_name:       (c as { sv_name?: string | null }).sv_name ?? null,
+    };
+  });
+
+  // ── 遅刻申請（承認待ち・打刻端末発） ─────────────────────────────
+  const { data: rawLateRequests } = await admin
+    .from("late_reports")
+    .select("id, staff_id, late_date, reason, sv_name, created_at")
+    .eq("project_id", projectId)
+    .eq("status", "pending")
+    .order("late_date", { ascending: false })
+    .limit(500);
+  const lateRequests: LateRequestRow[] = (rawLateRequests ?? []).map(l => {
+    const m = memberMap.get(l.staff_id as string);
+    return {
+      id:            l.id as string,
+      staff_id:      l.staff_id as string,
+      staff_name:    m?.name ?? (l.staff_id as string),
+      accountNumber: m?.accountNumber ?? null,
+      late_date:     l.late_date as string,
+      reason:        (l.reason as string | null) ?? null,
+      sv_name:       (l as { sv_name?: string | null }).sv_name ?? null,
+      created_at:    l.created_at as string,
     };
   });
 
@@ -383,6 +406,7 @@ export default async function AttendanceEditPage({
           projectId={projectId}
           rows={rows}
           corrections={corrections}
+          lateRequests={lateRequests}
           exceptions={exceptions}
           currentMonth={currentMonth}
           todayMonth={today.slice(0, 7)}

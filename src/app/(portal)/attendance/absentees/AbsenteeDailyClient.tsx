@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { AbsenteeByDate } from "@/app/api/admin/work-records/absentees/route";
+import { toggleAbsenceRecoveryAction } from "./actions";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -32,6 +33,28 @@ export default function AbsenteeDailyClient({
   const [loading, setLoading] = useState(false);
   const [byDate, setByDate] = useState<AbsenteeByDate[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
+
+  // 名前タップで補填回収 済/未 を切替（楽観的更新）
+  const toggleRecovery = useCallback(async (staffId: string, date: string) => {
+    const key = `${staffId}_${date}`;
+    if (togglingKey) return;
+    setTogglingKey(key);
+    setByDate(prev => prev.map(d => d.date !== date ? d : {
+      ...d,
+      items: d.items.map(it => it.staffId === staffId ? { ...it, recovered: !it.recovered } : it),
+    }));
+    const res = await toggleAbsenceRecoveryAction(projectId, staffId, date);
+    if (!res.success) {
+      // ロールバック
+      setByDate(prev => prev.map(d => d.date !== date ? d : {
+        ...d,
+        items: d.items.map(it => it.staffId === staffId ? { ...it, recovered: !it.recovered } : it),
+      }));
+      setError(res.message ?? "保存に失敗しました");
+    }
+    setTogglingKey(null);
+  }, [projectId, togglingKey]);
 
   // 月未指定なら当月（JST）をマウント後に設定（hydration mismatch回避）
   useEffect(() => {
@@ -83,9 +106,23 @@ export default function AbsenteeDailyClient({
       </div>
 
       {/* サマリー */}
-      <div className="flex items-center justify-center gap-4 text-xs text-zinc-400 mb-4">
+      <div className="flex items-center justify-center gap-4 text-xs text-zinc-400 mb-2">
         <span>欠勤のあった日 <span className="font-bold text-zinc-600 dark:text-zinc-300 tabular-nums">{totalDays}</span> 日</span>
         <span>延べ <span className="font-bold text-red-500 tabular-nums">{totalAbsences}</span> 名</span>
+      </div>
+
+      {/* 凡例 */}
+      <div className="flex items-center justify-center gap-3 text-[11px] text-zinc-400 mb-4 flex-wrap">
+        <span>名前タップで補填回収の 済/未 を切替：</span>
+        <span className="inline-flex items-center gap-1">
+          <span className="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 dark:bg-emerald-900/40 dark:border-emerald-700 inline-block" />
+          済
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="w-3 h-3 rounded-sm bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-900 inline-block" />
+          未
+        </span>
+        <span className="text-zinc-300 dark:text-zinc-600">※離脱リスクONのスタッフは表示されません</span>
       </div>
 
       {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
@@ -120,12 +157,30 @@ export default function AbsenteeDailyClient({
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1.5">
-                        {d.items.map(it => (
-                          <span key={it.staffId} className="inline-flex items-center gap-1 text-[12px] px-2 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
-                            <span className="font-semibold text-zinc-800 dark:text-zinc-100">{it.name}</span>
-                            {it.reason && <span className="text-red-400 truncate max-w-[140px]">{it.reason}</span>}
-                          </span>
-                        ))}
+                        {d.items.map(it => {
+                          const key = `${it.staffId}_${d.date}`;
+                          return (
+                            <button
+                              key={it.staffId}
+                              type="button"
+                              disabled={togglingKey === key}
+                              onClick={() => toggleRecovery(it.staffId, d.date)}
+                              title={it.recovered ? "補填回収 済（タップで未に戻す）" : "補填回収 未（タップで済にする）"}
+                              className={[
+                                "inline-flex items-center gap-1 text-[12px] px-2 py-1 rounded-lg border transition-colors disabled:opacity-50",
+                                it.recovered
+                                  ? "bg-emerald-100 border-emerald-300 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:border-emerald-700 dark:hover:bg-emerald-900/60"
+                                  : "bg-red-50 border-red-200 hover:bg-red-100 dark:bg-red-950/30 dark:border-red-900 dark:hover:bg-red-950/50",
+                              ].join(" ")}
+                            >
+                              <span className={`text-[10px] font-bold ${it.recovered ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+                                {it.recovered ? "済" : "未"}
+                              </span>
+                              <span className="font-semibold text-zinc-800 dark:text-zinc-100">{it.name}</span>
+                              {it.reason && <span className="text-red-400 truncate max-w-[140px]">{it.reason}</span>}
+                            </button>
+                          );
+                        })}
                       </div>
                     </td>
                   </tr>

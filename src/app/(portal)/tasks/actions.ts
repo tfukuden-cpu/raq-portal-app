@@ -508,3 +508,31 @@ export async function addTaskNoteAction(input: {
     return { success: false, message: "メモの保存に失敗しました" };
   }
 }
+
+/** カテゴリ（フラグ）を削除する＝該当カテゴリを使う全タスクからタグを外す */
+export async function deleteTaskCategoryAction(
+  projectId: string,
+  category: string,
+): Promise<{ success: boolean; message?: string; cleared?: number }> {
+  try {
+    const myStaffId = await assertTaskAdmin(projectId);
+    if (!myStaffId) return { success: false, message: "権限がありません" };
+    const name = (category ?? "").trim();
+    if (!name) return { success: false, message: "カテゴリ名が不正です" };
+
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("project_tasks")
+      .update({ category: null, updated_at: new Date().toISOString() })
+      .eq("project_id", projectId)
+      .eq("category", name)
+      .select("id");
+    if (error) return { success: false, message: error.message };
+
+    revalidatePath("/tasks");
+    return { success: true, cleared: (data ?? []).length };
+  } catch (e) {
+    console.error("[tasks] deleteTaskCategoryAction failed:", e);
+    return { success: false, message: "カテゴリの削除に失敗しました" };
+  }
+}

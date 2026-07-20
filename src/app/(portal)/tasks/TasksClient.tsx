@@ -13,6 +13,7 @@ import {
   saveProjectTaskAction,
   deleteProjectTaskAction,
   addTaskNoteAction,
+  deleteTaskCategoryAction,
 } from "./actions";
 
 // ── 旧型（dashboard/MyTasksWidget が import しているため維持） ──────────────
@@ -184,6 +185,19 @@ export default function TasksClient({
     ? tasks.filter(t => t.category === categoryFilter)
     : tasks;
 
+  function handleDeleteCategory(c: string) {
+    if (isPending) return;
+    const count = tasks.filter(t => t.category === c).length;
+    if (!window.confirm(`カテゴリ「${c}」を削除しますか？\n${count}件のタスクからタグが外れます（タスク自体は消えません）。`)) return;
+    setErrorMsg(null);
+    startTransition(async () => {
+      const res = await deleteTaskCategoryAction(projectId, c);
+      if (!res.success) setErrorMsg(res.message ?? "カテゴリを削除できませんでした");
+      if (categoryFilter === c) setCategoryFilter(null);
+      router.refresh();
+    });
+  }
+
   function handleDeleteTask(t: ProjectTask) {
     if (isPending) return;
     if (!window.confirm(`タスク「${t.title}」を削除しますか？\n作業メモも一緒に消えます。`)) return;
@@ -244,13 +258,21 @@ export default function TasksClient({
             ].join(" ")}
           >すべて</button>
           {categories.map(c => (
-            <button key={c} type="button"
-              onClick={() => setCategoryFilter(categoryFilter === c ? null : c)}
+            <span key={c}
               className={[
-                "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all",
+                "inline-flex items-center rounded-full border transition-all",
                 categoryFilter === c ? `${categoryCls(c)} ring-2 ring-blue-400/60` : `${categoryCls(c)} opacity-70 hover:opacity-100`,
               ].join(" ")}
-            >🏷 {c}</button>
+            >
+              <button type="button"
+                onClick={() => setCategoryFilter(categoryFilter === c ? null : c)}
+                className="pl-2.5 pr-1 py-1 text-[11px] font-bold"
+              >🏷 {c}</button>
+              <button type="button" title={`カテゴリ「${c}」を削除`}
+                onClick={() => handleDeleteCategory(c)}
+                className="pl-0.5 pr-2 py-1 text-[10px] opacity-50 hover:opacity-100 hover:text-red-500 transition-opacity"
+              >✕</button>
+            </span>
           ))}
         </div>
       )}
@@ -553,7 +575,14 @@ function TimelineView({
                     style={{ width: LABEL_W }}
                   >
                     <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 truncate">{task.title}</p>
-                    <p className="text-[10px] text-zinc-400 truncate">{task.assigneeName ?? "担当未定"}</p>
+                    <span className="flex items-center gap-1 mt-0.5 min-w-0">
+                      {task.category && (
+                        <span className={`shrink-0 px-1 py-px rounded text-[9px] font-bold border max-w-[80px] truncate ${categoryCls(task.category)}`}>
+                          {task.category}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-zinc-400 truncate">{task.assigneeName ?? "担当未定"}</span>
+                    </span>
                   </button>
                   <div className="relative shrink-0" style={{ width: days * DAY_W, height: 46 }}>
                     {/* 週末の背景 */}

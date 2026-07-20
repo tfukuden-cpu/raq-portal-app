@@ -5,8 +5,28 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
 import { sendEventNotify } from "@/lib/notify";
+import { pushLineWithButton } from "@/lib/line";
 
 export type CorrectionResult = { success: boolean; message?: string };
+
+const APP_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://raq-portal-app.vercel.app";
+
+/** 管理者グループLINEへ申請通知（失敗しても本体は成功扱い） */
+export async function notifyAdminGroupPunchRequest(projectId: string, text: string): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { data: ps } = await admin
+      .from("project_settings")
+      .select("line_group_id")
+      .eq("project_id", projectId)
+      .maybeSingle();
+    const groupId = (ps as { line_group_id?: string | null } | null)?.line_group_id;
+    if (!groupId) return;
+    await pushLineWithButton(groupId, text, "承認画面を開く", `${APP_URL}/attendance/edit?tab=corrections`);
+  } catch (e) {
+    console.error("[corrections] notifyAdminGroupPunchRequest failed:", e);
+  }
+}
 
 /** 勤怠補正申請 */
 export async function submitCorrectionAction(
@@ -16,10 +36,12 @@ export async function submitCorrectionAction(
   const correctedIn = String(formData.get("correctedIn") ?? "").trim() || null;
   const correctedOut = String(formData.get("correctedOut") ?? "").trim() || null;
   const reason = String(formData.get("reason") ?? "").trim();
+  const svName = String(formData.get("svName") ?? "").trim();
 
   if (!targetDate) return { success: false, message: "対象日は必須です" };
   if (!correctedIn && !correctedOut) return { success: false, message: "修正後の出勤または退勤時刻を入力してください" };
   if (!reason) return { success: false, message: "理由は必須です" };
+  if (!svName) return { success: false, message: "依頼したSVの名前は必須です" };
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -36,11 +58,67 @@ export async function submitCorrectionAction(
     corrected_in: correctedIn,
     corrected_out: correctedOut,
     reason,
+    sv_name: svName,
   });
 
   if (error) return { success: false, message: "申請失敗：" + error.message };
 
+  // 管理者グループLINEへ即通知（当日中の承認を促す）
+  {
+    const admin = createAdminClient();
+    const { data: staffRow } = await admin.from("staffs").select("display_name, name").eq("id", staffId).maybeSingle();
+    const name = (staffRow as { display_name?: string | null; name?: string | null } | null)?.display_name
+      ?? (staffRow as { display_name?: string | null; name?: string | null } | null)?.name ?? staffId;
+    const times = [correctedIn ? `出勤 ${correctedIn.slice(0, 5)}` : null, correctedOut ? `退勤 ${correctedOut.slice(0, 5)}` : null]
+      .filter(Boolean).join(" / ");
+    await notifyAdminGroupPunchRequest(
+      projectId,
+      `⚠ 打刻修正申請が届きました\n【名前】${name}\n【対象日】${targetDate}\n【修正】${times}\n【理由】${reason}\n【依頼SV】${svName}\n当日中の承認をお願いします。`,
+    );
+  }
+
   revalidatePath("/corrections");
+  return { success: true };
+}
+
+/** 管理者：遅刻申請（打刻時に自動作成されたもの）の承認・却下 */
+export async function reviewLateRequestAction(
+  formData: FormData
+): Promise<CorrectionResult> {
+  const id = String(formData.get("id") ?? "").trim();
+  const status = String(formData.get("status") ?? "");
+  if (!id || !["approved", "rejected"].includes(status)) {
+    return { success: false, message: "不正なパラメータです" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "ログインしてください" };
+  const reviewerId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+
+  // サーバー側管理者チェック
+  const admin = createAdminClient();
+  const { data: target } = await admin
+    .from("late_reports").select("project_id").eq("id", id).maybeSingle();
+  if (!target) return { success: false, message: "申請が見つかりません" };
+  const projectId = (target as { project_id: string }).project_id;
+
+  const { data: me } = await supabase.from("staffs").select("global_role").eq("id", reviewerId).maybeSingle();
+  const isGlobal = me?.global_role === "executive" || me?.global_role === "admin";
+  if (!isGlobal) {
+    const { data: membership } = await supabase
+      .from("project_members").select("role")
+      .eq("staff_id", reviewerId).eq("project_id", projectId).maybeSingle();
+    if (membership?.role !== "project_admin") return { success: false, message: "権限がありません" };
+  }
+
+  const { error } = await admin
+    .from("late_reports")
+    .update({ status, approved_by: reviewerId, approved_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { success: false, message: "更新失敗：" + error.message };
+
+  revalidatePath("/attendance/edit");
   return { success: true };
 }
 

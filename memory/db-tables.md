@@ -74,6 +74,7 @@
 | `project_tasks` | 管理者タスク管理（title, category, assignee_staff_id, start_date, due_date, progress, status, priority）2026-07-12新設 |
 | `project_task_notes` | タスク作業メモ（task_id, author_staff_id, body, progress, mark_done）メモでステータス自動導出・2026-07-12新設 |
 | `skill_items` | スキル管理カスタム項目（project_id, label, sort_order）2026-07-12新設 |
+| `absence_recovery_marks` | 欠勤補填日の回収済マーク（staff_id, absence_date・行が存在=済）2026-07-12新設 |
 | `staff_skill_values` | スタッフ×カスタム項目の○×（staff_id, item_id, value）2026-07-12新設 |
 | `task_extraction_groups` | タスク抽出グループ設定（group_id, enabled） |
 | `line_groups` | LINEグループ情報 |
