@@ -342,12 +342,15 @@ export default async function AttendanceEditPage({
     };
   });
 
-  // ── 遅刻申請（承認待ち・打刻端末発） ─────────────────────────────
+  // ── 遅刻申請（承認待ち・打刻端末発のみ） ─────────────────────────
+  // ⚠ source='punch' で絞る（旧・ホーム遅刻報告に status='pending' の過去データが
+  //    多数残っており、絞らないと承認不要な過去分が混入する）
   const { data: rawLateRequests } = await admin
     .from("late_reports")
     .select("id, staff_id, late_date, reason, sv_name, created_at")
     .eq("project_id", projectId)
     .eq("status", "pending")
+    .eq("source", "punch")
     .order("late_date", { ascending: false })
     .limit(500);
   const lateRequests: LateRequestRow[] = (rawLateRequests ?? []).map(l => {

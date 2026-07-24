@@ -307,6 +307,21 @@ export default function AttendanceClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 
+  // ── 離脱リスク候補アラートの表示/非表示（localStorageに記憶） ──
+  const [showChurnAlert, setShowChurnAlert] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("rqp-churn-alert-hidden") === "1") setShowChurnAlert(false);
+    } catch { /* noop */ }
+  }, []);
+  const toggleChurnAlert = () => {
+    setShowChurnAlert(prev => {
+      const next = !prev;
+      try { localStorage.setItem("rqp-churn-alert-hidden", next ? "0" : "1"); } catch { /* noop */ }
+      return next;
+    });
+  };
+
   // ── セクション間ドラッグ ──────────────────────────────────
   const [dragStaffId, setDragStaffId] = useState<string | null>(null);
   const [dragOverSection, setDragOverSection] = useState<string | null>(null);
@@ -690,20 +705,35 @@ export default function AttendanceClient({
           </div>
         )}
 
-        {/* ── 離脱リスク候補アラート ── */}
+        {/* ── 離脱リスク候補アラート（表示/非表示切替可） ── */}
         {activeTab === "today" && (churnRiskAlerts?.length ?? 0) > 0 && (
-          <div className="mb-3 px-4 py-3 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 shrink-0">
-            <p className="text-xs font-bold text-red-700 dark:text-red-300 mb-1.5">⚠ 離脱リスク候補</p>
-            <div className="space-y-1">
-              {churnRiskAlerts!.map(a => (
-                <p key={a.staffId} className="text-xs text-red-600 dark:text-red-400">
-                  <span className="font-semibold">{a.staffName}</span>
-                  <span className="ml-1 text-red-400">— {a.consecutiveDays}日連続欠勤</span>
-                </p>
-              ))}
+          showChurnAlert ? (
+            <div className="mb-3 px-4 py-3 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 shrink-0">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs font-bold text-red-700 dark:text-red-300">⚠ 離脱リスク候補</p>
+                <button type="button" onClick={toggleChurnAlert}
+                  className="px-2 py-0.5 rounded-md text-[10px] font-semibold text-red-400 hover:text-red-600 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors">
+                  非表示にする
+                </button>
+              </div>
+              <div className="space-y-1">
+                {churnRiskAlerts!.map(a => (
+                  <p key={a.staffId} className="text-xs text-red-600 dark:text-red-400">
+                    <span className="font-semibold">{a.staffName}</span>
+                    <span className="ml-1 text-red-400">— {a.consecutiveDays}日連続欠勤</span>
+                  </p>
+                ))}
+              </div>
+              <p className="text-[10px] text-red-400 mt-2">スタッフ設定で「離脱リスク」フラグをONにしてください</p>
             </div>
-            <p className="text-[10px] text-red-400 mt-2">スタッフ設定で「離脱リスク」フラグをONにしてください</p>
-          </div>
+          ) : (
+            <div className="mb-3 shrink-0">
+              <button type="button" onClick={toggleChurnAlert}
+                className="px-3 py-1.5 rounded-full border border-red-200 dark:border-red-900 bg-red-50/60 dark:bg-red-950/20 text-[11px] font-semibold text-red-500 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors">
+                ⚠ 離脱リスク候補（{churnRiskAlerts!.length}名）を表示
+              </button>
+            </div>
+          )
         )}
 
         {/* ── 出勤簿タブ（セクション横並びボード） ── */}
