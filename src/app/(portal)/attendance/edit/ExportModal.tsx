@@ -36,7 +36,8 @@ export default function ExportModal({
 
   const [startDate,    setStartDate]    = useState(thisMonthStart);
   const [endDate,      setEndDate]      = useState(today);
-  const [filterCompany, setFilterCompany] = useState(""); // "" = すべて
+  // 空 = すべての会社。複数選択可
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [downloading,  setDownloading]  = useState(false);
 
   const companies = useMemo(
@@ -44,12 +45,18 @@ export default function ExportModal({
     [staffs],
   );
 
+  function toggleCompany(c: string) {
+    setSelectedCompanies(prev =>
+      prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]
+    );
+  }
+
   // 出力対象スタッフ
   const targetStaffs = useMemo(() =>
-    filterCompany
-      ? staffs.filter(s => (s.company ?? "未設定") === filterCompany)
+    selectedCompanies.length > 0
+      ? staffs.filter(s => selectedCompanies.includes(s.company ?? "未設定"))
       : staffs,
-    [staffs, filterCompany],
+    [staffs, selectedCompanies],
   );
 
   async function handleDownload() {
@@ -69,7 +76,12 @@ export default function ExportModal({
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
-      a.download = `稼働実績_${filterCompany || "全社"}${startDate}_${endDate}.xlsx`;
+      const companyLabel = selectedCompanies.length === 0
+        ? "全社"
+        : selectedCompanies.length <= 2
+          ? selectedCompanies.join("+")
+          : `${selectedCompanies[0]}ほか${selectedCompanies.length - 1}社`;
+      a.download = `稼働実績_${companyLabel}_${startDate}_${endDate}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -135,22 +147,54 @@ export default function ExportModal({
             </div>
           </div>
 
-          {/* 会社名プルダウン */}
+          {/* 会社名（複数選択可） */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">会社名</p>
-            <select
-              value={filterCompany}
-              onChange={e => setFilterCompany(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">会社名（複数選択可）</p>
+              {selectedCompanies.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCompanies([])}
+                  className="text-[11px] font-semibold text-blue-500 hover:text-blue-600"
+                >選択をクリア</button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedCompanies([])}
+              className={[
+                "w-full flex items-center justify-between px-3 py-2 rounded-xl border text-sm transition-colors",
+                selectedCompanies.length === 0
+                  ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-semibold"
+                  : "border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800",
+              ].join(" ")}
             >
-              <option value="">すべての会社（{staffs.length}名）</option>
+              <span>すべての会社</span>
+              <span className="tabular-nums text-xs">{staffs.length}名</span>
+            </button>
+            <div className="max-h-44 overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-700 divide-y divide-zinc-100 dark:divide-zinc-800">
               {companies.map(c => {
                 const count = staffs.filter(s => (s.company ?? "未設定") === c).length;
+                const checked = selectedCompanies.includes(c);
                 return (
-                  <option key={c} value={c}>{c}（{count}名）</option>
+                  <label key={c}
+                    className={[
+                      "flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer transition-colors",
+                      checked ? "bg-blue-50 dark:bg-blue-950/30" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleCompany(c)}
+                      className="accent-blue-600 w-4 h-4"
+                    />
+                    <span className={`flex-1 truncate ${checked ? "font-semibold text-blue-700 dark:text-blue-300" : "text-zinc-700 dark:text-zinc-200"}`}>{c}</span>
+                    <span className="tabular-nums text-xs text-zinc-400">{count}名</span>
+                  </label>
                 );
               })}
-            </select>
+            </div>
           </div>
         </div>
 
