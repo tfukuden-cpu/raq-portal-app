@@ -72,6 +72,8 @@ export type LateRequestRow = {
   reason: string | null;
   sv_name: string | null;
   created_at: string;
+  clock_in: string | null;  // 記録された出勤打刻（HH:MM・15分切上げ後）
+  actual_in: string | null; // 実際にボタンを押した時刻（noteから抽出）
 };
 
 export type ExceptionRow = {
@@ -572,6 +574,12 @@ export default function AttendanceEditClient({
                     <span className="tabular-nums text-zinc-500 shrink-0">{fmtDate(lr.late_date)}</span>
                     <span className="font-mono tabular-nums text-zinc-400 shrink-0">{lr.accountNumber ?? "─"}</span>
                     <span className="font-semibold text-zinc-800 dark:text-zinc-100 shrink-0">{lr.staff_name}</span>
+                    <span className="tabular-nums shrink-0 px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-semibold">
+                      出勤 {lr.clock_in ?? "─"}
+                      {lr.actual_in && lr.actual_in !== lr.clock_in && (
+                        <span className="ml-1 font-normal text-zinc-400">(実打刻 {lr.actual_in})</span>
+                      )}
+                    </span>
                     <span className="text-zinc-500 flex-1 min-w-[8rem] truncate" title={lr.reason ?? ""}>
                       {lr.reason ?? "（理由なし）"}
                     </span>

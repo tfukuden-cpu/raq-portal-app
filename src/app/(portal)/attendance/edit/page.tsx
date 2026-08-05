@@ -353,8 +353,36 @@ export default async function AttendanceEditPage({
     .eq("source", "punch")
     .order("late_date", { ascending: false })
     .limit(500);
+  // 遅刻申請対象日の出勤打刻を取得（記録時刻＋noteの実打刻を表示するため）
+  const latePunchMap = new Map<string, { recorded: string; actual: string | null }>();
+  if ((rawLateRequests ?? []).length > 0) {
+    const dates = (rawLateRequests ?? []).map(l => l.late_date as string).sort();
+    const staffIds = [...new Set((rawLateRequests ?? []).map(l => l.staff_id as string))];
+    const { data: latePunches } = await admin
+      .from("punch_logs")
+      .select("staff_id, recorded_at, note")
+      .eq("project_id", projectId)
+      .eq("punch_type", "clock_in")
+      .in("staff_id", staffIds)
+      .gte("recorded_at", `${dates[0]}T00:00:00+09:00`)
+      .lte("recorded_at", `${dates[dates.length - 1]}T23:59:59+09:00`)
+      .order("recorded_at", { ascending: true })
+      .limit(1000);
+    for (const p of latePunches ?? []) {
+      const d = new Date(p.recorded_at as string).toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+      const key = `${p.staff_id}_${d}`;
+      if (latePunchMap.has(key)) continue; // 最初のclock_inのみ
+      const recorded = new Date(p.recorded_at as string).toLocaleTimeString("ja-JP", {
+        timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit",
+      });
+      const actual = ((p.note as string | null) ?? "").match(/出勤打刻: (\d{1,2}:\d{2})/)?.[1] ?? null;
+      latePunchMap.set(key, { recorded, actual });
+    }
+  }
+
   const lateRequests: LateRequestRow[] = (rawLateRequests ?? []).map(l => {
     const m = memberMap.get(l.staff_id as string);
+    const punch = latePunchMap.get(`${l.staff_id}_${l.late_date}`);
     return {
       id:            l.id as string,
       staff_id:      l.staff_id as string,
@@ -364,6 +392,8 @@ export default async function AttendanceEditPage({
       reason:        (l.reason as string | null) ?? null,
       sv_name:       (l as { sv_name?: string | null }).sv_name ?? null,
       created_at:    l.created_at as string,
+      clock_in:      punch?.recorded ?? null,
+      actual_in:     punch?.actual ?? null,
     };
   });
 
