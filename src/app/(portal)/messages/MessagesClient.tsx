@@ -423,7 +423,18 @@ function AdminMessageCard({ m, myStaffId }: { m: AdminMessage; myStaffId: string
         {attentionCount > 0 && (
           <span className="text-[10px] font-bold text-white bg-red-500 rounded-full px-1.5 py-0.5 leading-none">新着{attentionCount}</span>
         )}
-        {m.isPinned && <span className="text-[10px] font-semibold text-blue-500 border border-blue-200 dark:border-blue-700 rounded px-1.5 py-0.5 ml-auto">固定</span>}
+        <button
+          type="button"
+          onClick={togglePin}
+          title={m.isPinned ? "固定を解除する" : "上部に固定する"}
+          className={`ml-auto text-[10px] font-semibold rounded px-1.5 py-0.5 border transition-colors ${
+            m.isPinned
+              ? "text-blue-500 border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-950/60"
+              : "text-zinc-300 dark:text-zinc-600 border-zinc-200 dark:border-zinc-700 hover:text-blue-500 hover:border-blue-200"
+          }`}
+        >
+          {m.isPinned ? "📌 固定中（タップで解除）" : "📌 固定"}
+        </button>
       </div>
 
       <button type="button" onClick={() => setOpen(o => !o)}
