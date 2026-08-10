@@ -537,6 +537,49 @@ export async function markStaffRoomReadAction(targetStaffId: string): Promise<vo
 
 // ── 削除（発信者 or 管理者） ──────────────────────────────
 
+/** 固定（上部固定）の切替（管理者のみ・adminクライアントで更新） */
+export async function toggleMessagePinAction(formData: FormData): Promise<MessageResult> {
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { success: false, message: "IDが必要です" };
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, message: "ログインしてください" };
+    const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+
+    const admin = createAdminClient();
+    const { data: msg } = await admin
+      .from("messages")
+      .select("project_id, is_pinned")
+      .eq("id", id)
+      .maybeSingle();
+    if (!msg) return { success: false, message: "メッセージが見つかりません" };
+    const projectId = (msg as { project_id: string }).project_id;
+
+    // サーバー側管理者チェック
+    const { data: me } = await supabase.from("staffs").select("global_role").eq("id", staffId).maybeSingle();
+    const isGlobal = me?.global_role === "executive" || me?.global_role === "admin";
+    if (!isGlobal) {
+      const { data: membership } = await supabase
+        .from("project_members").select("role")
+        .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle();
+      if (membership?.role !== "project_admin") return { success: false, message: "権限がありません" };
+    }
+
+    const next = !(msg as { is_pinned: boolean }).is_pinned;
+    const { error } = await admin.from("messages").update({ is_pinned: next }).eq("id", id);
+    if (error) return { success: false, message: "更新失敗: " + error.message };
+
+    revalidatePath("/messages");
+    revalidatePath("/messages/manage");
+    revalidatePath("/dashboard");
+    return { success: true, message: next ? "上部に固定しました" : "固定を解除しました" };
+  } catch (e) {
+    console.error("[messages] toggleMessagePinAction failed:", e);
+    return { success: false, message: "更新に失敗しました" };
+  }
+}
+
 export async function deleteMessageAction(formData: FormData): Promise<MessageResult> {
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { success: false, message: "IDが必要です" };

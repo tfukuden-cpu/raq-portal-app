@@ -3,7 +3,7 @@
 import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import {
   sendMessageAction, staffStartMessageAction, replyMessageAction,
-  markThreadReadAction, deleteMessageAction,
+  markThreadReadAction, deleteMessageAction, toggleMessagePinAction,
   sendDirectMessageAction, markStaffRoomReadAction,
 } from "./actions";
 import {
@@ -405,6 +405,11 @@ function AdminMessageCard({ m, myStaffId }: { m: AdminMessage; myStaffId: string
     startTransition(() => { deleteMessageAction(fd); });
   }
 
+  function togglePin() {
+    const fd = new FormData(); fd.set("id", m.id);
+    startTransition(() => { toggleMessagePinAction(fd); });
+  }
+
   return (
     <div className={`rounded-xl border bg-white dark:bg-zinc-950 overflow-hidden ${
       m.isPinned ? "border-blue-200 dark:border-blue-800" : "border-zinc-100 dark:border-zinc-800"
@@ -462,7 +467,13 @@ function AdminMessageCard({ m, myStaffId }: { m: AdminMessage; myStaffId: string
             </div>
           </div>
 
-          <button type="button" onClick={del} className="mt-3 text-[11px] text-red-500 hover:text-red-600">削除</button>
+          <div className="mt-3 flex items-center gap-4">
+            <button type="button" onClick={togglePin}
+              className="text-[11px] text-blue-500 hover:text-blue-600 font-semibold">
+              {m.isPinned ? "📌 固定を解除する" : "📌 上部に固定する"}
+            </button>
+            <button type="button" onClick={del} className="text-[11px] text-red-500 hover:text-red-600">削除</button>
+          </div>
         </div>
       )}
     </div>
