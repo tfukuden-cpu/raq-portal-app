@@ -481,12 +481,21 @@ export async function getBreakDurationAction(
   if (slotAssign) {
     const slotNum = (slotAssign as { slot_number?: number }).slot_number;
     if (slotNum) {
-      const { data: slotSetting } = await admin
+      // 日付別オーバーライドがあれば優先、無ければ案件共通設定
+      const { data: dailySetting } = await admin
+        .from("break_slot_daily_settings")
+        .select("start_time, end_time")
+        .eq("project_id", projectId)
+        .eq("target_date", today)
+        .eq("slot_number", slotNum)
+        .maybeSingle();
+      const { data: globalSetting } = dailySetting ? { data: null } : await admin
         .from("break_slot_settings")
         .select("start_time, end_time")
         .eq("project_id", projectId)
         .eq("slot_number", slotNum)
         .maybeSingle();
+      const slotSetting = dailySetting ?? globalSetting;
 
       if (slotSetting) {
         const [sh, sm] = ((slotSetting as { start_time: string }).start_time).split(":").map(Number);

@@ -13,7 +13,7 @@ import TerminalPunchClient, {
   type TerminalSeat,
   type TerminalWall,
 } from "./TerminalPunchClient";
-import { getBreakSlotSettingsAction } from "@/app/(portal)/seating/break-actions";
+import { getBreakSlotSettingsForDateAction } from "@/app/(portal)/seating/break-actions";
 
 function tokyoToday(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -246,8 +246,8 @@ export default async function PunchPage({
     breakAssignmentMap[a.staff_id as string] = a.slot_number as number;
   }
 
-  // デフォルト値付きでスロット設定を取得
-  const breakSlotSettings = await getBreakSlotSettingsAction(projectId);
+  // デフォルト値付きでスロット設定を取得（当日の日付別オーバーライド優先）
+  const { slots: breakSlotSettings } = await getBreakSlotSettingsForDateAction(projectId, today);
   type BreakSlotInfo = { slotNumber: number; label: string; startTime: string; endTime: string };
   const breakSlots: BreakSlotInfo[] = breakSlotSettings.map(s => ({
     slotNumber: s.slot_number,

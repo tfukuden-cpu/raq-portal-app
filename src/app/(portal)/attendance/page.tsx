@@ -11,7 +11,7 @@ import type { SeatData, WallData, StaffInfo } from "../seating/SeatingClient";
 import type { MotaRow } from "./HMotaPanel";
 import type { MotaAssignment } from "./mota-actions";
 import {
-  getBreakSlotSettingsAction,
+  getBreakSlotSettingsForDateAction,
   getBreakSlotAssignmentsAction,
   getBreakShortSettingsAction,
 } from "@/app/(portal)/seating/break-actions";
@@ -242,7 +242,7 @@ export default async function AttendancePage({
       .select("id, account_number, slot, is_fixed, staff_name, assigned_account")
       .eq("project_id", projectId)
       .eq("assignment_date", today),
-    getBreakSlotSettingsAction(projectId),
+    getBreakSlotSettingsForDateAction(projectId, today).then(r => r.slots),
     getBreakSlotAssignmentsAction(projectId, today),
     getBreakShortSettingsAction(projectId, today),
     admin.from("shift_slot_requirements")

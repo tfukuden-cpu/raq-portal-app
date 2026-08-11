@@ -274,7 +274,6 @@ export async function exportPunchLogToSheetAction(fd: FormData): Promise<SyncRes
   try {
     const { supabase, projectId } = await getContext();
     const { startDate, endDate } = monthRange(year, month);
-    const names = await getStaffNames(supabase, projectId);
 
     const { data, error } = await supabase
       .from("punch_logs")
@@ -290,17 +289,19 @@ export async function exportPunchLogToSheetAction(fd: FormData): Promise<SyncRes
         year: "numeric", month: "2-digit", day: "2-digit",
         hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-    const header = ["社員ID", "氏名", "日時", "種別", "区分", "承認者"];
+    // 氏名は書き出さない(スプシ側でメンバーリストから社員IDで参照する運用)
+    const header = ["社員ID", "日時", "種別", "区分", "承認者"];
     const rows = (data ?? []).map((p) => [
       p.staff_id,
-      names.get(p.staff_id) ?? p.staff_id,
       toJST(p.recorded_at),
       PUNCH_LABEL[p.punch_type] ?? p.punch_type,
       p.note ?? "",
       p.approver_name ?? "",
     ]);
 
-    await writeSheet(sheetId(url), "打刻ログ", [header, ...rows]);
+    // RAW: USER_ENTEREDだと日時がSheets側で日付型に変換され、セルに残った
+    // 「日付のみ」書式が適用されて時刻表示が消える(書き出すたびに再発)ため
+    await writeSheet(sheetId(url), "打刻ログ", [header, ...rows], "A1", "RAW");
     return { success: true, count: rows.length };
   } catch (e) {
     return { success: false, message: (e as Error).message };

@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import SeatingClient, { type SeatData, type WallData, type StaffInfo } from "./SeatingClient";
-import { getBreakSlotAssignmentsAction, getBreakSlotSettingsAction } from "./break-actions";
+import { getBreakSlotAssignmentsAction, getBreakSlotSettingsForDateAction } from "./break-actions";
 
 function tokyoToday() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -58,7 +58,7 @@ export default async function SeatingPage() {
       .select("x1_pct, y1_pct, x2_pct, y2_pct")
       .eq("project_id", projectId),
     getBreakSlotAssignmentsAction(projectId, today),
-    getBreakSlotSettingsAction(projectId),
+    getBreakSlotSettingsForDateAction(projectId, today).then(r => r.slots),
   ]);
 
   // メンバーマップ

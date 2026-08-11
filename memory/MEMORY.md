@@ -40,6 +40,18 @@
 
 ---
 
+## 現在の開発状態（2026-08-10更新）
+
+### 休憩スロット（①〜③）の日付別設定（2026-08-10・実装済・デプロイ済）
+**ユーザー要望「翌日座席表で翌日の休憩時間を設定したい／当日も変更したい」。従来の `break_slot_settings` は案件全体で1セットのみ＝日付別に変えられなかった。tsc 0・新規lint 0。**
+- **新テーブル `break_slot_daily_settings`**（project_id, target_date, slot_number, label, start_time, end_time, target_shift, ratio, sort_order・UNIQUE(project_id,target_date,slot_number)・マイグレーション`create_break_slot_daily_settings`・RLSポリシー無し=adminクライアントのみ）。**行がある日はそれを優先・無い日は案件共通設定にフォールバック**
+- **break-actions.ts**: `getBreakSlotSettingsForDateAction(projectId, date)`→{slots, isDaily}／`saveBreakSlotDailySettingsAction`（削除→insert→**その日の割り当てを自動再実行**）／`clearBreakSlotDailySettingsAction`（共通設定に戻す＋再割当）。`assignBreakSlotsAction` は日付別取得に変更
+- **getBreakDurationAction（punch-actions.ts）**: スロット時間幅の参照を「日付別→共通」の順に
+- **消費側を日付対応に**: punch端末page（当日）・attendance page（**表示中の日付**=DateNavで翌日を見れば翌日設定）・seating page（当日）
+- **共通UI `seating/BreakSlotDayEditor.tsx`**（モーダル・時間帯/対象/比率編集・比率合計表示・「この日の設定として保存」＝保存後N名再割振トースト・「共通設定に戻す」）。設置場所＝**翌日座席プラン(SeatingPlanClient)のツールバー「休憩設定」**と**当日座席表(SeatingClient)の「休憩割り振り」隣＋埋め込みツールバー**
+- ⚠️既知挙動: 座席プラン保存時(`saveSeatAssignmentsAction`)は毎回その日の休憩割当を自動で全削除→再生成（個別スロット変更は消える）。日付別設定の保存も同様に再割当する
+- 調査メモ: ユーザーが「①〜③を編集しても反映されない」と報告した時点で `break_slot_settings` はデフォルト値のまま＝設定変更は保存されていなかった（編集場所が存在しなかった可能性が高い）。今回のUI追加で解決
+
 ## 現在の開発状態（2026-07-12更新・第2弾）
 
 ### 改修3件＝タスクタグ改善／打刻の申請制／欠勤補填の済未（2026-07-12・実装済・デプロイ済）

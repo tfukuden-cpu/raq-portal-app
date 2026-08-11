@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { saveSeatAssignmentsAction, autoAssignSeatsAction } from "../actions";
+import BreakSlotDayEditor from "../BreakSlotDayEditor";
 import { getSeatBgClass, getSeatBorderClass, getSeatTextClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 
 export type WallData = {
@@ -48,6 +49,7 @@ export default function SeatingPlanClient({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [showBreakEditor, setShowBreakEditor] = useState(false);
   const router   = useRouter();
   const pathname = usePathname();
 
@@ -170,6 +172,12 @@ export default function SeatingPlanClient({
   const actionButtons = (
     <div className="flex items-center gap-1.5">
       <button
+        onClick={() => setShowBreakEditor(true)}
+        className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-100 transition-colors"
+      >
+        休憩設定
+      </button>
+      <button
         onClick={handleClear}
         disabled={isPending}
         className="text-xs text-zinc-500 dark:text-zinc-400 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
@@ -195,6 +203,16 @@ export default function SeatingPlanClient({
 
   return (
     <div className={embedded ? "" : "min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-40"}>
+      {/* 日付別 休憩スロット設定モーダル */}
+      {showBreakEditor && (
+        <BreakSlotDayEditor
+          projectId={projectId}
+          date={date}
+          onClose={() => setShowBreakEditor(false)}
+          onSaved={m => { setToast({ msg: m, ok: true }); setTimeout(() => setToast(null), 3000); }}
+        />
+      )}
+
       {/* ヘッダー（スタンドアロン時のみ） */}
       {!embedded && (
         <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">

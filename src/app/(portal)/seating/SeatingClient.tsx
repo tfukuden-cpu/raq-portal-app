@@ -10,6 +10,7 @@ import {
   type SeatingEditor,
 } from "./actions";
 import { assignBreakSlotsAction } from "./break-actions";
+import BreakSlotDayEditor from "./BreakSlotDayEditor";
 import type { BreakSlotSetting } from "./break-actions";
 import {
   getBreakRoomStateAction, forceReleaseBreakRoomAction, setBreakRoomCapacityAction,
@@ -479,6 +480,9 @@ export default function SeatingClient({
     return () => { supabase.removeChannel(channel); };
   }, [projectId]);
 
+  // 日付別の休憩スロット設定モーダル
+  const [showBreakEditor, setShowBreakEditor] = useState(false);
+
   // 休憩スロット自動割り振り
   function handleAssignBreaks() {
     startTransition(async () => {
@@ -648,6 +652,12 @@ export default function SeatingClient({
                 >
                   休憩割り振り
                 </button>
+                <button
+                  onClick={() => setShowBreakEditor(true)}
+                  className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-50 transition-colors"
+                >
+                  休憩設定
+                </button>
                 {breakSlots.length > 0 && (
                   <button
                     onClick={() => setShowBreakPanel(v => !v)}
@@ -752,6 +762,14 @@ export default function SeatingClient({
           )}
           {!editMode && (
             <button
+              onClick={() => setShowBreakEditor(true)}
+              className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-50 transition-colors"
+            >
+              休憩設定
+            </button>
+          )}
+          {!editMode && (
+            <button
               onClick={toggleRoomPanel}
               className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${showRoomPanel ? "bg-amber-600 text-white border-amber-600" : "text-amber-600 dark:text-amber-400 bg-white dark:bg-zinc-900 border-amber-200 dark:border-amber-800 hover:bg-amber-50"}`}
             >
@@ -759,6 +777,16 @@ export default function SeatingClient({
             </button>
           )}
         </div>
+      )}
+
+      {/* 日付別 休憩スロット設定モーダル */}
+      {showBreakEditor && (
+        <BreakSlotDayEditor
+          projectId={projectId}
+          date={today}
+          onClose={() => setShowBreakEditor(false)}
+          onSaved={m => { setToast(m); router.refresh(); setTimeout(() => setToast(null), 3000); }}
+        />
       )}
 
       {/* 他ユーザー編集中バナー（同時編集ロック） */}

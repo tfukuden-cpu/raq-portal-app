@@ -106,6 +106,71 @@ export async function getBreakSlotSettingsAction(projectId: string): Promise<Bre
   return data as BreakSlotSetting[];
 }
 
+/** 日付別スロット設定（オーバーライドがあればそれ・無ければ案件共通設定） */
+export async function getBreakSlotSettingsForDateAction(
+  projectId: string,
+  date: string,
+): Promise<{ slots: BreakSlotSetting[]; isDaily: boolean }> {
+  const admin = createAdminClient();
+  const { data: daily } = await admin.from("break_slot_daily_settings")
+    .select("id, slot_number, label, start_time, end_time, target_shift, ratio, sort_order")
+    .eq("project_id", projectId)
+    .eq("target_date", date)
+    .order("sort_order");
+  if (daily && daily.length > 0) {
+    return { slots: daily as BreakSlotSetting[], isDaily: true };
+  }
+  return { slots: await getBreakSlotSettingsAction(projectId), isDaily: false };
+}
+
+/** 日付別スロット設定を保存し、その日の割り当てを再実行する（管理者UI用） */
+export async function saveBreakSlotDailySettingsAction(
+  projectId: string,
+  date: string,
+  slots: Omit<BreakSlotSetting, "id">[],
+): Promise<{ success: boolean; count?: number; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "未認証" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { success: false, error: "日付が不正です" };
+
+  const admin = createAdminClient();
+  await admin.from("break_slot_daily_settings").delete()
+    .eq("project_id", projectId).eq("target_date", date);
+  const { error } = await admin.from("break_slot_daily_settings").insert(
+    slots.map(s => ({ ...s, project_id: projectId, target_date: date }))
+  );
+  if (error) return { success: false, error: error.message };
+
+  // その日の休憩割り当てを新しい設定で作り直す
+  const res = await assignBreakSlotsAction(projectId, date);
+  revalidatePath("/seating");
+  revalidatePath("/seating/plan");
+  revalidatePath("/attendance");
+  return { success: true, count: res.count };
+}
+
+/** 日付別スロット設定を削除して案件共通設定に戻す */
+export async function clearBreakSlotDailySettingsAction(
+  projectId: string,
+  date: string,
+): Promise<{ success: boolean; count?: number; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "未認証" };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("break_slot_daily_settings").delete()
+    .eq("project_id", projectId).eq("target_date", date);
+  if (error) return { success: false, error: error.message };
+
+  const res = await assignBreakSlotsAction(projectId, date);
+  revalidatePath("/seating");
+  revalidatePath("/seating/plan");
+  revalidatePath("/attendance");
+  return { success: true, count: res.count };
+}
+
 export async function saveBreakSlotSettingsAction(
   projectId: string,
   slots: Omit<BreakSlotSetting, "id">[],
@@ -156,8 +221,8 @@ export async function assignBreakSlotsAction(
 ): Promise<{ success: boolean; count: number; error?: string }> {
   const admin = createAdminClient();
 
-  // 設定取得（なければデフォルト）
-  const slots = await getBreakSlotSettingsAction(projectId);
+  // 設定取得（日付別オーバーライド優先・なければ案件共通/デフォルト）
+  const { slots } = await getBreakSlotSettingsForDateAction(projectId, date);
 
   // 当日座席割り当てからスタッフ取得
   const { data: seatAssignments } = await admin.from("seat_assignments")

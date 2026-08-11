@@ -166,7 +166,10 @@ export async function writeSheet(
   spreadsheetId: string,
   sheetName: string,
   values: string[][],
-  range = "A1"
+  range = "A1",
+  // RAW: 文字列をそのまま書く。日時文字列がSheets側で日付型に変換され、
+  // セルに残った「日付のみ」書式で時刻が消えるのを防ぎたいシートで使う
+  valueInputOption: "USER_ENTERED" | "RAW" = "USER_ENTERED"
 ): Promise<void> {
   const token = await getAccessToken();
   const encodedClearRange = encodeURIComponent(`${sheetName}!A:AZ`); // 52列まで対応（31日+余裕）
@@ -184,7 +187,7 @@ export async function writeSheet(
 
   const encodedRange = encodeURIComponent(`${sheetName}!${range}`);
   const res = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}?valueInputOption=USER_ENTERED`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}?valueInputOption=${valueInputOption}`,
     {
       method: "PUT",
       headers: {
@@ -1328,7 +1331,7 @@ const SHEET_HEADERS: Record<string, string[]> = {
   希望休:         ["社員ID", "氏名", "希望日", "備考"],
   希望休ルール:   ["ルール", "値", "単位"],
   シフトパターン: ["パターン名", "略称", "開始時刻", "終了時刻", "必要人数", "対象"],
-  打刻ログ:       ["社員ID", "氏名", "日時", "種別", "区分", "承認者"],
+  打刻ログ:       ["社員ID", "日時", "種別", "区分", "承認者"],
   日別勤怠:       ["社員ID", "所属会社", "氏名", "日付", "出勤", "退勤", "休憩(分)", "実働", "残業", "深夜", "深夜残業"],
   月次集計:       ["社員ID", "所属会社", "氏名", "勤務予定日", "稼働日数", "実働時間", "残業時間", "深夜時間", "深夜残業時間", "欠勤", "遅刻", "早退", "遵守率"],
   シフト変更ログ: ["変更日時", "変更者", "操作", "対象社員ID", "対象氏名", "対象日", "変更前", "変更後"],
