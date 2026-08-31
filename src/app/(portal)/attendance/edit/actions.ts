@@ -23,6 +23,33 @@ async function requireAdmin(projectId: string): Promise<string> {
   return staffId;
 }
 
+/** 運営者（executive）かどうか。確定の解除は運営者のみ（2026-08-31 ユーザー判断） */
+async function isExecutive(): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
+  const { data } = await supabase.from("staffs").select("global_role").eq("id", staffId).maybeSingle();
+  return data?.global_role === "executive";
+}
+
+/**
+ * 確定（締め）済みの日は編集させない。
+ * 確定は「スタッフ×日」単位。締めた日を直すには運営者に解除してもらう。
+ */
+async function assertNotConfirmed(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string, staffId: string, date: string,
+): Promise<string | null> {
+  const { data } = await admin
+    .from("attendance_confirmations")
+    .select("work_date")
+    .eq("project_id", projectId).eq("staff_id", staffId).eq("work_date", date)
+    .maybeSingle();
+  if (!data) return null;
+  return `${date} は確定済みのため編集できません。修正する場合は運営者に確定の解除を依頼してください。`;
+}
+
 export type CorrectionResult = { ok: boolean; error?: string };
 
 /**
@@ -42,6 +69,9 @@ export async function savePunchCorrectionAction(
 ): Promise<CorrectionResult> {
   const adminId = await requireAdmin(projectId);
   const admin = createAdminClient();
+
+  const locked = await assertNotConfirmed(admin, projectId, staffId, date);
+  if (locked) return { ok: false, error: locked };
 
   const dayStart = `${date}T00:00:00+09:00`;
   const dayEnd   = `${date}T23:59:59+09:00`;
@@ -108,6 +138,10 @@ export async function unconfirmAttendanceAction(
   date: string,
 ): Promise<CorrectionResult> {
   await requireAdmin(projectId);
+  // 確定の解除は運営者のみ（締めたあとの修正は必ず運営者を通す）
+  if (!(await isExecutive())) {
+    return { ok: false, error: "確定の解除は運営者のみが行えます。解除が必要な場合は運営者に依頼してください。" };
+  }
   const admin = createAdminClient();
   const { error } = await admin
     .from("attendance_confirmations")
@@ -175,6 +209,14 @@ export async function reviewCorrectionAction(
 
   if (!correction) return { success: false, message: "申請が見つかりません" };
 
+  // 確定済みの日は承認しても打刻に反映できないため、承認自体を止める（却下は可）
+  if (status === "approved") {
+    const locked = await assertNotConfirmed(
+      admin, correction.project_id as string, correction.staff_id as string, correction.target_date as string,
+    );
+    if (locked) return { success: false, message: locked };
+  }
+
   const { error } = await admin
     .from("punch_corrections")
     .update({ status, reviewed_by: reviewerId, reviewed_at: new Date().toISOString(), review_note: reviewNote })
@@ -222,6 +264,11 @@ export async function reapplyCorrectionAction(id: string): Promise<ReviewResult>
 
   if (!correction) return { success: false, message: "申請が見つかりません" };
   if (correction.status !== "approved") return { success: false, message: "承認済みではありません" };
+
+  const locked = await assertNotConfirmed(
+    admin, correction.project_id as string, correction.staff_id as string, correction.target_date as string,
+  );
+  if (locked) return { success: false, message: locked };
 
   try {
     await applyPunchCorrection(

@@ -873,10 +873,18 @@ export default function AttendanceEditClient({
                     return (
                       <tr key={key} className={STATUS_STYLE[row.status]}>
                         <td className="px-2 py-1.5 whitespace-nowrap">
-                          <button type="button" onClick={() => openEdit(row)}
-                            className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[11px] font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-                            修正
-                          </button>
+                          {/* 確定済みは締め扱い＝編集不可（解除は運営者のみ） */}
+                          {isConfirmed ? (
+                            <span title="確定済みのため編集できません（解除は運営者のみ）"
+                              className="inline-block px-2 py-1 rounded-md bg-zinc-50 dark:bg-zinc-900 text-zinc-300 dark:text-zinc-600 text-[11px] font-semibold cursor-not-allowed">
+                              確定
+                            </span>
+                          ) : (
+                            <button type="button" onClick={() => openEdit(row)}
+                              className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[11px] font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                              修正
+                            </button>
+                          )}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap tabular-nums text-zinc-600 dark:text-zinc-300">
                           {fmtDate(row.date)}
