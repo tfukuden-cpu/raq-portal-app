@@ -462,12 +462,14 @@ export async function GET(req: NextRequest) {
       breakMinutes = breakOverrideMap.get(key) ?? autoBreakMinutes(grossMin);
       workMinutes = Math.max(0, grossMin - breakMinutes);
 
+      // 超過＝稼働が8時間を超えた分（画面の勤怠実績と定義を統一・2026-08-31 ユーザー判断）
+      // ※旧定義は「シフト終了時刻を超えた分」で、画面と数字が食い違っていた
+      overtimeMinutes = Math.max(0, workMinutes - 480);
+
       if (resolvedEnd) {
         const endDt = shiftTimeToDate(shift.shift_date, resolvedEnd);
         if (endDt) {
-          const endMs = endDt.getTime();
-          overtimeMinutes = Math.max(0, Math.round((outMs - endMs) / 60000));
-          isEarlyLeave = outMs < endMs - 10 * 60000;
+          isEarlyLeave = outMs < endDt.getTime() - 10 * 60000;
         }
       }
     }

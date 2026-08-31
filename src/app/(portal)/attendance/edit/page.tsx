@@ -238,19 +238,23 @@ export default async function AttendanceEditPage({
     const exception   = exceptionMap.get(key);
     const isOvertimeApproved = !!exception?.overtime;
 
+    // SVは打刻端末を使わず勤怠修正で時刻を入力する運用のため、申請の有無によらず実打刻で集計する
+    // （申請ベースだと定時に丸められ、遅くまでの稼働が超過に出ない・2026-08-31 ユーザー判断）
+    const isSv = m.section === "SV";
+
     const breakMinutes = breakOverrideMap.get(key) ?? (punch?.clockIn ? 60 : 0);
     let workingMinutes = 0, regularMinutes = 0, overtimeMinutes = 0;
     if (punch?.clockIn && punch?.clockOut) {
-      // 遅刻でなければ出勤 = シフト開始時刻、遅刻なら実打刻
-      const effectiveInMs = (!isLate && shiftStart)
+      // 遅刻でなければ出勤 = シフト開始時刻、遅刻なら実打刻（SVは常に実打刻）
+      const effectiveInMs = (!isLate && shiftStart && !isSv)
         ? new Date(`${shift.shift_date}T${shiftStart.slice(0, 5)}:00+09:00`).getTime()
         : new Date(punch.clockIn).getTime();
 
-      // 残業or早退の申請あり → 実打刻、どちらも申請なし → シフト終了時刻
+      // 残業or早退の申請あり → 実打刻、どちらも申請なし → シフト終了時刻（SVは常に実打刻）
       const rawOutMs          = new Date(punch.clockOut).getTime();
       const shiftEndMs        = shiftEnd ? new Date(`${shift.shift_date}T${shiftEnd.slice(0, 5)}:00+09:00`).getTime() : rawOutMs;
       const isEarlyLeaveApproved = !!exception?.earlyLeave;
-      const effectiveOutMs = (isOvertimeApproved || isEarlyLeaveApproved || !shiftEnd)
+      const effectiveOutMs = (isOvertimeApproved || isEarlyLeaveApproved || !shiftEnd || isSv)
         ? rawOutMs
         : shiftEndMs;
 

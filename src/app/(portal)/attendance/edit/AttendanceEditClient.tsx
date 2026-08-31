@@ -370,15 +370,17 @@ export default function AttendanceEditClient({
 
         const rawOutMs = new Date(newClockOut).getTime();
         const isOvertimeApproved = !!row.overtimeApprover;
+        // SVは申請の有無によらず実打刻で集計（page.tsx の行データ生成と同じルール）
+        const isSv = row.section === "SV";
 
-        const effectiveInMs = (!isLate && shiftStartISO)
+        const effectiveInMs = (!isLate && shiftStartISO && !isSv)
           ? new Date(shiftStartISO).getTime()
           : new Date(newClockIn).getTime();
 
-        // 残業or早退の申請あり → 実打刻、どちらも申請なし → シフト終了時刻
+        // 残業or早退の申請あり → 実打刻、どちらも申請なし → シフト終了時刻（SVは常に実打刻）
         const isEarlyLeaveApproved = !!row.earlyLeaveApprover;
         const shiftEndMs = shiftEndISO ? new Date(shiftEndISO).getTime() : rawOutMs;
-        const effectiveOutMs = (isOvertimeApproved || isEarlyLeaveApproved || !shiftEndISO)
+        const effectiveOutMs = (isOvertimeApproved || isEarlyLeaveApproved || !shiftEndISO || isSv)
           ? rawOutMs
           : shiftEndMs;
 
