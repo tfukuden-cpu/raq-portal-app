@@ -1725,7 +1725,7 @@ function exportAttendanceXLSX(
 
   void import("exceljs").then(async (ExcelJS) => {
     const wb = new ExcelJS.Workbook();
-    wb.creator = "Raq Portal";
+    wb.creator = "I Works";
     const ws = wb.addWorksheet(dateLabel.slice(0, 31));
 
     // Row 1: セクションヘッダー（2列マージ）

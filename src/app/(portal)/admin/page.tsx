@@ -1,7 +1,6 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
-import NewProjectModal from "./NewProjectModal";
 import ProjectList from "./ProjectList";
 
 export default async function AdminPage() {
@@ -63,7 +62,6 @@ export default async function AdminPage() {
               <p className="text-xs text-zinc-400 mt-0.5">担当案件の設定・メンバー管理</p>
             )}
           </div>
-          {(isExecutive || isGlobalAdmin) && <NewProjectModal />}
         </div>
       </div>
       <div className="max-w-6xl mx-auto px-4 pt-4 pb-10">

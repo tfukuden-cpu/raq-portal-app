@@ -20,7 +20,7 @@ export default async function NoticesPage({
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   // 表示モード確認（"staff" モード中は管理者権限を無効化）
   const cookieStore = await cookies();

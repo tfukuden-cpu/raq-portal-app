@@ -47,7 +47,7 @@ export default function DailyReportTab({
   async function exportXLSX() {
     const ExcelJS = await import("exceljs");
     const wb = new ExcelJS.Workbook();
-    wb.creator = "Raq Portal";
+    wb.creator = "I Works";
     const ws = wb.addWorksheet(dateLabel.slice(0, 31));
 
     const HEADER = ["ASS", "アカウント番号", "シフト", "商材", "欠勤", "追加", "当日セクション"];

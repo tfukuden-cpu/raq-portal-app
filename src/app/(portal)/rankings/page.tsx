@@ -10,7 +10,7 @@ export default async function RankingsPage() {
   if (!user) redirect("/login");
 
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   // 管理者チェック
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";

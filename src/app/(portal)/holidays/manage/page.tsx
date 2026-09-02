@@ -14,7 +14,7 @@ export default async function HolidayManagePage() {
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   const { data: myMembership } = await supabase
     .from("project_members").select("role")

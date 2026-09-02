@@ -31,7 +31,7 @@ export default async function MessagesPage({
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   // 管理者ビュー（運営者・全社管理者・案件管理者）は管理画面へ
   if (await isAdminView(supabase, staffId, projectId)) {

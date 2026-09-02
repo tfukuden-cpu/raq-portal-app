@@ -74,7 +74,7 @@ export default function LineFriendGate({ lineAddUrl }: Props) {
       </h1>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-xs leading-relaxed mb-8">
         シフト確認・お知らせ通知のため、<br />
-        RaqWorks の LINE 公式アカウントを<br />
+        I Works の LINE 公式アカウントを<br />
         友達追加してください。
       </p>
 

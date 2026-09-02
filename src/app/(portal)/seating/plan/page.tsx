@@ -18,7 +18,7 @@ export default async function SeatingPlanPage(props: {
   if (!user) redirect("/login");
 
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const [{ data: myMembership }, { data: myStaff }] = await Promise.all([

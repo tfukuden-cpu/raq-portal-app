@@ -1,11 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AppNav from "@/components/AppNav";
 import { logoutAction } from "@/app/login/actions";
-import { switchProjectAction } from "./switch-project-action";
 import type { IconKey } from "@/components/icons";
 import PushPermissionRequest from "./PushPermissionRequest";
 import LineFriendGate from "./LineFriendGate";
@@ -17,7 +15,6 @@ export type NavSection = {
   icon?: IconKey;
   items: NavItem[];
   /** 運用者アカウントの管理セクション用：案件切り替えタブ */
-  projectTabs?: { id: string; name: string; isActive: boolean }[];
 };
 
 // ── スタッフ共通メニュー ─────────────────────────────────
@@ -84,15 +81,6 @@ export default async function PortalLayout({ children }: { children: React.React
     isProjectAdmin = membership?.role === "project_admin";
   }
 
-  // ── 運用者：全案件リスト取得（案件切り替えタブ用） ───
-  let opsProjects: { id: string; name: string }[] = [];
-  if (isExecutive) {
-    const admin = createAdminClient();
-    const { data: pj } = await admin
-      .from("projects").select("id, name").eq("is_active", true).order("id");
-    opsProjects = pj ?? [];
-  }
-
   // ── 表示モード確定 ───────────────────────────────────
   type ViewMode = "staff" | "admin" | "ops";
   let viewMode: ViewMode;
@@ -114,16 +102,11 @@ export default async function PortalLayout({ children }: { children: React.React
   let sections: NavSection[];
 
   if (viewMode === "ops") {
-    // 運用者：管理セクションに案件切り替えタブを付与
-    const projectTabs = opsProjects.map(p => ({
-      id: p.id, name: p.name, isActive: p.id === projectId,
-    }));
     sections = [
       { mobileLabel: "メイン", icon: "Home",
         items: [...staffMenu, MY_ITEM] },
       { title: "管理", icon: "Settings",
-        items: ADMIN_MENU_ITEMS,
-        projectTabs },
+        items: ADMIN_MENU_ITEMS },
       { title: "運営", icon: "Shield",
         items: OPS_MENU_ITEMS },
     ];
@@ -179,7 +162,6 @@ export default async function PortalLayout({ children }: { children: React.React
         rpgCharId={(staff as { rpg_character?: number | null } | null)?.rpg_character ?? null}
         projectName={projectName}
         logoutAction={logoutAction}
-        switchProjectAction={switchProjectAction}
         initialCollapsed={initialCollapsed}
       >
         {children}

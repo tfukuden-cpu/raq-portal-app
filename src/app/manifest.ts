@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "RaqWorks",
-    short_name: "RaqWorks",
-    description: "RaqWorks 社内ポータル",
+    name: "I Works",
+    short_name: "I Works",
+    description: "I Works 社内ポータル",
     start_url: "/dashboard",
     display: "standalone",
     orientation: "portrait",

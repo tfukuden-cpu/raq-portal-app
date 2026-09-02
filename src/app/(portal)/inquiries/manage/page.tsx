@@ -17,7 +17,7 @@ export default async function InquiryManagePage() {
   const projectId   = await getCurrentProjectId();
 
   // 案件未選択かつ運営者でもない場合はプロジェクト選択へ
-  if (!projectId && !isExecutive) redirect("/select-project");
+  if (!projectId && !isExecutive) redirect("/login");
 
   // 案件管理者チェック（案件が選択されている場合のみ）
   if (projectId && !isExecutive) {

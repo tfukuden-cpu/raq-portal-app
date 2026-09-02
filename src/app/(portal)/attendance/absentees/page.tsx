@@ -20,7 +20,7 @@ export default async function AbsenteeDailyPage({
 
   const staffId   = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   const [{ data: membership }, { data: myStaff }] = await Promise.all([
     supabase.from("project_members").select("role")

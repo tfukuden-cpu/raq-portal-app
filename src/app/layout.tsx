@@ -15,11 +15,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "RaqWorks",
-    template: "%s | RaqWorks",
+    default: "I Works",
+    template: "%s | I Works",
   },
-  description: "RaqWorks 社内ポータル",
-  applicationName: "RaqWorks",
+  description: "I Works 社内ポータル",
+  applicationName: "I Works",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "32x32" },
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "RaqWorks",
+    title: "I Works",
     startupImage: "/icons/apple-touch-icon.png",
   },
   formatDetection: {

@@ -15,7 +15,7 @@ export default async function SeatingPage() {
   if (!user) redirect("/login");
 
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   const admin  = createAdminClient();
   const today  = tokyoToday();

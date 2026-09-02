@@ -59,7 +59,7 @@ export default async function ManageShiftsPage(props: {
       allProjects[0]?.id ?? null;
   } else {
     selectedProjectId = await getCurrentProjectId();
-    if (!selectedProjectId) redirect("/select-project");
+    if (!selectedProjectId) redirect("/login");
 
     const { data: pm } = await supabase
       .from("project_members").select("role")
@@ -67,7 +67,7 @@ export default async function ManageShiftsPage(props: {
     if (pm?.role !== "project_admin") redirect("/shifts");
   }
 
-  if (!selectedProjectId) redirect("/select-project");
+  if (!selectedProjectId) redirect("/login");
 
   const admin = createAdminClient();
 

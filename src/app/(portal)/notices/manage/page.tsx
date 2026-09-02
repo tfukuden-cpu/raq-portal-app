@@ -14,7 +14,7 @@ export default async function ManageNoticesPage() {
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   // 権限チェック
   const [{ data: myMembership }, { data: myStaff }] = await Promise.all([

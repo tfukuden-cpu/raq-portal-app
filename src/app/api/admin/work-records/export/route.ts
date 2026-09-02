@@ -526,7 +526,7 @@ export async function GET(req: NextRequest) {
 
   // Excel生成
   const wb = new ExcelJS.Workbook();
-  wb.creator = "RaqWorks";
+  wb.creator = "I Works";
   wb.created = new Date();
 
   const persons = [...personMap.values()].sort((a, b) => a.staffId.localeCompare(b.staffId));

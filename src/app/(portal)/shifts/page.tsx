@@ -24,7 +24,7 @@ export default async function ShiftsPage({
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   const today = new Date();
   const todayStr = dateKey(today);

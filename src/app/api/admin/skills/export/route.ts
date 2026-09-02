@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
   });
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "RaqWorks";
+  wb.creator = "I Works";
   wb.created = new Date();
   const ws = wb.addWorksheet("スキル管理");
   ws.views = [{ state: "frozen", xSplit: 3, ySplit: 1 }];

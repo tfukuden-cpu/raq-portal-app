@@ -17,7 +17,7 @@ export default async function MembersPage(props: {
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   // アクセス制御: project_admin または global admin
   const { data: myStaff } = await supabase

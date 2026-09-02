@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
-import { useState, useTransition, useEffect } from "react";
+import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { DotGothic16 } from "next/font/google";
@@ -38,7 +38,6 @@ interface AppNavProps {
   rpgCharId?: number | null;
   projectName: string | null;
   logoutAction: () => Promise<void>;
-  switchProjectAction: (projectId: string) => Promise<void>;
   initialCollapsed: boolean;
   children: React.ReactNode;
 }
@@ -69,14 +68,11 @@ export default function AppNav({
   rpgCharId = null,
   projectName,
   logoutAction,
-  switchProjectAction,
   initialCollapsed,
   children,
 }: AppNavProps) {
   const pathname = usePathname();
-  const router   = useRouter();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
-  const [switching, startSwitch]  = useTransition();
   // SSRとクライアントで時刻がズレると hydration mismatch (#418) になるため、
   // 初期値は固定プレースホルダにしてマウント後に確定させる
   const [liveTime,  setLiveTime]  = useState("--:--");
@@ -121,13 +117,6 @@ export default function AppNav({
     return pathname === href;
   };
 
-  function handleSwitchProject(projectId: string) {
-    startSwitch(async () => {
-      await switchProjectAction(projectId);
-      router.refresh();
-    });
-  }
-
   const isCol = collapsed;
   const myCharSrc = rpgCharImg(rpgCharFor(staffId, rpgCharId).id);
 
@@ -138,28 +127,6 @@ export default function AppNav({
   const [activeSectionIdx, setActiveSectionIdx] = useState(defaultSectionIdx);
   const activeSection = sections[activeSectionIdx] ?? sections[0];
   const showSectionTabs = sections.length > 1;
-
-  function ProjectTabsMobile({ tabs }: { tabs: NonNullable<NavSection["projectTabs"]> }) {
-    return (
-      <div className="flex overflow-x-auto gap-1.5 px-3 py-1.5 border-b border-white/15" style={{ scrollbarWidth: "none" }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => handleSwitchProject(tab.id)}
-            disabled={switching}
-            className={[
-              "flex-shrink-0 px-3 py-1 rounded-full text-[11px] transition-colors whitespace-nowrap",
-              tab.isActive
-                ? "bg-white text-[#000846]"
-                : "bg-white/10 text-white/50",
-            ].join(" ")}
-          >
-            {tab.name}
-          </button>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div className={`flex bg-[#f4f6fa] dark:bg-zinc-950 ${isNoScrollPage ? "md:h-screen min-h-screen" : "min-h-screen"}`}>
@@ -180,10 +147,10 @@ export default function AppNav({
             aria-label={isCol ? "メニューを開く" : "メニューを閉じる"}
             className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity flex-shrink-0"
           >
-            <Image src="/icons/icon-512-any.png" alt="RaqWorks" width={40} height={40} className="flex-shrink-0" />
+            <Image src="/icons/icon-512-any.png" alt="I Works" width={40} height={40} className="flex-shrink-0" />
             {!isCol && (
               <span className="text-[14px] font-semibold text-white truncate">
-                RaqWorks
+                I Works
               </span>
             )}
           </button>
@@ -196,34 +163,10 @@ export default function AppNav({
               {si > 0 && (
                 <div className="my-3 mx-1 border-t border-white/[0.08]" />
               )}
-              {!isCol && (
-                section.projectTabs && section.projectTabs.length > 0 ? (
-                  <div
-                    className="flex overflow-x-auto mt-1 mb-1 border-b border-white/[0.08]"
-                    style={{ scrollbarWidth: "none" }}
-                  >
-                    {section.projectTabs.map(tab => (
-                      <button
-                        key={tab.id}
-                        onClick={() => handleSwitchProject(tab.id)}
-                        disabled={switching}
-                        title={tab.name}
-                        className={[
-                          "flex-shrink-0 px-3 py-1.5 text-[11px] font-medium whitespace-nowrap transition-colors border-b-2 -mb-px",
-                          tab.isActive
-                            ? "border-blue-400 text-white"
-                            : "border-transparent text-white/40 hover:text-white/70",
-                        ].join(" ")}
-                      >
-                        {tab.name.length > 7 ? tab.name.slice(0, 7) + "…" : tab.name}
-                      </button>
-                    ))}
-                  </div>
-                ) : section.title ? (
+              {!isCol && section.title && (
                   <p className="px-2 pt-2 pb-1.5 text-[9px] font-semibold text-white/30 uppercase tracking-[0.12em] select-none">
                     {section.title}
                   </p>
-                ) : null
               )}
               {section.items.map((item) => {
                 const active = isActive(item.href);
@@ -347,10 +290,6 @@ export default function AppNav({
               })}
             </div>
           </div>
-        )}
-
-        {activeSection.projectTabs && activeSection.projectTabs.length > 0 && (
-          <ProjectTabsMobile tabs={activeSection.projectTabs} />
         )}
 
         <nav className="flex overflow-x-auto px-1 pb-1" style={{ scrollbarWidth: "none" }}>

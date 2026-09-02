@@ -52,7 +52,7 @@ export default async function RecordPage({
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   const { data: project } = await supabase
     .from("projects")

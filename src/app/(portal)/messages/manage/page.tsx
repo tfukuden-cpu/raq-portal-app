@@ -35,7 +35,7 @@ export default async function MessagesManagePage({
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   if (!(await isAdminView(supabase, staffId, projectId))) {
     redirect("/messages");

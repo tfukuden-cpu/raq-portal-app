@@ -16,7 +16,7 @@ export default async function TasksPage() {
 
   const staffId = user.email?.split("@")[0]?.toUpperCase() ?? "";
   const projectId = await getCurrentProjectId();
-  if (!projectId) redirect("/select-project");
+  if (!projectId) redirect("/login");
 
   // アクセス制御: project_admin または global admin / executive のみ
   const [{ data: membership }, { data: myStaff }] = await Promise.all([

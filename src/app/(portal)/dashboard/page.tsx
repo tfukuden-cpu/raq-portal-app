@@ -72,25 +72,14 @@ export default async function DashboardPage() {
     return p?.is_active;
   });
 
-  if (activeMemberships.length === 0) redirect("/select-project");
+  if (activeMemberships.length === 0) redirect("/login");
 
+  // 単一案件（P001固定）。所属が無ければアプリを使えないのでログインへ戻す
   const currentProjectId = await getCurrentProjectId();
-  const isCurrentValid = activeMemberships.some(
-    (m) => m.project_id === currentProjectId
-  );
-
-  if (!currentProjectId || !isCurrentValid) {
-    if (activeMemberships.length === 1) {
-      // Server Component では cookies().set() 不可 → Route Handler 経由でセット＆リダイレクト
-      redirect(`/api/set-project?id=${activeMemberships[0].project_id}&next=/dashboard`);
-    } else {
-      redirect("/select-project");
-    }
-  }
-
   const currentMembership = activeMemberships.find(
     (m) => m.project_id === currentProjectId
-  )!;
+  );
+  if (!currentMembership) redirect("/login");
   const currentProject = Array.isArray(currentMembership.projects)
     ? currentMembership.projects[0]
     : currentMembership.projects;
