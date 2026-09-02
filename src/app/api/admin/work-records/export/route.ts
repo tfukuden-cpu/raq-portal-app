@@ -65,6 +65,9 @@ type DailyRecord = {
   shiftEnd: string | null;
   clockIn: string | null;
   clockOut: string | null;
+  /** 端末で実際に押された時刻（punch_logs.note の「出勤打刻: HH:MM」）。SVの代理記録のみの日は null */
+  rawIn: string | null;
+  rawOut: string | null;
   breakMinutes: number | null;
   workMinutes: number | null;
   overtimeMinutes: number | null;
@@ -125,6 +128,8 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
     { width: 8  },  // 退勤予定
     { width: 8  },  // 出勤打刻
     { width: 8  },  // 退勤打刻
+    { width: 8  },  // 実打刻(出)
+    { width: 8  },  // 実打刻(退)
     { width: 8  },  // 休憩時間
     { width: 10 },  // 稼働時間
     { width: 10 },  // 　内通常時間
@@ -139,12 +144,12 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
   const label = [person.accountNumber, person.name, person.company, person.section].filter(Boolean).join("　");
   const infoRow = ws.addRow([label]);
   infoRow.font = { bold: true, size: 12 };
-  ws.mergeCells(`A1:N1`);
+  ws.mergeCells(`A1:P1`);
   infoRow.getCell(1).fill = TOTAL_FILL;
   applyBorder(infoRow);
 
   // Row2: ヘッダー
-  const hdr = ws.addRow(["日付","シフト名","出勤予定","退勤予定","出勤打刻","退勤打刻","休憩時間","稼働時間","　内通常時間","　内残業時間","遅刻","早退","欠勤","備考"]);
+  const hdr = ws.addRow(["日付","シフト名","出勤予定","退勤予定","出勤打刻","退勤打刻","実打刻(出)","実打刻(退)","休憩時間","稼働時間","　内通常時間","　内残業時間","遅刻","早退","欠勤","備考"]);
   hdr.font = { bold: true };
   hdr.fill = HEADER_FILL;
   hdr.alignment = { horizontal: "center" };
@@ -153,7 +158,7 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
   // Row3: 合計行（ヘッダーと列を揃える）
   const totalRow = ws.addRow([
     `合計 (稼働${person.workDays}日)`,
-    "", "", "", "", "",
+    "", "", "", "", "", "", "",
     fmtMin(person.breakMinutes),
     fmtMin(person.workMinutes),
     fmtMin(person.normalMinutes),
@@ -180,6 +185,8 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
       r.shiftEnd   ?? "",
       r.clockIn  ? toJSTTime(r.clockIn)  : "",
       r.clockOut ? toJSTTime(r.clockOut) : "",
+      r.rawIn  ?? "",
+      r.rawOut ?? "",
       r.breakMinutes    != null ? fmtMin(r.breakMinutes)    : "",
       r.workMinutes     != null ? fmtMin(r.workMinutes)     : "",
       normalMin         != null ? fmtMin(normalMin)          : "",
@@ -191,9 +198,9 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
     ]);
     if (r.isAbsent)    dataRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F0" } };
     else if (r.isLate) dataRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF9F0" } };
-    dataRow.getCell(11).alignment = { horizontal: "center" };
-    dataRow.getCell(12).alignment = { horizontal: "center" };
-    dataRow.getCell(13).alignment = { horizontal: "center" };
+    dataRow.getCell(13).alignment = { horizontal: "center" };  // 遅刻
+    dataRow.getCell(14).alignment = { horizontal: "center" };  // 早退
+    dataRow.getCell(15).alignment = { horizontal: "center" };  // 欠勤
     applyBorder(dataRow);
   }
 }
@@ -356,13 +363,13 @@ export async function GET(req: NextRequest) {
   }
 
   // punches：ページネーション付きフェッチ
-  const punches: { staff_id: string; punch_type: string; recorded_at: string }[] = [];
+  const punches: { staff_id: string; punch_type: string; recorded_at: string; note: string | null }[] = [];
   {
     const PAGE = 1000;
     let from = 0;
     while (true) {
       const { data, error } = await admin.from("punch_logs")
-        .select("staff_id, punch_type, recorded_at")
+        .select("staff_id, punch_type, recorded_at, note")
         .eq("project_id", projectId)
         .gte("recorded_at", startISO).lte("recorded_at", endISO)
         .order("recorded_at")
@@ -405,13 +412,17 @@ export async function GET(req: NextRequest) {
   );
 
   // 打刻マップ
-  const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null }>();
+  const punchMap = new Map<string, {
+    clockIn: string | null; clockOut: string | null; rawIn: string | null; rawOut: string | null;
+  }>();
   for (const p of punches ?? []) {
     const key = `${p.staff_id}_${p.recorded_at.slice(0, 10)}`;
-    if (!punchMap.has(key)) punchMap.set(key, { clockIn: null, clockOut: null });
+    if (!punchMap.has(key)) punchMap.set(key, { clockIn: null, clockOut: null, rawIn: null, rawOut: null });
     const e = punchMap.get(key)!;
-    if (p.punch_type === "clock_in"  && !e.clockIn) e.clockIn  = p.recorded_at;
-    if (p.punch_type === "clock_out")                e.clockOut = p.recorded_at;
+    // 端末で押された生の時刻は note に「出勤打刻: HH:MM」「退勤打刻: HH:MM」として残る
+    const raw = p.note?.match(/(?:出勤|退勤)打刻[:：]\s*(\d{1,2}:\d{2})/)?.[1] ?? null;
+    if (p.punch_type === "clock_in"  && !e.clockIn) { e.clockIn = p.recorded_at; e.rawIn = raw; }
+    if (p.punch_type === "clock_out")               { e.clockOut = p.recorded_at; e.rawOut = raw; }
   }
   const absenceMap = new Map((absences ?? []).map(a => [`${a.staff_id}_${a.absence_date}`, a.reason ?? ""]));
   const lateMap    = new Map((lates    ?? []).map(l => [`${l.staff_id}_${l.late_date}`, l.reason ?? ""]));
@@ -481,6 +492,8 @@ export async function GET(req: NextRequest) {
       shiftEnd:   resolvedEnd,
       clockIn:    punch?.clockIn    ?? null,
       clockOut:   punch?.clockOut   ?? null,
+      rawIn:      punch?.rawIn      ?? null,
+      rawOut:     punch?.rawOut     ?? null,
       breakMinutes: (punch?.clockIn && punch?.clockOut) ? breakMinutes : null,
       workMinutes, overtimeMinutes,
       isLate, isEarlyLeave, isAbsent,
