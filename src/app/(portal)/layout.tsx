@@ -55,11 +55,14 @@ export default async function PortalLayout({ children }: { children: React.React
 
   const { data: staff } = await supabase
     .from("staffs")
-    .select("name, display_name, global_role, line_user_id, line_friend, rpg_character")
+    .select("name, display_name, global_role, line_user_id, line_friend, rpg_character, admin_only")
     .eq("id", staffId)
     .maybeSingle();
 
-  if (!staff?.line_user_id) redirect("/link-line");
+  // 管理専用アカウント（スタッフメニューを持たない管理者）はLINE連携を求めない
+  const isAdminOnly = staff?.admin_only === true;
+
+  if (!isAdminOnly && !staff?.line_user_id) redirect("/link-line");
 
   const isExecutive   = staff?.global_role === "executive";
   const isGlobalAdmin = staff?.global_role === "admin";
@@ -84,7 +87,10 @@ export default async function PortalLayout({ children }: { children: React.React
   // ── 表示モード確定 ───────────────────────────────────
   type ViewMode = "staff" | "admin" | "ops";
   let viewMode: ViewMode;
-  if (isExecutive) {
+  if (isAdminOnly) {
+    // 視点モードの切り替えは持たせない（常に管理者ビュー）
+    viewMode = "admin";
+  } else if (isExecutive) {
     viewMode = "ops";
   } else if (isGlobalAdmin) {
     viewMode = "admin";
@@ -101,7 +107,21 @@ export default async function PortalLayout({ children }: { children: React.React
   // ── セクション構築 ───────────────────────────────────
   let sections: NavSection[];
 
-  if (viewMode === "ops") {
+  // 案件設定のリンク先（project_admin（非グローバル）は案件詳細へ直リンク）
+  const settingsHref = (!isGlobalAdmin && isProjectAdmin && projectId)
+    ? `/admin/${projectId}`
+    : "/admin";
+  const adminItems = ADMIN_MENU_ITEMS.map(item =>
+    item.href === "/admin" ? { ...item, href: settingsHref } : item
+  );
+
+  if (isAdminOnly) {
+    // 管理メニューだけ（メイン＝スタッフメニューは出さない）
+    sections = [
+      { title: "管理", mobileLabel: "管理", icon: "Settings",
+        items: adminItems },
+    ];
+  } else if (viewMode === "ops") {
     sections = [
       { mobileLabel: "メイン", icon: "Home",
         items: [...staffMenu, MY_ITEM] },
@@ -111,13 +131,6 @@ export default async function PortalLayout({ children }: { children: React.React
         items: OPS_MENU_ITEMS },
     ];
   } else if (viewMode === "admin") {
-    // project_admin（非グローバル）は案件設定を直リンクにする
-    const settingsHref = (!isGlobalAdmin && isProjectAdmin && projectId)
-      ? `/admin/${projectId}`
-      : "/admin";
-    const adminItems = ADMIN_MENU_ITEMS.map(item =>
-      item.href === "/admin" ? { ...item, href: settingsHref } : item
-    );
     sections = [
       { mobileLabel: "メイン", icon: "Home",
         items: [...staffMenu, MY_ITEM] },
@@ -132,7 +145,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
   // LINE友達追加ゲート用のURLを取得（line_friend でない場合のみ）
   let lineAddUrl = process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL ?? "";
-  if (!staff?.line_friend && !lineAddUrl) {
+  if (!isAdminOnly && !staff?.line_friend && !lineAddUrl) {
     try {
       const botRes = await fetch("https://api.line.me/v2/bot/info", {
         headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
@@ -151,7 +164,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
   return (
     <>
-      {!staff?.line_friend && (
+      {!isAdminOnly && !staff?.line_friend && (
         <LineFriendGate lineAddUrl={lineAddUrl} />
       )}
       <PushPermissionRequest />

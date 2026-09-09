@@ -1,7 +1,13 @@
-﻿# Raq Works 全機能仕様書
+﻿# I Works 全機能仕様書
 
-> 最終更新: 2026-06-02（v80）  
+> 最終更新: 2026-09-01（v81）  
 > 対象: 全メニュー（スタッフ / 管理 / 運営）
+
+> **2026-09-01: アプリ名を「I Works」に変更し、IDOM（P001）専用の単一案件アプリにした。**
+> 案件の選択・切替・新規作成は廃止（`/select-project`・`/api/set-project`・
+> `/admin/ops/switch/[projectId]`・`NewProjectModal` を削除）。P002 MUNDO PIXAR は
+> 削除済み（バックアップ `_backup_p002_20260901_*`）。DBの `project_id` 列は残っており、
+> `getCurrentProjectId()` が常に `P001` を返すことで全クエリを動かしている。
 
 ---
 
@@ -48,14 +54,26 @@ user.email = "s001@raq.internal" → staffId = "S001"
 | グローバル管理者 | `"admin"` | 全案件の管理メニューにアクセス可 |
 | 運用者 | `"executive"` | 全機能 + 運営メニューにアクセス可 |
 
+### 管理専用アカウント（`staffs.admin_only = true`・2026-09-09追加）
+シフトに入らず管理業務だけを行う人向けのアカウント。**スタッフメニュー（ホーム/シフト/勤怠実績/メッセージ/ヘルプ/My）を出さず、管理メニュー7項目だけ**を表示する。
+
+- ナビは「管理」セクションのみ（`layout.tsx`）。視点モード切替は持たない（常に `admin`）
+- **LINE連携ゲートと友達追加バナーをスキップ**（LINE通知を受け取らない前提）
+- ログイン後の着地は `/dashboard` ではなく `/attendance`（当日状況）。`/dashboard` に来ても `/attendance` へリダイレクト
+- 権限そのものは `project_members.role = "project_admin"` で与える（このフラグはメニューの見え方だけを変える）
+- セクション未設定で登録するため**シフト仮組みの対象にはならない**（セクション一致のパターンが無いスタッフは飛ばされる）が、メンバー管理の一覧には出る
+- 現在の該当者: **AM002 小倉康功**（2026-09-09作成）
+
 ### 表示モード（Cookie: `rqp-view-mode`）
 - `"staff"` — 管理機能を非表示（案件管理者がスタッフ視点で確認する際に使用）
 - `"admin"` — 管理メニュー表示
 - `"ops"` — 運営メニュー表示（運用者のみ）
+- ※ `admin_only = true` のアカウントはCookieに関係なく常に `"admin"`
 
 ### LINE友達ゲート
 LINEアカウント未連携（`line_user_id = null`）→ ログイン後に `/link-line` へリダイレクト  
-LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友達追加バナーを表示
+LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友達追加バナーを表示  
+※ どちらも `admin_only = true` のアカウントは対象外
 
 ---
 
@@ -244,7 +262,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - プッシュ通知 ON/OFF トグル（`PushNotifyToggle`）
 - ログアウト
 - 視点モード切り替え（案件管理者のみ: スタッフ ↔ 管理者）
-- 案件切り替え（複数案件所属時）
+- ~~案件切り替え~~（2026-09-01 廃止・単一案件のため）
 
 **関連テーブル:**
 `staffs`, `project_members`
@@ -519,7 +537,7 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 |------|------|
 | 勤怠修正 | `punch_corrections`（staff申請の打刻補正）一覧。フィルタ: 審査中/すべて/承認済/却下。承認/却下モーダル（承認時は punch_logs を正しい時刻で上書き＋LINE通知）。承認済みに「再適用」ボタン（タイムスタンプバグ救済用）。SV承認者列（work_exception_requests とクロス参照） |
 | 申請一覧 | `work_exception_requests`（早退・残業申請）一覧。フィルタ: すべて/早退/残業。SV署名・ステータス表示（現状 view-only） |
-| 勤怠実績 | 月ナビ＋名前検索 → スタッフ一覧（月次サマリー）→ クリックで当月全日カレンダー詳細。公休・希望休含む全シフトを表示。打刻修正モーダル・確定ボタン・月計フッター。管理者修正は備考欄に修正者名を表示。出力ボタン（ExportModal）。詳細ビューでも月移動可（URLにstaffId保持） |
+| 勤怠実績 | 月ナビ＋名前検索 → スタッフ一覧（月次サマリー）→ クリックで当月全日カレンダー詳細。公休・希望休含む全シフトを表示。打刻修正モーダル・確定ボタン・月計フッター。管理者修正は備考欄に修正者名を表示。出力ボタン（ExportModal）。詳細ビューでも月移動可（URLにstaffId保持）。**確定（締め）済みの日は編集不可**＝修正ボタンの代わりにグレーの「確定」バッジを出し、サーバー側でも拒否。**確定の解除は運営者（`global_role='executive'`）のみ**（2026-08-31） |
 | 欠勤者レポート | （2026-06-20・#14で遵守率タブを置換／2026-06-28拡張）`AbsenteeReportClient` ＋ API `GET /api/admin/work-records/absentees?projectId&month`。月ナビ／当月の欠勤者数・延べ欠勤日数／当月の欠勤者一覧（各行に**当月の欠勤率%＋回数**を表示・タップで**当月のみ**と**過去1年累計**の出勤率/出勤数/欠勤数を2段で展開）。**出勤率は小数2桁・出勤予定は本日(JST)まででカウント**。日毎の欠勤者は別ページ `/attendance/absentees`（「📅 日毎の欠勤者」ボタン→選択月の日毎の表）に分離。※旧遵守率(WorkRecordsClient fixedTab="compliance")は当タブからは撤去（コンポーネント自体は残置）。※API は shifts を `.range()` で全件取得（1000行制限対策） |
 
 **関連テーブル:**
@@ -529,6 +547,11 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - `punch_corrections.corrected_in/out` は DB の time 型なので `"HH:MM:SS"` で返る。ISO生成時は `.slice(0,5)` で `"HH:MM"` に正規化してから `:00+09:00` を付ける（二重付加で insert が無音失敗するバグあり、修正済み）
 - `punch_corrections` に staffs FK が未定義のため join 禁止。名前は `memberMap`（project_members 起源）で解決
 - 管理者による直接修正は `punch_logs.note = "管理者修正:staffId"` を記録し、備考欄に修正者名として表示
+- **確定（締め）済みガード（2026-08-31）**: `attendance_confirmations` に行がある日は `savePunchCorrectionAction` / `reviewCorrectionAction`（承認時） / `reapplyCorrectionAction` がエラーを返す。解除 `unconfirmAttendanceAction` は運営者のみ
+- **月次締めの自動化（2026-08-31）**: `/api/cron/close-attendance` が **毎月1日 13:00 JST**（vercel.json `0 4 1 * *`）に前月分を一括確定（`confirmed_by='SYSTEM'`）し、管理者グループLINEへ結果を通知。手動実行は `?month=YYYY-MM`、件数確認だけなら `?dry=1`
+- **SVの稼働・超過は実打刻ベース（2026-08-31）**: SVは打刻端末を使わず勤怠修正で時刻を入力する運用のため、`section === "SV"` のスタッフは早退・残業申請の有無によらず実打刻で稼働を集計する（画面 `page.tsx` と保存後の再計算 `AttendanceEditClient.tsx` の両方）
+- **超過の定義（2026-08-31・画面とExcelで統一）**: 超過＝**稼働が8時間（480分）を超えた分**。Excel出力の「内残業時間」も同じ定義
+- **稼働実績Excel（`GET /api/admin/work-records/export`）の列（2026-08-31）**: 日付／シフト名／出勤予定／退勤予定／出勤打刻／退勤打刻／**実打刻(出)／実打刻(退)**／休憩時間／稼働時間／内通常時間／内残業時間／遅刻／早退／欠勤／備考。「出勤打刻」は打刻ルール適用後（遅刻なしならシフト開始時刻）の記録値、「実打刻」は `punch_logs.note` の `出勤打刻: HH:MM` / `退勤打刻: HH:MM` から取り出した**端末を押した実時刻**。休憩は個別設定が無ければ拘束時間から自動算出（8h超=60分／6h以上=45分／6h未満=0分）
 
 **廃止:** `/attendance/corrections`（別ページ）は廃止。`/attendance/edit?tab=corrections` に統合済み（2026-06-09）
 
@@ -693,9 +716,9 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 ### 5-1. 案件管理 (`/admin`)
 
 **機能:**
-- 全案件の一覧表示（アクティブ / アーカイブ）
-- 新規案件作成（`NewProjectModal`）
-- 各案件への切り替え（案件タブ）
+- 案件（IDOM / P001）の表示
+- ~~新規案件作成~~（2026-09-01 廃止・`NewProjectModal` 削除）
+- ~~各案件への切り替え（案件タブ）~~（2026-09-01 廃止）
 - 案件の詳細設定へのリンク（`/admin/[projectId]`）
 - 案件アーカイブ（`archiveProjectAction`）
 
@@ -931,7 +954,7 @@ export function monsterImg(id)             // → /rpg/mon-${id}.png
 
 | テーブル名 | 主な用途 |
 |-----------|---------|
-| `staffs` | スタッフマスタ（name, display_name, global_role, line_user_id, avatar_config） |
+| `staffs` | スタッフマスタ（name, display_name, global_role, line_user_id, avatar_config, **admin_only**） |
 | `projects` | 案件マスタ（name, is_active） |
 | `project_members` | 案件所属（staff_id, project_id, role, section, work_days_type など） |
 | `project_settings` | 案件設定（line_group_id, notification_settings, enable_departure_report） |
@@ -994,20 +1017,14 @@ git push
 | メール | `s001@raq.internal` |
 | 社員ID | `S001` |
 | グローバルロール | `admin` |
-| 案件 | P001（管理者）/ P002（スタッフ） |
+| 案件 | P001（管理者）※単一案件 |
 | 別アカウント | O002 — `global_role = "executive"`（運用者） |
 
-### 案件コンテキスト（Cookie）
+### 案件コンテキスト（2026-09-01 変更）
 
-| 属性 | 値 |
-|------|-----|
-| Cookie名 | `rqp-project-id` |
-| 有効期間 | 30日 |
-| フラグ | HTTPOnly |
-| セット場所 | `/api/set-project`（Route Handler） |
-
-1案件のみ所属 → ログイン後に自動セット  
-複数案件所属 → `/select-project` で選択
+Cookie方式は廃止。`src/lib/project-context.ts` の `getCurrentProjectId()` が
+常に定数 `PROJECT_ID = "P001"` を返す。全テーブルの `project_id` 列はそのまま残して
+あるので、複数案件に戻す場合はCookie方式と `/select-project` を復活させる。
 
 ### Cron ローカルテスト
 

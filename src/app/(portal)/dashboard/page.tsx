@@ -51,11 +51,14 @@ export default async function DashboardPage() {
 
   const { data: staff } = await supabase
     .from("staffs")
-    .select("id, name, display_name, global_role, must_change_password, rpg_character")
+    .select("id, name, display_name, global_role, must_change_password, rpg_character, admin_only")
     .eq("id", staffId)
     .maybeSingle();
 
   if (staff?.must_change_password) redirect("/change-password");
+
+  // 管理専用アカウント（スタッフメニューなし）はホームを持たないので当日状況へ
+  if (staff?.admin_only) redirect("/attendance");
 
   const displayName = staff?.display_name ?? staff?.name ?? staffId;
   const isGlobalAdmin = staff?.global_role === "admin" || staff?.global_role === "executive";

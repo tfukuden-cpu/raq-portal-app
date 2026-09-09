@@ -56,19 +56,25 @@ export async function loginAction(formData: FormData): Promise<LoginResult> {
     return { success: false, message: "パスワードが違います" };
   }
 
-  // LINE未連携なら連携フローへ
   const { data: staffDetail } = await supabase
     .from("staffs")
-    .select("line_user_id")
+    .select("line_user_id, admin_only, must_change_password")
     .eq("id", staffId)
     .maybeSingle();
 
-  if (!staffDetail?.line_user_id) {
+  // 初期パスワードのままなら変更画面へ
+  if (staffDetail?.must_change_password) {
+    redirect("/change-password");
+  }
+
+  // LINE未連携なら連携フローへ（管理専用アカウントはLINEを使わないので対象外）
+  if (!staffDetail?.admin_only && !staffDetail?.line_user_id) {
     redirect("/link-line");
   }
 
-  // next が内部パスであればそこへ、なければダッシュボードへ
-  const dest = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/dashboard";
+  // next が内部パスであればそこへ。既定は管理専用アカウントなら当日状況、他はダッシュボード
+  const home = staffDetail?.admin_only ? "/attendance" : "/dashboard";
+  const dest = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : home;
   redirect(dest);
 }
 

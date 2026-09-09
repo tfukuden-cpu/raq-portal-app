@@ -1,4 +1,4 @@
-# Raq Works 開発メモリ
+# I Works 開発メモリ
 
 > AIが作業を始める前に必ず読む。SPEC.md と合わせて使う。
 
@@ -7,7 +7,9 @@
 ## システム概要
 
 合同会社Raqの社内ポータルPWA。Next.js 16 + Supabase + LINE通知。  
-スタッフの勤怠・シフト・座席・通知を一元管理する多テナントシステム。
+スタッフの勤怠・シフト・座席・通知を一元管理する。  
+**2026-09-01にアプリ名を「I Works」に変更し、IDOM（P001）専用の単一案件アプリにした**（旧称 Raq Works / RaqWorks）。
+DBの `project_id` 列は残っているが、案件の選択・切替・新規作成の機能は無い。
 
 **開発スタイル:** バイブコーディング（JS/SQL未経験ユーザーがAIに指示して進める）
 
@@ -39,6 +41,39 @@
 - 骨子: 上記ロール3層の完全対応／管理者・運営者アカウントは別体系／グローバル管理者廃止／スタッフアカウント管理を管理者へ移譲／集計はDB側(ビュー/RPC)で1000行制限バグを根絶／テストを最初から書く
 
 ---
+
+## 現在の開発状態（2026-09-09更新）
+
+### 管理専用アカウント（スタッフメニュー無しの管理者）＋勤怠出力の期間バグ修正（2026-09-09）
+**ユーザー依頼「小倉さんのアカウントを作ってほしい。管理メニューだけで、スタッフメニューは不要」。判断＝権限は管理者(project_admin)／LINE連携は不要（ゲートをスキップ）／社員IDは AM002／管理メニューは7項目すべて。tsc 0・eslint エラー0。**
+- **`staffs.admin_only boolean not null default false` を追加**（マイグレーション `add_staffs_admin_only`・本番適用済）。**権限ではなく「メニューの見え方」を変えるフラグ**＝権限は従来どおり `project_members.role='project_admin'` で与える
+- **`layout.tsx`**: `admin_only` なら ①ナビは「管理」セクション（`ADMIN_MENU_ITEMS` 7項目）だけ＝メイン（スタッフメニュー＋My）を出さない ②`viewMode` を常に `"admin"`（視点切替を持たせない）③**`/link-line` リダイレクトと `LineFriendGate` をスキップ**。`settingsHref`/`adminItems` の算出は admin ブランチの外に出して共用
+- **`login/actions.ts`**: `must_change_password` なら `/change-password` へ（従来は `/dashboard` 経由で判定していた）。`admin_only` はLINE未連携でも `/link-line` に飛ばさず、着地を `/attendance` にする
+- **`dashboard/page.tsx`**: `admin_only` が `/dashboard` に来たら `/attendance` へ
+- **AM002 小倉康功を作成（本番）**: `auth.users`＋`auth.identities`＋`staffs`(admin_only=true・must_change_password=true)＋`project_members`(P001・project_admin・section null)。初期パスワードは既存の運用者作成と同じ `1234`。ログインは氏名照合なので `name="小倉康功"` / `display_name="小倉 康功"` の両方でヒットする
+- **セクション未設定なので仮組みの対象外**（`draft-actions.ts` はセクション一致するパターンが無いスタッフを `continue` で飛ばす。P001の12パターンは全てセクション付き）。ただしメンバー管理の一覧には出る
+- **勤怠出力の期間バグ**: `/attendance/edit` の勤怠実績で8月を表示して「出力」しても、`ExportModal` の初期期間が常に「今月1日〜本日」だったため9月分が出ていた。`month` prop（＝`currentMonth`）を渡し、**表示中の月を初期期間**にする（当月なら末日ではなく本日まで）。期間ショートカットに「N月（表示中）」を追加
+
+## 現在の開発状態（2026-09-01更新）
+
+### アプリ名を「I Works」に変更＋IDOM専用の単一案件アプリ化（2026-09-01・デプロイ済 a86cd14）
+**ユーザー指示「名称をI Worksに変えてほしい。そして案件はIDOM案件のみにしてほしい、他の案件追加機能はそもそもいらない」。判断＝①P002は完全削除 ②`project_id`列は残す ③名称は「I Works」で確定。tsc 0・eslint 0・`next build` 成功。41ファイル・-545行。**
+- **単一案件化の核＝`src/lib/project-context.ts`**: `export const PROJECT_ID = "P001"` を新設し、`getCurrentProjectId()` は**常に `"P001"` を返す**（Cookie読み取り廃止）。`setCurrentProjectId()` は互換のため残すが何もしない。`clearCurrentProjectId()` はログアウト時の旧Cookie掃除のみ。**全テーブルの `project_id` 列と `.eq("project_id", projectId)` はそのまま**＝複数案件に戻す場合はここをCookie方式に戻して選択画面を復活させるだけでよい
+- **削除したファイル**: `src/app/select-project/{page,actions}.tsx`／`src/app/api/set-project/route.ts`／`src/app/admin/ops/switch/[projectId]/route.ts`／`src/app/(portal)/switch-project-action.ts`／`src/app/(portal)/admin/NewProjectModal.tsx`
+- **UIから消したもの**: `layout.tsx` の運営者向け全案件リスト取得（`createAdminClient`でのprojects取得）と案件タブ生成／`AppNav.tsx` の案件タブ（PC・モバイル`ProjectTabsMobile`）と切替ハンドラ／`dashboard/page.tsx` の案件選択分岐（**所属が無ければ `/login` へ**）。各ページの `redirect("/select-project")` は全25箇所 `redirect("/login")` に置換
+- **名称変更16箇所**: `layout.tsx`(title/description/applicationName/openGraph)・`manifest.ts`(PWAのname/short_name/description)・ログイン画面・サイドバー・`LineFriendGate`・Excel出力3種(skills/export・work-records/export・稼働人数)の作成者情報・`AttendanceClient`・`DailyReportTab`
+- **DB（本番適用済）**: **P002（MUNDO PIXAR）を削除**（`projects`/`project_members`/`project_settings` 各1行のみ・実績データ0件）。バックアップ＝`_backup_p002_20260901_projects` / `_members` / `_settings` / `_staffs`。所属案件が無くなる **AM001（長壁菜摘）は `is_active=false`**
+- 残（任意）: GitHubリポジトリ名 `raq-portal-app` とVercel URL `raq-portal-app.vercel.app` は未変更／アイコン・ロゴ画像も未差し替え
+
+## 現在の開発状態（2026-08-31更新）
+
+### 勤怠の締め＋SV稼働の是正 4件（2026-08-31・デプロイ済 cfeceab / 82686c8 / a7d6f2f / 874986e）
+**7月・8月の勤怠点検（打刻漏れ63件→0／86件→0）の過程で出た改修。**
+- **①確定（締め）済みは編集不可（cfeceab）**: `attendance_confirmations` に行がある日は勤怠実績の「修正」ボタンを出さずグレーの**確定バッジ**に。サーバー側にもガード `assertNotConfirmed()` を入れ、`savePunchCorrectionAction`／`reviewCorrectionAction`（承認時のみ）／`reapplyCorrectionAction` はエラーを返す。**確定の解除（`unconfirmAttendanceAction`）は運営者（`global_role='executive'`）のみ**＝`isExecutive()` ヘルパーで判定
+- **②月次締めの自動化（82686c8）**: 新API `src/app/api/cron/close-attendance/route.ts`。**毎月1日 13:00 JST**（vercel.json に `0 4 1 * *` 追加）に前月分の勤務日を `attendance_confirmations` へ一括upsert（onConflict=`project_id,staff_id,work_date`・ignoreDuplicates）し、`project_settings.line_group_id` へ結果通知。`?month=YYYY-MM` で対象月指定・`?dry=1` で件数だけ確認。**2026-09-01 13:00 に初回稼働＝8月分1,766件を `confirmed_by='SYSTEM'` で確定済み**
+- **③SVの稼働・超過を実打刻ベースに（a7d6f2f）**: SVは打刻端末を使わず勤怠修正で時刻を入力する運用のため、早退・残業申請が無いと稼働が「シフト定時」に丸められ 09:00〜22:45 の打刻でも 8:00 と表示されていた。`section === "SV"` は申請の有無によらず実打刻で集計するよう変更（`attendance/edit/page.tsx` の初期算出と `AttendanceEditClient.tsx` の保存後再計算の**両方**）。あわせて**超過の定義を「稼働が8時間を超えた分」に統一**（画面とExcelの `overtimeMinutes = max(0, workMinutes - 480)`）
+- **④稼働実績Excelに実打刻列を追加（874986e）**: 「出勤打刻／退勤打刻」（打刻ルール適用後の記録値）に加えて **「実打刻(出)／実打刻(退)」**（`punch_logs.note` の `出勤打刻: HH:MM` / `退勤打刻: HH:MM` ＝端末を押した実時刻）を追加。ヘッダーは16列・`A1:P1` マージ・合計行の空セルとセンタリング位置も更新
+- **運用ルール（ユーザー判断）**: 打刻漏れ・打刻が間に合わなかったケースは**定時**として補正（note に `[定時補正:O002]`）。LINEに実際の遅刻報告があるものだけ遅刻として残す。**`note="admin_manual"` は「本人の打刻が間に合わない時にSVが代わりに記録したもの」＝実到着時刻に近い**ので集計から除外しない（当初除外を提案したがユーザー指摘で撤回）
 
 ## 現在の開発状態（2026-08-10更新）
 
@@ -537,8 +572,9 @@
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 
+// 単一案件（P001固定）。getCurrentProjectId() は常に "P001" を返す
 const projectId = await getCurrentProjectId();
-if (!projectId) redirect("/select-project");
+if (!projectId) redirect("/login");
 ```
 
 ### ログインユーザーの社員ID取得
@@ -653,6 +689,14 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | クライアントの `useState(props)` 初期値は router.push の再取得に追従しない | `router.push(?month=...)` 等でURLパラメータだけ変えてサーバー再取得しても、**同じクライアントコンポーネントは再マウントされない**ため `useState(props)` の初期値は最初の値で固定される。`AttendanceEditClient` の `localRows`/`confirmMap` が該当し、勤怠実績の月送りで**打刻・稼働が全日空欄**になった（シフト名等のprops直参照は正しく出るため気づきにくい）。編集用のローカルstateをpropsから初期化している画面は `useEffect(()=>setState(props),[props])` でprops変更に追従させること（2026-07-01修正）。※`ShiftManageClient` の `latestDraft` も同種で `onDraftSaved`+refresh で対処済 |
 | 休み扱いシフト名(OFFリスト)はページ間で揃える | 欠勤/出勤予定の集計で休みを「公休」「休」だけで判定すると、希望休/有休/特別休暇などが出勤予定に入り打刻無し→欠勤に誤カウントする。フルリスト＝`["公休","休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤","公募"]`（**公募は2026-07-12追加＝余剰時帰宅の休みステータス**）。本人 `/record` の page.tsx が短縮リストで希望休を欠勤カウントしていた（2026-07-06修正）。管理者側は2026-06-25に修正済だった＝新しく勤怠集計を書くときは必ずフルOFFリストを使う（導入研修は稼働日なので除外しない）。**新しい休みステータスを増やすときは全OFFリスト（約20ファイル・SQL not-in含む）に漏れなく追加すること** |
 | Postgres `time`型カラム(`shift_start`/`shift_end`)は `"HH:MM:SS"` で返る | `` `${date}T${timeStr}:00+09:00` `` のように`"HH:MM"`前提で秒を足すと `...T20:00:00:00+09:00` の不正文字列→`Invalid Date`→`NaN`。Excel出力(`work-records/export/route.ts`)で内通常/内残業時間が `NaN:NaN` になった。`timeStr.slice(0,5)` で正規化してから日時を組む（2026-07-01修正）。他の勤怠計算箇所は既に `.slice(0,5)` 済み |
+| 案件は P001 のみ・`getCurrentProjectId()` は常に `"P001"` を返す | 2026-09-01に単一案件化。案件の選択・切替・新規作成の画面は削除済み（`/select-project`・`/api/set-project`・`/admin/ops/switch/[projectId]`・`NewProjectModal`）。**新規ページでも `getCurrentProjectId()` は呼び続ける**（`.eq("project_id", projectId)` の絞り込みはDB側にproject_id列が残っているため必須）。`if (!projectId)` のフォールバックは `/login` へ。複数案件に戻すときは `src/lib/project-context.ts` をCookie方式に戻して選択画面を復活させる |
+| アプリ名は「I Works」（旧 Raq Works / RaqWorks） | 2026-09-01変更。表示名は `layout.tsx`のmetadata・`manifest.ts`・ログイン画面・サイドバー・`LineFriendGate`・Excel出力の作成者情報にある。**新しく名前を出す箇所は「I Works」に揃える**。リポジトリ名(`raq-portal-app`)とVercel URLは旧名のまま |
+| 確定（締め）済みの日は編集不可・解除は運営者のみ | `attendance_confirmations` に行がある日は `savePunchCorrectionAction`／`reviewCorrectionAction`(承認)／`reapplyCorrectionAction` がサーバー側で拒否する（`assertNotConfirmed()`）。**新しく打刻を書き換えるアクションを作るときは同じガードを入れる**。解除 `unconfirmAttendanceAction` は `global_role='executive'` のみ。毎月1日13:00 JSTに `/api/cron/close-attendance` が前月を自動確定するので、締め後の修正は「運営者が解除→修正→再確定」の順になる |
+| `note="admin_manual"` は「SVが本人の代わりに記録した打刻」＝集計から除外しない | 出勤簿で手動「勤務中」にしたときと同じnoteだが、実運用では**本人の打刻が間に合わない時にSVが代理で記録する**ために使われている（実到着時刻に近い）。稼働時間の集計から除外すると実態とズレる（2026-08-31にユーザー指摘で除外案を撤回）。打刻バッジやスタッフ本人の打刻可否判定で除外するのは従来どおり正しい |
+| SV（`section === "SV"`）の稼働は実打刻ベースで集計する | SVは打刻端末を使わず勤怠修正で時刻を入力する運用のため、早退・残業申請が無いと稼働がシフト定時に丸められ 09:00〜22:45 でも 8:00 と出ていた。`attendance/edit/page.tsx`（初期算出）と `AttendanceEditClient.tsx`（保存後の再計算）の**両方**に同じ分岐が必要。超過は画面もExcelも `max(0, 稼働 - 480分)` で統一 |
+| 手でinsertした `auth.users` は空文字カラムを埋めないとログインが500になる | `confirmation_token` / `recovery_token` / `email_change` / `email_change_token_new` などの文字列カラムがNULLのままだと、GoTrueが値を読めず `{"code":500,"msg":"Database error querying schema"}` になる（AM002作成時に発生）。**`coalesce(col,'')` で空文字にする**。あわせて `auth.identities` の行（provider='email'・identity_data に sub/email）も必ず作ること。作成後は `POST /auth/v1/token?grant_type=password` を叩いて200を確認する |
+| 管理専用アカウントは `staffs.admin_only` フラグ（権限ではない） | true にするとスタッフメニューを出さず管理メニューだけになる。**権限自体は `project_members.role='project_admin'` で与える**（フラグ単体では何の権限も付かない）。LINE連携ゲート（`/link-line`）と友達追加バナーもスキップし、ログイン後の着地は `/attendance`。**スタッフ向けの新機能を作るときは `admin_only` のアカウントがそのページに来ない前提で良いが、ナビに出す項目を増やすときはメイン/管理どちらのセクションかを意識する**（該当者＝AM002 小倉康功） |
+| 実績出力モーダルの期間は「表示中の月」から作る | `ExportModal` は月ナビの隣にあるのに初期期間が常に「今月1日〜本日」で、8月を表示して出力しても9月が出ていた（2026-09-09修正）。`AttendanceEditClient` から `month={currentMonth}` を渡して初期化する。**同種のモーダルを足すときも、画面が今見ている期間を引き継ぐこと** |
 
 ---
 

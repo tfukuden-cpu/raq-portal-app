@@ -6,7 +6,7 @@
 
 | テーブル | 主な用途・主要カラム |
 |---------|-------------------|
-| `staffs` | スタッフマスタ（name, display_name, global_role, line_user_id, line_friend, avatar_config） |
+| `staffs` | スタッフマスタ（name, display_name, global_role, line_user_id, line_friend, avatar_config, admin_only） |
 | `projects` | 案件マスタ（name, is_active） |
 | `project_members` | 案件所属（staff_id, project_id, role, section, sections[], work_days_type, account_number, churn_risk, shift_published, **sort_order**=SV手動並び順(2026-06-20追加・#17/#19)） |
 | `project_settings` | 案件設定（line_group_id, notification_settings JSONB, enable_departure_report） |
@@ -64,6 +64,7 @@
 | `notices.attachment_url/attachment_name` | 周知の添付ファイル（1周知1ファイル）。Storage バケット `notice-attachments`（public）に実体 |
 | `break_room_uses` | 休憩室の占有（入室中のみ行が存在・退室で削除。UNIQUE: project_id, use_date, box_number / UNIQUE: project_id, use_date, staff_id） |
 | `staff_partners` | パートナーモンスター所持（SPEC.md §6-7・全社共通。id 代理PK, staff_id, monster_id 1〜72, obtained_at）。**重複所持OK**＝同一 monster_id の行が複数あり得る（複合PK不可）。insert はガチャアクションの admin クライアントのみ。RLS: 本人 select 可 |
+| `staffs.admin_only` | 管理専用アカウント（true=スタッフメニューを出さず管理メニューのみ・LINEゲートもスキップ・2026-09-09追加） |
 | `staffs.active_partner_id` | 現在連れているパートナー（mon 1〜72・null=なし） |
 
 ## タスク・LINE連携
