@@ -7,11 +7,12 @@
 | `/api/auth/line` | GET | LINE OAuthログイン開始 |
 | `/api/auth/line/callback` | GET | LINE OAuthコールバック → `staffs.line_user_id` セット |
 | `/api/line/webhook` | POST | LINE Webhook（follow→line_friend=true / unfollow→line_blocked=true） |
-| `/api/set-project` | POST | 案件IDをCookieにセット |
+| ~~`/api/set-project`~~ | - | **2026-09-01 削除**（単一案件化・`getCurrentProjectId()`が常にP001を返す） |
 | `/api/punch/[projectId]/statuses` | GET | 打刻状態取得（QRコード端末用） |
 | `/api/push/subscribe` | POST | Web Push購読登録 |
 | `/api/cron/notify` | POST | スケジュール通知Cron（時刻指定・1日3回） |
 | `/api/cron/extract-tasks` | POST | AIタスク自動抽出Cron（17:00 JST） |
+| `/api/cron/close-attendance` | POST/GET | **勤怠の月次締め**（毎月1日13:00 JST・前月を一括確定・2026-08-31追加） |
 | `/api/test-push` | POST | Web Pushテスト送信 |
 | `/api/debug/line-push` | POST | LINEテスト送信（デバッグ用） |
 | `/api/admin/import-shift-off-requests` | POST | 希望休リクエストインポート |
@@ -34,6 +35,7 @@
 | `/api/cron/notify` | `0 10 * * *` | 19:00 | `rest_day_remind` |
 | `/api/cron/notify` | `0 23 * * *` | 08:00 | `task_remind`（毎朝タスクリマインド→管理者グループLINE・2026-07-12追加） |
 | `/api/cron/extract-tasks` | `0 8 * * *` | 17:00 | タスク自動抽出 |
+| `/api/cron/close-attendance` | `0 4 1 * *` | 毎月1日 13:00 | 前月の勤怠を `attendance_confirmations` に一括upsert（`confirmed_by='SYSTEM'`）→管理者グループLINEへ結果通知。`?month=YYYY-MM` で対象月指定・`?dry=1` で件数だけ確認 |
 
 ## cron/notify の処理内容
 

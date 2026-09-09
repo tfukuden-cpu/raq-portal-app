@@ -1054,7 +1054,7 @@ export default function AttendanceEditClient({
 
       {/* 実績出力モーダル */}
       {showExport && (
-        <ExportModal projectId={projectId} staffs={staffs} onClose={() => setShowExport(false)} />
+        <ExportModal projectId={projectId} staffs={staffs} month={currentMonth} onClose={() => setShowExport(false)} />
       )}
 
       {/* トースト */}

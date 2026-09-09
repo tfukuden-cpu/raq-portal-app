@@ -22,20 +22,34 @@ function lastWeek() {
   };
 }
 
+/** "YYYY-MM" → その月の初日・末日（当月なら末日は本日まで） */
+function monthRange(month: string, today: string) {
+  const [y, m] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  return { start: `${month}-01`, end: last > today ? today : last };
+}
+
 export default function ExportModal({
   projectId,
   staffs,
+  month,
   onClose,
 }: {
   projectId: string;
   staffs: StaffEntry[];
+  /** 画面で表示中の月（YYYY-MM）。出力期間の初期値に使う */
+  month?: string;
   onClose: () => void;
 }) {
   const today          = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
   const thisMonthStart = today.slice(0, 7) + "-01";
 
-  const [startDate,    setStartDate]    = useState(thisMonthStart);
-  const [endDate,      setEndDate]      = useState(today);
+  // 表示中の月をそのまま初期期間にする（月送りして出力したら別の月が出た、を防ぐ）
+  const viewMonth = month && /^\d{4}-\d{2}$/.test(month) ? month : today.slice(0, 7);
+  const viewRange = monthRange(viewMonth, today);
+
+  const [startDate,    setStartDate]    = useState(viewRange.start);
+  const [endDate,      setEndDate]      = useState(viewRange.end);
   // 空 = すべての会社。複数選択可
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [downloading,  setDownloading]  = useState(false);
@@ -90,10 +104,11 @@ export default function ExportModal({
   }
 
   const PERIOD_BTNS = [
+    { label: `${Number(viewMonth.slice(5, 7))}月（表示中）`, ...viewRange },
     { label: "今月", start: thisMonthStart,              end: today },
     { label: "先月", ...lastMonth() },
     { label: "先週", ...lastWeek() },
-  ];
+  ].filter((b, i, arr) => arr.findIndex(x => x.start === b.start && x.end === b.end) === i);
 
   return (
     <div

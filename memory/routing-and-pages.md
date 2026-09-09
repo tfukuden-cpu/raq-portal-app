@@ -7,7 +7,7 @@
 | パス | 用途 |
 |------|------|
 | `/login` | ログイン |
-| `/select-project` | 案件選択（複数所属時） |
+| ~~`/select-project`~~ | **2026-09-01 削除**（単一案件化・所属が無ければ `/login`） |
 | `/link-line` | LINE連携（未連携時にリダイレクト） |
 | `/change-password` | パスワード変更 |
 | `/auth/confirm` | メール確認 |
