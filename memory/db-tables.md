@@ -9,7 +9,7 @@
 | `staffs` | スタッフマスタ（name, display_name, global_role, line_user_id, line_friend, avatar_config, admin_only） |
 | `projects` | 案件マスタ（name, is_active） |
 | `project_members` | 案件所属（staff_id, project_id, role, section, sections[], work_days_type, account_number, churn_risk, shift_published, **sort_order**=SV手動並び順(2026-06-20追加・#17/#19)） |
-| `project_settings` | 案件設定（line_group_id, notification_settings JSONB, enable_departure_report） |
+| `project_settings` | 案件設定（line_group_id, notification_settings JSONB, enable_departure_report）・**break_sheet_url/break_sheet_name=休憩表スプレッドシート（2026-09-25追加・sheet_urlとは別）** |
 
 ## シフト関連
 
@@ -55,10 +55,10 @@
 | `seat_assignments` | 座席割り当て |
 | `seat_walls` | 座席レイアウト壁 |
 | `mota_slot_assignments` | H MOTAスロット配置（account_number, slot, staff_name, assigned_account） |
-| `break_slot_settings` | 休憩スロット設定（slot_number ①②③, start_time, end_time, ratio） |
+| `break_slot_settings` | 休憩スロット設定（slot_number ①②③, start_time, end_time, ratio）・**short_start_time/short_end_time=小休憩の時間帯（2026-09-25追加）** |
 | `staff_break_overrides` | スタッフ別当日休憩時間（project_id, staff_id, override_date, regular_minutes, short_minutes）デフォルト60/15分 |
 | `work_exception_requests` | 早退・残業申請（request_type: early_leave/overtime, signer_name, status: pending/approved/rejected） |
-| `break_slot_assignments` | 休憩スロット割り当て（UNIQUE: project_id, assignment_date, staff_id） |
+| `break_slot_assignments` | 休憩スロット割り当て（UNIQUE: project_id, assignment_date, staff_id）・**source=sheet/manual/auto（2026-09-25追加）** |
 | `break_room_settings` | 休憩室の定員＋設備＋開閉（project_id PK, capacity 1〜50 デフォルト6, amenities jsonb `[{label, ok}]`, is_open boolean default true） |
 | `login_bonuses` | ログインボーナス（staff_id PK・全社共通, coins, total_logins, last_claimed_date）。毎日1回コインのガチャ。更新はサーバーアクションの admin クライアント |
 | `notices.attachment_url/attachment_name` | 周知の添付ファイル（1周知1ファイル）。Storage バケット `notice-attachments`（public）に実体 |
@@ -76,7 +76,7 @@
 | `project_task_notes` | タスク作業メモ（task_id, author_staff_id, body, progress, mark_done）メモでステータス自動導出・2026-07-12新設 |
 | `skill_items` | スキル管理カスタム項目（project_id, label, sort_order）2026-07-12新設 |
 | `absence_recovery_marks` | 欠勤補填日の回収済マーク（staff_id, absence_date・行が存在=済）2026-07-12新設 |
-| `break_slot_daily_settings` | 休憩スロット①〜③の日付別オーバーライド（target_date・行がある日はこちら優先）2026-08-10新設 |
+| `break_slot_daily_settings` | 休憩スロット①〜③の日付別オーバーライド（target_date・行がある日はこちら優先）2026-08-10新設・**short_start_time/short_end_time（2026-09-25追加）** |
 | `staff_skill_values` | スタッフ×カスタム項目の○×（staff_id, item_id, value）2026-07-12新設 |
 | `task_extraction_groups` | タスク抽出グループ設定（group_id, enabled） |
 | `line_groups` | LINEグループ情報 |

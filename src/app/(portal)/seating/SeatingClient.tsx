@@ -9,8 +9,8 @@ import {
   getSeatingEditorsAction,
   type SeatingEditor,
 } from "./actions";
-import { assignBreakSlotsAction } from "./break-actions";
 import BreakSlotDayEditor from "./BreakSlotDayEditor";
+import BreakSheetImportButton from "./BreakSheetImportButton";
 import type { BreakSlotSetting } from "./break-actions";
 import {
   getBreakRoomStateAction, forceReleaseBreakRoomAction, setBreakRoomCapacityAction,
@@ -483,18 +483,11 @@ export default function SeatingClient({
   // 日付別の休憩スロット設定モーダル
   const [showBreakEditor, setShowBreakEditor] = useState(false);
 
-  // 休憩スロット自動割り振り
-  function handleAssignBreaks() {
-    startTransition(async () => {
-      const res = await assignBreakSlotsAction(projectId, today);
-      if (res.success) {
-        setToast(`休憩割り振り完了（${res.count}名）`);
-        router.refresh();
-      } else {
-        setToast(`⚠️ ${res.error ?? "休憩割り振りに失敗しました"}`);
-      }
-      setTimeout(() => setToast(null), 2500);
-    });
+  // 休憩表スプレッドシートからの取り込み結果
+  function handleBreakImported(message: string, ok: boolean) {
+    setToast(ok ? message : `⚠️ ${message}`);
+    if (ok) router.refresh();
+    setTimeout(() => setToast(null), 4000);
   }
 
   // ── 超過判定用 tick（30秒ごと） ──────────────────────────
@@ -645,13 +638,7 @@ export default function SeatingClient({
                 >
                   配置編集
                 </a>
-                <button
-                  onClick={handleAssignBreaks}
-                  disabled={isPending}
-                  className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-100 transition-colors disabled:opacity-50"
-                >
-                  休憩割り振り
-                </button>
+                <BreakSheetImportButton projectId={projectId} date={today} onDone={handleBreakImported} />
                 <button
                   onClick={() => setShowBreakEditor(true)}
                   className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-50 transition-colors"
@@ -761,6 +748,9 @@ export default function SeatingClient({
             </button>
           )}
           {!editMode && (
+            <BreakSheetImportButton projectId={projectId} date={today} onDone={handleBreakImported} />
+          )}
+          {!editMode && (
             <button
               onClick={() => setShowBreakEditor(true)}
               className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-50 transition-colors"
@@ -857,6 +847,11 @@ export default function SeatingClient({
                       <td className={`px-3 py-2 font-semibold tabular-nums ${slotBg}`}>
                         <div>{slot.label} スロット{slot.slot_number}</div>
                         <div className="text-[10px] opacity-80 mt-0.5">{slot.start_time.slice(0,5)}〜{slot.end_time.slice(0,5)}</div>
+                        {slot.short_start_time && slot.short_end_time && (
+                          <div className="text-[10px] opacity-70 mt-0.5 font-normal">
+                            小休憩 {slot.short_start_time.slice(0,5)}〜{slot.short_end_time.slice(0,5)}
+                          </div>
+                        )}
                       </td>
                       {["査定", "販売"].flatMap(sec => {
                         const d = secs[sec] ?? { early: [], late: [] };

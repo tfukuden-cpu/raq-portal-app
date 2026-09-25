@@ -42,6 +42,21 @@ DBの `project_id` 列は残っているが、案件の選択・切替・新規�
 
 ---
 
+## 現在の開発状態（2026-09-25更新）
+
+### 休憩スロットをSVのスプレッドシートから取り込む＋自動振り分けの廃止（2026-09-25・実装済・未デプロイ）
+**ユーザー依頼「このスプシのデータ通りの休憩時間を反映させてほしいらしい。自動振り分けじゃなくて」。決定＝①取り込みボタンを作る ②自動振り分けは完全停止 ③小休憩の時間帯も保存できるようにする。実装は engineer、検品は qa-reviewer に依頼。tsc 0・`npx eslint src` は 77 warnings/0 errors（HEADと同数＝新規0）・`next build` 成功。**
+- **取り込み元シート**（SVが毎日記入・`project_settings.break_sheet_url` に登録済み）: 4行目以降がデータで A=日付(`YYYY/MM/DD`)／B=アカウント番号(`ASS 61`)／C=商材／D=休憩開始／E=休憩終了／F=小休憩開始／G=小休憩終了。**B列が空の行は未入力**（翌日テンプレ）。9/24の実データは36名で、**休憩の時間帯はP001の既存スロット①②③と完全一致**（違うのは誰がどのスロットかだけ＝自動振り分けが実態と合っていなかった）
+- **新アクション `importBreakAssignmentsFromSheetAction(projectId, date)`**（break-actions.ts）: 管理者ガードあり。①シート読取（403/404は原因の分かるメッセージに変換）②対象日で絞る③**アカウント番号は数値化して比較**（`ASS 03`=3）④**退職者と現役で番号が重複しているため「その日に勤務シフトがある人」に絞る**・0人/複数は未解決⑤休憩開始・終了が有効スロットの時刻と一致するスロットを採用・不一致は未解決⑥小休憩はスロットごとの多数派を採用し**効いている値と違うときだけ** `break_slot_daily_settings` に書く⑦**upsert 先・掃除あと**（onConflict=`project_id,assignment_date,staff_id`・`source='sheet'`）で書き、掃除は「シートに載っていない かつ `source!=='manual'`」の行だけ削除＝**手動指定は再取り込みでも残す**。**取り込める行が0件なら既存割当を消さない**。戻り値に `removed`/`keptManual` を持たせトーストに出す
+- **検品（qa-reviewer）で差し戻した6件**（すべて修正済）: ①delete条件が日付だけで手動指定まで消える②A列の日付が読めない行が未解決にも載らず痕跡なく消える③insert失敗で「消えただけ」になる④`setBreakSlotAction`（座席表の手動変更）が `source` を入れておらず保持判定が効かない⑤`saveBreakSlotSettingsAction`/`updateBreakSlotAssignmentAction` に管理者ガードが無い⑥`toHHMM` が `16:60` を通す・小休憩updateのエラーを捨てる
+- **自動振り分けの停止**: `seating/actions.ts` の座席保存後の `assignBreakSlotsAction` 呼び出しを削除／`saveBreakSlotDailySettingsAction`・`clearBreakSlotDailySettingsAction` の再割当も削除（両者に管理者ガードを追加）／`SeatingClient` の「休憩割り振り」ボタンを撤去。**`assignBreakSlotsAction` は関数として残置し参照0件**（戻したいときはここから）
+- **DB（本番適用済・マイグレーション `add_break_short_times_and_break_sheet`）**: `break_slot_settings`/`break_slot_daily_settings` に `short_start_time`・`short_end_time`（小休憩の時間帯＝スロット単位）／`break_slot_assignments` に `source`（sheet/manual/auto）／`project_settings` に `break_sheet_url`・`break_sheet_name`。P001の共通スロットに小休憩時間帯を設定（①②16:00-16:30／③16:30-17:00）
+- **小休憩の持ち時間も時間帯から算出（ユーザー判断①）**: `punch-actions.ts` の `getBreakDurationAction` に非exportヘルパー `spanMinutes()` を足し、**小休憩＝`short_end_time - short_start_time`**（未設定なら15分）に。従来は `shortMinutes: 15` 固定で、時間帯16:00-16:30（30分）と端末タイマー15分が食い違っていた。優先順は 個人オーバーライド → スロットの時間帯 → デフォルト(60/15)
+- **UI**: 新規 `BreakSheetImportButton.tsx`（当日座席表と翌日座席プランで共用・完了トースト・未解決行のモーダル）／`BreakSlotDayEditor` と案件設定の休憩設定に小休憩の開始・終了／案件設定に休憩表スプレッドシートのURL・シート名（`saveBreakSheetSettingsAction`）／`PunchModal` と休憩一覧に小休憩の時間帯を併記
+- ⚠️ **読み取りはアプリのGoogle連携アカウント**（`lib/gsheets.ts`・OAuthリフレッシュトークン優先）。**そのアカウントに休憩表シートを共有しないと403**。ユーザーのブラウザ用に共有されたアカウントとは別物
+- ⚠️ シートに載っていない勤務者はスロット未割当になる（9/24は査定/販売の勤務者43名に対しシート36行＝7名未割当）。シートを正とする運用
+- 残: デプロイ（ユーザー承認待ち）／`eslint.config.mjs` の `globalIgnores` に `.claude/worktrees/**` が無く `npm run lint` が二重カウント（154件）になる点は未対応
+
 ## 現在の開発状態（2026-09-09更新）
 
 ### 管理専用アカウント（スタッフメニュー無しの管理者）＋勤怠出力の期間バグ修正（2026-09-09）
@@ -697,6 +712,10 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | 手でinsertした `auth.users` は空文字カラムを埋めないとログインが500になる | `confirmation_token` / `recovery_token` / `email_change` / `email_change_token_new` などの文字列カラムがNULLのままだと、GoTrueが値を読めず `{"code":500,"msg":"Database error querying schema"}` になる（AM002作成時に発生）。**`coalesce(col,'')` で空文字にする**。あわせて `auth.identities` の行（provider='email'・identity_data に sub/email）も必ず作ること。作成後は `POST /auth/v1/token?grant_type=password` を叩いて200を確認する |
 | 管理専用アカウントは `staffs.admin_only` フラグ（権限ではない） | true にするとスタッフメニューを出さず管理メニューだけになる。**権限自体は `project_members.role='project_admin'` で与える**（フラグ単体では何の権限も付かない）。LINE連携ゲート（`/link-line`）と友達追加バナーもスキップし、ログイン後の着地は `/attendance`。**スタッフ向けの新機能を作るときは `admin_only` のアカウントがそのページに来ない前提で良いが、ナビに出す項目を増やすときはメイン/管理どちらのセクションかを意識する**（該当者＝AM002 小倉康功） |
 | 実績出力モーダルの期間は「表示中の月」から作る | `ExportModal` は月ナビの隣にあるのに初期期間が常に「今月1日〜本日」で、8月を表示して出力しても9月が出ていた（2026-09-09修正）。`AttendanceEditClient` から `month={currentMonth}` を渡して初期化する。**同種のモーダルを足すときも、画面が今見ている期間を引き継ぐこと** |
+| `project_members.work_days_type` に `'spot'` は保存できない（UIとDBの不整合・未修正） | UI（`StaffInfoPanel`/`SettingsClient`）には「スポット」の選択肢があり `draft-actions.ts` も `wdType === "spot"` を仮組み対象外として扱うが、**DBのCHECK制約は `monthly|weekly` しか許していない**（`project_members_work_days_type_check`）。保存すると 23514 で失敗する（2026-09-10に吉田翔馬の設定時に判明）。**仮組みから確実に外したいときは「セクション未設定（section=null・sections=null）」にする**＝P001のシフトパターンは全てセクション付きなので `staffPatterns.length===0` で必ずスキップされる。制約に 'spot' を足すか、UIから選択肢を消すかは未対応 |
+| 休憩スロットの自動振り分けは廃止済み（2026-09-25） | 以前は座席プラン保存・休憩設定保存の副作用で `assignBreakSlotsAction`（番付＋比率のBresenham分配）が走り、手動指定を毎回潰していた。**ユーザー判断で自動実行は全廃**し、休憩はSVのスプレッドシート取り込み（`importBreakAssignmentsFromSheetAction`）か画面での個別変更で決める。`assignBreakSlotsAction` は残置してあるが**参照0件＝復活させるときは呼び出し元を足す**。`break_slot_assignments.source` で出どころ（sheet/manual/auto）が分かる。**手動指定は `source='manual'` で守られている**＝スロットを書き込む経路を新しく作るときは必ず `source` を入れること（付け忘れるとシート再取り込みで消える） |
+| 休憩表スプレッドシートの取り込みはアカウント番号だけで人を決めない | `staffs.account_number` は**退職者と現役で重複している**（ASS 11/19/30/31/54/141/144。ASS 19 は3人）。番号だけで引くと退職者に当たる。**「その日に勤務シフトがある人」で絞ると一意になる**（9/24の36行で検証済み）。0人/複数になった行は黙って捨てず未解決として画面に出すこと。シートの「商材」列は当日シフト基準でメンバー登録のセクションと違う人がいる（林周星＝登録は販売・当日は査定遅番） |
+| 小休憩の時間帯はスロット単位（`short_start_time`/`short_end_time`）＝持ち時間もここから算出 | 従来の小休憩は**分数だけ**（`staff_break_overrides.short_minutes`・`break_short_settings`）で時間帯の概念が無かった。2026-09-25にスロット設定へ時間帯を追加（SVのシートがスロットごとに指定しているため）。⚠️`saveBreakSlotSettingsAction` は **delete→insert** なので、**小休憩の値を送らずに保存すると既存の小休憩時間帯が消える**。スロット設定を保存するUIを増やすときは必ず小休憩も一緒に送ること |
 
 ---
 

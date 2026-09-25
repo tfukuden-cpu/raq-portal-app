@@ -458,9 +458,10 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 **機能:**
 - 当日の着席状況をリアルタイム表示（座席カードにステータス色）
 - 休憩開始/終了トグル（座席タップ）
-- 席替えモード: 座席にスタッフをドラッグ・アサイン→保存時に休憩スロットも自動割り振り
+- 席替えモード: 座席にスタッフをドラッグ・アサイン（**2026-09-25以降、保存時の休憩自動割り振りは行わない**）
 - **休憩スロットバッジ（①②③）**: 査定・販売スタッフの座席右下に表示
-- **「休憩割り振り」ボタン**: 番付順に基づき Bresenham 分配でスロットを自動割り当て
+- **「シートから休憩を取り込む」ボタン**（2026-09-25追加・`BreakSheetImportButton`）: SVが記入する休憩表スプレッドシートを読み、その日の休憩スロット割り当てを作る。結果は「N名を取り込みました（①x名／②y名／③z名）」のトースト、引き当てできなかった行は行番号・アカウント番号・理由のモーダルで表示。当日座席表と翌日座席プランの両方に設置
+- ~~**「休憩割り振り」ボタン**（番付順のBresenham分配で自動割り当て）~~ **2026-09-25にUIから撤去**（ユーザー判断「自動振り分けは完全に停止」）。`assignBreakSlotsAction` は関数としてのみ残置＝呼び出し元は無い
 - **「休憩一覧」ボタン**: スロット × 査定/販売 × 早番/遅番 の人数・名前一覧をトグルパネルで表示（`breakAssignmentMap` + `seats.shiftName` から計算）
 - 同時編集セッション管理（ハートビート・ロック機能）
 
@@ -671,9 +672,22 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - `SeatItem`, `WallItem` の配置情報をJSONで保存
 
 #### 休憩設定
-- 休憩スロット（①②③）の時間帯・対象シフト・割合を編集
+- 休憩スロット（①②③）の時間帯・**小休憩の時間帯**・対象シフト・割合を編集
 - `break_slot_settings` テーブルに保存（設定なし時はデフォルト値を使用）
 - デフォルト: ①12:00-13:00 早番20% / ②13:15-14:15 両方40% / ③14:30-15:30 遅番40%
+- **小休憩の時間帯（2026-09-25追加）**: `short_start_time` / `short_end_time`。スロット単位で持つ（SVのシートがスロットごとに指定しているため）。P001の現行値＝①②16:00-16:30 / ③16:30-17:00。座席表の「休憩一覧」と打刻モーダルにも表示
+- **小休憩の持ち時間も時間帯から算出（2026-09-25・ユーザー判断）**: `getBreakDurationAction` の優先順は **個人オーバーライド → スロットの時間帯（休憩＝`end-start`／小休憩＝`short_end-short_start`）→ デフォルト(60分/15分)**。小休憩の時間帯が未設定の日は15分に落ちる。打刻端末のタイマー・超過判定もこの値で動く
+- **休憩表スプレッドシート（2026-09-25追加）**: `project_settings.break_sheet_url` / `break_sheet_name` を設定すると、座席表の「シートから休憩を取り込む」で読み込める。**メンバー同期用の `sheet_url` とは別枠**。読み取りはアプリのGoogle連携（`lib/gsheets.ts`）なので、**そのアカウントにシートを共有しておく必要がある**
+
+##### 休憩表スプレッドシートの取り込み仕様（`importBreakAssignmentsFromSheetAction`）
+- シートの形: 4行目以降がデータ。A=日付（`YYYY/MM/DD`）／B=アカウント番号（`ASS 61`・ゼロ埋めあり）／C=商材／D=休憩開始／E=休憩終了／F=小休憩開始／G=小休憩終了。**B列が空の行は未入力としてスキップ**（翌日分のテンプレ行）
+- **スタッフの引き当て**: アカウント番号は数値化して比較（`ASS 03` = 3）。**退職者と現役で番号が重複している**ため、候補を「その日に勤務シフトがある人」に絞る。0人／複数人になった行は取り込まず**未解決として画面に出す**
+- **スロットの決定**: シートの休憩開始・終了が、その日の有効なスロット（日付別→共通のフォールバック）の時刻と一致するものを採用。一致しなければ未解決（時間帯が勝手に増えたら気づけるようにするため）
+- **小休憩**: スロットごとに多数派を採用し、効いている値と違うときだけその日の `break_slot_daily_settings` に書く。多数派と違う行は未解決リストに出す（休憩スロット自体は取り込む）
+- **取り込める行が0件のときは既存の割り当てを消さない**（シート未入力で全消しになるのを防ぐ）
+- **書き込みは upsert 先・掃除あと**（`onConflict=project_id,assignment_date,staff_id`・`source='sheet'`）。upsert が失敗したら掃除に進まない＝「消えただけ」にならない
+- **掃除で消すのは「シートに載っていない かつ `source` が `'manual'` ではない」行だけ**＝SVが座席表や打刻記録タブで個別に入れた指定（`source='manual'`）は**再取り込みでも残る**。`source` が null の古い自動割当と `'sheet'`/`'auto'` は消える
+- 結果のトーストに「N名を取り込みました（①x／②y／③z）｜古い割り当てM件を削除・手動指定K件は保持」を出す
 
 #### 希望休ルール設定
 - 6種類のルール設定（`holiday_rules` テーブル）:
@@ -987,8 +1001,8 @@ export function monsterImg(id)             // → /rpg/mon-${id}.png
 | `line_groups` | LINEグループ情報（group_id, joined_at） |
 | `line_name_mappings` | LINEユーザー名 → 社員ID マッピング |
 | `mota_slot_assignments` | H MOTAスロット配置（account_number=ポジションキー, slot, staff_name, assigned_account, is_fixed） |
-| `break_slot_settings` | 休憩スロット設定（slot_number, label, start_time, end_time, target_shift: early/late/both, ratio, sort_order） |
-| `break_slot_assignments` | 休憩スロット割り当て（project_id, assignment_date, staff_id, slot_number, UNIQUE(project_id,assignment_date,staff_id)） |
+| `break_slot_settings` | 休憩スロット設定（slot_number, label, start_time, end_time, **short_start_time, short_end_time**, target_shift: early/late/both, ratio, sort_order） |
+| `break_slot_assignments` | 休憩スロット割り当て（project_id, assignment_date, staff_id, slot_number, **source**: sheet/manual/auto, UNIQUE(project_id,assignment_date,staff_id)） |
 | `rankings` | 番付データ（project_id, staff_name, account_number=ASS査定/ASS販売, rank, period） |
 | `break_room_settings` | 休憩室の定員（project_id PK, capacity 1〜50 デフォルト6） |
 | `break_room_uses` | 休憩室の占有状況（入室中のみ行が存在。UNIQUE(project_id,use_date,box_number) / UNIQUE(project_id,use_date,staff_id)） |

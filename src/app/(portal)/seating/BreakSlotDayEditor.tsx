@@ -2,7 +2,7 @@
 
 /**
  * 日付別の休憩スロット（①〜③）編集モーダル
- * 保存するとその日だけのオーバーライドとして保存され、休憩割り当ても自動で再実行される。
+ * 保存するとその日だけのオーバーライドとして保存される（休憩の割り当ては変更しない）。
  * 「共通設定に戻す」でオーバーライドを削除（案件共通の設定に戻る）。
  */
 
@@ -41,6 +41,8 @@ export default function BreakSlotDayEditor({
         ...s,
         start_time: s.start_time.slice(0, 5),
         end_time:   s.end_time.slice(0, 5),
+        short_start_time: (s.short_start_time ?? "").slice(0, 5),
+        short_end_time:   (s.short_end_time   ?? "").slice(0, 5),
       })));
       setIsDaily(res.isDaily);
     });
@@ -65,10 +67,12 @@ export default function BreakSlotDayEditor({
           target_shift: s.target_shift,
           ratio:        s.ratio,
           sort_order:   i,
+          short_start_time: s.short_start_time || null,
+          short_end_time:   s.short_end_time   || null,
         })),
       );
       if (res.success) {
-        onSaved?.(`この日の休憩設定を保存し、${res.count ?? 0}名に再割り振りしました`);
+        onSaved?.("この日の休憩設定を保存しました");
         onClose();
       } else {
         setMsg(res.error ?? "保存に失敗しました");
@@ -78,12 +82,12 @@ export default function BreakSlotDayEditor({
 
   function handleClear() {
     if (isPending) return;
-    if (!window.confirm("この日だけの設定を削除して、案件共通の休憩設定に戻しますか？（割り当ても再実行されます）")) return;
+    if (!window.confirm("この日だけの設定を削除して、案件共通の休憩設定に戻しますか？")) return;
     setMsg(null);
     startTransition(async () => {
       const res = await clearBreakSlotDailySettingsAction(projectId, date);
       if (res.success) {
-        onSaved?.(`共通設定に戻し、${res.count ?? 0}名に再割り振りしました`);
+        onSaved?.("案件共通の休憩設定に戻しました");
         onClose();
       } else {
         setMsg(res.error ?? "削除に失敗しました");
@@ -127,6 +131,16 @@ export default function BreakSlotDayEditor({
                       className="px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm tabular-nums" />
                   </div>
                   <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-zinc-400 w-8 shrink-0">小休憩</span>
+                    <input type="time" value={s.short_start_time ?? ""}
+                      onChange={e => update(i, "short_start_time", e.target.value)}
+                      className="px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm tabular-nums" />
+                    <span className="text-zinc-400 text-sm">〜</span>
+                    <input type="time" value={s.short_end_time ?? ""}
+                      onChange={e => update(i, "short_end_time", e.target.value)}
+                      className="px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm tabular-nums" />
+                  </div>
+                  <div className="flex items-center gap-2">
                     <select value={s.target_shift}
                       onChange={e => update(i, "target_shift", e.target.value as BreakSlotSetting["target_shift"])}
                       className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm">
@@ -147,7 +161,8 @@ export default function BreakSlotDayEditor({
                 比率合計: {totalRatio}%{totalRatio !== 100 && "（100%推奨）"}
               </p>
               <p className="text-[11px] text-zinc-400 leading-relaxed">
-                保存すると、この日の休憩割り当てが新しい設定で自動的に作り直されます（個別に変更していたスロットも再割り振りされます）。
+                保存してもスタッフの割り当ては変わりません（時間帯・小休憩の定義だけを更新します）。
+                誰がどのスロットかは「シートから休憩を取り込む」か、座席表の個別変更で決めます。
               </p>
               {msg && <p className="text-xs font-medium px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-500">✗ {msg}</p>}
             </>

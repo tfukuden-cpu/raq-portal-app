@@ -445,6 +445,16 @@ export async function updateExceptionStatusAction(
 
 // ── 休憩持ち時間（分数）の取得 ────────────────────────────
 // 優先順: 個人オーバーライド → スロット時間幅 → デフォルト(60/15)
+/** "HH:MM(:SS)" 2つの差を分で返す（どちらか欠けていれば null） */
+function spanMinutes(from: string | null | undefined, to: string | null | undefined): number | null {
+  if (!from || !to) return null;
+  const [fh, fm] = from.split(":").map(Number);
+  const [th, tm] = to.split(":").map(Number);
+  if ([fh, fm, th, tm].some(n => Number.isNaN(n))) return null;
+  const diff = (th * 60 + tm) - (fh * 60 + fm);
+  return diff > 0 ? diff : null;
+}
+
 export async function getBreakDurationAction(
   projectId: string,
   staffId: string,
@@ -484,24 +494,29 @@ export async function getBreakDurationAction(
       // 日付別オーバーライドがあれば優先、無ければ案件共通設定
       const { data: dailySetting } = await admin
         .from("break_slot_daily_settings")
-        .select("start_time, end_time")
+        .select("start_time, end_time, short_start_time, short_end_time")
         .eq("project_id", projectId)
         .eq("target_date", today)
         .eq("slot_number", slotNum)
         .maybeSingle();
       const { data: globalSetting } = dailySetting ? { data: null } : await admin
         .from("break_slot_settings")
-        .select("start_time, end_time")
+        .select("start_time, end_time, short_start_time, short_end_time")
         .eq("project_id", projectId)
         .eq("slot_number", slotNum)
         .maybeSingle();
       const slotSetting = dailySetting ?? globalSetting;
 
       if (slotSetting) {
-        const [sh, sm] = ((slotSetting as { start_time: string }).start_time).split(":").map(Number);
-        const [eh, em] = ((slotSetting as { end_time:   string }).end_time).split(":").map(Number);
-        const slotMinutes = (eh * 60 + em) - (sh * 60 + sm);
-        if (slotMinutes > 0) return { regularMinutes: slotMinutes, shortMinutes: 15 };
+        const ss = slotSetting as {
+          start_time: string; end_time: string;
+          short_start_time?: string | null; short_end_time?: string | null;
+        };
+        const slotMinutes = spanMinutes(ss.start_time, ss.end_time);
+        // 小休憩も時間帯（short_start_time〜short_end_time）から算出する（2026-09-25 ユーザー判断）。
+        // 時間帯が未設定の日はデフォルト15分に落ちる
+        const shortMinutes = spanMinutes(ss.short_start_time, ss.short_end_time) ?? 15;
+        if (slotMinutes !== null && slotMinutes > 0) return { regularMinutes: slotMinutes, shortMinutes };
       }
     }
   }
@@ -567,7 +582,8 @@ export async function setBreakSlotAction(
   } else {
     const { error } = await admin.from("break_slot_assignments")
       .upsert(
-        { project_id: projectId, staff_id: staffId, assignment_date: date, slot_number: slotNumber },
+        // source='manual' は「シートから取り込む」で消さない印。付け忘れると再取り込みで消える
+        { project_id: projectId, staff_id: staffId, assignment_date: date, slot_number: slotNumber, source: "manual" },
         { onConflict: "project_id,assignment_date,staff_id" },
       );
     if (error) return { ok: false, error: error.message };

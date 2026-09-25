@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { saveSeatAssignmentsAction, autoAssignSeatsAction } from "../actions";
 import BreakSlotDayEditor from "../BreakSlotDayEditor";
+import BreakSheetImportButton from "../BreakSheetImportButton";
 import { getSeatBgClass, getSeatBorderClass, getSeatTextClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 
 export type WallData = {
@@ -170,7 +171,17 @@ export default function SeatingPlanClient({
   const assignedStaff   = staff.filter(s => assignedIds.has(s.id));
 
   const actionButtons = (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <BreakSheetImportButton
+        projectId={projectId}
+        date={date}
+        onDone={(msg, ok) => {
+          setToast({ msg, ok });
+          if (ok) router.refresh();
+          setTimeout(() => setToast(null), 4000);
+        }}
+        className="flex items-center gap-1.5 text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-100 dark:hover:bg-violet-950/50 transition-colors disabled:opacity-50"
+      />
       <button
         onClick={() => setShowBreakEditor(true)}
         className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-100 transition-colors"

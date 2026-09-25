@@ -92,6 +92,15 @@ export default function PunchModal({
   const [slotNumber, setSlotNumber] = useState<number | null>(initSlotNumber);
   const [slotIsOther, setSlotIsOther] = useState(false);
 
+  // 割当スロットの小休憩の時間帯（設定されていれば表示する）
+  const slotShort = (() => {
+    if (!slotNumber) return null;
+    const s = breakSlots.find(x => x.slot_number === slotNumber);
+    const start = s?.short_start_time?.slice(0, 5);
+    const end   = s?.short_end_time?.slice(0, 5);
+    return start && end ? { start, end } : null;
+  })();
+
   // ── 初回ロード（スロット番号もDBから直接取得） ───────────
   useEffect(() => {
     Promise.all([
@@ -416,6 +425,16 @@ export default function PunchModal({
                       : slotNumber ? `${SLOT_LABEL[slotNumber] ?? ""}` : "未割当"}
                   </span>
                 )}
+              </div>
+            )}
+
+            {/* 小休憩の時間帯（スロット単位） */}
+            {slotShort && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-zinc-400 w-20 shrink-0">小休憩</span>
+                <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 tabular-nums">
+                  {slotShort.start}–{slotShort.end}
+                </span>
               </div>
             )}
 

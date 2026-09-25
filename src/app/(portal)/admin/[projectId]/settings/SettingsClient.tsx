@@ -25,6 +25,7 @@ import {
   testNotifyAction,
   testLinePushToSelfAction,
   sendRestDayRemindNowAction,
+  saveBreakSheetSettingsAction,
 } from "./actions";
 import {
   buildDefaultNotificationSettings,
@@ -98,6 +99,8 @@ export function SettingsContainer({
   canArchive = true,
   initialSeats,
   initialWalls,
+  breakSheetUrl = null,
+  breakSheetName = null,
 }: {
   projectId: string;
   projectName: string;
@@ -110,6 +113,8 @@ export function SettingsContainer({
   canArchive?: boolean;
   initialSeats?: SeatItem[];
   initialWalls?: WallItem[];
+  breakSheetUrl?: string | null;
+  breakSheetName?: string | null;
 }) {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get("tab") as TabId | null) ?? "basic";
@@ -200,9 +205,23 @@ export function SettingsContainer({
 
       {/* ── 休憩設定タブ ── */}
       {tab === "break" && (
-        <div className="space-y-4">
-          <SectionHeading title="休憩スロット設定" sub="査定・販売セクションの休憩時間帯と割合を設定します" />
-          <BreakSlotEditor projectId={projectId} />
+        <div className="space-y-8">
+          <section className="space-y-4">
+            <SectionHeading title="休憩スロット設定" sub="査定・販売セクションの休憩時間帯・小休憩の時間帯と割合を設定します" />
+            <BreakSlotEditor projectId={projectId} />
+          </section>
+          <Divider />
+          <section className="space-y-3">
+            <SectionHeading
+              title="休憩表スプレッドシート"
+              sub="現場が休憩時間を決めているシート。座席表の「シートから休憩を取り込む」で読み込みます"
+            />
+            <BreakSheetForm
+              projectId={projectId}
+              currentUrl={breakSheetUrl}
+              currentName={breakSheetName}
+            />
+          </section>
         </div>
       )}
 
@@ -217,6 +236,82 @@ export function SettingsContainer({
   );
 }
 
+// ── 休憩表スプレッドシート（URL＋シート名） ──────────────
+
+function BreakSheetForm({
+  projectId,
+  currentUrl,
+  currentName,
+}: {
+  projectId: string;
+  currentUrl: string | null;
+  currentName: string | null;
+}) {
+  const [url, setUrl]   = useState(currentUrl ?? "");
+  const [name, setName] = useState(currentName ?? "");
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const save = () => {
+    const fd = new FormData();
+    fd.set("projectId", projectId);
+    fd.set("breakSheetUrl", url);
+    fd.set("breakSheetName", name);
+    startTransition(async () => {
+      const r = await saveBreakSheetSettingsAction(fd);
+      setResult({ ok: r.success, msg: r.message ?? (r.success ? "保存しました" : "エラー") });
+    });
+  };
+
+  const dirty = url !== (currentUrl ?? "") || name !== (currentName ?? "");
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-semibold text-zinc-400">スプレッドシートURL</label>
+        <input
+          type="text"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder="https://docs.google.com/spreadsheets/d/..."
+          className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm text-zinc-900 dark:text-zinc-100 font-mono"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-semibold text-zinc-400">シート名（タブ名）</label>
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="シート1"
+          className="w-full sm:w-64 px-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm text-zinc-900 dark:text-zinc-100"
+        />
+      </div>
+      <p className="text-[11px] text-zinc-400 leading-relaxed">
+        列は A=日付／B=アカウント番号／C=商材／D=休憩開始／E=休憩終了／F=小休憩開始／G=小休憩終了。
+        データは4行目以降を読みます。Google連携アカウントに閲覧権限を共有してください。
+      </p>
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={save}
+          disabled={isPending || !dirty}
+          className="px-4 py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-semibold disabled:opacity-40"
+        >
+          {isPending ? "保存中…" : "保存"}
+        </button>
+        {url && (
+          <a href={url} target="_blank" rel="noopener noreferrer"
+            className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+            シートを開く
+          </a>
+        )}
+      </div>
+      {result && <Flash ok={result.ok} msg={result.msg} />}
+    </div>
+  );
+}
+
 // ── 休憩スロット編集 ─────────────────────────────────────
 
 function BreakSlotEditor({ projectId }: { projectId: string }) {
@@ -227,7 +322,14 @@ function BreakSlotEditor({ projectId }: { projectId: string }) {
   useEffect(() => {
     startTransition(async () => {
       const data = await getBreakSlotSettingsAction(projectId);
-      setSlots(data);
+      // time型カラムは "HH:MM:SS" で返るので input[type=time] 用に "HH:MM" へ寄せる
+      setSlots(data.map(s => ({
+        ...s,
+        start_time: s.start_time.slice(0, 5),
+        end_time:   s.end_time.slice(0, 5),
+        short_start_time: (s.short_start_time ?? "").slice(0, 5),
+        short_end_time:   (s.short_end_time   ?? "").slice(0, 5),
+      })));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -249,6 +351,9 @@ function BreakSlotEditor({ projectId }: { projectId: string }) {
           target_shift: s.target_shift,
           ratio:       s.ratio,
           sort_order:  i,
+          // 小休憩の時間帯も一緒に送る（送らないと delete→insert で消える）
+          short_start_time: s.short_start_time || null,
+          short_end_time:   s.short_end_time   || null,
         }))
       );
       setMsg({ ok: res.success, text: res.success ? "保存しました" : (res.error ?? "エラー") });
@@ -262,17 +367,19 @@ function BreakSlotEditor({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-        <div className="grid grid-cols-[3rem_5rem_5rem_1fr_4rem] gap-0 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 overflow-x-auto">
+        <div className="grid grid-cols-[3rem_5rem_5rem_5rem_5rem_1fr_4rem] min-w-[42rem] gap-0 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
           <span>記号</span>
           <span>開始</span>
           <span>終了</span>
+          <span>小休憩開始</span>
+          <span>小休憩終了</span>
           <span>対象シフト</span>
           <span>割合</span>
         </div>
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
           {slots.map((slot, idx) => (
-            <div key={slot.slot_number} className="grid grid-cols-[3rem_5rem_5rem_1fr_4rem] gap-2 items-center px-3 py-2">
+            <div key={slot.slot_number} className="grid grid-cols-[3rem_5rem_5rem_5rem_5rem_1fr_4rem] min-w-[42rem] gap-2 items-center px-3 py-2">
               <input
                 className="w-10 text-center text-sm font-bold px-1 py-0.5 border rounded-lg border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
                 value={slot.label}
@@ -287,6 +394,16 @@ function BreakSlotEditor({ projectId }: { projectId: string }) {
                 className="text-xs px-2 py-0.5 border rounded-lg border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
                 value={slot.end_time}
                 onChange={e => update(idx, "end_time", e.target.value)}
+              />
+              <input type="time"
+                className="text-xs px-2 py-0.5 border rounded-lg border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
+                value={slot.short_start_time ?? ""}
+                onChange={e => update(idx, "short_start_time", e.target.value)}
+              />
+              <input type="time"
+                className="text-xs px-2 py-0.5 border rounded-lg border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"
+                value={slot.short_end_time ?? ""}
+                onChange={e => update(idx, "short_end_time", e.target.value)}
               />
               <select
                 className="text-xs px-2 py-0.5 border rounded-lg border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100"

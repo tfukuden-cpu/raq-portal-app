@@ -56,7 +56,7 @@ export default async function ProjectDetailPage(props: {
     supabase.from("project_members")
       .select("staff_id, role, section, sections, work_days_type, work_days_count, preferred_shift, preferred_section, max_consecutive_days, start_date, end_date, churn_risk, churn_risk_since, staffs(name, display_name, company_name, line_user_id, line_friend, account_number)")
       .eq("project_id", projectId),
-    createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id, enable_departure_report").eq("project_id", projectId).maybeSingle(),
+    createAdminClient().from("project_settings").select("sheet_url, notification_settings, line_group_id, enable_departure_report, break_sheet_url, break_sheet_name").eq("project_id", projectId).maybeSingle(),
     createAdminClient().from("shift_patterns")
       .select("id, name, short_name, start_time, end_time, required_count, required_weekday, required_weekend, section, target_role")
       .eq("project_id", projectId).order("sort_order"),
@@ -220,6 +220,8 @@ export default async function ProjectDetailPage(props: {
             canArchive={isExecutive || isAdmin}
             initialSeats={initialSeats}
             initialWalls={initialWalls}
+            breakSheetUrl={(settings as { break_sheet_url?: string | null } | null)?.break_sheet_url ?? null}
+            breakSheetName={(settings as { break_sheet_name?: string | null } | null)?.break_sheet_name ?? null}
           />
         </Suspense>
       </div>

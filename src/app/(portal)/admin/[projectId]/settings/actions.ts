@@ -194,6 +194,31 @@ export async function saveSheetUrlAction(fd: FormData): Promise<SettingsResult> 
   return { success: true };
 }
 
+// ── 休憩表スプシの保存（URL＋シート名） ──────────────────
+// 現場が休憩時間を決めているスプレッドシート。座席表の「シートから休憩を取り込む」で読む。
+
+export async function saveBreakSheetSettingsAction(fd: FormData): Promise<SettingsResult> {
+  const projectId = String(fd.get("projectId") ?? "").trim();
+  const url       = String(fd.get("breakSheetUrl")  ?? "").trim();
+  const name      = String(fd.get("breakSheetName") ?? "").trim();
+
+  await assertAdmin(projectId);
+  const { error } = await adminSupa()
+    .from("project_settings")
+    .upsert({
+      project_id:        projectId,
+      break_sheet_url:   url  || null,
+      break_sheet_name:  name || null,
+      updated_at:        new Date().toISOString(),
+    }, { onConflict: "project_id" });
+  if (error) return { success: false, message: error.message };
+
+  revalidatePath(`/admin/${projectId}`);
+  revalidatePath("/seating");
+  revalidatePath("/seating/plan");
+  return { success: true };
+}
+
 // ── スプシ自動作成 ───────────────────────────────────────
 
 export async function createSpreadsheetAction(fd: FormData): Promise<SettingsResult & { url?: string }> {
