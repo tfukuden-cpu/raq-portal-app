@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 import { DotGothic16 } from "next/font/google";
 
-// 休憩室（RPG風）用ドットフォント
+// 打刻端末（RPG風）用ドットフォント
 const dotGothic = DotGothic16({ weight: "400", subsets: ["latin"], preload: false });
 import TerminalPunchClient, {
   type TerminalMember,
@@ -52,8 +52,6 @@ export default async function PunchPage({
     { data: absenceRows },
     { data: breakAssignmentRows },
     { data: motaAssignmentRows },
-    { data: breakRoomSetting },
-    { data: breakRoomUseRows },
   ] = await Promise.all([
     admin
       .from("project_members")
@@ -105,17 +103,6 @@ export default async function PunchPage({
       .select("assigned_account, slot, account_number")
       .eq("project_id", projectId)
       .eq("assignment_date", today),
-    admin
-      .from("break_room_settings")
-      .select("capacity, amenities, is_open")
-      .eq("project_id", projectId)
-      .maybeSingle(),
-    admin
-      .from("break_room_uses")
-      .select("box_number, staff_id, entered_at")
-      .eq("project_id", projectId)
-      .eq("use_date", today)
-      .order("box_number"),
   ]);
 
   // 当月同意済みスタッフセット
@@ -273,23 +260,6 @@ export default async function PunchPage({
     });
   }
 
-  const breakRoomCapacity = (breakRoomSetting as { capacity?: number } | null)?.capacity ?? 6;
-  const breakRoomIsOpen   = (breakRoomSetting as { is_open?: boolean } | null)?.is_open ?? true;
-  const breakRoomUses = (breakRoomUseRows ?? []).map(u => ({
-    boxNumber: u.box_number as number,
-    staffId:   u.staff_id as string,
-    enteredAt: u.entered_at as string,
-  }));
-  const rawAmenities = (breakRoomSetting as { amenities?: unknown } | null)?.amenities;
-  const breakRoomAmenities = Array.isArray(rawAmenities)
-    ? (rawAmenities as { label: string; ok: boolean }[])
-    : [
-        { label: "トイレ", ok: true },
-        { label: "Wi-Fi", ok: true },
-        { label: "冷蔵庫", ok: false },
-        { label: "電子レンジ", ok: false },
-      ];
-
   return (
     <TerminalPunchClient
       projectId={projectId}
@@ -301,10 +271,6 @@ export default async function PunchPage({
       breakSlots={breakSlots}
       motaAccountNumbers={motaAccountNumbers}
       motaSlotInfoMap={motaSlotInfoMap}
-      breakRoomCapacity={breakRoomCapacity}
-      breakRoomIsOpen={breakRoomIsOpen}
-      breakRoomUses={breakRoomUses}
-      breakRoomAmenities={breakRoomAmenities}
       rpgFontClass={dotGothic.className}
     />
   );

@@ -401,6 +401,15 @@ function LayoutGridIcon({ className }: { className?: string }) {
   );
 }
 
+export function UndoIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M4 9h11a5 5 0 0 1 0 10H8" />
+      <path d="M8 5L4 9l4 4" />
+    </svg>
+  );
+}
+
 export const ICON_MAP = {
   Home: HomeIcon,
   Clock: ClockIcon,

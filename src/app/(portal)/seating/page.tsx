@@ -32,6 +32,7 @@ export default async function SeatingPage() {
     { data: wallRows },
     breakAssignmentRows,
     breakSlotRows,
+    { data: seatSnapshotRow },
   ] = await Promise.all([
     admin.from("seats")
       .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
@@ -59,7 +60,14 @@ export default async function SeatingPage() {
       .eq("project_id", projectId),
     getBreakSlotAssignmentsAction(projectId, today),
     getBreakSlotSettingsForDateAction(projectId, today).then(r => r.slots),
+    // 「席替えを元に戻す」用の退避（1世代のみ）
+    admin.from("seat_assignment_snapshots")
+      .select("saved_at")
+      .eq("project_id", projectId).eq("assignment_date", today)
+      .maybeSingle(),
   ]);
+
+  const seatSnapshotAt = (seatSnapshotRow as { saved_at?: string } | null)?.saved_at ?? null;
 
   // メンバーマップ
   const memberMap = new Map<string, { name: string; accountNumber: string | null }>();
@@ -192,6 +200,7 @@ export default async function SeatingPage() {
       breakAssignmentMap={breakAssignmentMap}
       breakSlots={breakSlotRows}
       shiftTimeMap={shiftTimeMap}
+      seatSnapshotAt={seatSnapshotAt}
     />
   );
 }

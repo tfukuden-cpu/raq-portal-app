@@ -7,7 +7,7 @@
  *   レアリティ5段階（★1〜★5）。id 昇順＝レア度昇順。排出率は src/lib/gacha.ts。
  *
  * 旧API（RPG_CHARS / rpgCharFor / rpgCharImg）は新100体システムに差し替え済み。
- * シグネチャは互換のまま（My・AppNav・ホーム・打刻端末・休憩室がそのまま動く）。
+ * シグネチャは互換のまま（My・AppNav・ホーム・打刻端末がそのまま動く）。
  */
 export type RpgChar = { id: number; label: string };
 

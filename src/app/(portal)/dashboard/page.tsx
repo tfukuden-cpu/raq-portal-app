@@ -9,7 +9,6 @@ import { cookies } from "next/headers";
 import { getCurrentProjectId } from "@/lib/project-context";
 import HomeClient from "./HomeClient";
 import AdminHomeWrapper from "./AdminHomeWrapper";
-import { getBreakRoomStateAction } from "../seating/break-room-actions";
 import type { GroupTask, TaskGroup, StaffOption, NameMapping } from "../tasks/TasksClient";
 
 function tokyoToday(): string {
@@ -113,7 +112,6 @@ export default async function DashboardPage() {
     { data: projectSettings },
     { data: yesterdayAbsence },
     { data: tomorrowShift },
-    { data: breakRoomUseRow },
     { data: loginBonusRow },
     rawTasksResult,
     rawGroupsResult,
@@ -200,14 +198,6 @@ export default async function DashboardPage() {
       .eq("project_id", currentProjectId!)
       .eq("shift_date", tomorrowStr)
       .not("shift_name", "in", '("公休","休","公休日","欠勤","有休","振替休日","特別休暇","代休","公募")')
-      .maybeSingle(),
-    // 休憩室の入室状態（本人・当日）
-    adminClient
-      .from("break_room_uses")
-      .select("box_number, entered_at")
-      .eq("project_id", currentProjectId!)
-      .eq("staff_id", staffId)
-      .eq("use_date", today)
       .maybeSingle(),
     // ログインボーナス（本人・全社共通）
     adminClient
@@ -312,9 +302,6 @@ export default async function DashboardPage() {
     .reverse()
     .find((p) => p.punch_type === "clock_out");
 
-  // ── 休憩室の全体状況（空き箱・開放/閉鎖） ──
-  const breakRoomState = await getBreakRoomStateAction(currentProjectId!);
-
   // ── ログインボーナス（コイン残高・当日受取済みか） ──
   const bonusCoins = (loginBonusRow as { coins?: number } | null)?.coins ?? 0;
   const bonusLastClaimed = (loginBonusRow as { last_claimed_date?: string | null } | null)?.last_claimed_date ?? null;
@@ -324,7 +311,6 @@ export default async function DashboardPage() {
   const homeProps = {
     isAdmin,
     projectId: currentProjectId!,
-    breakRoomState,
     bonusCoins,
     bonusAvailable,
     displayName,
@@ -353,12 +339,6 @@ export default async function DashboardPage() {
       start: s.shift_start as string | null,
       end:   s.shift_end   as string | null,
     })),
-    breakRoomUse: breakRoomUseRow
-      ? {
-          boxNumber: (breakRoomUseRow as { box_number: number }).box_number,
-          enteredAt: fmtTime((breakRoomUseRow as { entered_at: string }).entered_at),
-        }
-      : null,
     myStaffId: staffId,
     myRpgCharId: (staff as { rpg_character?: number | null } | null)?.rpg_character ?? null,
   };

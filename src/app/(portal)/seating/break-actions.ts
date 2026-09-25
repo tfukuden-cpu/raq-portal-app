@@ -70,10 +70,6 @@ const OFF_SHIFT_NAMES = ["公休", "休", "希望休", "有休", "休暇", "振�
 /** シートのデータは4行目以降（1〜3行目はヘッダー・注記） */
 const SHEET_DATA_START_ROW = 4;
 
-function normalize(s: string | null | undefined): string {
-  return (s ?? "").toLowerCase().replace(/\s+/g, "").trim();
-}
-
 /**
  * "HH:MM" / "HH:MM:SS" → "HH:MM"（解釈できなければ null）。time型カラムは秒付きで返るため必ず通す。
  * 時 0-23・分 0-59 の範囲外は null にする（"16:60" を通すと time へのキャストで落ちる）。
@@ -106,7 +102,7 @@ function accountKey(raw: string | null | undefined): number | null {
 }
 
 /**
- * 管理者判定（break-room-actions.ts と同じ方式）。
+ * 管理者判定（この案件の project_admin か、全社 admin/executive か）。
  * admin系のサーバーアクションは UI で隠すだけでは不十分なのでサーバー側でも必ず確認する。
  */
 async function isProjectAdmin(projectId: string): Promise<boolean> {
@@ -123,33 +119,6 @@ async function isProjectAdmin(projectId: string): Promise<boolean> {
     .from("project_members").select("role")
     .eq("staff_id", staffId).eq("project_id", projectId).maybeSingle();
   return (mem as { role?: string } | null)?.role === "project_admin";
-}
-
-// Bresenham-style interleaved distribution
-function spreadInterleave(
-  staff: string[],
-  slotCounts: { slotNumber: number; count: number }[],
-): { staffId: string; slotNumber: number }[] {
-  const total = slotCounts.reduce((a, b) => a + b.count, 0);
-  if (total === 0 || staff.length === 0) return [];
-  const result: { staffId: string; slotNumber: number }[] = [];
-  const errors = slotCounts.map(s => s.count / total);
-  const remaining = slotCounts.map(s => s.count);
-
-  for (let i = 0; i < staff.length; i++) {
-    let bestIdx = -1;
-    let bestErr = -Infinity;
-    for (let j = 0; j < slotCounts.length; j++) {
-      if (remaining[j] <= 0) continue;
-      if (errors[j] > bestErr) { bestErr = errors[j]; bestIdx = j; }
-    }
-    if (bestIdx === -1) break;
-    result.push({ staffId: staff[i], slotNumber: slotCounts[bestIdx].slotNumber });
-    remaining[bestIdx]--;
-    errors[bestIdx] -= 1;
-    for (let j = 0; j < slotCounts.length; j++) errors[j] += slotCounts[j].count / total;
-  }
-  return result;
 }
 
 export async function getBreakShortSettingsAction(
@@ -643,153 +612,4 @@ export async function importBreakAssignmentsFromSheetAction(
     console.error("importBreakAssignmentsFromSheetAction failed", e);
     return { ...empty, message: (e as Error).message ?? "取り込みに失敗しました" };
   }
-}
-
-/**
- * 番付＋比率による休憩スロットの自動振り分け。
- *
- * ⚠️ 2026-09-25 以降、この処理はどこからも呼ばれていない（UIの「休憩割り振り」ボタンと
- * 座席保存・休憩設定保存の副作用を撤去した）。現場はスプレッドシートで休憩を決めているため
- * 取り込み（importBreakAssignmentsFromSheetAction）が正。将来戻す可能性があるため残置する。
- */
-export async function assignBreakSlotsAction(
-  projectId: string,
-  date: string,
-): Promise<{ success: boolean; count: number; error?: string }> {
-  const admin = createAdminClient();
-
-  // 設定取得（日付別オーバーライド優先・なければ案件共通/デフォルト）
-  const { slots } = await getBreakSlotSettingsForDateAction(projectId, date);
-
-  // 当日座席割り当てからスタッフ取得
-  const { data: seatAssignments } = await admin.from("seat_assignments")
-    .select("staff_id").eq("project_id", projectId).eq("assignment_date", date);
-  const staffIds = [...new Set((seatAssignments ?? []).map(a => a.staff_id as string))];
-  if (staffIds.length === 0) return { success: true, count: 0 };
-
-  // スタッフのセクション・名前取得
-  const { data: memberRows } = await admin.from("project_members")
-    .select("staff_id, section, staffs(name, display_name)")
-    .eq("project_id", projectId)
-    .in("staff_id", staffIds);
-
-  // 当日シフト名取得（早番/遅番判定）
-  const { data: shiftRows } = await admin.from("shifts")
-    .select("staff_id, shift_name")
-    .eq("project_id", projectId).eq("shift_date", date)
-    .in("staff_id", staffIds);
-
-  // 番付取得（ASS査定 / ASS販売）
-  const { data: rankRows } = await admin.from("rankings")
-    .select("staff_name, account_number, rank")
-    .eq("project_id", projectId)
-    .order("rank");
-
-  // 番付マップ（normalize済み名前 → 順位）
-  const rankMap: Record<string, Map<string, number>> = {
-    "査定": new Map(),
-    "販売": new Map(),
-  };
-  for (const r of rankRows ?? []) {
-    const key = normalize(r.staff_name as string);
-    if ((r.account_number as string) === "ASS査定") rankMap["査定"].set(key, r.rank as number);
-    if ((r.account_number as string) === "ASS販売") rankMap["販売"].set(key, r.rank as number);
-  }
-
-  const shiftMap = new Map((shiftRows ?? []).map(r => [r.staff_id as string, r.shift_name as string]));
-
-  type StaffItem = { staffId: string; section: string; shiftType: "early" | "late"; rank: number };
-  const staffItems: StaffItem[] = [];
-
-  for (const m of memberRows ?? []) {
-    const section = (m as { section?: string | null }).section ?? "";
-    if (section !== "査定" && section !== "販売") continue;
-    const shiftName = shiftMap.get(m.staff_id) ?? "";
-    const shiftType = shiftName.includes("早番") ? "early"
-                    : shiftName.includes("遅番") ? "late"
-                    : null;
-    if (!shiftType) continue;
-
-    const sInfo = (Array.isArray(m.staffs) ? m.staffs[0] : m.staffs) as
-      { display_name?: string | null; name?: string | null } | null;
-    const displayName = sInfo?.display_name ?? sInfo?.name ?? "";
-    const rank = rankMap[section].get(normalize(displayName)) ?? 9999;
-
-    staffItems.push({ staffId: m.staff_id, section, shiftType, rank });
-  }
-
-  const allAssignments: { project_id: string; assignment_date: string; staff_id: string; slot_number: number; source: string }[] = [];
-
-  for (const sectionName of ["査定", "販売"] as const) {
-    const sectionStaff = staffItems
-      .filter(s => s.section === sectionName)
-      .sort((a, b) => a.rank - b.rank);
-    if (sectionStaff.length === 0) continue;
-
-    const earlyStaff = sectionStaff.filter(s => s.shiftType === "early").map(s => s.staffId);
-    const lateStaff  = sectionStaff.filter(s => s.shiftType === "late").map(s => s.staffId);
-    const total = sectionStaff.length;
-
-    // スロット別目標人数計算
-    let rem = total;
-    const targets = slots.map((s, i) => {
-      const count = i === slots.length - 1 ? rem : Math.round(total * s.ratio / 100);
-      rem -= count;
-      return { slotNumber: s.slot_number, targetShift: s.target_shift, count: Math.max(0, count) };
-    });
-
-    const earlyOnlySlots = targets.filter(t => t.targetShift === "early");
-    const bothSlots      = targets.filter(t => t.targetShift === "both");
-    const lateOnlySlots  = targets.filter(t => t.targetShift === "late");
-
-    const earlyOnlyCap = earlyOnlySlots.reduce((a, b) => a + b.count, 0);
-    const bothCap      = bothSlots.reduce((a, b) => a + b.count, 0);
-    const lateOnlyCap  = lateOnlySlots.reduce((a, b) => a + b.count, 0);
-
-    // 早番: ①→②→③(オーバーフロー) の順に詰める
-    const earlyInEarlyOnly = Math.min(earlyOnlyCap, earlyStaff.length);
-    const earlyInBoth      = Math.min(bothCap, earlyStaff.length - earlyInEarlyOnly);
-    const earlyOverflow    = earlyStaff.length - earlyInEarlyOnly - earlyInBoth;
-
-    if (earlyStaff.length > 0) {
-      const earlyDist: { slotNumber: number; count: number }[] = [
-        ...earlyOnlySlots.map(s => ({ slotNumber: s.slotNumber, count: Math.min(s.count, earlyInEarlyOnly) })),
-        ...bothSlots.map(s => ({ slotNumber: s.slotNumber, count: Math.min(s.count, earlyInBoth) })),
-        // 早番が①②に入り切らない場合は③にオーバーフロー（番付最下位から）
-        ...lateOnlySlots.map(s => ({ slotNumber: s.slotNumber, count: Math.min(s.count, earlyOverflow) })),
-      ].filter(d => d.count > 0);
-      spreadInterleave(earlyStaff, earlyDist).forEach(a =>
-        allAssignments.push({ project_id: projectId, assignment_date: date, staff_id: a.staffId, slot_number: a.slotNumber, source: "auto" })
-      );
-    }
-
-    // 遅番: ②の残枠→③の残枠（早番オーバーフロー分を差し引き）
-    if (lateStaff.length > 0) {
-      const lateTotal = lateStaff.length;
-      const remainingBoth     = Math.max(0, bothCap - earlyInBoth);
-      const remainingLateOnly = Math.max(0, lateOnlyCap - earlyOverflow);
-      const lateInBoth     = Math.min(remainingBoth, lateTotal);
-      const lateInLateOnly = Math.min(remainingLateOnly, lateTotal - lateInBoth);
-      const lateDist: { slotNumber: number; count: number }[] = [
-        ...bothSlots.map(s => ({ slotNumber: s.slotNumber, count: Math.min(Math.max(0, s.count - earlyInBoth), lateInBoth) })),
-        ...lateOnlySlots.map(s => ({ slotNumber: s.slotNumber, count: Math.min(Math.max(0, s.count - earlyOverflow), lateInLateOnly) })),
-      ].filter(d => d.count > 0);
-      spreadInterleave(lateStaff, lateDist).forEach(a =>
-        allAssignments.push({ project_id: projectId, assignment_date: date, staff_id: a.staffId, slot_number: a.slotNumber, source: "auto" })
-      );
-    }
-  }
-
-  // 保存（既存を削除して挿入）
-  await admin.from("break_slot_assignments").delete()
-    .eq("project_id", projectId).eq("assignment_date", date);
-
-  if (allAssignments.length > 0) {
-    const { error } = await admin.from("break_slot_assignments").insert(allAssignments);
-    if (error) return { success: false, count: 0, error: error.message };
-  }
-
-  revalidatePath("/seating");
-  revalidatePath("/attendance");
-  return { success: true, count: allAssignments.length };
 }

@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { saveSeatAssignmentsAction, autoAssignSeatsAction } from "../actions";
-import BreakSlotDayEditor from "../BreakSlotDayEditor";
 import BreakSheetImportButton from "../BreakSheetImportButton";
+import SeatUndoButton from "../SeatUndoButton";
 import { getSeatBgClass, getSeatBorderClass, getSeatTextClass, formatSectionShift, resolveShiftSection } from "@/lib/seatColors";
 
 export type WallData = {
@@ -35,6 +35,7 @@ export type PlanStaff = {
 
 export default function SeatingPlanClient({
   projectId, date, today, seats: initialSeats, staff, walls = [], embedded = false,
+  seatSnapshotAt = null,
 }: {
   projectId: string;
   date: string;
@@ -43,6 +44,8 @@ export default function SeatingPlanClient({
   staff: PlanStaff[];
   walls?: WallData[];
   embedded?: boolean;
+  /** 直前の座席配置が退避された時刻（ISO・null なら「元に戻す」は無効） */
+  seatSnapshotAt?: string | null;
 }) {
   const [seats, setSeats] = useState<PlanSeat[]>(initialSeats);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
@@ -50,7 +53,6 @@ export default function SeatingPlanClient({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
-  const [showBreakEditor, setShowBreakEditor] = useState(false);
   const router   = useRouter();
   const pathname = usePathname();
 
@@ -182,12 +184,16 @@ export default function SeatingPlanClient({
         }}
         className="flex items-center gap-1.5 text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-100 dark:hover:bg-violet-950/50 transition-colors disabled:opacity-50"
       />
-      <button
-        onClick={() => setShowBreakEditor(true)}
-        className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-100 transition-colors"
-      >
-        休憩設定
-      </button>
+      <SeatUndoButton
+        projectId={projectId}
+        date={date}
+        snapshotAt={seatSnapshotAt}
+        onDone={(msg, ok) => {
+          setToast({ msg, ok });
+          if (ok) router.refresh();
+          setTimeout(() => setToast(null), 4000);
+        }}
+      />
       <button
         onClick={handleClear}
         disabled={isPending}
@@ -214,16 +220,6 @@ export default function SeatingPlanClient({
 
   return (
     <div className={embedded ? "" : "min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-40"}>
-      {/* 日付別 休憩スロット設定モーダル */}
-      {showBreakEditor && (
-        <BreakSlotDayEditor
-          projectId={projectId}
-          date={date}
-          onClose={() => setShowBreakEditor(false)}
-          onSaved={m => { setToast({ msg: m, ok: true }); setTimeout(() => setToast(null), 3000); }}
-        />
-      )}
-
       {/* ヘッダー（スタンドアロン時のみ） */}
       {!embedded && (
         <div className="sticky top-0 z-20 bg-white dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-2">

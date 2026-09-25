@@ -97,14 +97,13 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 
 **対象:** 全スタッフ（ops モード時は `/admin` へリダイレクト）
 
-**デザイン:** 王道RPG風（2026-06-12〜）。夜空グラデ背景＋DotGothic16フォント＋ドラクエ風ウィンドウ（紺 `#000846`・白二重枠・枠上タイトルラベル）。打刻端末の休憩室と同じ世界観。
+**デザイン:** 王道RPG風（2026-06-12〜）。夜空グラデ背景＋DotGothic16フォント＋ドラクエ風ウィンドウ（紺 `#000846`・白二重枠・枠上タイトルラベル）。打刻端末と同じ世界観。
 
 **主な表示内容（上から）:**
 - ヒーローステージ（**画面の約半分＝`h-[50vh] md:h-[56vh]`・通常フロー＝旧stickyは廃止**）: AI生成の夜の城下町広場ドット絵（`public/rpg/home-stage.png`・ChatGPT生成。旧 `home-hero.png` は未使用で残置）＋星の瞬き＋ゲーム画面風ビネット＋日付・しょじコイン・ライブ時計＋中央下にマイキャラクター大きめ（ぴょこぴょこアニメ＋足元の影・タップでキャラ選択モーダル）。`object-bottom` で手前の石畳とキャラが常時表示
 - メッセージウィンドウ: ＊「挨拶メッセージ」＋点滅▼カーソル（ランダム24パターンは従来どおり）
-- 「きゅうけいちゅう」ウィンドウ（休憩室入室中のみ・▶退室する）
-- 「きゅうけいキャンプ」: 打刻端末の休憩室タブと同一スタイル（キャンプ背景＋焚き火＋「なかま N／Mにん」カウント）。**箱は1枠のみ表示**: 空きあり=「ぼしゅうちゅう ▶くわわる」（タップで先頭の空き箱に自動入室・`enterMyBreakRoomAction`・休憩打刻中のみサーバー側で検証）/ 満員=「あきわく なし」/ 自分が入室中=自分のキャラ＋「きゅうけいちゅう」（アンバー枠）/ 閉鎖中=「ヘイサちゅう」。退室は「きゅうけいちゅう」カードから。**管理者は「▶閉鎖する／開放する」ボタンで開閉切替**（`break_room_settings.is_open`・閉鎖中はヘイサちゅう表示＆入室不可・打刻端末側も「とざされている」表示で入室ブロック）
-- 打刻端末の休憩室タブには「▶つかいかた」ボタン→RPG風マニュアルモーダル（はいるとき/でるとき/ちゅうい）
+- ~~「きゅうけいちゅう」ウィンドウ（休憩室入室中のみ・▶退室する）~~ **2026-09-25 撤去**（休憩室の廃止）
+- ~~「きゅうけいキャンプ」（箱の表示・入退室・管理者の開閉切替）~~ **2026-09-25 撤去**（休憩室の廃止）
 - 「きょうのクエスト」= 本日シフト（休日は「きょうは おやすみだ」）/「ステータス」= 勤怠状態＋しゅっきん・たいきん時刻（2カラム）
 - 「コマンド」= ▶欠勤報告 ▶遅刻報告（報告済みはグレー・欠勤済は▶経過報告に変化）。出発報告はクエスト窓内「▶しゅっぱつ ほうこく」
 - 「おしらせ」= ギルドけいじばん風タイムライン（★＋日時＋タイトル）
@@ -461,12 +460,16 @@ LINE公式アカウント未友達（`line_friend = false`）→ 全画面に友
 - 席替えモード: 座席にスタッフをドラッグ・アサイン（**2026-09-25以降、保存時の休憩自動割り振りは行わない**）
 - **休憩スロットバッジ（①②③）**: 査定・販売スタッフの座席右下に表示
 - **「シートから休憩を取り込む」ボタン**（2026-09-25追加・`BreakSheetImportButton`）: SVが記入する休憩表スプレッドシートを読み、その日の休憩スロット割り当てを作る。結果は「N名を取り込みました（①x名／②y名／③z名）」のトースト、引き当てできなかった行は行番号・アカウント番号・理由のモーダルで表示。当日座席表と翌日座席プランの両方に設置
+- **「席替えを元に戻す」ボタン**（2026-09-25追加・`SeatUndoButton`）: 直前の保存に戻す**1手アンドゥ**。座席保存のたびに上書き前の配置を `seat_assignment_snapshots` に1世代だけ退避し（0名の状態も退避）、ボタンには退避時刻を出す（「14:32の配置に戻す」）。**戻すと「戻す直前の配置」が新しい退避になる＝もう一度押すと元に戻る（往復）**。退避が無い日はボタン無効。**休憩スロット割り当てには触れない**。座席が消えている場合は残っている席だけ復元し差分を報告（`seat_id` は `seats(id)` へのFKがあるため）
+- ~~**「休憩設定」ボタン**（日付別の休憩スロット設定）~~ / ~~**「休憩室」ボタン**（占有状況・強制解放・定員変更・設備情報）~~ **2026-09-25にUIから撤去**（ユーザー判断。休憩はシート取り込みで決めるため／休憩室機能そのものを廃止）
 - ~~**「休憩割り振り」ボタン**（番付順のBresenham分配で自動割り当て）~~ **2026-09-25にUIから撤去**（ユーザー判断「自動振り分けは完全に停止」）。`assignBreakSlotsAction` は関数としてのみ残置＝呼び出し元は無い
 - **「休憩一覧」ボタン**: スロット × 査定/販売 × 早番/遅番 の人数・名前一覧をトグルパネルで表示（`breakAssignmentMap` + `seats.shiftName` から計算）
 - 同時編集セッション管理（ハートビート・ロック機能）
 
 **関連テーブル:**
-`seats`, `seat_assignments`, `seat_walls`, `punch_logs`, `shifts`, `absence_reports`, `break_slot_settings`, `break_slot_assignments`
+`seats`, `seat_assignments`, `seat_walls`, `punch_logs`, `shifts`, `absence_reports`, `break_slot_settings`, `break_slot_assignments`, `seat_assignment_snapshots`
+
+> **⚠️ 休憩室機能は2026-09-25に全面廃止**（ユーザー判断「入退室・定員管理は使っていない」）。打刻端末の「休憩室」タブ・ホームの「きゅうけいキャンプ」・座席表の休憩室パネル・休憩終了/退勤時の箱の自動解放（`releaseBreakRoomBox` 8箇所）をすべて削除し、`seating/break-room-actions.ts`／`lib/break-room.ts`／`lib/break-room-info.ts` も削除した。`/api/punch/[projectId]/statuses` のレスポンスから `breakRoom` を除去（形状は `{ statuses: [...] }` のまま）。**DBの `break_room_settings` / `break_room_uses` は未使用のまま残置**（データは削除していない）
 
 ---
 
@@ -833,23 +836,18 @@ sendEventNotify(
 - **遅刻打刻は申請制（2026-07-12）**: シフト開始後の出勤打刻は「遅刻申請」画面＝理由＋依頼SV名が必須。打刻自体は即記録（15分切り上げ・従来通り）しつつ `late_reports` に `status='pending'/source='punch'` の申請を自動作成し、管理者グループLINEへ即通知（当日中に勤怠管理で承認/却下）。noteに `遅刻依頼SV: X` を記録
 - **打刻漏れ申請（2026-07-12）**: アクション画面に「⚠打刻漏れを申請する」ボタン。出勤/退勤時刻・理由・依頼SV（全て必須系）を入力→ `punch_corrections` に pending 登録（`sv_name` 付き）＋管理者グループLINEへ即通知。承認で打刻反映（既存の勤怠修正承認フローを再利用）。本人スマホの補正申請（/record）も依頼SV名が必須に
 
-### 6-5-2. 休憩室（定員制チェックイン）
-打刻端末 `/punch/[projectId]` に「休憩室」タブ（座席表で打刻・名前で打刻に続く3つ目）。
+### 6-5-2. ~~休憩室（定員制チェックイン）~~ **2026-09-25 全面廃止**
 
-- **箱方式**: 定員数分の番号付き箱（No.1〜N）。空き箱をタップ → 休憩中スタッフの一覧から自分の名前を選択して入室。使用中の箱をタップ → 退室確認 → 退室（本人のみ操作する運用）
-- **入室条件**: ステータスが休憩中（`break_start` 進行中・未退勤）のスタッフのみ。事前予約は不可
-- **自動退室**: 休憩戻り（break_end）・退勤（clock_out）・休憩リセットの**全経路**で `releaseBreakRoomBox()`（`src/lib/break-room.ts`）により箱を自動解放
-- **競合防止**: `break_room_uses` の UNIQUE(project_id, use_date, box_number) で同じ箱の二重取りをDBレベルで防止。UNIQUE(project_id, use_date, staff_id) で1人1箱
-- **タブバッジ**: 「休憩室 3/6」形式で使用数/定員を常時表示（満室時は赤）。箱には入室からの経過時間タイマー表示
-- **同期**: `/api/punch/[projectId]/statuses` のポーリング（30秒）に占有状況を同梱。レスポンス形式は `{ statuses: [...], breakRoom: { capacity, uses } }`
-- **管理者ビュー**: 座席表 `/seating` ツールバーの「休憩室」ボタン → パネルで占有状況閲覧・**強制解放**・**定員変更**（1〜50・`break_room_settings.capacity`）。定員を減らすとはみ出した箱は自動解放
-- **本人のスマホから退室**: ダッシュボード（`/dashboard`）に入室中のみアンバーのカードを表示。「退室する」ボタンで自分の枠を解放（`leaveMyBreakRoomAction`・staffId はセッションから導出するため他人の枠は外せない）
-- **設備情報の表示**: 端末の休憩室タブに「【せつび】○トイレ ○Wi-Fi ×冷蔵庫 ×電子レンジ」のように○×で表示。`break_room_settings.amenities`（jsonb・`[{label, ok}]` 最大12件）。管理者は `/seating` 休憩室パネルで追加・削除・あり/なし切替・保存ができる。デフォルトはトイレ○/Wi-Fi○/冷蔵庫×/電子レンジ×
+**ユーザー判断「入退室・定員管理は使っていない」により機能ごと削除した。以下は廃止済み＝復活させないこと。**
+
+- 削除したファイル: `src/app/(portal)/seating/break-room-actions.ts` / `src/lib/break-room.ts` / `src/lib/break-room-info.ts`
+- 撤去したUI: 打刻端末の「休憩室」タブ一式（箱・入退室・タブバッジ・つかいかた・地図リンク・設備○×／タブは座席表・打刻の2つに）／ホームの「きゅうけいキャンプ」「きゅうけいちゅう」カード・管理者の開放/閉鎖ボタン／座席表ツールバーの「休憩室」ボタンとパネル
+- **`releaseBreakRoomBox()` による箱の自動解放は全経路（8箇所）から削除済み**＝新しく `break_end` / `clock_out` を書く処理に解放を足す必要はない
+- `/api/punch/[projectId]/statuses` のレスポンスから `breakRoom` を除去（**形状は `{ statuses: [...] }` のまま維持**）
+- **DBの `break_room_settings` / `break_room_uses` はテーブル・データとも残置**（未使用）。復活させるならここから
+- 未参照になった画像 `public/rpg/camp-bg-v2.png` / `world-map.png` も残置（消すなら `sw.js` の `CACHE_VERSION` を上げる）
+
 - **キャラクター＝基本職100体・本人選択**（§6-7へ移行済。旧108体混在は廃止）: キャラ定義は `src/lib/rpg-chars.ts`（20職業×5種族=100体、`public/rpg/char-1..100.png`）。スタッフは Myページ（`/my`）のプロフィールアイコンをタップ、またはホーム（`/dashboard`）の「マイキャラクター」カード →「変更する」で全キャラ一覧から自分のキャラを選択（`staffs.rpg_character` に保存・未選択は社員IDハッシュで自動割当）。選んだキャラは Myページのプロフィールアイコン・サイドバー/PCヘッダーのユーザーアイコン・打刻端末の名前選択リスト・休憩室の表示・入退室モーダルすべてに反映（旧 AvatarEditor の顔アバターは /my から廃止）
-- **開放/閉鎖**: `break_room_settings.is_open boolean default true`（マイグレーション add_break_room_is_open 実行済み）。管理者がホームの「きゅうけいしつ」ウィンドウから切替。閉鎖中は `enterBreakRoomAction` がサーバー側で拒否（「休憩室は閉鎖中です」）。statuses API の breakRoom に `isOpen` 同梱・端末は30秒ポーリングで反映。**権限**: 開閉できるのは全社管理者（admin/executive）または当該案件の project_admin のみ。UIで隠すだけでなく `setBreakRoomOpenAction` 等の管理系アクションは `isProjectAdmin()` でサーバー側検証（定員変更・設備編集・強制解放も同様）
-- **ホームからの入退室**: `enterMyBreakRoomAction(boxNumber)`（セッションからstaffId導出）で本人入室。`getBreakRoomStateAction` は占有者の `name`・`rpgCharId` も解決して返す
-- **建物名・住所**: `src/lib/break-room-info.ts` に一元管理。`BREAK_ROOM_NAME = "サンパーク東京銀座708"`・`BREAK_ROOM_ADDRESS = "中央区入船1丁目2-8"`。ホームの「きゅうけいキャンプ」ウィンドウに「【ばしょ】サンパーク東京銀座708（とほ5ふん）」として表示。打刻端末の休憩室タブ・マニュアルモーダルにも同定数を使用
-- サーバーアクション: `src/app/(portal)/seating/break-room-actions.ts`
 
 ### 6-6. Google スプレッドシート連携
 - `src/lib/gsheets.ts` のヘルパー関数
@@ -1003,9 +1001,10 @@ export function monsterImg(id)             // → /rpg/mon-${id}.png
 | `mota_slot_assignments` | H MOTAスロット配置（account_number=ポジションキー, slot, staff_name, assigned_account, is_fixed） |
 | `break_slot_settings` | 休憩スロット設定（slot_number, label, start_time, end_time, **short_start_time, short_end_time**, target_shift: early/late/both, ratio, sort_order） |
 | `break_slot_assignments` | 休憩スロット割り当て（project_id, assignment_date, staff_id, slot_number, **source**: sheet/manual/auto, UNIQUE(project_id,assignment_date,staff_id)） |
+| `seat_assignment_snapshots` | 席替えの「元に戻す」用の退避（project_id, assignment_date, assignments jsonb, saved_by, saved_at・PK(project_id,assignment_date)・**その日1世代だけ**・2026-09-25追加） |
 | `rankings` | 番付データ（project_id, staff_name, account_number=ASS査定/ASS販売, rank, period） |
-| `break_room_settings` | 休憩室の定員（project_id PK, capacity 1〜50 デフォルト6） |
-| `break_room_uses` | 休憩室の占有状況（入室中のみ行が存在。UNIQUE(project_id,use_date,box_number) / UNIQUE(project_id,use_date,staff_id)） |
+| `break_room_settings` | 休憩室の定員（project_id PK, capacity 1〜50 デフォルト6） ・**2026-09-25に機能廃止＝未使用（テーブル・データは残置）** |
+| `break_room_uses` | 休憩室の占有状況（入室中のみ行が存在。UNIQUE(project_id,use_date,box_number) / UNIQUE(project_id,use_date,staff_id)） ・**2026-09-25に機能廃止＝未使用（テーブル・データは残置）** |
 | `login_bonuses` | ログインボーナス残高（staff_id PK・全社共通。coins, total_logins, last_claimed_date） |
 | `staff_partners` | ＜未実装・§6-7＞所持パートナーモンスター（staff_id, monster_id 1〜72, obtained_at。PK(staff_id,monster_id)・全社共通） |
 

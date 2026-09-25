@@ -3,7 +3,7 @@
 /**
  * Myページのプロフィールアイコン（RPGキャラクター）
  * タップで108体のキャラクターピッカーを開き、staffs.rpg_character に保存する。
- * 休憩室・打刻端末・サイドバーのアイコンと共通のキャラが表示される。
+ * 打刻端末・サイドバーのアイコンと共通のキャラが表示される。
  */
 import { useState, useTransition } from "react";
 import { RPG_CHARS, rpgCharFor, rpgCharImg } from "@/lib/rpg-chars";
@@ -82,7 +82,7 @@ export default function MyCharacterAvatar({
             <div className="px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between shrink-0">
               <div>
                 <p className="text-[15px] font-bold text-zinc-800 dark:text-zinc-100">キャラクターを選ぶ</p>
-                <p className="text-[11px] text-zinc-400 mt-0.5">あなたのアイコン・休憩室のキャラとして表示されます（全{RPG_CHARS.length}体）</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5">あなたのアイコンとして表示されます（全{RPG_CHARS.length}体）</p>
               </div>
               <button onClick={() => setPickerOpen(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg px-2">✕</button>
             </div>

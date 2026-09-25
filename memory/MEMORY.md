@@ -42,6 +42,20 @@ DBの `project_id` 列は残っているが、案件の選択・切替・新規�
 
 ---
 
+## 現在の開発状態（2026-09-25更新・第2弾）
+
+### 席替えの1手アンドゥ＋休憩室機能の全面廃止（2026-09-25・実装済・未デプロイ）
+**ユーザー依頼「席替え後に戻れるようにしたい」→ 決定＝①直前の保存に戻す1手アンドゥ ②座席だけ戻す（休憩は触らない）。続けて「休憩設定・休憩室のボタンは不要／休憩自動振り分けも不要／休憩室機能自体も使っていない（打刻端末のタブごと消す）」。実装は engineer 2体を直列（同じファイルを触るため並列にしない）、検品は qa-reviewer。tsc 0・`npx eslint src` 0 errors・warning 76（-1）・`next build` 成功。**
+- **新テーブル `seat_assignment_snapshots`**（project_id, assignment_date, assignments jsonb, saved_by, saved_at・PK(project_id,assignment_date)・RLSポリシー無し＝adminクライアント専用・マイグレーション `create_seat_assignment_snapshots`）。**その日1世代だけ**持つ
+- **`saveSeatAssignmentsAction`**: delete の前に現在の配置を退避（**0件でも空配列**＝「誰も置いていない状態」にも戻せる）。退避失敗は握りつぶして保存は続行。**管理者ガードを追加**（従来 `if (!user)` だけだった）
+- **新 `undoSeatAssignmentsAction(projectId, date)`**: 退避を復元し、**復元直前の配置を新しい退避にする＝トグル**（押すたびにA↔Bを往復）。insert失敗時は消した配置を入れ直してから失敗を返す。**席が消えている場合は `seats` に存在するものだけ復元**（`seat_assignments.seat_id` は `seats(id)` へのFKがあり、そのままinsertすると全件FK違反）
+- **UI**: 新規 `seating/SeatUndoButton.tsx`（当日座席表・当日状況の埋め込み・翌日プランの**3経路で共用**）。退避が無ければ無効化、あれば「14:32の配置に戻す」。`components/icons.tsx` に `UndoIcon` 追記
+- **休憩室機能を全面廃止**: 削除＝`seating/break-room-actions.ts`／`lib/break-room.ts`／`lib/break-room-info.ts`。撤去＝打刻端末の「休憩室」タブ一式（-543行・タブは座席表/打刻の2つに）／ホームの「きゅうけいキャンプ」「入室中」カード・開閉ボタン（-337行）／座席表の休憩室パネル／`releaseBreakRoomBox` の呼び出し**8箇所**（seating/punch-actions 4・seating/actions 1・punch/[projectId]/actions 2・(portal)/punch/actions 1）／`/api/punch/[projectId]/statuses` の `breakRoom`（**レスポンス形状 `{ statuses: [...] }` は維持**）
+- **座席表の休憩UIも撤去**: 「休憩設定」「休憩室」ボタン（standalone・埋め込み・翌日プラン）と `BreakSlotDayEditor` のマウント。**`assignBreakSlotsAction`（自動振り分け）は関数ごと削除**（専用ヘルパー `spreadInterleave`・`normalize` も）
+- ⚠️ **`break_room_settings` / `break_room_uses` は残置**（データ削除はしていない）。未参照になった画像 `public/rpg/camp-bg-v2.png`・`world-map.png` も残置（消すなら `sw.js` の CACHE_VERSION バンプが必要）
+- ⚠️ **日付別スロット設定（`break_slot_daily_settings`）を編集するUIが無くなった**＝`BreakSlotDayEditor.tsx`・`saveBreakSlotDailySettingsAction`・`clearBreakSlotDailySettingsAction` は参照0件で残置。行がある日は従来どおり優先されるが画面からは変更・解除できない（シート取り込みは必要なとき自動で書く）
+- 残: デプロイ（ユーザー承認待ち）
+
 ## 現在の開発状態（2026-09-25更新）
 
 ### 休憩スロットをSVのスプレッドシートから取り込む＋自動振り分けの廃止（2026-09-25・実装済・未デプロイ）
@@ -683,8 +697,8 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | ShiftManageClient sticky ツールバーの top は `var(--page-header-h)` | `--page-header-h` = ページタイトル+タブの高さ。ShiftDayList内ヘッダーの top は `calc(--page-header-h + --toolbar-h)` を使う |
 | `punch_logs.note` に実打刻時刻が記録される | 形式: `出勤打刻: HH:MM` / `退勤打刻: HH:MM  早退承認者: XX`。`"管理者修正:staffId"` とは別管理。備考列表示には `clockInNote`/`clockOutNote` フィールドを使う |
 | 問い合わせLINE返信は全文送信 | `inquiry_reply` 通知の80文字制限を撤廃済み。再度制限を入れないこと |
-| break_end を挿入する処理は休憩室の箱も解放すること | `releaseBreakRoomBox()`（lib/break-room.ts）を呼ばないと幽霊が箱に残る。新しい break_end / clock_out 経路を作るときは必ず追加 |
-| `/api/punch/[projectId]/statuses` のレスポンスはオブジェクト形式 | `{ statuses: [...], breakRoom: {...} }`。以前は配列だった。端末クライアントの型と一致させること |
+| ~~break_end を挿入する処理は休憩室の箱も解放すること~~（2026-09-25 休憩室廃止により無効） | `releaseBreakRoomBox()`（lib/break-room.ts）を呼ばないと幽霊が箱に残る。新しい break_end / clock_out 経路を作るときは必ず追加 |
+| `/api/punch/[projectId]/statuses` のレスポンスはオブジェクト形式 | **2026-09-25の休憩室廃止で `breakRoom` は無くなり `{ statuses: [...] }` になった**（配列には戻していない＝端末クライアントの型もオブジェクト前提のまま）。形状を変えるときは端末側の型と必ず揃えること |
 | 休憩室の定員超過はDBのUNIQUE制約で防止 | カウント方式は同時タップで競合する。箱番号UNIQUE(project_id,use_date,box_number)方式を維持。error.code 23505 を「箱が使用中」と表示 |
 | 休憩室の管理操作（開閉・定員・設備・強制解放）はサーバー側で管理者チェック必須 | `break-room-actions.ts` の `setBreakRoomOpenAction`/`setBreakRoomCapacityAction`/`setBreakRoomAmenitiesAction`/`forceReleaseBreakRoomAction` は当初UIで隠すだけ＝adminクライアントで無条件更新だった（一般スタッフが直接呼べば実行できる穴）。共通ヘルパー `isProjectAdmin(projectId)`（全社admin/executive または project_admin を session→staffs/project_members で判定）でサーバー側ガード追加済（2026-06-13）。**新しい管理者専用サーバーアクションを作るときは必ず同じガードを入れる**（admin系は UI 非表示だけでは不十分） |
 | insert直後のID取得に `.single()` 禁止 | RLSのSELECTポリシーが通らないとエラー。insertとselectを分離し、取れない場合のフォールバックを用意（周知投稿で発生済み） |
@@ -716,6 +730,8 @@ const isAdmin = viewMode !== "staff" && /* ロールチェック */;
 | 休憩スロットの自動振り分けは廃止済み（2026-09-25） | 以前は座席プラン保存・休憩設定保存の副作用で `assignBreakSlotsAction`（番付＋比率のBresenham分配）が走り、手動指定を毎回潰していた。**ユーザー判断で自動実行は全廃**し、休憩はSVのスプレッドシート取り込み（`importBreakAssignmentsFromSheetAction`）か画面での個別変更で決める。`assignBreakSlotsAction` は残置してあるが**参照0件＝復活させるときは呼び出し元を足す**。`break_slot_assignments.source` で出どころ（sheet/manual/auto）が分かる。**手動指定は `source='manual'` で守られている**＝スロットを書き込む経路を新しく作るときは必ず `source` を入れること（付け忘れるとシート再取り込みで消える） |
 | 休憩表スプレッドシートの取り込みはアカウント番号だけで人を決めない | `staffs.account_number` は**退職者と現役で重複している**（ASS 11/19/30/31/54/141/144。ASS 19 は3人）。番号だけで引くと退職者に当たる。**「その日に勤務シフトがある人」で絞ると一意になる**（9/24の36行で検証済み）。0人/複数になった行は黙って捨てず未解決として画面に出すこと。シートの「商材」列は当日シフト基準でメンバー登録のセクションと違う人がいる（林周星＝登録は販売・当日は査定遅番） |
 | 小休憩の時間帯はスロット単位（`short_start_time`/`short_end_time`）＝持ち時間もここから算出 | 従来の小休憩は**分数だけ**（`staff_break_overrides.short_minutes`・`break_short_settings`）で時間帯の概念が無かった。2026-09-25にスロット設定へ時間帯を追加（SVのシートがスロットごとに指定しているため）。⚠️`saveBreakSlotSettingsAction` は **delete→insert** なので、**小休憩の値を送らずに保存すると既存の小休憩時間帯が消える**。スロット設定を保存するUIを増やすときは必ず小休憩も一緒に送ること |
+| 席替えの保存は上書き前の配置を1世代だけ退避する（`seat_assignment_snapshots`） | `saveSeatAssignmentsAction` は delete→insert で履歴が無かったため、保存したら前の配置に戻せなかった（2026-09-25に1手アンドゥを追加）。**座席割り当てを書く経路を新しく作るときは退避も入れる**（入れないとその保存だけ戻せない）。復元は `seats` に存在する席だけ＝`seat_assignments.seat_id` は `seats(id)` へのFKがあるので、消えた席をそのままinsertすると**全件FK違反でロールバック**する。アンドゥはトグル（戻すと「戻す直前」が新しい退避になる） |
+| 休憩室機能は全面廃止済み（2026-09-25） | 打刻端末の「休憩室」タブ・ホームの「きゅうけいキャンプ」・座席表の休憩室パネル・`releaseBreakRoomBox` の自動解放（8経路）・`break-room-actions.ts`／`lib/break-room.ts`／`lib/break-room-info.ts` をすべて削除した。**`break_end`/`clock_out` を挿入する処理に箱の解放を足す必要はもう無い**（旧地雷は無効）。`break_room_settings`/`break_room_uses` テーブルはデータごと残置＝復活させるならここから。`/api/punch/[projectId]/statuses` の形状 `{ statuses: [...] }` は維持しているので端末クライアントの型はそのまま |
 
 ---
 

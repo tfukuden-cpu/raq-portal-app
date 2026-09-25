@@ -53,16 +53,17 @@
 |---------|-----|
 | `seats` | 座席定義 |
 | `seat_assignments` | 座席割り当て |
+| `seat_assignment_snapshots` | 席替えの「元に戻す」用の退避（assignments jsonb・PK(project_id,assignment_date)・その日1世代だけ・2026-09-25追加） |
 | `seat_walls` | 座席レイアウト壁 |
 | `mota_slot_assignments` | H MOTAスロット配置（account_number, slot, staff_name, assigned_account） |
 | `break_slot_settings` | 休憩スロット設定（slot_number ①②③, start_time, end_time, ratio）・**short_start_time/short_end_time=小休憩の時間帯（2026-09-25追加）** |
 | `staff_break_overrides` | スタッフ別当日休憩時間（project_id, staff_id, override_date, regular_minutes, short_minutes）デフォルト60/15分 |
 | `work_exception_requests` | 早退・残業申請（request_type: early_leave/overtime, signer_name, status: pending/approved/rejected） |
 | `break_slot_assignments` | 休憩スロット割り当て（UNIQUE: project_id, assignment_date, staff_id）・**source=sheet/manual/auto（2026-09-25追加）** |
-| `break_room_settings` | 休憩室の定員＋設備＋開閉（project_id PK, capacity 1〜50 デフォルト6, amenities jsonb `[{label, ok}]`, is_open boolean default true） |
+| `break_room_settings` | 休憩室の定員＋設備＋開閉（project_id PK, capacity 1〜50 デフォルト6, amenities jsonb `[{label, ok}]`, is_open boolean default true）・**2026-09-25に機能廃止＝未使用（テーブルとデータは残置）** |
 | `login_bonuses` | ログインボーナス（staff_id PK・全社共通, coins, total_logins, last_claimed_date）。毎日1回コインのガチャ。更新はサーバーアクションの admin クライアント |
 | `notices.attachment_url/attachment_name` | 周知の添付ファイル（1周知1ファイル）。Storage バケット `notice-attachments`（public）に実体 |
-| `break_room_uses` | 休憩室の占有（入室中のみ行が存在・退室で削除。UNIQUE: project_id, use_date, box_number / UNIQUE: project_id, use_date, staff_id） |
+| `break_room_uses` | 休憩室の占有（入室中のみ行が存在・退室で削除。UNIQUE: project_id, use_date, box_number / UNIQUE: project_id, use_date, staff_id）・**2026-09-25に機能廃止＝未使用（テーブルとデータは残置）** |
 | `staff_partners` | パートナーモンスター所持（SPEC.md §6-7・全社共通。id 代理PK, staff_id, monster_id 1〜72, obtained_at）。**重複所持OK**＝同一 monster_id の行が複数あり得る（複合PK不可）。insert はガチャアクションの admin クライアントのみ。RLS: 本人 select 可 |
 | `staffs.admin_only` | 管理専用アカウント（true=スタッフメニューを出さず管理メニューのみ・LINEゲートもスキップ・2026-09-09追加） |
 | `staffs.active_partner_id` | 現在連れているパートナー（mon 1〜72・null=なし） |

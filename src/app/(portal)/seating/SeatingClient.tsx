@@ -9,15 +9,9 @@ import {
   getSeatingEditorsAction,
   type SeatingEditor,
 } from "./actions";
-import BreakSlotDayEditor from "./BreakSlotDayEditor";
 import BreakSheetImportButton from "./BreakSheetImportButton";
+import SeatUndoButton from "./SeatUndoButton";
 import type { BreakSlotSetting } from "./break-actions";
-import {
-  getBreakRoomStateAction, forceReleaseBreakRoomAction, setBreakRoomCapacityAction,
-  setBreakRoomAmenitiesAction,
-  type BreakRoomState, type BreakRoomAmenity,
-} from "./break-room-actions";
-import { formatTimeJP } from "@/lib/datetime";
 import { resolveShiftSection } from "@/lib/seatColors";
 import { createClient } from "@/lib/supabase/client";
 import PunchModal from "./PunchModal";
@@ -138,6 +132,7 @@ export default function SeatingClient({
   projectId, today, seats, walls = [], isAdmin, myStaffId,
   staffList = [], embedded = false, breakAssignmentMap = {},
   motaAccountSlotRecord = {}, shiftTimeMap = {}, breakSlots = [],
+  seatSnapshotAt = null,
 }: {
   projectId: string;
   today: string;
@@ -151,6 +146,8 @@ export default function SeatingClient({
   motaAccountSlotRecord?: Record<string, string>;
   shiftTimeMap?: Record<string, { start: string | null; end: string | null }>;
   breakSlots?: BreakSlotSetting[];
+  /** 直前の座席配置が退避された時刻（ISO・null なら「元に戻す」は無効） */
+  seatSnapshotAt?: string | null;
 }) {
   const [statuses, setStatuses] = useState<Map<string, NonNullable<SeatData["status"]>>>(() => {
     const m = new Map<string, NonNullable<SeatData["status"]>>();
@@ -181,67 +178,6 @@ export default function SeatingClient({
   const [pickSeatId, setPickSeatId] = useState<string | null>(null);
   const [showBreakPanel, setShowBreakPanel] = useState(false);
 
-  // ── 休憩室パネル（管理者） ────────────────────────────────
-  const [showRoomPanel, setShowRoomPanel] = useState(false);
-  const [roomState, setRoomState] = useState<BreakRoomState | null>(null);
-  const [roomCapInput, setRoomCapInput] = useState("6");
-  const [amenitiesDraft, setAmenitiesDraft] = useState<BreakRoomAmenity[]>([]);
-
-  async function refreshRoomState() {
-    const s = await getBreakRoomStateAction(projectId);
-    setRoomState(s);
-    setRoomCapInput(String(s.capacity));
-    setAmenitiesDraft(s.amenities);
-  }
-
-  function toggleRoomPanel() {
-    setShowRoomPanel(v => {
-      const next = !v;
-      if (next) void refreshRoomState();
-      return next;
-    });
-  }
-
-  function handleForceRelease(boxNumber: number) {
-    if (!window.confirm(`No.${boxNumber} を強制解放しますか？`)) return;
-    startTransition(async () => {
-      const res = await forceReleaseBreakRoomAction(projectId, boxNumber);
-      if (!res.ok) {
-        setToast(`⚠️ ${res.error ?? "解放に失敗しました"}`);
-        setTimeout(() => setToast(null), 2500);
-      }
-      await refreshRoomState();
-    });
-  }
-
-  function handleSaveRoomCapacity() {
-    const cap = parseInt(roomCapInput, 10);
-    if (!Number.isInteger(cap) || cap < 1 || cap > 50) {
-      setToast("⚠️ 定員は1〜50で指定してください");
-      setTimeout(() => setToast(null), 2500);
-      return;
-    }
-    startTransition(async () => {
-      const res = await setBreakRoomCapacityAction(projectId, cap);
-      if (!res.ok) {
-        setToast(`⚠️ ${res.error ?? "定員の保存に失敗しました"}`);
-      } else {
-        setToast(`休憩室の定員を${cap}名に変更しました`);
-      }
-      setTimeout(() => setToast(null), 2500);
-      await refreshRoomState();
-    });
-  }
-
-  function handleSaveAmenities() {
-    const clean = amenitiesDraft.filter(a => a.label.trim().length > 0);
-    startTransition(async () => {
-      const res = await setBreakRoomAmenitiesAction(projectId, clean);
-      setToast(res.ok ? "設備情報を保存しました" : `⚠️ ${res.error ?? "保存に失敗しました"}`);
-      setTimeout(() => setToast(null), 2500);
-      await refreshRoomState();
-    });
-  }
   const [staffSearch, setStaffSearch] = useState("");
   // ドラッグ＆スワップ
   const [dragSeatId, setDragSeatId] = useState<string | null>(null);
@@ -480,11 +416,8 @@ export default function SeatingClient({
     return () => { supabase.removeChannel(channel); };
   }, [projectId]);
 
-  // 日付別の休憩スロット設定モーダル
-  const [showBreakEditor, setShowBreakEditor] = useState(false);
-
-  // 休憩表スプレッドシートからの取り込み結果
-  function handleBreakImported(message: string, ok: boolean) {
+  // ツールバー操作（休憩の取り込み・席替えを元に戻す）の結果表示
+  function handleToolbarResult(message: string, ok: boolean) {
     setToast(ok ? message : `⚠️ ${message}`);
     if (ok) router.refresh();
     setTimeout(() => setToast(null), 4000);
@@ -616,7 +549,7 @@ export default function SeatingClient({
             <h1 className="text-base font-bold text-zinc-800 dark:text-zinc-100">座席表</h1>
             <p className="text-xs text-zinc-400 tabular-nums">{dateLabel}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {isAdmin && !editMode && (
               <>
                 <button
@@ -638,13 +571,14 @@ export default function SeatingClient({
                 >
                   配置編集
                 </a>
-                <BreakSheetImportButton projectId={projectId} date={today} onDone={handleBreakImported} />
-                <button
-                  onClick={() => setShowBreakEditor(true)}
-                  className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-50 transition-colors"
-                >
-                  休憩設定
-                </button>
+                <SeatUndoButton
+                  projectId={projectId}
+                  date={today}
+                  snapshotAt={seatSnapshotAt}
+                  lockedBy={otherEditors.map(e => e.staffName)}
+                  onDone={handleToolbarResult}
+                />
+                <BreakSheetImportButton projectId={projectId} date={today} onDone={handleToolbarResult} />
                 {breakSlots.length > 0 && (
                   <button
                     onClick={() => setShowBreakPanel(v => !v)}
@@ -653,12 +587,6 @@ export default function SeatingClient({
                     休憩一覧
                   </button>
                 )}
-                <button
-                  onClick={toggleRoomPanel}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${showRoomPanel ? "bg-amber-600 text-white border-amber-600" : "text-amber-600 dark:text-amber-400 bg-white dark:bg-zinc-900 border-amber-200 dark:border-amber-800 hover:bg-amber-50"}`}
-                >
-                  休憩室
-                </button>
               </>
             )}
             {editMode ? (
@@ -748,35 +676,18 @@ export default function SeatingClient({
             </button>
           )}
           {!editMode && (
-            <BreakSheetImportButton projectId={projectId} date={today} onDone={handleBreakImported} />
+            <SeatUndoButton
+              projectId={projectId}
+              date={today}
+              snapshotAt={seatSnapshotAt}
+              lockedBy={otherEditors.map(e => e.staffName)}
+              onDone={handleToolbarResult}
+            />
           )}
           {!editMode && (
-            <button
-              onClick={() => setShowBreakEditor(true)}
-              className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 hover:bg-violet-50 transition-colors"
-            >
-              休憩設定
-            </button>
-          )}
-          {!editMode && (
-            <button
-              onClick={toggleRoomPanel}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${showRoomPanel ? "bg-amber-600 text-white border-amber-600" : "text-amber-600 dark:text-amber-400 bg-white dark:bg-zinc-900 border-amber-200 dark:border-amber-800 hover:bg-amber-50"}`}
-            >
-              休憩室
-            </button>
+            <BreakSheetImportButton projectId={projectId} date={today} onDone={handleToolbarResult} />
           )}
         </div>
-      )}
-
-      {/* 日付別 休憩スロット設定モーダル */}
-      {showBreakEditor && (
-        <BreakSlotDayEditor
-          projectId={projectId}
-          date={today}
-          onClose={() => setShowBreakEditor(false)}
-          onSaved={m => { setToast(m); router.refresh(); setTimeout(() => setToast(null), 3000); }}
-        />
       )}
 
       {/* 他ユーザー編集中バナー（同時編集ロック） */}
@@ -871,136 +782,6 @@ export default function SeatingClient({
                 })}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* 休憩室パネル（管理者・占有状況/強制解放/定員変更） */}
-      {showRoomPanel && isAdmin && (
-        <div className="mx-3 mb-2 rounded-2xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-zinc-950 overflow-hidden">
-          <div className="px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between gap-2 flex-wrap">
-            <p className="text-xs font-bold text-amber-700 dark:text-amber-300 tabular-nums">
-              休憩室{roomState ? `（使用中 ${roomState.uses.length} / 定員 ${roomState.capacity}）` : ""}
-            </p>
-            <div className="flex items-center gap-2">
-              <label className="text-[11px] text-zinc-500 dark:text-zinc-400">定員</label>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={roomCapInput}
-                onChange={e => setRoomCapInput(e.target.value)}
-                className="w-14 text-xs tabular-nums px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200"
-              />
-              <button
-                onClick={handleSaveRoomCapacity}
-                disabled={isPending}
-                className="text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-500 px-2.5 py-1 rounded-lg disabled:opacity-50"
-              >
-                保存
-              </button>
-              <button
-                onClick={() => void refreshRoomState()}
-                className="text-[11px] text-amber-500 hover:text-amber-700 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800"
-              >
-                更新
-              </button>
-              <button onClick={() => setShowRoomPanel(false)} className="text-[11px] text-amber-400 hover:text-amber-600">✕</button>
-            </div>
-          </div>
-          <div className="p-3">
-            {!roomState ? (
-              <p className="text-xs text-zinc-400 text-center py-2">読み込み中…</p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                {Array.from({ length: roomState.capacity }, (_, i) => i + 1).map(boxNumber => {
-                  const use = roomState.uses.find(u => u.boxNumber === boxNumber);
-                  if (!use) {
-                    return (
-                      <div key={boxNumber} className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700 p-2">
-                        <p className="text-[10px] font-bold text-zinc-400 tabular-nums">No.{boxNumber}</p>
-                        <p className="text-xs text-zinc-400 mt-0.5">空き</p>
-                      </div>
-                    );
-                  }
-                  const name = staffNameMap.get(use.staffId)?.name ?? use.staffId;
-                  const elapsedMin = Math.max(0, Math.floor((nowMs - new Date(use.enteredAt).getTime()) / 60000));
-                  return (
-                    <div key={boxNumber} className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tabular-nums">No.{boxNumber}</p>
-                        <button
-                          onClick={() => handleForceRelease(boxNumber)}
-                          disabled={isPending}
-                          className="text-[10px] font-semibold text-red-500 hover:text-red-700 disabled:opacity-50"
-                        >
-                          解放
-                        </button>
-                      </div>
-                      <p className="text-xs font-bold text-zinc-700 dark:text-zinc-200 truncate mt-0.5">{name}</p>
-                      <p className="text-[10px] text-zinc-500 tabular-nums mt-0.5">
-                        {formatTimeJP(use.enteredAt)}〜（{elapsedMin}分）
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* 設備情報の編集 */}
-            {roomState && (
-              <div className="mt-3 pt-3 border-t border-amber-100 dark:border-amber-900/50">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300">設備情報（端末の休憩室タブに表示）</p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setAmenitiesDraft(prev => [...prev, { label: "", ok: true }])}
-                      disabled={amenitiesDraft.length >= 12}
-                      className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:opacity-50"
-                    >
-                      ＋追加
-                    </button>
-                    <button
-                      onClick={handleSaveAmenities}
-                      disabled={isPending}
-                      className="text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-500 px-2.5 py-1 rounded-lg disabled:opacity-50"
-                    >
-                      設備を保存
-                    </button>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {amenitiesDraft.map((a, i) => (
-                    <div key={i} className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 pl-1 pr-1.5 py-1">
-                      <button
-                        onClick={() => setAmenitiesDraft(prev => prev.map((x, j) => j === i ? { ...x, ok: !x.ok } : x))}
-                        className={`text-[11px] font-bold w-9 py-0.5 rounded-md ${a.ok ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300" : "bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300"}`}
-                      >
-                        {a.ok ? "あり" : "なし"}
-                      </button>
-                      <input
-                        type="text"
-                        value={a.label}
-                        maxLength={20}
-                        placeholder="設備名"
-                        onChange={e => setAmenitiesDraft(prev => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
-                        className="w-24 text-xs px-1.5 py-0.5 bg-transparent text-zinc-700 dark:text-zinc-200 focus:outline-none"
-                      />
-                      <button
-                        onClick={() => setAmenitiesDraft(prev => prev.filter((_, j) => j !== i))}
-                        className="text-[11px] text-zinc-400 hover:text-red-500 px-0.5"
-                        aria-label="削除"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                  {amenitiesDraft.length === 0 && (
-                    <p className="text-[11px] text-zinc-400">設備が未設定です。「＋追加」で登録してください。</p>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

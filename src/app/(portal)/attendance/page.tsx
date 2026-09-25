@@ -183,6 +183,7 @@ export default async function AttendancePage({
     breakAssignments,
     breakShortSettings,
     { data: slotRequirementRows },
+    { data: seatSnapshotRow },
   ] = await Promise.all([
     admin.from("projects").select("id, name").eq("id", projectId).maybeSingle(),
     admin.from("project_members")
@@ -249,7 +250,15 @@ export default async function AttendancePage({
       .select("pattern_name, required_count")
       .eq("project_id", projectId)
       .eq("shift_date", today),
+    // 座席表タブの「席替えを元に戻す」用の退避（1世代のみ）
+    admin.from("seat_assignment_snapshots")
+      .select("saved_at")
+      .eq("project_id", projectId)
+      .eq("assignment_date", today)
+      .maybeSingle(),
   ]);
+
+  const seatSnapshotAt = (seatSnapshotRow as { saved_at?: string } | null)?.saved_at ?? null;
 
   // 今日・明日でデータを分割
   const todayShifts = (allShiftRows ?? []).filter(r => r.shift_date === today);
@@ -740,6 +749,7 @@ export default async function AttendancePage({
       seatData={seatData}
       wallData={wallData}
       seatStaffList={seatStaffList}
+      seatSnapshotAt={seatSnapshotAt}
       motaAccountSlotRecord={motaAccountSlotRecord}
       hMotaRows={hMotaRows}
       initialMotaAssignments={initialMotaAssignments}

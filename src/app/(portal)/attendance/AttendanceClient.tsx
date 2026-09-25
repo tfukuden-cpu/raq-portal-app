@@ -197,6 +197,8 @@ interface Props {
   seatData: SeatData[];
   wallData: WallData[];
   seatStaffList: StaffInfo[];
+  /** 直前の座席配置が退避された時刻（ISO・null なら「席替えを元に戻す」は無効） */
+  seatSnapshotAt?: string | null;
   motaAccountSlotRecord?: Record<string, string>;
   hMotaRows: MotaRow[];
   initialMotaAssignments: MotaAssignment[];
@@ -219,7 +221,7 @@ export default function AttendanceClient({
   grouped, offMembers, shiftRequired = {}, enableDeparture,
   publishedAt, shiftChanges,
   myStaffId, churnRiskAlerts,
-  seatData, wallData, seatStaffList, motaAccountSlotRecord = {},
+  seatData, wallData, seatStaffList, seatSnapshotAt = null, motaAccountSlotRecord = {},
   hMotaRows, initialMotaAssignments,
   breakSlots = [], breakAssignments = [],
   breakShortSettings = [], breakRecords = [],
@@ -647,6 +649,7 @@ export default function AttendanceClient({
             breakAssignmentMap={breakAssignmentMap}
             breakSlots={breakSlots}
             motaAccountSlotRecord={motaAccountSlotRecord}
+            seatSnapshotAt={seatSnapshotAt}
             embedded
           />
         </div>

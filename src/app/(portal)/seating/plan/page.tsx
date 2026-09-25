@@ -42,6 +42,7 @@ export default async function SeatingPlanPage(props: {
     { data: memberRows },
     { data: shifts },
     { data: wallRows },
+    { data: seatSnapshotRow },
   ] = await Promise.all([
     admin.from("seats")
       .select("id, label, x_pct, y_pct, section, seat_type, shift_slot")
@@ -58,7 +59,14 @@ export default async function SeatingPlanPage(props: {
     admin.from("seat_walls")
       .select("x1_pct, y1_pct, x2_pct, y2_pct")
       .eq("project_id", projectId),
+    // 「席替えを元に戻す」用の退避（1世代のみ）
+    admin.from("seat_assignment_snapshots")
+      .select("saved_at")
+      .eq("project_id", projectId).eq("assignment_date", target)
+      .maybeSingle(),
   ]);
+
+  const seatSnapshotAt = (seatSnapshotRow as { saved_at?: string } | null)?.saved_at ?? null;
 
   // メンバーマップ
   type MemberInfo = { name: string; accountNumber: string | null; section: string | null };
@@ -126,6 +134,7 @@ export default async function SeatingPlanPage(props: {
       seats={planSeats}
       staff={planStaff}
       walls={wallData}
+      seatSnapshotAt={seatSnapshotAt}
     />
   );
 }

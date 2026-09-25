@@ -44,3 +44,9 @@ next-env.d.ts
 .env*.local
 .env*
 MONSTER/
+
+# サブエージェントの作業用ワークツリー（リポジトリに入れない）
+.claude/worktrees/
+
+# 画像素材のローカルバックアップ
+.rpg-backup/
