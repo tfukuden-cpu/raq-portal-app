@@ -90,6 +90,27 @@ function timeOrNull(raw: string | null | undefined): string | null {
   return toHHMM(raw);
 }
 
+/** Googleスプレッドシートの数式エラー値（IMPORTRANGE の連携切れなど） */
+const SHEET_ERROR_VALUES = ["#REF!", "#N/A", "#ERROR!", "#VALUE!", "#NAME?", "#DIV/0!"];
+
+/**
+ * シートが数式エラーで壊れているかを見る（2026-09-26追加）。
+ * この休憩表は元シートを IMPORTRANGE で引いているため、連携が切れると中身が "#REF!" 1セルだけになる。
+ * そのまま進むと「シートに YYYY-MM-DD の行がありません」と出て原因が分からないので、ここで止めて理由を出す。
+ * **休憩の時刻が入った行が1行でもあれば正常**とみなす（注記にエラー値が混ざっていても取り込みは止めない）。
+ */
+function findSheetError(rows: string[][]): string | null {
+  let found: string | null = null;
+  for (const r of rows) {
+    if (toHHMM(r?.[3]) !== null && toHHMM(r?.[4]) !== null) return null; // データ行がある＝正常
+    for (const c of r ?? []) {
+      const v = (c ?? "").trim();
+      if (!found && SHEET_ERROR_VALUES.includes(v)) found = v;
+    }
+  }
+  return found;
+}
+
 /** "2026/09/24" / "2026-9-4" → "2026-09-24"（解釈できなければ null） */
 function toISODate(raw: string | null | undefined): string | null {
   const m = (raw ?? "").trim().match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})/);
@@ -331,6 +352,17 @@ export async function importBreakAssignmentsFromSheetAction(
         return { ...empty, message: "スプレッドシートが見つかりません（URLを確認してください）" };
       }
       return { ...empty, message: `シートの読み取りに失敗しました: ${msg}` };
+    }
+
+    const sheetError = findSheetError(sheetRows);
+    if (sheetError === "#REF!") {
+      return {
+        ...empty,
+        message: "シートが #REF! になっています（元の休憩表を読み込む IMPORTRANGE の連携が切れています）。休憩表スプレッドシートを開いて「アクセスを許可」してから、もう一度取り込んでください",
+      };
+    }
+    if (sheetError) {
+      return { ...empty, message: `シートが ${sheetError} になっています（シート側の数式を確認してください）` };
     }
 
     // ── ③ スロット設定（日付別→共通のフォールバック） ────
