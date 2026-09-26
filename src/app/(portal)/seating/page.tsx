@@ -169,6 +169,8 @@ export default async function SeatingPage() {
         accountNumber: (s?.account_number as string | null | undefined) ?? null,
         section:       (m as { section?: string | null }).section ?? null,
         shiftName:     shiftNameMap.get(m.staff_id) ?? null,
+        // 未配置パネルは statuses を持たないので、欠勤はここで渡す（deriveStatus と同じ absenceIds）
+        isAbsent:      absenceIds.has(m.staff_id),
       };
     });
 

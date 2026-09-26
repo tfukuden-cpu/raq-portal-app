@@ -47,7 +47,17 @@ export type StaffInfo = {
   accountNumber: string | null;
   section: string | null;
   shiftName: string | null;
+  /** その日の欠勤報告がある（absence_reports 由来・座席が無くて当然な人） */
+  isAbsent?: boolean;
 };
+
+/**
+ * 休憩スロットの運用対象セクション。
+ * SVの休憩表スプレッドシートは査定/販売しか載せないため、他セクション（SV・MOTA・
+ * H MOTA・インフォ・ローン・未アポ）は正しく取り込んでも休憩が付かない。
+ * 休憩一覧パネルと「休憩なし」警告はこの基準で揃える。
+ */
+const BREAK_TARGET_SECTIONS: readonly string[] = ["査定", "販売"];
 
 // 凡例用（ステータス色ドット）
 const STATUS_BG: Record<NonNullable<SeatData["status"]>, string> = {
@@ -275,14 +285,18 @@ export default function SeatingClient({
   // スタッフ名マップ（id → name）
   const staffNameMap = useMemo(() => new Map(staffList.map(s => [s.id, s])), [staffList]);
 
+  // 休憩の割り当てが1件も無い日（＝SVのシートを未取り込み・休憩運用が無い日）は
+  // 座席と休憩の食い違い表示を一切出さない（全席が赤くなるのを防ぐ）
+  // ※翌日座席プランは別コンポーネント（plan/SeatingPlanClient.tsx）なのでここは通らない
+  const hasBreakData = Object.keys(breakAssignmentMap).length > 0;
+
   // 休憩一覧：スロット × セクション × 早番/遅番
   const breakOverview = useMemo(() => {
     if (!breakSlots.length) return [];
-    const TARGET_SECTIONS = ["査定", "販売"] as const;
     type SecData = { early: string[]; late: string[] };
     const rows = breakSlots.map(slot => ({
       slot,
-      secs: Object.fromEntries(TARGET_SECTIONS.map(sec => [sec, { early: [], late: [] } as SecData])) as Record<string, SecData>,
+      secs: Object.fromEntries(BREAK_TARGET_SECTIONS.map(sec => [sec, { early: [], late: [] } as SecData])) as Record<string, SecData>,
     }));
     for (const seat of seats) {
       if (!seat.staffId || !seat.staffName || !seat.section) continue;
@@ -892,6 +906,18 @@ export default function SeatingClient({
             // 当日出勤外スタッフ判定（シフトなし・休み）
             const isNotWorking = !editMode && sfId && workingStaffSet !== null && !workingStaffSet.has(sfId);
 
+            // 席に座っているのに休憩が割り当てられていない（＝SVのシートに載っていない）
+            // ・席替えモード中は出さない（組んでいる最中に赤だらけになる）
+            // ・休憩データが1件も無い日は出さない（hasBreakData）
+            // ・査定・販売だけが対象。他セクションは休憩スロットの運用対象外で毎日赤になるため
+            // ・未出勤（シフト外）はオレンジ破線＋「!」を優先＝休憩が無いのは当然なので重ねない
+            // ・欠勤も来ない人なので出さない（カード自体が既に赤系）
+            const isBreakMissing =
+              !editMode && hasBreakData && !!sfId && !isNotWorking &&
+              status !== "absent" &&
+              BREAK_TARGET_SECTIONS.includes(effectiveSection ?? "") &&
+              !breakAssignmentMap[sfId];
+
             // カード本体スタイル
             const headerBg = editMode
               ? "bg-amber-300 dark:bg-amber-800"
@@ -937,6 +963,8 @@ export default function SeatingClient({
                   "absolute flex flex-col w-[76px] h-[70px] rounded-xl border-2 overflow-hidden shadow-sm select-none",
                   "transition-colors",
                   cardBorder,
+                  // 休憩なし：セクション色の枠は残したまま、外側に赤いリングを重ねる
+                  isBreakMissing ? "ring-2 ring-red-500 dark:ring-red-400" : "",
                   editMode && sfId ? "cursor-grab active:cursor-grabbing"
                     : (tappableBreak || tappableEdit) ? "cursor-pointer active:scale-95"
                     : "cursor-default",
@@ -992,6 +1020,13 @@ export default function SeatingClient({
                     </span>
                   )}
                 </div>
+
+                {/* ── 休憩が割り当てられていない人の警告帯 ── */}
+                {isBreakMissing && (
+                  <div className="w-full shrink-0 px-0.5 py-0.5 bg-red-600 dark:bg-red-500 text-white text-[8px] font-bold leading-none text-center">
+                    休憩なし
+                  </div>
+                )}
               </button>
             );
           })}
@@ -1011,6 +1046,12 @@ export default function SeatingClient({
                 <p className="text-[10px] text-zinc-300 dark:text-zinc-600 px-0.5">全員配置済み</p>
               ) : unassigned.map(s => {
                 const sfStatus = statuses.get(s.id);
+                const sfSlot = breakAssignmentMap[s.id];
+                // 休憩は割り当てられているのに席が無い人（欠勤は席が無くて当然なので除く）
+                // 休憩データが1件も無い日は判定しない（hasBreakData）
+                // ⚠ 欠勤判定に statuses は使えない（statuses は席に座っている人しか持たず、
+                //    未配置スタッフは定義上必ず undefined になる）。props の isAbsent で判定する
+                const isSeatMissing = hasBreakData && !!sfSlot && !s.isAbsent;
                 return (
                   <div
                     key={s.id}
@@ -1045,9 +1086,13 @@ export default function SeatingClient({
                     }}
                     className={[
                       "px-2 py-1.5 rounded-xl border text-[11px] select-none transition-colors",
-                      editMode
-                        ? "cursor-grab active:cursor-grabbing bg-white dark:bg-zinc-800 border-amber-200 dark:border-amber-800 hover:border-amber-400"
-                        : "cursor-pointer bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-blue-400",
+                      editMode ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
+                      // 休憩ありなのに未配置＝赤で強調（席替えモード中も出す）
+                      isSeatMissing
+                        ? "bg-red-100 dark:bg-red-900/40 border-red-400 dark:border-red-500"
+                        : editMode
+                          ? "bg-white dark:bg-zinc-800 border-amber-200 dark:border-amber-800 hover:border-amber-400"
+                          : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-blue-400",
                       dragPanelStaffId === s.id ? "opacity-40" : "",
                     ].join(" ")}
                   >
@@ -1055,18 +1100,23 @@ export default function SeatingClient({
                       <span className="font-mono text-[9px] text-zinc-400 tabular-nums block leading-none mb-0.5">{s.accountNumber}</span>
                     )}
                     <span className="font-semibold text-zinc-700 dark:text-zinc-200 block truncate">{s.name}</span>
-                    {!editMode && sfStatus && (
+                    {isSeatMissing && (
+                      <span className="text-[9px] font-bold mt-0.5 block text-red-600 dark:text-red-400">
+                        休憩{BREAK_SLOT_LABEL[sfSlot] ?? sfSlot}
+                      </span>
+                    )}
+                    {!editMode && (s.isAbsent || sfStatus) && (
                       <span className={`text-[9px] font-bold mt-0.5 block ${
+                        s.isAbsent                 ? "text-zinc-400 dark:text-zinc-500" :
                         sfStatus === "working"     ? "text-green-600 dark:text-green-400" :
                         sfStatus === "on_break"    ? "text-amber-600 dark:text-amber-400" :
-                        sfStatus === "clocked_out" ? "text-zinc-400" :
-                        sfStatus === "absent"      ? "text-red-500" : "text-zinc-300"
+                        sfStatus === "clocked_out" ? "text-zinc-400" : "text-zinc-300"
                       }`}>
-                        {sfStatus === "not_arrived" ? "未出勤" :
+                        {s.isAbsent                 ? "欠勤" :
+                         sfStatus === "not_arrived" ? "未出勤" :
                          sfStatus === "working"     ? "勤務中" :
                          sfStatus === "on_break"    ? "休憩中" :
-                         sfStatus === "clocked_out" ? "退勤済" :
-                         sfStatus === "absent"      ? "欠勤"   : ""}
+                         sfStatus === "clocked_out" ? "退勤済" : ""}
                       </span>
                     )}
                   </div>

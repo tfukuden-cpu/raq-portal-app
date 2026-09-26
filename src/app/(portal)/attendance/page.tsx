@@ -623,6 +623,8 @@ export default async function AttendancePage({
         accountNumber: info?.accountNumber ?? null,
         section:       info?.section ? mergeInfo(info.section) : null,
         shiftName:     seatShiftMap.get(m.staff_id) ?? null,
+        // 未配置パネルは statuses を持たないので、欠勤はここで渡す（座席ステータスと同じ seatAbsenceIds）
+        isAbsent:      seatAbsenceIds.has(m.staff_id),
       };
     });
 
