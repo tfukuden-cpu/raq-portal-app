@@ -68,7 +68,9 @@ const DEFAULT_SLOTS: Omit<BreakSlotSetting, "id">[] = [
 const OFF_SHIFT_NAMES = ["公休", "休", "希望休", "有休", "休暇", "振替休日", "特別休暇", "代休", "欠勤", "公募"];
 
 /** シートのデータは4行目以降（1〜3行目はヘッダー・注記） */
-const SHEET_DATA_START_ROW = 4;
+// 走査は1行目から。見出し・注記の行は「休憩の時刻が入っているか」で振り分けるので、
+// シートの見出しが増減して位置がずれても取りこぼさない（2026-09-26・9/25分の取り込みで判明）
+const SHEET_DATA_START_ROW = 1;
 
 /**
  * "HH:MM" / "HH:MM:SS" → "HH:MM"（解釈できなければ null）。time型カラムは秒付きで返るため必ず通す。
@@ -389,25 +391,35 @@ export async function importBreakAssignmentsFromSheetAction(
       if (!rawAccount) continue;                     // 未入力のテンプレ行
       const account = rawAccount;
 
-      // B列が埋まっているのに A列が日付として読めない行は黙って落とさない
-      // （日付セルの結合・記入漏れ・"9/24" のような年なし書式で起きる）
+      // シートは見出し・注記の行が混ざる（「査定番付」「アカウント」「11」など。
+      // 日付ブロックが増えると位置も動く）。**データ行の判定は「休憩の時刻が入っていること」**で行う。
+      // 時刻が無い行は見出しとみなして黙って飛ばす＝毎回同じ行が未解決に出るノイズを防ぐ
+      const hasTimes = toHHMM(r[3]) !== null && toHHMM(r[4]) !== null;
+
+      const key = accountKey(rawAccount);
+      if (key === null) {
+        // 時刻が入っているのにアカウント番号が読めない＝本物のデータ行が壊れている
+        if (hasTimes) {
+          unresolved.push({ row: rowNo, account, reason: "アカウント番号を読み取れません" });
+        }
+        continue;
+      }
+
+      // A列が日付として読めない行（日付セルの結合・記入漏れ・"9/24" のような年なし書式）。
+      // 時刻が入っていれば取りこぼしなので報告し、無ければ見出しとして飛ばす
       const rowDate = toISODate(r[0]);
       if (rowDate === null) {
-        const rawDate = (r[0] ?? "").trim();
-        unresolved.push({
-          row: rowNo, account,
-          reason: `日付（A列）を読み取れません${rawDate ? `（"${rawDate}"）` : "（空欄）"}`,
-        });
+        if (hasTimes) {
+          const rawDate = (r[0] ?? "").trim();
+          unresolved.push({
+            row: rowNo, account,
+            reason: `日付（A列）を読み取れません${rawDate ? `（"${rawDate}"）` : "（空欄）"}`,
+          });
+        }
         continue;
       }
       if (rowDate !== date) continue;                // 対象日以外は今どおり黙ってスキップ
       dateRowCount++;
-
-      const key = accountKey(rawAccount);
-      if (key === null) {
-        unresolved.push({ row: rowNo, account, reason: "アカウント番号を読み取れません" });
-        continue;
-      }
 
       // スタッフ引き当て
       const candidates = byAccount.get(key) ?? [];
