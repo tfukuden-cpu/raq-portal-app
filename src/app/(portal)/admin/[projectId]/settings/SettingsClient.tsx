@@ -818,7 +818,7 @@ export function MemberList({
     const fd = new FormData();
     fd.set("projectId", projectId); fd.set("name", fullName);
     fd.set("display_name", fullName); fd.set("role", newRole);
-    if (newCompany.trim()) fd.set("company_name", newCompany.trim());
+    fd.set("company_name", newCompany.trim());
     if (newSection.trim()) fd.set("section", newSection.trim());
     if (newAssignDate.trim()) fd.set("start_date", newAssignDate.trim());
     start(async () => {
@@ -1167,7 +1167,7 @@ export function MemberList({
           <div className="flex gap-2">
             <button type="button" onClick={() => reset()}
               className="flex-1 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500">キャンセル</button>
-            <button type="button" onClick={handleCreateNew} disabled={!newLast || !newFirst || !newAssignDate || isPending}
+            <button type="button" onClick={handleCreateNew} disabled={!newLast || !newFirst || !newCompany.trim() || !newAssignDate || isPending}
               className="flex-1 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold disabled:opacity-40">作成して追加</button>
           </div>
         </div>
@@ -1232,12 +1232,12 @@ export function MemberList({
               {csvResults ? "閉じる" : "キャンセル"}
             </button>
             {!csvResults && (
-              <button type="button" onClick={handleBulkCsv} disabled={csvPreview.length === 0 || isPending}
+              <button type="button" onClick={handleBulkCsv} disabled={csvPreview.length === 0 || isPending || csvPreview.some(r => !r.company_name)}
                 className="flex-1 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold disabled:opacity-40">
                 {isPending ? "登録中…" : (() => {
                   const noCompany = csvPreview.filter(r => !r.company_name).length;
                   return noCompany > 0
-                    ? `${csvPreview.length}件を登録（⚠ ${noCompany}件 会社名なし）`
+                    ? `⚠ ${noCompany}件に会社名がありません`
                     : `${csvPreview.length}件を登録`;
                 })()}
               </button>
@@ -1744,7 +1744,7 @@ export function MemberList({
                     className="flex-1 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                     キャンセル
                   </button>
-                  <button type="button" onClick={handleSaveEdit} disabled={!editName.trim() || isPending}
+                  <button type="button" onClick={handleSaveEdit} disabled={!editName.trim() || !editCompany.trim() || isPending}
                     className="flex-1 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-40">
                     {isPending ? "保存中…" : "保存"}
                   </button>

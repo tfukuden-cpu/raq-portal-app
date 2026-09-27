@@ -303,6 +303,9 @@ export async function createAndAddStaffAction(fd: FormData): Promise<SettingsRes
   const startDate   = String(fd.get("start_date")    ?? "").trim() || null;
 
   if (!name) return { success: false, message: "氏名は必須です" };
+  // 所属会社は必須。勤怠実績を会社ごとに切り出して各社へ提出するエビデンスにしており、
+  // 空欄だと稼働実績Excelで「未設定」に落ちてその会社の提出分に入らない（2026-09-27にユーザー判断で必須化）
+  if (!companyName) return { success: false, message: "所属会社は必須です" };
 
   await assertAdmin(projectId);
 
@@ -401,6 +404,12 @@ export async function bulkCreateAndAddStaffsAction(fd: FormData): Promise<{
     // 当該案件に同名メンバーがいればスキップ
     if (existingNames.has(name)) {
       results.push({ id: "", name, ok: false, message: "既存メンバーのためスキップ" });
+      continue;
+    }
+
+    // 所属会社は必須（単体登録と同じ理由）。空の行は作らずに理由を返す
+    if (!entry.company_name?.trim()) {
+      results.push({ id: "", name, ok: false, message: "所属会社が空です" });
       continue;
     }
 
@@ -764,6 +773,7 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
   const churnRisk        = fd.get("churn_risk") === "true";
 
   if (!name) return { success: false, message: "氏名を入力してください" };
+  if (!companyName) return { success: false, message: "所属会社を入力してください" };
 
   await assertAdmin(projectId);
   const admin = adminSupa();
