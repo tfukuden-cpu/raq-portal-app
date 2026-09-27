@@ -660,7 +660,7 @@ export async function importMembersFromSheetAction(fd: FormData): Promise<SyncRe
       const name         = (r[2] ?? "").trim() || displayName;
       const role         = (r[3] ?? "staff").trim() || "staff";
       const email        = `${staffId.toLowerCase()}@raq.internal`;
-      const password     = "1234";
+      const password     = "123456";  // Supabase Auth の最低文字数6を下回らないこと
 
       // staffs テーブルの存在確認
       const { data: existing } = await supabase

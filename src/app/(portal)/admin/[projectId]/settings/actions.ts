@@ -278,7 +278,9 @@ export async function addMemberAction(fd: FormData): Promise<SettingsResult> {
 // ── 新規スタッフ作成 ＋ 案件紐付け ──────────────────────────
 
 const EMAIL_DOMAIN = "raq.internal";
-const INITIAL_PASSWORD = "1234";
+// Supabase Auth の最低文字数は6。5文字以下にすると作成時に
+// "Password should be at least 6 characters." で必ず失敗する（2026-09-27に「1234」で発生）
+const INITIAL_PASSWORD = "123456";
 
 /** S001, S002, ... の形式で次の空き社員IDを自動採番する */
 async function getNextStaffId(): Promise<string> {
