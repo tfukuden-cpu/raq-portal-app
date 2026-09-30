@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { toDateKeyJST } from "@/lib/datetime";
 import ExcelJS from "exceljs";
 
 // ─── 権限チェック ─────────────────────────────────────────────
@@ -416,7 +417,7 @@ export async function GET(req: NextRequest) {
     clockIn: string | null; clockOut: string | null; rawIn: string | null; rawOut: string | null;
   }>();
   for (const p of punches ?? []) {
-    const key = `${p.staff_id}_${p.recorded_at.slice(0, 10)}`;
+    const key = `${p.staff_id}_${toDateKeyJST(p.recorded_at)}`;
     if (!punchMap.has(key)) punchMap.set(key, { clockIn: null, clockOut: null, rawIn: null, rawOut: null });
     const e = punchMap.get(key)!;
     // 端末で押された生の時刻は note に「出勤打刻: HH:MM」「退勤打刻: HH:MM」として残る

@@ -1,6 +1,7 @@
 ﻿"use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { toDateKeyJST } from "@/lib/datetime";
 
 const OFF_SHIFT_NAMES = ["公休","希望休","有休","休暇","振替休日","特別休暇","代休","欠勤","公募"];
 
@@ -136,7 +137,7 @@ export async function fetchAttendanceSummaryAction(
     // 打刻マップ
     const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null }>();
     for (const p of punches ?? []) {
-      const key = `${p.staff_id}_${p.recorded_at.slice(0, 10)}`;
+      const key = `${p.staff_id}_${toDateKeyJST(p.recorded_at)}`;
       if (!punchMap.has(key)) punchMap.set(key, { clockIn: null, clockOut: null });
       const e = punchMap.get(key)!;
       if (p.punch_type === "clock_in"  && !e.clockIn) e.clockIn  = p.recorded_at;

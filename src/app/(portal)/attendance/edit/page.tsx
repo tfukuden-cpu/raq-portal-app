@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProjectId } from "@/lib/project-context";
+import { toDateKeyJST } from "@/lib/datetime";
 import { redirect } from "next/navigation";
 import AttendanceEditClient from "./AttendanceEditClient";
 import type { AttendanceRow, CorrectionRow, ExceptionRow, LateRequestRow } from "./AttendanceEditClient";
@@ -173,7 +174,7 @@ export default async function AttendanceEditPage({
 
   const punchMap = new Map<string, { clockIn: string | null; clockOut: string | null; modifiedBy: string | null; clockInNote: string | null; clockOutNote: string | null }>();
   for (const p of punches ?? []) {
-    const key = `${p.staff_id}_${p.recorded_at.slice(0, 10)}`;
+    const key = `${p.staff_id}_${toDateKeyJST(p.recorded_at)}`;
     if (!punchMap.has(key)) punchMap.set(key, { clockIn: null, clockOut: null, modifiedBy: null, clockInNote: null, clockOutNote: null });
     const e = punchMap.get(key)!;
     const note = (p as { note?: string | null }).note ?? null;

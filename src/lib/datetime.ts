@@ -46,6 +46,19 @@ export function startOfTodayJST(): string {
   return `${jpDate}T00:00:00+09:00`;
 }
 
+/** YYYY-MM-DD（東京時刻）。打刻を日付ごとにまとめるキーに使う。
+ *  recorded_at はUTCで保存されるため、文字列の先頭10文字を使うと
+ *  JSTで09:00より前の打刻が前日に集計されてしまう。 */
+export function toDateKeyJST(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 /** 同じ日（東京時刻）かどうか */
 export function isSameDayJP(a: Date | string, b: Date | string): boolean {
   return formatDateJP(a) === formatDateJP(b);

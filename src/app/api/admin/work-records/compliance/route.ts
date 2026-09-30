@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { toDateKeyJST } from "@/lib/datetime";
 import { fetchAllPaged } from "@/lib/supabase/fetch-all";
 
 async function requireAccess(projectId: string): Promise<boolean> {
@@ -122,7 +123,7 @@ export async function GET(req: NextRequest) {
 
   const punchMap = new Map<string, { clockOut: string | null }>();
   for (const p of punches ?? []) {
-    const key = `${p.staff_id}_${p.recorded_at.slice(0, 10)}`;
+    const key = `${p.staff_id}_${toDateKeyJST(p.recorded_at)}`;
     if (!punchMap.has(key)) punchMap.set(key, { clockOut: null });
     if (p.punch_type === "clock_out") punchMap.get(key)!.clockOut = p.recorded_at;
   }
