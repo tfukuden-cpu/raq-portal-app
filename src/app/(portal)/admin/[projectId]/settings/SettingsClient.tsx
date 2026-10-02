@@ -12,6 +12,7 @@ import {
   saveSheetUrlAction,
   createSpreadsheetAction,
   updateMemberInfoAction,
+  resetMemberPasswordAction,
   saveShiftPatternsAction,
   saveHolidayRulesAction,
   createAndAddStaffAction,
@@ -41,6 +42,7 @@ import {
   getRuleConfig,
 } from "../../holiday-rule-config";
 import SeatLayoutEditor, { type SeatItem, type WallItem } from "./SeatLayoutEditor";
+import { INITIAL_PASSWORD } from "@/lib/auth-defaults";
 import {
   getBreakSlotSettingsAction,
   saveBreakSlotSettingsAction,
@@ -681,6 +683,9 @@ export function MemberList({
   const [result, setResult]         = useState<{ ok: boolean; msg: string } | null>(null);
   const [isPending, start]          = useTransition();
 
+  // PW初期化は isPending（保存・離脱処理と共有）だと文言が混ざるので専用フラグを持つ
+  const [pwResetting, setPwResetting] = useState(false);
+
   // インライン編集
   const [editId, setEditId]                   = useState<string | null>(null);
   const [editName, setEditName]               = useState("");
@@ -716,6 +721,8 @@ export function MemberList({
   }, [initialEditStaffId]);
 
   const startEdit = (m: Member) => {
+    setResult(null);   // 前の操作のメッセージをモーダル内に持ち込まない
+    setPwResetting(false);
     setEditId(m.staffId);
     setEditName(m.name);
     setEditCompany(m.company_name ?? "");
@@ -1125,7 +1132,7 @@ export function MemberList({
       {addMode === "new" && (
         <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20 p-3 space-y-2">
           <p className="text-xs font-semibold text-zinc-500">新規アカウントを作成してこの案件に追加</p>
-          <p className="text-[10px] text-zinc-400">社員IDは自動採番 ／ 初期パスワード: 123456</p>
+          <p className="text-[10px] text-zinc-400">社員IDは自動採番 ／ 初期パスワード: {INITIAL_PASSWORD}</p>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] text-zinc-500 font-semibold">苗字 *</label>
@@ -1738,6 +1745,47 @@ export function MemberList({
                     </div>
                   </div>
                 ) : null}
+
+                {/* ── パスワード初期化（管理者＝SVも実行可） ──
+                     離脱済みメンバーには出さない（サーバー側でも end_date is null を必須にしている）。
+                     運営者のPWはサーバー側で拒否される。 */}
+                {!editingMember?.end_date && (
+                  <>
+                    <div className="border-t border-zinc-100 dark:border-zinc-800" />
+                    <div className="space-y-1">
+                      <button type="button"
+                        disabled={pwResetting || isPending}
+                        onClick={() => {
+                          if (!editId) return;
+                          const label = editingMember?.name ?? editId;
+                          if (!window.confirm(`${label} のパスワードを ${INITIAL_PASSWORD} に初期化します。よろしいですか？`)) return;
+                          const fd = new FormData();
+                          fd.set("projectId", projectId);
+                          fd.set("staffId",   editId);
+                          setResult(null);
+                          setPwResetting(true);
+                          start(async () => {
+                            const r = await resetMemberPasswordAction(fd);
+                            setPwResetting(false);
+                            // 成功＝モーダルを閉じてから結果を出す（本文末尾の Flash が見える）
+                            // 失敗＝モーダルは開いたままにし、モーダル内の Flash で見せる
+                            if (r.success) setEditId(null);
+                            setResult({ ok: r.success, msg: r.message ?? (r.success ? "初期化しました" : "エラー") });
+                          });
+                        }}
+                        className="w-full py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40"
+                      >
+                        {pwResetting ? "初期化中…" : "PW初期化"}
+                      </button>
+                      <p className="text-[10px] text-zinc-400">
+                        パスワードを {INITIAL_PASSWORD} に戻します。次回ログイン時に本人が再設定します。
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* モーダルを開いたまま出す結果表示（本文末尾の Flash は黒幕の裏に隠れるため） */}
+                {result && <Flash ok={result.ok} msg={result.msg} />}
 
                 <div className="flex gap-2">
                   <button type="button" onClick={() => setEditId(null)}

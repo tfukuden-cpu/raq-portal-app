@@ -10,6 +10,8 @@ import { getCurrentProjectId } from "@/lib/project-context";
 import { revalidatePath } from "next/cache";
 import { readSheet, writeSheet, extractSpreadsheetId } from "@/lib/gsheets";
 import { calcDailyRecord, calcMonthlySummary, fmtMin } from "@/lib/attendance";
+// 初期パスワードは plain モジュールで一元管理（UI表記もここを参照する）
+import { INITIAL_PASSWORD } from "@/lib/auth-defaults";
 
 export type SyncResult = {
   success: boolean;
@@ -660,7 +662,7 @@ export async function importMembersFromSheetAction(fd: FormData): Promise<SyncRe
       const name         = (r[2] ?? "").trim() || displayName;
       const role         = (r[3] ?? "staff").trim() || "staff";
       const email        = `${staffId.toLowerCase()}@raq.internal`;
-      const password     = "123456";  // Supabase Auth の最低文字数6を下回らないこと
+      const password     = INITIAL_PASSWORD;  // Supabase Auth の最低文字数6を下回らないこと
 
       // staffs テーブルの存在確認
       const { data: existing } = await supabase

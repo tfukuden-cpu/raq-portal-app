@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProjectId } from "@/lib/project-context";
 import { redirect } from "next/navigation";
 import { ChevronLeftIcon } from "@/components/icons";
+import { INITIAL_PASSWORD } from "@/lib/auth-defaults";
 
 const SECTIONS = [
   {
@@ -301,7 +302,7 @@ const SECTIONS = [
         body:
           "「+ メンバーを追加」をタップします。\n\n" +
           "苗字・名前・所属会社（必須）、ロール・セクション（任意）を入力して「作成して追加」をタップします。\n\n" +
-          "社員IDは自動採番、初期パスワードは「123456」に設定されます。スタッフ本人に伝えてください。",
+          `社員IDは自動採番、初期パスワードは「${INITIAL_PASSWORD}」に設定されます。スタッフ本人に伝えてください。`,
       },
       {
         heading: "CSVで一括登録する",

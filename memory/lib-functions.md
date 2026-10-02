@@ -179,3 +179,9 @@ Cookie名: `rqp_project_id`、30日有効
 ```typescript
 import { ICON_MAP, type IconKey } from "@/components/icons";
 ```
+
+## auth-defaults.ts（plain・"use server" なし）
+
+| エクスポート | 内容 |
+|---|---|
+| `INITIAL_PASSWORD` | 新規登録・パスワード初期化で設定する初期パスワード（`"123456"`）。**Supabase Auth の最低文字数6を下回らないこと**。サーバーアクションとUI表記の両方がここから import する（2026-10-02に6箇所から集約） |

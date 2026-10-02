@@ -3,10 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+// 初期パスワードは plain モジュールで一元管理（UI表記もここを参照する）
+import { INITIAL_PASSWORD } from "@/lib/auth-defaults";
 
-// Supabase Auth の最低文字数は6。5文字以下にすると作成時に
-// "Password should be at least 6 characters." で必ず失敗する（2026-09-27に「1234」で発生）
-const INITIAL_PASSWORD = "123456";
 const EMAIL_DOMAIN = "raq.internal";
 
 export type OperatorResult = { success: boolean; message?: string };

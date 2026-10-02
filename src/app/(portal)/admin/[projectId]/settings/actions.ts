@@ -23,6 +23,8 @@ import {
   DEFAULT_NOTIFY_MESSAGES,
 } from "./notify-config";
 import type { NotificationSettings } from "./notify-config";
+// 初期パスワードは plain モジュールで一元管理（UI表記もここを参照する）
+import { INITIAL_PASSWORD } from "@/lib/auth-defaults";
 
 function adminSupa() {
   return createAdminClient(
@@ -278,9 +280,6 @@ export async function addMemberAction(fd: FormData): Promise<SettingsResult> {
 // ── 新規スタッフ作成 ＋ 案件紐付け ──────────────────────────
 
 const EMAIL_DOMAIN = "raq.internal";
-// Supabase Auth の最低文字数は6。5文字以下にすると作成時に
-// "Password should be at least 6 characters." で必ず失敗する（2026-09-27に「1234」で発生）
-const INITIAL_PASSWORD = "123456";
 
 /** S001, S002, ... の形式で次の空き社員IDを自動採番する */
 async function getNextStaffId(): Promise<string> {
@@ -816,6 +815,88 @@ export async function updateMemberInfoAction(fd: FormData): Promise<SettingsResu
 
   revalidatePath(`/admin/${projectId}`);
   return { success: true, message: "更新しました" };
+}
+
+/**
+ * メンバーのパスワードを初期値に戻す（管理者＝SV も実行できる）
+ *
+ * 運営者専用の `/admin/staffs` の resetStaffPasswordAction とは別物。
+ * 「自分の案件のメンバーだけ」を守るため、サーバー側で3段のガードを掛ける：
+ *   ① assertAdmin(projectId)        … 実行者が当該案件の管理者（または全社admin/executive）か
+ *   ② project_members に在籍行があるか … 対象が「その案件の在籍メンバー」か
+ *                                        （他案件のIDを投げられても弾く／離脱済み end_date 付きも弾く）
+ *   ③ 対象の global_role チェック    … 運営者・全社管理者のPWは初期化させない（権限の上位を取られる）
+ *
+ * ⚠️ ②で `end_date is null` を必須にしているのは、`departStaffAction` が `staffs.is_active` を
+ *    落とさない（end_date と将来シフトだけを触る）ため、離脱済みでも is_active=true のまま残る
+ *    アカウントが多数あるから。初期化するとそのアカウントが共有の初期パスワードで
+ *    ログインできる状態に戻ってしまう（ログイン可否の判定は is_active だけ）。
+ *    退職者の再雇用は運営者の /admin/staffs に寄せる方針。
+ */
+export async function resetMemberPasswordAction(fd: FormData): Promise<SettingsResult> {
+  const projectId = String(fd.get("projectId") ?? "").trim();
+  const staffId   = String(fd.get("staffId")   ?? "").trim().toUpperCase();
+
+  if (!projectId || !staffId) return { success: false, message: "対象が指定されていません" };
+
+  // ① 実行者のガード（全社admin/executive または当該案件の project_admin のみ通る）
+  await assertAdmin(projectId);
+
+  const admin = adminSupa();
+
+  // ② 対象が「この案件の在籍メンバー」であることをサーバー側で確認する
+  //    （クライアントから任意の staffId を投げられても他案件の人・離脱済みの人は初期化できない）
+  const { data: membership, error: memberErr } = await admin
+    .from("project_members")
+    .select("staff_id")
+    .eq("project_id", projectId)
+    .eq("staff_id", staffId)
+    .is("end_date", null)
+    .maybeSingle();
+  if (memberErr) return { success: false, message: memberErr.message };
+  if (!membership) return { success: false, message: "この案件の在籍メンバーではありません" };
+
+  const { data: staff, error: staffErr } = await admin
+    .from("staffs")
+    .select("auth_user_id, global_role, name, display_name")
+    .eq("id", staffId)
+    .maybeSingle();
+  if (staffErr) return { success: false, message: staffErr.message };
+  if (!staff) return { success: false, message: "スタッフが見つかりません" };
+
+  // ③ 運営者・全社管理者のパスワードはここでは初期化させない
+  if (staff.global_role === "executive" || staff.global_role === "admin") {
+    return { success: false, message: "運営者のパスワードはここでは初期化できません" };
+  }
+
+  if (!staff.auth_user_id) return { success: false, message: "ログインアカウントがありません" };
+
+  // INITIAL_PASSWORD を使う（6文字未満だと Supabase Auth に弾かれる）
+  const { error: authErr } = await admin.auth.admin.updateUserById(staff.auth_user_id, {
+    password: INITIAL_PASSWORD,
+  });
+  if (authErr) return { success: false, message: authErr.message };
+
+  // 次回ログインで本人に再設定させる
+  // ここで失敗してもパスワードは既に初期化済み＝「失敗」と読まれないよう実態を書く
+  // （このアクションは冪等なので、もう一度実行すれば揃う）
+  const { error: flagErr } = await admin
+    .from("staffs")
+    .update({ must_change_password: true })
+    .eq("id", staffId);
+  if (flagErr) {
+    return {
+      success: false,
+      message: `パスワードは ${INITIAL_PASSWORD} に初期化されましたが、次回ログイン時の再設定フラグを立てられませんでした。もう一度実行してください。（${flagErr.message}）`,
+    };
+  }
+
+  const label = staff.display_name ?? staff.name ?? staffId;
+  revalidatePath("/members");
+  return {
+    success: true,
+    message: `${label} のパスワードを ${INITIAL_PASSWORD} に初期化しました（次回ログイン時に本人が再設定します）`,
+  };
 }
 
 // ── シフト設定のみ更新（シフト編集モードパネル用） ─────────────────
