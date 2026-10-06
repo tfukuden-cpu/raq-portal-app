@@ -10,7 +10,7 @@ import { regenerateShiftDraftAction, upsertSingleShiftAction } from "./actions";
 import PublishButton from "./PublishButton";
 import ShiftLineNotifyButton from "./ShiftLineNotifyButton";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
-import { resolveShiftSection, formatSectionShift, SEAT_SECTION_COLORS } from "@/lib/seatColors";
+import { resolveShiftSection, formatSectionShift } from "@/lib/seatColors";
 
 type Shift = {
   id: string;
@@ -27,6 +27,7 @@ type Member = {
   preferred_shift: string | null; preferred_section: string | null;
   max_consecutive_days: number | null; shift_note: string | null;
   accountNumber?: string | null;
+  endDate?: string | null; // 離脱日（null = 在籍中）。アカウント番号が重複したときの優先判定に使う
   churn_risk?: boolean; churn_risk_since?: string | null;
   shift_published?: boolean | null; svOrder?: number | null;
 };
@@ -303,31 +304,45 @@ export default function ShiftManageClient({
     }
 
     // ── セルの表示値を求めるヘルパー ─────────────────────────
-    // ・公休・有休・希望休・特別休暇 → 空白（休日扱い）
+    // ・公休・有休・希望休・特別休暇・公募 → 空白（休日扱い）
     // ・SEAT_SECTION_COLORS 定義済みセクション（販売・査定等）→ セクション（早番/遅番）形式
-    // ・未アポ・H MOTA・インフォ等の非カラーセクション → シフト名をそのまま出力
+    // ・未アポ・H MOTA・あいみつ査定等の非カラーセクション → シフト名をそのまま出力
     const OFF_PATTERNS = ["公休", "希望休", "有休", "特別休暇", "公募"];
-    const KNOWN_SECTIONS = new Set(Object.keys(SEAT_SECTION_COLORS));
-    // 選択セクションを既知・未知に分類
-    const knownSel = exportSectionsSel.filter(s => KNOWN_SECTIONS.has(s));
-    const unknownSel = exportSectionsSel.filter(s => !KNOWN_SECTIONS.has(s));
+    // ⚠️ セクション絞り込みの照合に文字列の前方一致を使ってはいけない。
+    // P001 には section="H MOTA" / name="ヘルプMOTA" のように
+    // シフト名がセクション名で始まらないパターンがあり、startsWith / includes では当たらない
+    // （「H MOTA」を選ぶと1件も出ない）。シフトパターン表の name → section の対応で引く。
+    const nameToSection = new Map(
+      shiftPatterns.filter(p => !!p.section).map(p => [p.name, p.section as string]),
+    );
 
     function cellValue(staffId: string, date: string): string {
       const shiftName = effectiveMap.get(staffId)?.get(date) ?? null;
       if (!shiftName) return "";
-      const sec = resolveShiftSection(shiftName, null);
-      if (!sec) {
-        // 休日パターンは空白
-        if (OFF_PATTERNS.some(p => shiftName.includes(p))) return "";
-        // 未アポ・インフォ等：フィルタがある場合は選択セクションに一致するもののみ出力
-        if (exportSectionsSel.length > 0) {
-          const matches = unknownSel.some(s => shiftName.startsWith(s));
-          if (!matches) return "";
-        }
-        return shiftName;
+      // 休日パターンは空白
+      if (OFF_PATTERNS.some(p => shiftName.includes(p))) return "";
+      // 絞り込み用セクション：パターン表に無い名前（研修など）は従来どおり前方一致で解決
+      const filterSec = nameToSection.get(shiftName) ?? resolveShiftSection(shiftName, null);
+      if (exportSectionsSel.length > 0 && (!filterSec || !exportSectionsSel.includes(filterSec))) {
+        return "";
       }
-      if (exportSectionsSel.length > 0 && !exportSectionsSel.includes(sec)) return "";
-      return formatSectionShift(sec, shiftName);
+      // 表示は従来どおり：カラー定義済みセクションは「セクション(早番/遅番)」、それ以外はシフト名そのまま
+      const displaySec = resolveShiftSection(shiftName, null);
+      return displaySec ? formatSectionShift(displaySec, shiftName) : shiftName;
+    }
+
+    // ── 当月に出力すべき値を1つでも持つか（＝行を出す対象か）────
+    // cellValue は選択セクション以外・休日を空文字にするので、
+    // 「その月に選択セクションのシフトが実際に入っているか」をそのまま判定できる。
+    // メンバーのメインセクション（project_members.section）では判定しない
+    // ＝メインが未アポ/未成約後追い等でも査定のシフトが入っている人を落とさないため。
+    const hasCellCache = new Map<string, boolean>();
+    function hasAnyCell(staffId: string): boolean {
+      const cached = hasCellCache.get(staffId);
+      if (cached !== undefined) return cached;
+      const v = allDates.some(date => cellValue(staffId, date) !== "");
+      hasCellCache.set(staffId, v);
+      return v;
     }
 
     // ── ヘッダー2行（アカウント番号列 + 名前列 + 日付列）──────
@@ -342,39 +357,65 @@ export default function ShiftManageClient({
     )];
 
     // ── 数値キー → メンバー のマップを構築（番号あり）
+    // ⚠️ アカウント番号は離脱者と現役で重複することがある（ASS 31 / 37 等）。
+    // 単純な Map.set は後勝ちで上書きされ、当月シフトの無い離脱者が枠を取ると行が空になるため、
+    // ①当月に出力対象のシフトがある人 → ②在籍中（endDate が null）→ ③先に来た人 の順で枠を決める。
     const accMap = new Map<number, typeof activeMembers[0]>();
+    const accLosers: typeof activeMembers = []; // 競合で枠を取れなかった人（末尾に別行で出す）
+    const accPriority = (m: typeof activeMembers[0]) =>
+      (hasAnyCell(m.id) ? 4 : 0) + (m.endDate ? 0 : 2);
     for (const m of activeMembers) {
       const n = getAccNum(m.accountNumber);
-      if (n !== Infinity) accMap.set(n, m);
+      if (n === Infinity) continue;
+      const cur = accMap.get(n);
+      if (!cur) { accMap.set(n, m); continue; }
+      // 同点なら先に来た人（activeMembers の並び順）を維持する
+      if (accPriority(m) > accPriority(cur)) {
+        accMap.set(n, m);
+        accLosers.push(cur);
+      } else {
+        accLosers.push(m);
+      }
     }
     const maxAcc = Math.max(160, ...[...accMap.keys()]);
 
-    // ── セクションフィルタ対象メンバーIDセット（空=全員）
-    // 既知セクション（販売・査定等）のみメンバーのsectionで絞り込む。
-    // 未アポ・インフォ等の非カラーセクションはメンバー属性ではなくシフト割当で判断するため全員表示。
-    const sectionIds = knownSel.length > 0
-      ? new Set(activeMembers.filter(m => m.section !== null && knownSel.includes(m.section)).map(m => m.id))
-      : null;
+    // ── 行を出すかの判定
+    // メンバー属性（section）ではなく「その月に選択セクションのシフトが実際に入っているか」で決める。
+    // セクション未選択（=全セクション出力）のときは従来どおり全員出す。
+    const filterRows = exportSectionsSel.length > 0;
 
     // ── データ行①：ASS 01〜maxAcc を昇順で必ず出力
     const dataRows: string[][] = [];
     for (let i = 1; i <= maxAcc; i++) {
       const m = accMap.get(i);
       const accLabel = `ASS ${String(i).padStart(2, "0")}`;
-      const nameLabel = m?.name ?? "";
 
-      if (!m || (sectionIds && !sectionIds.has(m.id))) {
+      if (!m || (filterRows && !hasAnyCell(m.id))) {
         dataRows.push(["", accLabel, ...allDates.map(() => "")]);
       } else {
-        dataRows.push([nameLabel, accLabel, ...allDates.map(date => cellValue(m.id, date))]);
+        dataRows.push([m.name, accLabel, ...allDates.map(date => cellValue(m.id, date))]);
       }
     }
 
     // ── データ行②：アカウント番号未設定メンバーを末尾に追加
     const noAccMembers = activeMembers.filter(m => getAccNum(m.accountNumber) === Infinity);
     for (const m of noAccMembers) {
-      if (sectionIds && !sectionIds.has(m.id)) continue;
+      if (filterRows && !hasAnyCell(m.id)) continue;
       dataRows.push([m.name, "", ...allDates.map(date => cellValue(m.id, date))]);
+    }
+
+    // ── データ行③：番号が重複して枠を取れなかった人を末尾に追加（取りこぼし防止）
+    // セクション未選択（=全員出力・名簿用途）のときは hasAnyCell を問わず必ず出す
+    // ＝全日公休の現役が、同番号の「離脱者だがシフトあり」に枠を取られて名簿から消えるのを防ぐ。
+    // セクション選択時は出力すべき値がある人だけ（空欄だけの重複行を増やさない）。
+    for (const m of accLosers) {
+      if (filterRows && !hasAnyCell(m.id)) continue;
+      const n = getAccNum(m.accountNumber);
+      dataRows.push([
+        m.name,
+        `ASS ${String(n).padStart(2, "0")}`,
+        ...allDates.map(date => cellValue(m.id, date)),
+      ]);
     }
 
     const csv = [header1, header2, ...dataRows]
