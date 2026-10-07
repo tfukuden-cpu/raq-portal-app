@@ -269,6 +269,33 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
   hdr.alignment = { horizontal: "center" };
   applyBorder(hdr);
 
+  // 全社合計行（会社別の集計より先に、いちばん上に出す）
+  {
+    const all = [...companies.values()].flat();
+    const sum = (f: (p: PersonData) => number) => all.reduce((s, p) => s + f(p), 0);
+    const totShiftDays = sum(p => p.totalShiftDays);
+    const totProblem   = sum(p => p.lateCount + p.earlyLeaveCount + p.absentCount);
+    const totRate      = totShiftDays > 0
+      ? Math.round((totShiftDays - totProblem) / totShiftDays * 100) : null;
+    const allRow = ws.addRow([
+      `【全社】合計 (${companies.size}社・${all.length}名)`,
+      "", "",
+      `${sum(p => p.workDays)}日`,
+      fmtMin(sum(p => p.workMinutes)),
+      fmtMin(sum(p => p.breakMinutes)),
+      fmtMin(sum(p => p.normalMinutes)),
+      fmtMin(sum(p => p.overtimeMinutes)),
+      `${sum(p => p.lateCount)}回`,
+      `${sum(p => p.earlyLeaveCount)}回`,
+      `${sum(p => p.absentCount)}日`,
+      totRate != null ? `${totRate}%` : "",
+    ]);
+    allRow.font = { bold: true, size: 11 };
+    allRow.fill = TOTAL_FILL;
+    applyBorder(allRow);
+    ws.addRow([]);
+  }
+
   for (const [company, persons] of companies) {
     // 会社合計行
     const totWorkDays  = persons.reduce((s, p) => s + p.workDays, 0);
