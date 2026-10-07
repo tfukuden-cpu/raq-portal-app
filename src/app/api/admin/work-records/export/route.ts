@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { toDateKeyJST } from "@/lib/datetime";
+import { exportShiftName } from "@/lib/shift-alias";
 import ExcelJS from "exceljs";
 
 // ─── 権限チェック ─────────────────────────────────────────────
@@ -105,6 +106,23 @@ const PERSON_FILL:  ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor:
 const HEADER_FILL:  ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F4F8" } };
 const TOTAL_FILL:   ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF3C7" } };
 
+/** 個人シートのシート名。サマリーのリンク先と実際のシート名を必ず同じ文字列にするため、
+ *  シートを作る側とリンクを張る側の両方からこれを呼ぶ（Excelのシート名は31文字まで）。 */
+function personSheetName(p: PersonData): string {
+  const n = [p.accountNumber, p.name].filter(Boolean).join(" ").slice(0, 31);
+  return n || p.staffId;
+}
+
+/** 同じブック内の別シートへ飛ぶセル。HYPERLINK関数で作る
+ *  （exceljs の `hyperlink` は外部リンク扱いの関係ファイルを書くのでブック内リンクにならない）。 */
+function internalLink(sheetName: string, label: string): ExcelJS.CellFormulaValue {
+  return {
+    formula: `HYPERLINK("#'${sheetName.replace(/'/g, "''")}'!A1","${label.replace(/"/g, '""')}")`,
+    result: label,
+  };
+}
+const LINK_FONT: Partial<ExcelJS.Font> = { color: { argb: "FF1D4ED8" }, underline: true };
+
 function applyBorder(row: ExcelJS.Row) {
   row.eachCell(cell => {
     cell.border = {
@@ -117,7 +135,7 @@ function applyBorder(row: ExcelJS.Row) {
 }
 
 // ─── シート：個人日別データ ───────────────────────────────────
-function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: string) {
+function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: string, hasSummary: boolean) {
   const ws = wb.addWorksheet(sheetName);
   ws.views = [{ state: "frozen", ySplit: 3 }];
 
@@ -145,7 +163,19 @@ function addPersonSheet(wb: ExcelJS.Workbook, person: PersonData, sheetName: str
   const label = [person.accountNumber, person.name, person.company, person.section].filter(Boolean).join("　");
   const infoRow = ws.addRow([label]);
   infoRow.font = { bold: true, size: 12 };
-  ws.mergeCells(`A1:P1`);
+  if (hasSummary) {
+    // 1行目の右端にサマリーへ戻るリンクを置く（結合をN列までに留めてO1を空ける）
+    ws.mergeCells("A1:N1");
+    ws.mergeCells("O1:P1");
+    const back = infoRow.getCell(15);
+    back.value = internalLink("サマリー", "← サマリーへ戻る");
+    back.font = { ...LINK_FONT, bold: true };
+    back.alignment = { horizontal: "right" };
+    back.fill = TOTAL_FILL;
+  } else {
+    // 個人別モードはサマリーシートが無いのでリンクを張らない
+    ws.mergeCells("A1:P1");
+  }
   infoRow.getCell(1).fill = TOTAL_FILL;
   applyBorder(infoRow);
 
@@ -288,6 +318,9 @@ function addSummarySheet(wb: ExcelJS.Workbook, companies: Map<string, PersonData
         p.complianceRate != null ? `${p.complianceRate}%` : "",
       ]);
       pRow.fill = PERSON_FILL;
+      // 氏名をクリックするとその人の個人シートへ飛ぶ
+      pRow.getCell(1).value = internalLink(personSheetName(p), p.name);
+      pRow.getCell(1).font = LINK_FONT;
       applyBorder(pRow);
     }
   }
@@ -488,7 +521,7 @@ export async function GET(req: NextRequest) {
 
     const rec: DailyRecord = {
       date:       shift.shift_date,
-      shiftName:  shift.shift_name  ?? "",
+      shiftName:  exportShiftName(shift.shift_name),
       shiftStart: resolvedStart,
       shiftEnd:   resolvedEnd,
       clockIn:    punch?.clockIn    ?? null,
@@ -546,14 +579,12 @@ export async function GET(req: NextRequest) {
 
     // Sheet 2+: 個人シート
     for (const p of persons) {
-      const sheetName = [p.accountNumber, p.name].filter(Boolean).join(" ").slice(0, 31);
-      addPersonSheet(wb, p, sheetName || p.staffId);
+      addPersonSheet(wb, p, personSheetName(p), true);
     }
   } else {
     // 個人別: 1シートずつ
     for (const p of persons) {
-      const sheetName = [p.accountNumber, p.name].filter(Boolean).join(" ").slice(0, 31);
-      addPersonSheet(wb, p, sheetName || p.staffId);
+      addPersonSheet(wb, p, personSheetName(p), false);
     }
   }
 
